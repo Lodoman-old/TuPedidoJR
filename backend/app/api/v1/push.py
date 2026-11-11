@@ -142,6 +142,8 @@ async def update_admin_config(
             "VAPID key pública para PWA",
         )
 
+    await db.flush()
+
     if body.enabled:
         service_account = await push_service.get_setting(db, push_service.FCM_SERVICE_ACCOUNT_JSON)
         if not service_account:

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import time
 
 import httpx
@@ -347,3 +348,91 @@ def schedule_mandado_status(mandado_id: str, status: str) -> None:
         asyncio.create_task(notify_mandado_status(mandado_id, status))
     except RuntimeError:
         logger.debug("No event loop for push notification")
+
+
+async def bootstrap_push_settings() -> None:
+    """Carga FCM desde variables de entorno en un despliegue nuevo.
+
+    Solo escribe valores que todavía no existan en la base, para no pisar
+    cambios hechos desde /web/admin/push.
+    """
+    service_account_raw = (os.getenv("FCM_SERVICE_ACCOUNT_JSON") or "").strip()
+    android_raw = (os.getenv("PUSH_ANDROID_CONFIG_JSON") or "").strip()
+    web_raw = (os.getenv("PUSH_WEB_CONFIG_JSON") or "").strip()
+    vapid_raw = (os.getenv("PUSH_VAPID_KEY") or "").strip()
+    enabled_raw = (os.getenv("PUSH_ENABLED") or "").strip().lower()
+
+    if not any((service_account_raw, android_raw, web_raw, vapid_raw, enabled_raw)):
+        return
+
+    try:
+        async with async_session() as db:
+            if service_account_raw and not await get_setting(db, FCM_SERVICE_ACCOUNT_JSON):
+                parsed = _load_json(service_account_raw)
+                if parsed and all(parsed.get(key) for key in ("client_email", "private_key", "project_id")):
+                    await set_setting(
+                        db,
+                        FCM_SERVICE_ACCOUNT_JSON,
+                        json.dumps(parsed),
+                        "Firebase service account (privado)",
+                    )
+                    logger.info("FCM: service account cargada desde variables de entorno")
+                else:
+                    logger.warning("FCM: FCM_SERVICE_ACCOUNT_JSON no tiene los campos requeridos")
+
+            if android_raw and not await get_setting(db, FCM_ANDROID_CONFIG_JSON):
+                parsed = _load_json(android_raw)
+                if parsed:
+                    await set_setting(
+                        db,
+                        FCM_ANDROID_CONFIG_JSON,
+                        json.dumps(parsed),
+                        "Firebase Android client config (público, para APK)",
+                    )
+                    logger.info("FCM: configuración Android cargada desde variables de entorno")
+
+            if web_raw and not await get_setting(db, FCM_WEB_CONFIG_JSON):
+                parsed = _load_json(web_raw)
+                if parsed:
+                    await set_setting(
+                        db,
+                        FCM_WEB_CONFIG_JSON,
+                        json.dumps(parsed),
+                        "Firebase web config (público, para PWA)",
+                    )
+                    logger.info("FCM: configuración web cargada desde variables de entorno")
+
+            if vapid_raw and not await get_setting(db, FCM_VAPID_KEY):
+                await set_setting(
+                    db,
+                    FCM_VAPID_KEY,
+                    vapid_raw,
+                    "VAPID key pública para PWA",
+                )
+                logger.info("FCM: VAPID cargada desde variables de entorno")
+
+            await db.flush()
+            current_enabled = await get_setting(db, PUSH_ENABLED)
+            if not current_enabled:
+                if enabled_raw in ("1", "true", "yes", "si", "sí"):
+                    if await get_setting(db, FCM_SERVICE_ACCOUNT_JSON):
+                        await set_setting(
+                            db,
+                            PUSH_ENABLED,
+                            "true",
+                            "Activa o desactiva las notificaciones push",
+                        )
+                        logger.info("FCM: push activado desde variables de entorno")
+                    else:
+                        logger.warning("FCM: PUSH_ENABLED=true pero falta la service account")
+                elif enabled_raw in ("0", "false", "no"):
+                    await set_setting(
+                        db,
+                        PUSH_ENABLED,
+                        "false",
+                        "Activa o desactiva las notificaciones push",
+                    )
+            await db.commit()
+    except Exception:
+        logger.exception("FCM: no se pudo inicializar desde variables de entorno")
+

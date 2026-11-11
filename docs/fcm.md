@@ -144,7 +144,37 @@ Requisitos:
 - Cambios de estatus del mandado al cliente.
 - Prueba manual desde el panel.
 
-## Problemas comunes
+## 10. Producción en Coolify
+
+Para que producción quede configurada sin volver a pegar nada en el panel, agrega estas variables al servicio `backend` en Coolify:
+
+```text
+PUSH_ENABLED=true
+FCM_SERVICE_ACCOUNT_JSON=<service account minificada en una línea>
+PUSH_ANDROID_CONFIG_JSON={"project_id":"tupedidojr-30f28","mobilesdk_app_id":"1:88387960123:android:99ae008757264de1c64b1e","api_key":"AIzaSyBqdmulTYLvfsc61OSU_YJuDNrxWHqZm3s","gcm_defaultSenderId":"88387960123","storage_bucket":"tupedidojr-30f28.firebasestorage.app"}
+```
+
+Opcional para web:
+
+```text
+PUSH_WEB_CONFIG_JSON=<firebaseConfig web minificado>
+PUSH_VAPID_KEY=<clave pública VAPID>
+```
+
+Para minificar la service account y copiarla al portapapeles en Windows:
+
+```powershell
+Get-Content -Raw archivo-service-account.json |
+  ConvertFrom-Json |
+  ConvertTo-Json -Compress |
+  Set-Clipboard
+```
+
+Después pégala en `FCM_SERVICE_ACCOUNT_JSON` de Coolify.
+
+El backend aplica estos valores al arrancar **solo si todavía no existen** en la base. No pisa cambios hechos después desde `/web/admin/push`.
+
+## 11. Problemas comunes
 
 ### El contador de tokens sigue en 0
 

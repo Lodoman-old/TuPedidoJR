@@ -23,6 +23,7 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.session import async_session, engine
 from app.services.file_service import ensure_upload_dir
+from app.services.push_service import bootstrap_push_settings
 from app.ws.delivery_ws import router as delivery_ws_router
 from app.ws.manager import ConnectionManager
 from app.ws.tracking_ws import router as tracking_ws_router
@@ -37,6 +38,7 @@ ws_manager = ConnectionManager(async_session)
 async def lifespan(app: FastAPI):
     logger.info("Iniciando %s ...", settings.APP_NAME)
     ensure_upload_dir()
+    await bootstrap_push_settings()
     task = asyncio.create_task(ws_manager.start_persist_background_task())
     yield
     task.cancel()

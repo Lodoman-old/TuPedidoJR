@@ -6,6 +6,9 @@
 backend/.env
 backend/.env.*
 !backend/.env.example
+service-account*.json
+*firebase-adminsdk*.json
+google-services.json
 
 # Python
 __pycache__/

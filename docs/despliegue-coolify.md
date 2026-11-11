@@ -56,6 +56,16 @@ ALLOWED_HOSTS
 NOINDEX=true
 ```
 
+Opcional para notificaciones push:
+
+```text
+PUSH_ENABLED=true
+FCM_SERVICE_ACCOUNT_JSON=<service account minificada>
+PUSH_ANDROID_CONFIG_JSON=<configuración Android>
+PUSH_WEB_CONFIG_JSON=<configuración web>
+PUSH_VAPID_KEY=<VAPID>
+```
+
 Genera `SECRET_KEY` con:
 
 ```bash

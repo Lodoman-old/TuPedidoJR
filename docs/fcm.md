@@ -139,7 +139,7 @@ Requisitos:
 ## 10. Qué notificaciones se envían
 
 - Cambios de estatus del pedido al cliente.
-- Pedido nuevo al dueño del restaurante.
+- Pedido nuevo al dueño y al equipo del restaurante.
 - Mandado nuevo a los mandaderos.
 - Cambios de estatus del mandado al cliente.
 - Prueba manual desde el panel.

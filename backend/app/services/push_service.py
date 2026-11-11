@@ -13,7 +13,9 @@ from app.models.mandado import Mandado
 from app.models.order import Order
 from app.models.push_token import PushToken
 from app.models.restaurant import Restaurant
+from app.models.restaurant_user import RestaurantUser
 from app.models.setting import Setting
+from app.services.restaurant_access import ORDER_ROLES
 
 logger = logging.getLogger(__name__)
 
@@ -255,13 +257,22 @@ async def notify_new_order(order_id: str) -> None:
             restaurant = resto_result.scalar_one_or_none()
             if not restaurant:
                 return
-            await send_to_user(
-                db,
-                restaurant.owner_id,
-                "Nuevo pedido",
-                f"Tienes un nuevo pedido en {restaurant.name}.",
-                {"type": "new_order", "order_id": str(order.id)},
+            members_result = await db.execute(
+                select(RestaurantUser.user_id).where(
+                    RestaurantUser.restaurant_id == restaurant.id,
+                    RestaurantUser.is_active.is_(True),
+                    RestaurantUser.role.in_(ORDER_ROLES),
+                )
             )
+            user_ids = {restaurant.owner_id, *members_result.scalars().all()}
+            for user_id in user_ids:
+                await send_to_user(
+                    db,
+                    user_id,
+                    "Nuevo pedido",
+                    f"Tienes un nuevo pedido en {restaurant.name}.",
+                    {"type": "new_order", "order_id": str(order.id)},
+                )
     except Exception:
         logger.exception("Push new-order notification failed for %s", order_id)
 

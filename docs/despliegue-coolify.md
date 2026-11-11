@@ -179,10 +179,17 @@ https://beta.tudominio.com/static/downloads/TuPedidoJR.apk
 
 ### APK apuntando a producción
 
+La app trae un selector de servidor en el login y en el perfil. Puedes cambiar entre:
+
+- **Local**: `mobile/server_local.txt`
+- **Producción**: `mobile/server_production.txt`
+- URL manual.
+
 Antes de compilar el APK de producción, cambia:
 
 ```text
 mobile/server_default.txt
+mobile/server_production.txt
 ```
 
 a:
@@ -191,7 +198,7 @@ a:
 https://beta.tudominio.com
 ```
 
-Luego recompila el APK. En una instalación existente, el archivo `server.json` del teléfono puede conservar la URL anterior; cambia el campo **Servidor** en la pantalla de login o borra los datos de la app.
+Luego recompila el APK. En una instalación existente, el archivo `server.json` del teléfono puede conservar la URL anterior; usa **Cambiar servidor** en el login o borra los datos de la app.
 
 ## 10. Respaldos
 

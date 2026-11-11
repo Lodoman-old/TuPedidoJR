@@ -6,6 +6,7 @@ from mobile.api import api, ApiError
 from mobile import secure_auth
 from mobile.location_service import compose_address, current_position, pick_colonia, reverse_address
 from mobile.map_widget import map_image, update_map
+from mobile.server_selector import open_server_dialog
 from mobile.utils import open_dlg, close_dlg
 
 
@@ -34,6 +35,28 @@ def profile_view(page: ft.Page):
         ], spacing=4),
         padding=12, bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH, border_radius=10,
         visible=False,
+    )
+    server_text = ft.Text(api.api_url, size=12, color=ft.Colors.GREY)
+
+    def refresh_server():
+        server_text.value = api.api_url
+        page.update()
+
+    server_card = ft.Container(
+        content=ft.Column([
+            ft.Row([
+                ft.Icon(ft.Icons.DNS, color=ft.Colors.BLUE),
+                ft.Text("Servidor", weight=ft.FontWeight.BOLD),
+            ], spacing=6),
+            server_text,
+            ft.FilledTonalButton(
+                "Cambiar servidor",
+                icon=ft.Icons.SWAP_HORIZ,
+                on_click=lambda _: open_server_dialog(page, refresh_server),
+            ),
+            ft.Text("Cambia entre local y producción. Se cerrará la sesión.", size=10, color=ft.Colors.GREY),
+        ], spacing=4),
+        padding=12, bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH, border_radius=10,
     )
 
     async def load_biometric():
@@ -118,6 +141,7 @@ def profile_view(page: ft.Page):
                 name_text, email_text,
                 loyalty_card,
                 bio_card,
+                server_card,
                 ft.Divider(),
                 ft.Text("Direcciones guardadas", size=16, weight=ft.FontWeight.BOLD),
                 addr_list,

@@ -6,6 +6,7 @@ import flet as ft
 from mobile.api import api, ApiError
 from mobile.location_service import compose_address, current_position, pick_colonia, reverse_address
 from mobile.map_widget import map_image, update_map
+from mobile.server_selector import open_server_dialog
 from mobile.utils import pick_image_file, snack
 
 DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
@@ -530,6 +531,13 @@ def restaurant_profile_view(page: ft.Page, rid: str):
                     ft.Icons.ARROW_BACK,
                     on_click=lambda _: page.run_task(page.push_route, f"/restaurant/{rid}"),
                 ),
+                actions=[
+                    ft.IconButton(
+                        ft.Icons.DNS,
+                        tooltip="Servidor",
+                        on_click=lambda _: open_server_dialog(page),
+                    ),
+                ],
             ),
             ft.SafeArea(ft.Column([
                 loading,

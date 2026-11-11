@@ -4,6 +4,7 @@ from mobile import secure_auth
 from mobile.cart_sync import hydrate_cart
 from mobile.push_utils import register_device_token
 from mobile.screens.restaurant_detail import cart
+from mobile.server_selector import open_server_dialog
 
 
 def _build_logo(size: int = 80):
@@ -13,12 +14,6 @@ def _build_logo(size: int = 80):
 def login_view(page: ft.Page):
     email = ft.TextField(label="Correo electrónico", keyboard_type=ft.KeyboardType.EMAIL, autofocus=True)
     password = ft.TextField(label="Contraseña", password=True, can_reveal_password=True)
-    server_url = ft.TextField(
-        label="Servidor",
-        value=api.api_url,
-        hint_text="http://192.168.1.10:8080",
-        keyboard_type=ft.KeyboardType.URL,
-    )
     error_text = ft.Text("", color=ft.Colors.RED)
     loading = ft.ProgressBar(visible=False)
 
@@ -31,9 +26,6 @@ def login_view(page: ft.Page):
         loading.visible = True
         page.update()
         try:
-            api.set_server_url(server_url.value)
-            logo.src = f"{api.api_url}/static/logo.png"
-            server_url.value = api.api_url
             resp = await api.login(email.value, password.value)
             api.set_token(resp["access_token"])
             await secure_auth.save_session(resp["access_token"], email.value, "")
@@ -43,12 +35,37 @@ def login_view(page: ft.Page):
         except ApiError as ex:
             error_text.value = ex.detail
         except Exception:
-            error_text.value = "No se pudo conectar al servidor. Revisa la dirección en 'Servidor'."
+            error_text.value = "No se pudo conectar al servidor. Revisa la dirección del servidor."
         finally:
             loading.visible = False
             page.update()
 
     logo = _build_logo()
+    server_text = ft.Text(api.api_url, size=11, color=ft.Colors.GREY)
+
+    def refresh_server():
+        server_text.value = api.api_url
+        logo.src = f"{api.api_url}/static/logo.png"
+        page.update()
+
+    server_card = ft.Container(
+        content=ft.Column([
+            ft.Row([
+                ft.Icon(ft.Icons.DNS, color=ft.Colors.BLUE, size=20),
+                ft.Text("Servidor", weight=ft.FontWeight.BOLD),
+            ], spacing=6),
+            server_text,
+            ft.FilledTonalButton(
+                "Cambiar servidor",
+                icon=ft.Icons.SWAP_HORIZ,
+                on_click=lambda _: open_server_dialog(page, refresh_server),
+            ),
+            ft.Text("Local o producción, sin recompilar la app.", size=10, color=ft.Colors.GREY),
+        ], spacing=4, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+        padding=12,
+        bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH,
+        border_radius=10,
+    )
 
     return ft.View(
         route="/login",
@@ -66,17 +83,9 @@ def login_view(page: ft.Page):
                     ft.TextButton("¿No tienes cuenta? Regístrate", on_click=lambda _: page.run_task(page.push_route, "/register")),
                     ft.TextButton("Registrar mi restaurante", on_click=lambda _: page.launch_url(f"{api.api_url}/web/register-restaurant")),
                     ft.TextButton("Olvidé mi contraseña", on_click=lambda _: page.launch_url(f"{api.api_url}/web/forgot-password")),
-                    ft.ExpansionTile(
-                        title=ft.Text("Servidor / conexión", size=13, color=ft.Colors.GREY),
-                        controls=[
-                            server_url,
-                            ft.Text(
-                                "En el celular usa la IP o dominio del servidor, por ejemplo http://192.168.1.10:8080",
-                                size=11, color=ft.Colors.GREY,
-                            ),
-                        ],
-                    ),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+                    ft.Container(height=10),
+                    server_card,
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
             )
         ]
     )

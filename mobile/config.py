@@ -3,6 +3,22 @@ import os
 from pathlib import Path
 
 
+def _read_server_file(name: str, default: str) -> str:
+    try:
+        value = Path(__file__).with_name(name).read_text(encoding="utf-8").strip()
+        return value.rstrip("/") if value else default
+    except OSError:
+        return default
+
+
+def get_local_server_url() -> str:
+    return _read_server_file("server_local.txt", "http://localhost:8080")
+
+
+def get_production_server_url() -> str:
+    return _read_server_file("server_production.txt", "https://beta.tudominio.com")
+
+
 def _default_server_url() -> str:
     env_url = os.getenv("API_URL")
     if env_url:

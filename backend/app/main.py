@@ -142,6 +142,13 @@ admin.add_view(MandadoAdmin)
 admin.add_view(CashAdvanceAdmin)
 
 
+@app.get("/", include_in_schema=False)
+async def root_redirect():
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url="/web/login")
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "app": settings.APP_NAME}

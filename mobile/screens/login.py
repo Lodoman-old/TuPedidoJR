@@ -30,7 +30,7 @@ def login_view(page: ft.Page):
             api.set_token(resp["access_token"])
             await secure_auth.save_session(resp["access_token"], email.value, "")
             await hydrate_cart(cart)
-            page.run_task(register_device_token)
+            page.run_task(register_device_token, True)
             await page.push_route("/restaurants")
         except ApiError as ex:
             error_text.value = ex.detail
@@ -113,7 +113,7 @@ def register_view(page: ft.Page):
             api.set_token(resp["access_token"])
             await secure_auth.save_session(resp["access_token"], email.value, name.value)
             await hydrate_cart(cart)
-            page.run_task(register_device_token)
+            page.run_task(register_device_token, True)
             await page.push_route("/restaurants")
         except ApiError as ex:
             error_text.value = ex.detail

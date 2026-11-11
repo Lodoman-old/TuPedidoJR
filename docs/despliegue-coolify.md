@@ -238,7 +238,7 @@ Así los saldos y deudas empiezan en cero.
 
 - **Un solo worker:** la app usa WebSockets y estado en memoria. No escales a varios workers/contenedores sin mover ese estado a Redis.
 - **HTTPS obligatorio:** el GPS del navegador solo funciona en HTTPS fuera de localhost.
-- **FCM/push está pendiente:** los avisos funcionan con la app abierta. Para notificar con la app cerrada falta configurar Firebase/FCM.
+- **FCM/push:** ya está implementado. Sigue [docs/fcm.md](fcm.md) para crear el proyecto de Firebase y cargar las credenciales en `/web/admin/push`.
 - **Mercado Pago:** déjalo vacío hasta tener credenciales; efectivo y transferencia funcionan sin ello.
 - **OSRM:** si no configuras `OSRM_URL` en ajustes, se usa distancia lineal. Es suficiente para la prueba inicial.
 - **Correo:** configura SMTP en `/web/admin/settings` para bienvenida, manuales y recuperación de contraseña.

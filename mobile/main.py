@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import flet as ft
 from mobile.api import api
-from mobile.config import get_device_location
+from mobile.config import get_device_location, get_server_url, save_server_url
 from mobile import secure_auth, background_location
 from mobile.screens.login import login_view, register_view
 from mobile.cart_sync import hydrate_cart
@@ -18,6 +18,7 @@ from mobile.screens.order_detail import order_detail_view
 from mobile.screens.delivery import delivery_hub_view, deliver_location_view, delivery_track_view
 from mobile.screens.payment import payment_view
 from mobile.screens.profile import profile_view
+from mobile.push_utils import watch_device_token
 from mobile.screens.restaurant_orders import restaurant_orders_view
 from mobile.screens.restaurant_earnings import restaurant_earnings_view
 from mobile.screens.restaurant_team import restaurant_team_view
@@ -82,11 +83,14 @@ def _nav_bar(page: ft.Page):
 async def main(page: ft.Page):
     page.title = "TuPedidoJR."
     page.theme_mode = ft.ThemeMode.LIGHT
+    # Persistir la URL efectiva para que la capa nativa (FCM) sepa a qué servidor pedir la configuración.
+    save_server_url(get_server_url())
     page.theme = ft.Theme(color_scheme=ft.ColorScheme(
         primary=ft.Colors.GREEN,
         primary_container=ft.Colors.GREEN_100,
         surface_container_high=ft.Colors.GREY_100,
     ))
+    page.run_task(watch_device_token)
 
     async def route_change(e):
         troute = page.route

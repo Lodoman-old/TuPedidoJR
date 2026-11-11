@@ -5,7 +5,6 @@ description = "TuPedidoJR mobile app (Flet)"
 requires-python = ">=3.11"
 dependencies = [
     "flet==0.85.2",
-    "flet-local-auth==1.0.5",
     "flet-secure-storage==0.85.2",
     "httpx>=0.28.0",
     "websockets>=12.0",

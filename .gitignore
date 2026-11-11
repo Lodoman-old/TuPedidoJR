@@ -33,6 +33,7 @@ backend/static/downloads/*
 *.db
 
 # Builds móviles y binarios
+.apk_build/
 mobile/build/
 mobile/.flet/
 mobile/.dart_tool/

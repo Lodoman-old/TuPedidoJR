@@ -5,7 +5,7 @@ import flet as ft
 from mobile.api import api
 from mobile import background_location, secure_auth
 from mobile.config import get_local_server_url, get_production_server_url
-from mobile.utils import close_dlg, open_dlg, snack
+from mobile.utils import close_dlg, open_dlg, snack, dialog_width
 
 
 def _normalize(url: str) -> str:
@@ -150,7 +150,7 @@ def open_server_dialog(page: ft.Page, on_changed=None):
                 "También puedes escribir otra IP o dominio.",
                 size=11, color=ft.Colors.GREY,
             ),
-        ], tight=True, width=340, scroll=ft.ScrollMode.AUTO),
+        ], tight=True, width=dialog_width(page), scroll=ft.ScrollMode.AUTO),
         actions=[
             ft.TextButton("Cancelar", on_click=lambda _: close_dlg(page, dialog)),
             ft.FilledButton("Guardar y cambiar", on_click=save),

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import flet as ft
 from mobile.api import api, ApiError
-from mobile.utils import close_dlg, open_dlg, snack
+from mobile.utils import close_dlg, open_dlg, snack, dialog_width
 
 
 STATUS_ORDER = ["pending", "confirmed", "preparing", "ready"]
@@ -237,7 +237,7 @@ def _order_card(page: ft.Page, rid: str, o: dict, reload_cb):
         confirm_btn = ft.FilledButton("Confirmar entrega", on_click=confirm)
         dlg = ft.AlertDialog(
             title=ft.Text("Confirmar entrega"),
-            content=ft.Column(body + [error_t], tight=True, width=320, scroll=ft.ScrollMode.AUTO),
+            content=ft.Column(body + [error_t], tight=True, width=dialog_width(page), scroll=ft.ScrollMode.AUTO),
             actions=[
                 ft.TextButton("Cancelar", on_click=lambda _: close_dlg(page, dlg)),
                 confirm_btn,

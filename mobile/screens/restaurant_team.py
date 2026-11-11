@@ -1,6 +1,6 @@
 import flet as ft
 from mobile.api import api, ApiError
-from mobile.utils import close_dlg, open_dlg, snack
+from mobile.utils import close_dlg, open_dlg, snack, dialog_width
 
 ROLE_LABELS = {
     "owner": "Dueño",
@@ -71,7 +71,7 @@ def restaurant_team_view(page: ft.Page, rid: str):
 
         dlg = ft.AlertDialog(
             title=ft.Text("Agregar usuario"),
-            content=ft.Column([name, email, password, role, msg, saving], tight=True, width=320),
+            content=ft.Column([name, email, password, role, msg, saving], tight=True, width=dialog_width(page)),
             actions=[
                 ft.TextButton("Cancelar", on_click=lambda _: close_dlg(page, dlg)),
                 ft.FilledButton("Crear usuario", on_click=save),

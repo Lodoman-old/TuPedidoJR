@@ -39,6 +39,17 @@ PAYMENT_STATUS_LABELS = {
 }
 
 
+def dialog_width(page: ft.Page, max_width: int = 340, min_width: int = 260) -> int:
+    """Ancho seguro para el contenido de un diálogo en pantallas pequeñas."""
+    try:
+        width = float(page.width or 0)
+    except (TypeError, ValueError):
+        width = 0
+    if width <= 0:
+        width = 360
+    return int(max(min_width, min(max_width, width - 72)))
+
+
 def open_dlg(page: ft.Page, dlg: ft.AlertDialog):
     page.overlay.append(dlg)
     dlg.open = True

@@ -17,7 +17,7 @@ PAYMENT_COLORS = {
 def payment_view(page: ft.Page, order_id: str):
     status_label = ft.Text("Pendiente", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.ORANGE)
     status_msg = ft.Text("", size=14)
-    pay_btn = ft.FilledButton("Pagar con Mercado Pago", width=300, disabled=False)
+    pay_btn = ft.FilledButton("Pagar con Mercado Pago", width=280, disabled=False)
     back_btn = ft.OutlinedButton("Ver mis pedidos", on_click=lambda _: page.run_task(page.push_route, "/orders"))
     polling = False
 

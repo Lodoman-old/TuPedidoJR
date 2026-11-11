@@ -79,7 +79,7 @@ def login_view(page: ft.Page):
                     ft.Container(height=20),
                     email, password, ft.Container(height=10),
                     error_text, loading,
-                    ft.FilledButton("Entrar", on_click=do_login, width=300),
+                    ft.FilledButton("Entrar", on_click=do_login, width=280),
                     ft.TextButton("¿No tienes cuenta? Regístrate", on_click=lambda _: page.run_task(page.push_route, "/register")),
                     ft.TextButton("Registrar mi restaurante", on_click=lambda _: page.launch_url(f"{api.api_url}/web/register-restaurant")),
                     ft.TextButton("Olvidé mi contraseña", on_click=lambda _: page.launch_url(f"{api.api_url}/web/forgot-password")),
@@ -134,7 +134,7 @@ def register_view(page: ft.Page):
                     ft.Container(height=10),
                     name, email, phone, password, referral, ft.Container(height=10),
                     error_text, loading,
-                    ft.FilledButton("Registrarse", on_click=do_register, width=300),
+                    ft.FilledButton("Registrarse", on_click=do_register, width=280),
                     ft.TextButton("¿Ya tienes cuenta? Inicia sesión", on_click=lambda _: page.run_task(page.push_route, "/login")),
                 ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
             )

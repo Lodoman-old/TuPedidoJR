@@ -1,7 +1,7 @@
 import flet as ft
 from mobile.api import api, ApiError
 from mobile.cart_sync import sync_cart
-from mobile.utils import close_dlg, open_dlg, snack, pick_image_file
+from mobile.utils import close_dlg, open_dlg, snack, pick_image_file, dialog_width
 
 
 cart: list[dict] = []
@@ -171,7 +171,7 @@ def restaurant_detail_view(page: ft.Page, rid: str):
 
     item_dialog = ft.AlertDialog(
         title=ft.Text("Agregar platillo"),
-        content=ft.Column([item_name, item_price, item_desc, item_cat, item_err], tight=True, width=300),
+        content=ft.Column([item_name, item_price, item_desc, item_cat, item_err], tight=True, width=dialog_width(page)),
         actions=[
             ft.TextButton("Cancelar", on_click=lambda e: page.pop_dialog()),
             ft.FilledButton("Agregar", on_click=lambda e: page.run_task(_do_add_item, e)),
@@ -417,7 +417,7 @@ def _open_item_customizer(page: ft.Page, item: dict, rid: str | None = None, com
         title=ft.Text(item["name"], size=16),
         content=ft.Column(
             [*controls, qty, price_text],
-            tight=True, width=340, scroll=ft.ScrollMode.AUTO,
+            tight=True, width=dialog_width(page), scroll=ft.ScrollMode.AUTO,
         ),
         actions=[
             ft.TextButton("Cancelar", on_click=lambda _: close_dlg(page, dlg)),
@@ -520,7 +520,7 @@ def _menu_item_card(page: ft.Page, item: dict, rid: str | None = None, is_owner:
             title=ft.Text(item["name"], size=16),
             content=ft.Image(
                 src=f"{api.api_url}{img_url}",
-                width=320, height=320, fit=ft.ImageFit.CONTAIN,
+                width=dialog_width(page, max_width=320), height=dialog_width(page, max_width=320), fit=ft.ImageFit.CONTAIN,
             ),
             actions=[ft.TextButton("Cerrar", on_click=lambda _: close_dlg(page, dlg))],
         )
@@ -547,7 +547,7 @@ def _menu_item_card(page: ft.Page, item: dict, rid: str | None = None, is_owner:
             item_image_widget,
             ft.Column([
                 ft.Row([
-                    ft.Text(item["name"], size=15, weight=ft.FontWeight.BOLD),
+                    ft.Text(item["name"], size=15, weight=ft.FontWeight.BOLD, expand=True, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
                     *([ft.IconButton(ft.Icons.IMAGE, icon_size=16, on_click=lambda e: page.run_task(_upload_item_image, e))] if is_owner else []),
                 ]),
                 ft.Text(item.get("description", "") or "", size=12, color=ft.Colors.GREY),

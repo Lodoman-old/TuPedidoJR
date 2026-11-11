@@ -126,8 +126,12 @@
     if (!addrCoords.lat || !addrCoords.lng) addrCoords = { lat: 20.644, lng: -100.993 };
 
     // Try to recover C.P. from an existing address string.
-    const cpMatch = (data?.addr || '').match(/(?:C\.?P\.?|CP)\s*(\d{5})/i);
+    const fullAddr = data?.addr || '';
+    const cpMatch = fullAddr.match(/(?:C\.?P\.?|CP)\s*(\d{5})/i);
     const initialCp = cpMatch ? cpMatch[1] : '';
+    const addrParts = fullAddr.split(',').map(s => s.trim()).filter(Boolean);
+    const initialStreet = addrParts.length ? addrParts[0] : '';
+    const initialColonia = addrParts.slice(1).find(p => !/(?:C\.?P\.?|CP)\s*\d{5}/i.test(p)) || '';
 
     const modal = document.createElement('div');
     modal.className = 'modal fade';
@@ -161,12 +165,7 @@
 
             <div class="mb-2">
               <label class="form-label small mb-1">Calle y número</label>
-              <input type="text" class="form-control" id="addrStreet" placeholder="Calle 5 de Mayo 209">
-            </div>
-
-            <div class="mb-2">
-              <label class="form-label small mb-1">Dirección completa</label>
-              <textarea class="form-control" id="addrAddress" rows="2" placeholder="Calle, colonia, C.P.">${esc(data?.addr || '')}</textarea>
+              <input type="text" class="form-control" id="addrStreet" value="${esc(initialStreet)}" placeholder="Calle 5 de Mayo 209">
             </div>
 
             <div class="d-flex align-items-center gap-2 mb-2">
@@ -205,6 +204,18 @@
 
     const msg = document.getElementById('geocodeAddrMsg');
     let coordsSource = isEdit ? 'saved' : 'none';
+
+    function composeAddress() {
+      const street = document.getElementById('addrStreet').value.trim();
+      const cp = document.getElementById('addrCp').value.trim();
+      const colonia = document.getElementById('addrColonia').value;
+      if (!street) return '';
+      const parts = [street];
+      if (colonia && !street.toLowerCase().includes(colonia.toLowerCase())) parts.push(colonia);
+      if (/^\d{5}$/.test(cp) && !street.includes(cp)) parts.push(`C.P. ${cp}`);
+      return parts.join(', ');
+    }
+
     const markTextSource = () => { coordsSource = 'text'; };
     const setMsg = (text, kind = 'muted') => {
       msg.className = `small text-${kind}`;
@@ -266,7 +277,6 @@
       if (cp.length === 5) loadColonias(cp);
     });
     document.getElementById('addrStreet').addEventListener('input', markTextSource);
-    document.getElementById('addrAddress').addEventListener('input', markTextSource);
     document.getElementById('addrColonia').addEventListener('change', markTextSource);
 
     document.getElementById('geocodeAddrBtn').addEventListener('click', async () => {
@@ -288,7 +298,6 @@
         const found = results[0];
         setCoords(found.lat, found.lng);
         coordsSource = 'geo';
-        document.getElementById('addrAddress').value = `${street}, ${colonia}, C.P. ${cp}`;
         setMsg(found.display_name || 'Ubicación encontrada', 'success');
       } catch (e) {
         setMsg(e.message, 'danger');
@@ -324,7 +333,6 @@
           }
           if (street) document.getElementById('addrStreet').value = street;
           const parts = [street, colonia, cp ? `C.P. ${cp}` : ''].filter(Boolean);
-          if (parts.length) document.getElementById('addrAddress').value = parts.join(', ');
           setMsg(parts.length
             ? `${auto ? 'Ubicación detectada' : 'Ubicación aplicada'}: ${parts.join(', ')}. Corrige la calle o mueve el pin si hace falta.`
             : 'Ubicación del dispositivo aplicada. Escribe la calle o ajusta el pin.', parts.length ? 'success' : 'warning');
@@ -341,26 +349,22 @@
     modal.addEventListener('shown.bs.modal', () => {
       initMap();
       setTimeout(() => addrMap && addrMap.invalidateSize(), 250);
-      if (initialCp) loadColonias(initialCp, !isEdit);
-      const emptyAddress = !document.getElementById('addrAddress').value.trim() &&
-        !document.getElementById('addrStreet').value.trim() &&
+      if (initialCp) loadColonias(initialCp, !isEdit, isEdit ? initialColonia : '');
+      const emptyAddress = !document.getElementById('addrStreet').value.trim() &&
         !document.getElementById('addrCp').value.trim();
       if (!isEdit && emptyAddress) applyDeviceLocation(true);
     }, { once: true });
 
     document.getElementById('saveAddrBtn').addEventListener('click', async () => {
       const name = document.getElementById('addrName').value.trim();
-      let address = document.getElementById('addrAddress').value.trim();
+      const address = composeAddress();
       const cp = document.getElementById('addrCp').value.trim();
       const colonia = document.getElementById('addrColonia').value;
       const street = document.getElementById('addrStreet').value.trim();
       const notes = document.getElementById('addrNotes').value.trim();
       const isDefault = document.getElementById('addrDefault').checked;
 
-      if (!address && street && colonia && cp) {
-        address = `${street}, ${colonia}, C.P. ${cp}`;
-      }
-      if (!name || !address) { showToast('Completa nombre y dirección', 'warning'); return; }
+      if (!name || !address) { showToast('Completa nombre y calle', 'warning'); return; }
 
       let finalCoords = { ...addrCoords };
       if (coordsSource === 'text') {

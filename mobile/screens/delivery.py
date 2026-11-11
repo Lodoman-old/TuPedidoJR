@@ -7,7 +7,7 @@ from mobile.api import api, ApiError
 from mobile import secure_auth, background_location
 from mobile.config import get_device_location
 
-from mobile.utils import open_dlg, close_dlg, snack, STATUS_LABELS, PAYOUT_STATUS_LABELS
+from mobile.utils import open_dlg, close_dlg, snack, STATUS_LABELS, PAYOUT_STATUS_LABELS, dialog_width
 from mobile.map_utils import lat_lng_to_tile, marker_offset, osm_tile_url
 
 
@@ -349,7 +349,7 @@ def _my_order_card(page: ft.Page, o: dict, content_area: ft.Column):
             confirm_btn = ft.FilledButton("Confirmar entrega", on_click=confirm)
             dlg = ft.AlertDialog(
                 title=ft.Text("Confirmar entrega"),
-                content=ft.Column(body + [error_t], tight=True, width=320, scroll=ft.ScrollMode.AUTO),
+                content=ft.Column(body + [error_t], tight=True, width=dialog_width(page), scroll=ft.ScrollMode.AUTO),
                 actions=[
                     ft.TextButton("Cancelar", on_click=lambda _: close_dlg(page, dlg)),
                     confirm_btn,
@@ -817,7 +817,7 @@ def _mandado_card(page: ft.Page, m: dict, mode: str, content_area: ft.Column) ->
 
             dlg = ft.AlertDialog(
                 title=ft.Text("Marcar como comprado"),
-                content=ft.Column([total_input, url_input, status_t, ft.FilledButton("Confirmar", on_click=submit)], tight=True, width=300),
+                content=ft.Column([total_input, url_input, status_t, ft.FilledButton("Confirmar", on_click=submit)], tight=True, width=dialog_width(page)),
                 actions=[ft.TextButton("Cancelar", on_click=lambda e: close_dlg(page, dlg))],
             )
             open_dlg(page, dlg)

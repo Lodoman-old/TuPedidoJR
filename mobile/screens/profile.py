@@ -7,7 +7,7 @@ from mobile import secure_auth
 from mobile.location_service import compose_address, current_position, pick_colonia, reverse_address
 from mobile.map_widget import map_image, update_map
 from mobile.server_selector import open_server_dialog
-from mobile.utils import open_dlg, close_dlg
+from mobile.utils import open_dlg, close_dlg, dialog_width
 
 
 def profile_view(page: ft.Page):
@@ -151,20 +151,36 @@ def profile_view(page: ft.Page):
 
 
 def _addr_card(page: ft.Page, a: dict, reload_cb):
-    actions = ft.Row([
-        ft.IconButton(ft.Icons.EDIT, icon_size=18, on_click=lambda _: _open_form(page, a, reload_cb)),
-        ft.IconButton(ft.Icons.DELETE, icon_size=18, on_click=lambda _: _delete_addr(a["id"], reload_cb)),
-    ])
+    info = ft.Column([
+        ft.Row([
+            ft.Text(
+                a["name"], weight=ft.FontWeight.BOLD, expand=True,
+                max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
+            ),
+            ft.Container(
+                ft.Text("Predeterminada", size=10, color=ft.Colors.WHITE),
+                bgcolor=ft.Colors.GREEN, border_radius=20,
+                padding=ft.Padding(8, 2, 8, 2),
+            ) if a.get("is_default") else ft.Container(),
+        ], spacing=4, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+        ft.Text(
+            a["address"], size=12, color=ft.Colors.GREY_700,
+            max_lines=2, overflow=ft.TextOverflow.ELLIPSIS,
+        ),
+    ], spacing=2, expand=True)
     return ft.Container(
-        content=ft.Column([
-            ft.Row([
-                ft.Icon(ft.Icons.LOCATION_ON, size=20, color=ft.Colors.RED),
-                ft.Text(a["name"], weight=ft.FontWeight.BOLD, expand=True),
-                    ft.Text("Predeterminada", size=11, color=ft.Colors.GREEN) if a.get("is_default") else ft.Container(),
-                actions,
-            ]),
-            ft.Text(a["address"], size=13, color=ft.Colors.GREY_700),
-        ]),
+        content=ft.Row([
+            ft.Icon(ft.Icons.LOCATION_ON, size=20, color=ft.Colors.RED),
+            info,
+            ft.IconButton(
+                ft.Icons.EDIT, icon_size=18, tooltip="Editar",
+                on_click=lambda _: _open_form(page, a, reload_cb),
+            ),
+            ft.IconButton(
+                ft.Icons.DELETE_OUTLINE, icon_size=18, tooltip="Eliminar",
+                on_click=lambda _: page.run_task(_delete_addr, a["id"], reload_cb),
+            ),
+        ], spacing=2, vertical_alignment=ft.CrossAxisAlignment.CENTER),
         padding=10, bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH, border_radius=10,
     )
 
@@ -173,7 +189,7 @@ async def _delete_addr(addr_id: str, reload_cb):
     try:
         await api.delete_address(addr_id)
         await reload_cb()
-    except ApiError as ex:
+    except ApiError:
         pass
 
 
@@ -371,7 +387,7 @@ def _open_form(page: ft.Page, existing: dict | None, reload_cb):
             geocode_btn, device_btn, geo_msg,
             map_gesture, map_hint,
             notes, is_default, error_t, saving,
-        ], tight=True, width=350, scroll=ft.ScrollMode.AUTO),
+        ], tight=True, width=dialog_width(page), scroll=ft.ScrollMode.AUTO),
         actions=[ft.TextButton("Cancelar", on_click=lambda _: close_dlg(page, dlg)), ft.FilledButton("Guardar", on_click=save)],
     )
     open_dlg(page, dlg)

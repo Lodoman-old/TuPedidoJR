@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0">Pedidos del restaurante <span class="small text-muted fs-6">· se actualiza cada 10 s</span></h5>
+  <a class="btn btn-sm btn-outline-primary" href="/web/restaurants/{{ restaurant_id }}/location">
+    <i class="bi bi-geo-alt"></i> Ubicación
+  </a>
+</div>
+<div id="ordersContainer"></div>
+<div id="ordersLoading" class="text-center py-3"><div class="spinner-border text-primary"></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  const STATUS_ORDER = ["pending", "confirmed", "preparing", "ready"];
+  const STATUS_LABELS = { pending: "Pendiente", confirmed: "Confirmado", preparing: "Preparando", ready: "Listo", in_delivery: "En reparto", picked_up: "Recogido", delivered: "Entregado", cancelled: "Cancelado" };
+  function portionLabel(value) {
+    const p = parseFloat(value || 0);
+    if (!p || p >= 0.99) return '';
+    if (Math.abs(p - 0.5) < 0.02) return '1/2';
+    if (Math.abs(p - 0.3333) < 0.02) return '1/3';
+    if (Math.abs(p - 0.6667) < 0.02) return '2/3';
+    if (Math.abs(p - 0.25) < 0.02) return '1/4';
+    if (Math.abs(p - 0.75) < 0.02) return '3/4';
+    return p.toFixed(2);
+  }
+  const STATUS_COLORS = { pending: "warning", confirmed: "primary", preparing: "info", ready: "success", in_delivery: "info", picked_up: "teal", delivered: "secondary", cancelled: "danger" };
+
+  let ordersBusy = false;
+
+  const scheduledAlerts = new Set();
+  let audioCtx = null;
+
+  function playAlertBeep() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.frequency.value = 740;
+      gain.gain.value = 0.12;
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.35);
+    } catch (e) { /* audio no disponible */ }
+  }
+
+  function scheduledInfo(o) {
+    if (!o.scheduled_for) return null;
+    const when = new Date(o.scheduled_for);
+    const mins = Math.round((when.getTime() - Date.now()) / 60000);
+    const kind = (o.fulfillment_type === 'pickup') ? 'recoger' : 'entregar';
+    let cls = 'text-info';
+    if (mins <= 30) cls = 'text-danger fw-bold';
+    else if (mins <= 60) cls = 'text-warning fw-bold';
+    return { when, mins, kind, cls };
+  }
+
+  function checkScheduledAlerts(orders) {
+    for (const o of orders) {
+      if (!o.scheduled_for || ['delivered', 'cancelled'].includes(o.status)) continue;
+      const info = scheduledInfo(o);
+      if (!info) continue;
+      let threshold = null;
+      if (info.mins <= 0) threshold = 0;
+      else if (info.mins <= 30) threshold = 30;
+      else if (info.mins <= 60) threshold = 60;
+      if (threshold === null) continue;
+      const key = `${o.id}:${threshold}`;
+      if (scheduledAlerts.has(key)) continue;
+      scheduledAlerts.add(key);
+      const whenLabel = info.when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const label = threshold === 60
+        ? 'Falta 1 hora'
+        : threshold === 30
+          ? 'Faltan 30 minutos'
+          : 'Es la hora programada';
+      const action = info.kind === 'recoger' ? 'recoger' : 'entregar';
+      showToast(`⏰ Pedido #${o.id.slice(0, 8)}: ${label} para ${action} (${whenLabel})`, 'warning');
+      playAlertBeep();
+    }
+  }
+
+  async function loadOrders(silent = false) {
+    if (ordersBusy) return;
+    ordersBusy = true;
+    const container = document.getElementById('ordersContainer');
+    const loading = document.getElementById('ordersLoading');
+    if (!silent) {
+      loading.classList.remove('d-none');
+      container.innerHTML = '';
+    }
+    try {
+      const orders = await listRestaurantOrders(RID);
+      loading.classList.add('d-none');
+      checkScheduledAlerts(orders);
+      if (!orders.length) {
+        container.innerHTML = '<p class="text-muted text-center py-4">No hay pedidos</p>';
+        return;
+      }
+      let html = '';
+      for (const o of orders) {
+        const status = o.status;
+        const isPickup = o.fulfillment_type === 'pickup' || o.delivery_mode === 'pickup';
+        const isOwn = o.delivery_mode === 'own';
+        const flow = isPickup
+          ? ['pending', 'confirmed', 'preparing', 'ready', 'delivered']
+          : (isOwn
+            ? ['pending', 'confirmed', 'preparing', 'ready', 'in_delivery', 'delivered']
+            : STATUS_ORDER);
+        const idx = flow.indexOf(status);
+        const canAdvance = idx >= 0 && idx < flow.length - 1;
+        const nextStatus = canAdvance ? flow[idx + 1] : null;
+        const color = STATUS_COLORS[status] || 'secondary';
+        const sched = scheduledInfo(o);
+        const schedLine = sched
+          ? `<small class="${sched.cls} d-block">Programado para ${sched.kind}: ${sched.when.toLocaleString()}${sched.mins > 0 ? ` · faltan ${sched.mins} min` : ' · ya es la hora'}</small>`
+          : '';
+        html += `<div class="card p-3 mb-2">
+          <div class="d-flex justify-content-between flex-wrap gap-2">
+            <h6 class="mb-1">#${o.id.slice(0, 8)} <span class="badge bg-${color}">${STATUS_LABELS[status] || status.toUpperCase()}</span></h6>
+            <small>$${parseFloat(o.total || 0).toFixed(2)}</small>
+          </div>
+          <small class="text-muted">${(o.items || []).length} artículo(s)</small>
+          ${(o.items || []).map(i => `<small class="text-muted d-block">${i.quantity}x ${i.name}${(i.options || []).length ? ` — ${i.options.map(opt => `${opt.name}${portionLabel(opt.portion) ? ` (${portionLabel(opt.portion)})` : ''}`).join(', ')}` : ''}</small>`).join('')}
+          <small class="text-muted d-block">Pago: ${o.payment_method === 'transfer'
+            ? (o.payment_status === 'approved' ? 'Transferencia confirmada a la plataforma' : 'Transferencia pendiente de confirmar')
+            : 'Efectivo'}</small>
+          ${o.delivery_mode === 'own' ? '<small class="text-info d-block">Entrega propia del restaurante</small>' : ''}
+          ${o.fulfillment_type === 'pickup' ? '<small class="text-primary d-block">Recoger en restaurante</small>' : ''}
+          ${schedLine}
+          <div class="mt-2 d-flex gap-2 flex-wrap">`;
+        if (canAdvance) {
+          const advanceLabel = nextStatus === 'delivered'
+            ? (isPickup ? '<i class="bi bi-cash-coin"></i> Entregar y cobrar' : '<i class="bi bi-check2"></i> Entregar')
+            : 'Avanzar';
+          html += `<button class="btn btn-sm btn-success" onclick="advanceOrder('${o.id}')">${advanceLabel}</button>`;
+        }
+        if (['pending', 'confirmed', 'preparing', 'ready'].includes(status)) {
+          html += `<button class="btn btn-sm btn-outline-danger" onclick="cancelRestaurantOrderUI('${o.id}')">Cancelar</button>`;
+        }
+        html += `</div></div>`;
+      }
+      container.innerHTML = html;
+    } catch (e) {
+      loading.classList.add('d-none');
+      if (!silent) container.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+    } finally {
+      ordersBusy = false;
+    }
+  }
+
+  async function advanceOrder(oid) {
+    try {
+      const order = await getOrder(oid);
+      const isPickup = order.fulfillment_type === 'pickup' || order.delivery_mode === 'pickup';
+      const isOwn = order.delivery_mode === 'own';
+      const flow = isPickup
+        ? ['pending', 'confirmed', 'preparing', 'ready', 'delivered']
+        : (isOwn
+          ? ['pending', 'confirmed', 'preparing', 'ready', 'in_delivery', 'delivered']
+          : STATUS_ORDER);
+      const status = order.status;
+      const idx = flow.indexOf(status);
+      if (idx < 0 || idx >= flow.length - 1) return showToast('No se puede avanzar más', 'warning');
+      const next = flow[idx + 1];
+      if (next === 'delivered' && isPickup) {
+        openRestaurantDeliveryModal(order, isPickup);
+        return;
+      }
+      await updateRestaurantOrderStatus(RID, oid, next);
+      showToast(`Pedido ${STATUS_LABELS[next] || next}`);
+      loadOrders(true);
+    } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+  }
+
+  function openRestaurantDeliveryModal(order, isPickup) {
+    const total = parseFloat(order.total || 0);
+    const isCash = order.payment_method === 'cash';
+    const isTransfer = order.payment_method === 'transfer';
+    const action = isPickup ? 'recoger' : 'entregar';
+    const payMessage = isTransfer
+      ? (order.payment_status === 'approved'
+        ? '<div class="alert alert-success small mb-2"><i class="bi bi-bank"></i> Pago por <strong>transferencia ya validado</strong>. No cobres en efectivo.</div>'
+        : '<div class="alert alert-info small mb-2"><i class="bi bi-bank"></i> Pago por <strong>transferencia</strong>. El cliente ya pagó; el administrador validará la transferencia. <strong>No cobres en efectivo.</strong></div>')
+      : (!isCash
+        ? '<div class="alert alert-info small mb-2"><i class="bi bi-credit-card"></i> Pago en línea ya registrado. <strong>No cobres en efectivo.</strong></div>'
+        : '');
+
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Confirmar ${action}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p class="mb-2">Pedido <strong>#${order.id.slice(0, 8)}</strong></p>
+            <div class="d-flex justify-content-between fs-5 mb-1"><span>Total</span><strong>$${total.toFixed(2)}</strong></div>
+            ${parseFloat(order.tip_amount || 0) > 0 ? `<div class="d-flex justify-content-between small text-muted mb-1"><span>Propina incluida</span><span>$${parseFloat(order.tip_amount).toFixed(2)}</span></div>` : ''}
+            ${payMessage}
+            ${isCash ? `
+              <div class="mb-2">
+                <label class="form-label" for="restCashReceived">Dinero que recibes</label>
+                <input type="number" step="0.01" min="0" class="form-control" id="restCashReceived" placeholder="0.00">
+              </div>
+              <div class="d-flex justify-content-between"><span>Cambio</span><strong id="restChangeAmount">$0.00</strong></div>
+            ` : ''}
+            <div id="restDeliverError" class="text-danger small mt-2"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-success" id="restConfirmDeliver">
+              <i class="bi bi-check2-circle"></i> Confirmar ${action}
+            </button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    let received = total;
+    if (isCash) {
+      const input = modal.querySelector('#restCashReceived');
+      const changeEl = modal.querySelector('#restChangeAmount');
+      input.addEventListener('input', () => {
+        received = parseFloat(input.value);
+        if (Number.isNaN(received)) {
+          changeEl.textContent = '$0.00';
+          changeEl.className = 'text-muted';
+          return;
+        }
+        const change = received - total;
+        changeEl.textContent = change >= 0 ? `$${change.toFixed(2)}` : `Faltan $${Math.abs(change).toFixed(2)}`;
+        changeEl.className = change >= 0 ? 'text-success' : 'text-danger';
+      });
+      input.focus();
+    }
+
+    const errorEl = modal.querySelector('#restDeliverError');
+    modal.querySelector('#restConfirmDeliver').addEventListener('click', async () => {
+      if (isCash) {
+        received = parseFloat(modal.querySelector('#restCashReceived').value);
+        if (Number.isNaN(received) || received < total) {
+          errorEl.textContent = `El dinero recibido debe ser al menos $${total.toFixed(2)}.`;
+          return;
+        }
+      }
+      const btn = modal.querySelector('#restConfirmDeliver');
+      btn.disabled = true;
+      try {
+        await updateRestaurantOrderStatus(RID, order.id, 'delivered');
+        bsModal.hide();
+        if (isCash) {
+          showToast(`Pedido ${isPickup ? 'recogido' : 'entregado'}. Cambio: $${(received - total).toFixed(2)}`);
+        } else if (isTransfer) {
+          showToast(order.payment_status === 'approved'
+            ? `Pedido ${isPickup ? 'recogido' : 'entregado'}. Transferencia ya validada.`
+            : `Pedido ${isPickup ? 'recogido' : 'entregado'}. Transferencia pendiente de validación.`);
+        } else {
+          showToast(`Pedido ${isPickup ? 'recogido' : 'entregado'}`);
+        }
+        loadOrders(true);
+      } catch (e) {
+        errorEl.textContent = e.message;
+        btn.disabled = false;
+      }
+    });
+    modal.addEventListener('hidden.bs.modal', () => modal.remove());
+  }
+
+  async function cancelRestaurantOrderUI(oid) {
+    const reason = prompt('Motivo de la cancelación (opcional):');
+    if (reason === null) return;
+    if (!confirm('¿Cancelar este pedido?')) return;
+    try {
+      await cancelRestaurantOrder(RID, oid, reason);
+      showToast('Pedido cancelado');
+      loadOrders(true);
+    } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+  }
+
+  // Helper: get current order status
+  async function getOrderStatus(oid) {
+    const orders = await listRestaurantOrders(RID);
+    const o = orders.find(o => o.id === oid);
+    return o ? o.status : null;
+  }
+
+  loadOrders();
+  setInterval(() => { if (!document.hidden) loadOrders(true); }, 10000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadOrders(true); });
+</script>
+{% endblock %}
+

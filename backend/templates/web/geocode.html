@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="mb-3">Geocodificación — Dirección a coordenadas</h4>
+<p class="text-muted small">Ingresa una dirección completa (calle, número, colonia, municipio, estado) para obtener sus coordenadas geográficas. Útil para ubicar restaurantes en el panel de administración.</p>
+<div class="card p-3 mb-3">
+  <div class="input-group mb-2">
+    <input type="text" class="form-control" id="addressInput" placeholder="Ej: Av. Juárez 100, Centro, Mérida, Yucatán">
+    <button class="btn btn-primary" id="searchBtn"><i class="bi bi-search"></i> Buscar</button>
+  </div>
+  <div id="geocodeMsg" class="small"></div>
+</div>
+<div id="resultsContainer"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  document.getElementById('searchBtn').addEventListener('click', async () => {
+    const addr = document.getElementById('addressInput').value.trim();
+    const msg = document.getElementById('geocodeMsg');
+    const container = document.getElementById('resultsContainer');
+    if (addr.length < 3) { msg.innerHTML = '<span class="text-danger">Dirección muy corta</span>'; return; }
+    msg.innerHTML = '<span class="text-muted">Buscando...</span>';
+    try {
+      const token = sessionStorage.getItem('token');
+      const res = await fetch('/api/v1/geocode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ address: addr }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Error'); }
+      const data = await res.json();
+      msg.innerHTML = '';
+      if (data.length === 0) { msg.innerHTML = '<span class="text-warning">Sin resultados</span>'; return; }
+      container.innerHTML = data.map((r, i) => `
+        <div class="card p-3 mb-2">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <strong>${r.display_name}</strong><br>
+              <span class="text-muted small">Lat: <code>${r.lat}</code> | Lng: <code>${r.lng}</code></span>
+            </div>
+            <div class="text-end">
+              <div class="small mb-1">Para admin panel:</div>
+              <code class="bg-light p-1 rounded">POINT(${r.lng} ${r.lat})</code>
+              <button class="btn btn-sm btn-outline-secondary ms-1" onclick="copyText('POINT(${r.lng} ${r.lat})')"><i class="bi bi-clipboard"></i></button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    } catch (ex) {
+      msg.innerHTML = `<span class="text-danger">${ex.message}</span>`;
+    }
+  });
+  document.getElementById('addressInput').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('searchBtn').click(); });
+  function copyText(t) { navigator.clipboard.writeText(t).then(() => showToast('Copiado: ' + t)); }
+</script>
+{% endblock %}

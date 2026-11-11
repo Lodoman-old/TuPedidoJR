@@ -1,0 +1,40 @@
+{% extends "sqladmin_original/base.html" %}
+{% block body %}
+<div class="d-flex align-items-center justify-content-center vh-100" style="background:linear-gradient(135deg, #f0f4ff 0%, #e8eef5 100%)">
+  <div style="text-align:center; max-width:420px; width:100%; padding:0 20px">
+    {% if admin.logo_url %}
+    <div style="background:white; border-radius:12px; padding:16px; display:inline-block; margin-bottom:24px; box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+      <img src="{{ admin.logo_url }}" alt="Logo" style="max-height:100px; width:auto">
+    </div>
+    {% else %}
+    <h2 style="color:#0d1b2a; margin-bottom:20px">{{ admin.title }}</h2>
+    {% endif %}
+    <form class="card card-md" action="{{ url_for('admin:login') }}" method="POST" autocomplete="off">
+      <div class="card-body">
+        <h2 class="card-title text-center mb-4">Inicia sesión</h2>
+        <div class="mb-3">
+          <label class="form-label">Email</label>
+          {% if error %}
+          <input name="username" type="text" class="form-control is-invalid" placeholder="Email" autocomplete="off">
+          <div class="invalid-feedback">{{ error }}</div>
+          {% else %}
+          <input name="username" type="text" class="form-control" placeholder="Email" autocomplete="off">
+          {% endif %}
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Contraseña</label>
+          {% if error %}
+          <input name="password" type="password" class="form-control is-invalid" placeholder="Contraseña" autocomplete="off">
+          <div class="invalid-feedback">{{ error }}</div>
+          {% else %}
+          <input name="password" type="password" class="form-control" placeholder="Contraseña" autocomplete="off">
+          {% endif %}
+        </div>
+        <div class="form-footer">
+          <button type="submit" class="btn w-100" style="background:#0d1b2a; color:white">Entrar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

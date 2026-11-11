@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tupedido
+      POSTGRES_PASSWORD: tupedido123
+      POSTGRES_DB: tupedidojr
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tupedido -d tupedidojr"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  osrm:
+    image: osrm/osrm-backend
+    restart: unless-stopped
+    command: osrm-routed --algorithm mld /data/guanajuato.osrm
+    volumes:
+      - osrm_data:/data:ro
+    ports:
+      - "5001:5000"
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    ports:
+      - "8080:8000"
+    environment:
+      APP_NAME: TuPedidoJR
+      DEBUG: "true"
+      DATABASE_URL: postgresql+asyncpg://tupedido:tupedido123@db:5432/tupedidojr
+      DATABASE_URL_SYNC: postgresql://tupedido:tupedido123@db:5432/tupedidojr
+      SECRET_KEY: supersecretkey-cambiar-en-produccion
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+volumes:
+  pgdata:
+  osrm_data:
+    external: true
+    name: tupedidojr_osrm_data

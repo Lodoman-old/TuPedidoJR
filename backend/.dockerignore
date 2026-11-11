@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Secretos
+.env
+.env.*
+!.env.example
+
+# Contenido generado o pesado (se monta como volumen en producción)
+static/tiles/
+static/uploads/
+static/downloads/*.apk
+
+# Pruebas y temporales
+tests/
+*.log
+htmlcov/
+.coverage

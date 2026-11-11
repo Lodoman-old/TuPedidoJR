@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ restaurant.name }}{% if restaurant.cuisine %} — {{ restaurant.cuisine }}{% endif %} | TuPedidoJR</title>
+  <meta name="description" content="{{ restaurant.description or ('Pide ' ~ restaurant.name ~ ' a domicilio en TuPedidoJR') }}">
+  <meta property="og:type" content="restaurant">
+  <meta property="og:title" content="{{ restaurant.name }}{% if restaurant.cuisine %} — {{ restaurant.cuisine }}{% endif %}">
+  <meta property="og:description" content="{{ restaurant.description or ('Pide ' ~ restaurant.name ~ ' a domicilio en TuPedidoJR') }}">
+  <meta property="og:url" content="{{ request.url }}">
+  <meta property="og:image" content="{{ request.base_url }}{{ (restaurant.logo_url or '/static/logo.png').lstrip('/') }}">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="/static/logo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <style>
+    body { background: #f0f4ff; font-family: system-ui, -apple-system, sans-serif; }
+    .hero { background: #0d1b2a; color: #fff; padding: 28px 0; }
+    .hero img { width: 96px; height: 96px; object-fit: cover; border-radius: 16px; background: #fff; }
+    .menu-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 12px; background: #eef1f4; }
+    .item { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .price { font-weight: 700; color: #0d1b2a; }
+    .footer { color: #6c757d; font-size: .85rem; padding: 30px 0; }
+    .badge-open { background: #198754; }
+    .badge-closed { background: #6c757d; }
+  </style>
+</head>
+<body>
+{% if not restaurant %}
+  <div class="container py-5 text-center">
+    <h1 class="h3">Restaurante no disponible</h1>
+    <p class="text-muted">Esta página no existe o fue desactivada.</p>
+    <a class="btn btn-dark" href="/web/restaurants">Ver restaurantes</a>
+  </div>
+{% else %}
+  {% set commission_rate = restaurant.effective_commission_percentage|float %}
+  <section class="hero">
+    <div class="container d-flex align-items-center gap-3">
+      <img src="{{ restaurant.logo_url or '/static/logo.png' }}" alt="{{ restaurant.name }}" onerror="this.src='/static/logo.png'">
+      <div>
+        <h1 class="h3 mb-1">{{ restaurant.name }}</h1>
+        <div class="mb-1">
+          {% if restaurant.cuisine %}<span class="badge bg-light text-dark">{{ restaurant.cuisine }}</span>{% endif %}
+          <span class="badge bg-warning text-dark">{{ restaurant.rating or '0.0' }} ★</span>
+          <span class="badge {{ 'badge-open' if open_state.is_open_now else 'badge-closed' }}">
+            {{ 'Abierto' if open_state.is_open_now else 'Cerrado' }}
+          </span>
+          {% if restaurant.delivery_mode == 'own' %}
+            <span class="badge bg-info text-dark">Entrega propia</span>
+          {% endif %}
+          {% if restaurant.pickup_enabled %}
+            <span class="badge bg-primary">Recoger en restaurante</span>
+          {% endif %}
+        </div>
+        <div class="small opacity-75">{{ restaurant.address }}</div>
+        {% if open_state.message %}<div class="small opacity-75">{{ open_state.message }}</div>{% endif %}
+        <div class="small opacity-75">Envío desde ${{ '%.2f'|format(restaurant.delivery_fee|float) }}</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="container py-3">
+    <div class="alert alert-light border small py-2 mb-3">
+      <i class="bi bi-info-circle"></i>
+      El menú es público y no necesitas cuenta para verlo. Para pedir, inicia sesión o crea una cuenta;
+      al terminar regresas automáticamente a este restaurante para completar tu pedido.
+    </div>
+    <div class="d-flex gap-2 flex-wrap mb-3">
+      <a class="btn btn-dark" href="/web/restaurants/{{ restaurant.id }}">
+        <i class="bi bi-bag-check"></i> Pedir a domicilio
+      </a>
+      <a class="btn btn-outline-primary" href="/web/login?next={{ ('/web/restaurants/' ~ restaurant.id)|urlencode }}">
+        <i class="bi bi-box-arrow-in-right"></i> Iniciar sesión
+      </a>
+      <a class="btn btn-outline-dark" href="/web/register?next={{ ('/web/restaurants/' ~ restaurant.id)|urlencode }}">
+        <i class="bi bi-person-plus"></i> Crear cuenta
+      </a>
+      <button class="btn btn-outline-dark" onclick="sharePage()">
+        <i class="bi bi-share"></i> Compartir
+      </button>
+      <a class="btn btn-outline-success" target="_blank"
+         href="https://wa.me/?text={{ (restaurant.name ~ ' — pide aquí: ' ~ request.url)|urlencode }}">
+        <i class="bi bi-whatsapp"></i> WhatsApp
+      </a>
+    </div>
+
+    {% for cat in restaurant.categories %}
+      {% set items = restaurant.menu | selectattr('category_id', 'equalto', cat.id) | list %}
+      {% if items %}
+        <h2 class="h5 mt-4 mb-2">{{ cat.name }}</h2>
+        {% for item in items %}
+          <div class="item d-flex gap-3 align-items-center">
+            {% if item.image_url %}
+              <img class="menu-thumb" src="{{ item.image_url }}" alt="{{ item.name }}" onerror="this.style.display='none'">
+            {% else %}
+              <div class="menu-thumb d-flex align-items-center justify-content-center text-muted"><i class="bi bi-image"></i></div>
+            {% endif %}
+            <div class="flex-grow-1">
+              <div class="fw-bold">{{ item.name }}</div>
+              {% if item.description %}<div class="small text-muted">{{ item.description }}</div>{% endif %}
+              <div class="price">${{ '%.2f'|format(item.price|float * (1 + commission_rate / 100)) }}</div>
+            </div>
+            {% if item.is_available %}
+              <a class="btn btn-sm btn-outline-dark" href="/web/restaurants/{{ restaurant.id }}">Pedir</a>
+            {% else %}
+              <span class="badge bg-secondary">Agotado</span>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endfor %}
+
+    {% set uncategorized = restaurant.menu | rejectattr('category_id') | list %}
+    {% if uncategorized %}
+      <h2 class="h5 mt-4 mb-2">Otros</h2>
+      {% for item in uncategorized %}
+        <div class="item d-flex gap-3 align-items-center">
+          {% if item.image_url %}
+            <img class="menu-thumb" src="{{ item.image_url }}" alt="{{ item.name }}" onerror="this.style.display='none'">
+          {% else %}
+            <div class="menu-thumb d-flex align-items-center justify-content-center text-muted"><i class="bi bi-image"></i></div>
+          {% endif %}
+          <div class="flex-grow-1">
+            <div class="fw-bold">{{ item.name }}</div>
+            {% if item.description %}<div class="small text-muted">{{ item.description }}</div>{% endif %}
+            <div class="price">${{ '%.2f'|format(item.price|float * (1 + commission_rate / 100)) }}</div>
+          </div>
+          {% if item.is_available %}
+            <a class="btn btn-sm btn-outline-dark" href="/web/restaurants/{{ restaurant.id }}">Pedir</a>
+          {% else %}
+            <span class="badge bg-secondary">Agotado</span>
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <div class="footer text-center">
+      <a href="/web/restaurants" class="text-decoration-none">Ver todos los restaurantes</a>
+      <br>Pedidos con TuPedidoJR
+    </div>
+  </div>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Restaurant",
+    "name": {{ restaurant.name|tojson }},
+    "description": {{ (restaurant.description or '')|tojson }},
+    "image": {{ (request.base_url ~ (restaurant.logo_url or '/static/logo.png').lstrip('/'))|tojson }},
+    "address": {{ restaurant.address|tojson }},
+    "telephone": {{ (restaurant.phone or '')|tojson }},
+    "servesCuisine": {{ (restaurant.cuisine or '')|tojson }},
+    "url": {{ request.url|string|tojson }}
+  }
+  </script>
+  <script>
+    async function sharePage() {
+      const data = { title: {{ restaurant.name|tojson }}, text: 'Mira el menú de {{ restaurant.name }}', url: location.href };
+      if (navigator.share) {
+        try { await navigator.share(data); return; } catch (e) {}
+      }
+      try { await navigator.clipboard.writeText(location.href); alert('Enlace copiado'); }
+      catch (e) { prompt('Copia el enlace:', location.href); }
+    }
+  </script>
+{% endif %}
+</body>
+</html>

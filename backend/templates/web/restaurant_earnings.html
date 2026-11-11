@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block content %}
+<h5 class="mb-3">Ganancias del restaurante</h5>
+<div id="earningsLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="earningsContent" class="d-none"></div>
+<div id="earningsError" class="d-none alert alert-danger"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  const money = n => '$' + parseFloat(n || 0).toFixed(2);
+
+  const payoutStatus = {
+    pending: ['Pendiente', 'warning'],
+    paid: ['Pagada', 'success'],
+    confirmed: ['Confirmada', 'success'],
+    cancelled: ['Cancelada', 'secondary'],
+  };
+
+  async function loadEarnings() {
+    const loading = document.getElementById('earningsLoading');
+    const content = document.getElementById('earningsContent');
+    const error = document.getElementById('earningsError');
+    try {
+      const [restaurant, data, payouts] = await Promise.all([
+        getRestaurant(RID),
+        apiRequest('GET', `/restaurants/${RID}/earnings`),
+        apiRequest('GET', `/restaurants/${RID}/payouts`),
+      ]);
+
+      loading.classList.add('d-none');
+      content.classList.remove('d-none');
+
+      const available = parseFloat(data.available_for_payout || 0);
+      const pendingPayouts = parseFloat(data.total_pending_payouts || 0);
+
+      let html = `
+        <div class="row g-2 mb-3">
+          <div class="col-6 col-md-3">
+            <div class="card p-3 text-center">
+              <small class="text-muted">Ganancia neta</small>
+              <strong class="fs-5 text-success">${money(data.net_earned)}</strong>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card p-3 text-center">
+              <small class="text-muted">Pedidos</small>
+              <strong class="fs-5">${data.total_orders}</strong>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card p-3 text-center ${available > 0 ? 'border-success' : ''}">
+              <small class="text-muted">Disponible para liquidar</small>
+              <strong class="fs-5 text-success">${money(available)}</strong>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card p-3 text-center ${pendingPayouts > 0 ? 'border-warning' : ''}">
+              <small class="text-muted">En proceso</small>
+              <strong class="fs-5 text-warning">${money(pendingPayouts)}</strong>
+            </div>
+          </div>
+        </div>`;
+
+      if (pendingPayouts > 0) {
+        html += `<div class="alert alert-warning py-2 text-center">Liquidación en proceso: ${money(pendingPayouts)}</div>`;
+      }
+      const pendingConfirmation = parseFloat(data.pending_confirmation || 0);
+      if (pendingConfirmation > 0) {
+        html += `<div class="alert alert-secondary py-2 text-center">Transferencias pendientes de confirmar por la plataforma: ${money(pendingConfirmation)}</div>`;
+      }
+
+      if (available > 0) {
+        html += `<div class="mb-3"><button class="btn btn-success btn-lg w-100" onclick="requestPayout()">Solicitar liquidación — ${money(available)}</button></div>`;
+      }
+
+      html += `
+        <div class="card p-3 mb-3">
+          <h6>Detalle</h6>
+          <table class="table table-sm mb-0">
+            <tr><td>Subtotal</td><td class="text-end">${money(data.total_subtotal)}</td></tr>
+            <tr><td>Comisión plataforma</td><td class="text-end text-danger">-${money(data.total_commission)}</td></tr>
+            <tr><td>Cuota fija (la paga el cliente)</td><td class="text-end text-muted">${money(data.total_flat_fees)}</td></tr>
+            <tr><td>Gastos de envío</td><td class="text-end">${money(data.total_delivery_fees)}</td></tr>
+            <tr class="border-top"><th>Ganancia neta</th><th class="text-end text-success">${money(data.net_earned)}</th></tr>
+          </table>
+        </div>
+        <div class="card p-3 mb-3">
+          <h6>Forma de cobro</h6>
+          <table class="table table-sm mb-0">
+            <tr><td>Efectivo (cobra repartidor)</td><td class="text-end">${money(data.total_collected_cash)}</td></tr>
+            <tr><td>Transferencia / MP (cobrado por la plataforma)</td><td class="text-end">${money(data.total_collected_transfer)}</td></tr>
+            <tr><td>Transferencias pendientes de confirmar</td><td class="text-end text-secondary">${money(data.pending_confirmation)}</td></tr>
+            <tr class="border-top"><th>Pendiente de cobro a plataforma</th><th class="text-end text-info">${money(data.pending_from_platform)}</th></tr>
+          </table>
+          <p class="small text-muted mb-0 mt-2">Las transferencias se depositan a TuPedidoJR. Tu ganancia neta se liquida desde la plataforma; no cobras la transferencia directamente al cliente.</p>
+        </div>`;
+
+      html += `<h6 class="mt-3 mb-2">Historial de liquidaciones</h6>`;
+      if (payouts.length) {
+        html += `<div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Período</th><th>Pedidos</th><th>Neto</th><th>Estado</th></tr></thead><tbody>`;
+        for (const p of payouts) {
+          const [label, color] = payoutStatus[p.status] || [p.status, 'secondary'];
+          html += `<tr>
+            <td>${p.period_start} a ${p.period_end}</td>
+            <td>${p.orders_count}</td>
+            <td>${money(p.net_payout)}</td>
+            <td><span class="badge bg-${color}">${label}</span></td>
+          </tr>`;
+        }
+        html += `</tbody></table></div>`;
+      } else {
+        html += `<p class="text-muted small">Sin liquidaciones todavía</p>`;
+      }
+
+      html += `
+        <div class="card p-3">
+          <h6>Datos bancarios</h6>
+          <p class="mb-1 small">Banco: ${restaurant.bank_name || '-'}</p>
+          <p class="mb-1 small">Titular: ${restaurant.bank_account_holder || '-'}</p>
+          <p class="mb-0 small">CLABE: ${restaurant.bank_clabe || '-'}</p>
+        </div>`;
+
+      content.innerHTML = html;
+    } catch (e) {
+      loading.classList.add('d-none');
+      error.classList.remove('d-none');
+      error.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  async function requestPayout() {
+    if (!confirm('¿Solicitar liquidación de tu saldo disponible?')) return;
+    try {
+      const payout = await apiRequest('POST', `/restaurants/${RID}/request-payout`);
+      showToast(`Liquidación solicitada: ${money(payout.net_payout)}`, 'success');
+      await loadEarnings();
+    } catch (e) {
+      showToast('Error: ' + e.message, 'danger');
+    }
+  }
+
+  loadEarnings();
+</script>
+{% endblock %}
+

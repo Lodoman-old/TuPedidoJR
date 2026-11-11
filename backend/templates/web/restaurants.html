@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="m-0">Restaurantes</h4>
+</div>
+<div class="input-group mb-3">
+  <input type="text" class="form-control" id="searchInput" autocomplete="off"
+         placeholder="Buscar restaurante, giro o platillo (ej. sushi, taco, pizza)...">
+  <button class="btn btn-outline-primary" id="searchBtn" aria-label="Buscar"><i class="bi bi-search"></i></button>
+</div>
+<div class="d-flex gap-3 flex-wrap align-items-center mb-3">
+  <select id="filterSort" class="form-select form-select-sm" style="max-width:210px">
+    <option value="">Más cercanos</option>
+    <option value="rating">Mejor calificados</option>
+    <option value="fee">Menor costo de envío</option>
+  </select>
+  <div class="form-check form-switch mb-0">
+    <input class="form-check-input" type="checkbox" id="filterOpen">
+    <label class="form-check-label small" for="filterOpen">Abiertos ahora</label>
+  </div>
+  <div class="form-check form-switch mb-0">
+    <input class="form-check-input" type="checkbox" id="filterFree">
+    <label class="form-check-label small" for="filterFree">Envío gratis</label>
+  </div>
+</div>
+<div id="restaurantsList" class="row g-3"></div>
+<div id="loadingSpinner" class="text-center py-5">
+  <div class="spinner-border text-primary"></div>
+</div>
+<div id="emptyMsg" class="text-center py-5 d-none">
+  <i class="bi bi-shop" style="font-size:3rem;color:#ccc;"></i>
+  <p class="mt-2 text-muted" id="emptyText">No hay restaurantes cerca de tu ubicación</p>
+  <button class="btn btn-outline-primary d-none" id="showAllBtn" onclick="loadAllRestaurants()">Ver todos los restaurantes</button>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  let searchTimer = null;
+
+  function restaurantCard(r) {
+    const cuisine = r.cuisine
+      ? `<span class="badge bg-dark ms-1">${r.cuisine}</span>`
+      : '';
+    const openBadge = r.is_open_now === false
+      ? '<span class="badge bg-secondary ms-1">Cerrado</span>'
+      : '<span class="badge bg-success ms-1">Abierto</span>';
+    const deliveryBadge = r.delivery_mode === 'own'
+      ? '<span class="badge bg-info text-dark ms-1">Entrega propia</span>'
+      : '';
+    const distance = r.distance_m ? `<small class="text-muted ms-1">· ${Math.round(r.distance_m)} m</small>` : '';
+    return `
+      <div class="col-6 col-md-4 col-lg-3">
+        <div class="card h-100" role="button" onclick="window.location='/web/restaurants/${r.id}'">
+          <img src="${r.logo_url || '/static/logo.png'}" class="card-img-top" alt="${r.name}" onerror="this.src='/static/logo.png'">
+          <div class="card-body">
+            <h6 class="card-title mb-1">${r.name}</h6>
+            <div class="mb-1">
+              <span class="badge bg-warning text-dark">${r.rating || '0.0'}</span>
+              ${cuisine}
+              ${openBadge}
+              ${deliveryBadge}
+            </div>
+            <small class="text-muted">Envío $${parseFloat(r.delivery_fee).toFixed(2)}${distance}</small>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function renderRestaurants(data) {
+    const container = document.getElementById('restaurantsList');
+    const empty = document.getElementById('emptyMsg');
+    const showAll = document.getElementById('showAllBtn');
+    container.innerHTML = '';
+    if (!data.length) {
+      empty.classList.remove('d-none');
+      return;
+    }
+    empty.classList.add('d-none');
+    container.innerHTML = data.map(restaurantCard).join('');
+  }
+
+  function getFilters() {
+    const filters = {};
+    const sort = document.getElementById('filterSort')?.value;
+    if (sort) filters.sort = sort;
+    if (document.getElementById('filterOpen')?.checked) filters.open_now = 'true';
+    if (document.getElementById('filterFree')?.checked) filters.free_delivery = 'true';
+    return filters;
+  }
+
+  async function loadRestaurants(q) {
+    const container = document.getElementById('restaurantsList');
+    const spinner = document.getElementById('loadingSpinner');
+    const empty = document.getElementById('emptyMsg');
+    const emptyText = document.getElementById('emptyText');
+    const showAll = document.getElementById('showAllBtn');
+    const query = (q || '').trim();
+    const filters = getFilters();
+
+    container.innerHTML = '';
+    empty.classList.add('d-none');
+    spinner.classList.remove('d-none');
+    try {
+      let data;
+      if (query) {
+        // Global search: name, giro, description, dishes or categories.
+        data = await listRestaurants(null, null, query, filters);
+        emptyText.textContent = `No encontramos restaurantes para “${query}”`;
+        showAll.classList.add('d-none');
+      } else {
+        const coords = await getCoords();
+        data = await listRestaurants(coords.lat, coords.lng, null, filters);
+        emptyText.textContent = 'No hay restaurantes con esos filtros';
+        showAll.classList.toggle('d-none', data.length > 0);
+      }
+      spinner.classList.add('d-none');
+      renderRestaurants(data);
+      if (!data.length) empty.classList.remove('d-none');
+    } catch (ex) {
+      spinner.classList.add('d-none');
+      showToast(ex.message, 'danger');
+    }
+  }
+
+  function getCoords() {
+    return new Promise(res => {
+      if (!navigator.geolocation) return res({ lat: 20.644, lng: -100.993 });
+      navigator.geolocation.getCurrentPosition(
+        p => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        () => res({ lat: 20.644, lng: -100.993 }),
+        { timeout: 5000, maximumAge: 300000 }
+      );
+    });
+  }
+
+  async function loadAllRestaurants() {
+    const q = document.getElementById('searchInput').value.trim();
+    await loadRestaurants(q);
+  }
+
+  function scheduleSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      loadRestaurants(document.getElementById('searchInput').value);
+    }, 280);
+  }
+
+  document.getElementById('searchBtn').addEventListener('click', () => {
+    clearTimeout(searchTimer);
+    loadRestaurants(document.getElementById('searchInput').value);
+  });
+  document.getElementById('searchInput').addEventListener('input', scheduleSearch);
+  document.getElementById('searchInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      clearTimeout(searchTimer);
+      loadRestaurants(document.getElementById('searchInput').value);
+    }
+  });
+  document.getElementById('filterSort').addEventListener('change', () => loadRestaurants(document.getElementById('searchInput').value));
+  document.getElementById('filterOpen').addEventListener('change', () => loadRestaurants(document.getElementById('searchInput').value));
+  document.getElementById('filterFree').addEventListener('change', () => loadRestaurants(document.getElementById('searchInput').value));
+  loadRestaurants();
+</script>
+{% endblock %}

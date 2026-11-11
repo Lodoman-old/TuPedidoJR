@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="mb-3">Pedidos <span class="small text-muted fs-6">· se actualiza cada 15 s</span></h4>
+<div id="restaurantOrdersSection" class="d-none mb-4"></div>
+<div id="customerOrdersSection"></div>
+<div id="ordersLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="ordersEmpty" class="text-center py-5 d-none">
+  <i class="bi bi-inbox" style="font-size:3rem;color:#ccc;"></i>
+  <p class="mt-2 text-muted">No tienes pedidos aún</p>
+  <a href="/web/restaurants" class="btn btn-primary">Ver restaurantes</a>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const STATUS_COLORS = {
+    pending: 'bg-warning text-dark', confirmed: 'bg-info text-dark', preparing: 'bg-primary text-white',
+    ready: 'bg-success text-white', in_delivery: 'bg-info text-white', picked_up: 'bg-teal text-white',
+    delivered: 'bg-secondary text-white', cancelled: 'bg-danger text-white'
+  };
+  const STATUS_LABELS = {
+    pending: 'Pendiente', confirmed: 'Confirmado', preparing: 'Preparando',
+    ready: 'Listo', in_delivery: 'En reparto', picked_up: 'Recogido',
+    delivered: 'Entregado', cancelled: 'Cancelado'
+  };
+
+  let ordersBusy = false;
+
+  async function loadOrders(silent = false) {
+    if (ordersBusy) return;
+    ordersBusy = true;
+    const container = document.getElementById('customerOrdersSection');
+    const restoSection = document.getElementById('restaurantOrdersSection');
+    const loading = document.getElementById('ordersLoading');
+    const empty = document.getElementById('ordersEmpty');
+    if (!silent) loading.classList.remove('d-none');
+
+    try {
+      let myRestaurants = [];
+      try { myRestaurants = await listMyRestaurants(); } catch (e) {}
+      loading.classList.add('d-none');
+
+      if (myRestaurants.length > 0) {
+        let html = '<h5 class="mb-2">Pedidos de tu restaurante</h5>';
+        let hasRestoOrders = false;
+        for (const r of myRestaurants) {
+          try {
+            const orders = await listRestaurantOrders(r.id);
+            if (orders.length > 0) {
+              hasRestoOrders = true;
+              html += orders.map(o => `
+                <div class="card p-3 mb-2 order-card" onclick="window.location='/web/restaurants/${r.id}/orders'">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                      <strong>${r.name}</strong>
+                      <div class="small text-muted">#${o.id.slice(0, 8)}${o.fulfillment_type === 'pickup' ? ' · Recoger en restaurante' : ''}</div>
+                    </div>
+                    <div class="text-end">
+                      <span class="status-pill ${STATUS_COLORS[o.status] || 'bg-secondary'}">${STATUS_LABELS[o.status] || o.status}</span>
+                      <div class="fw-bold mt-1">$${parseFloat(o.total).toFixed(2)}</div>
+                    </div>
+                  </div>
+                </div>`).join('');
+            }
+          } catch (e) {}
+        }
+        if (!hasRestoOrders) {
+          html += '<p class="text-muted small">No hay pedidos entrantes</p>';
+        }
+        restoSection.innerHTML = html;
+        restoSection.classList.remove('d-none');
+      } else {
+        restoSection.innerHTML = '';
+        restoSection.classList.add('d-none');
+      }
+
+      // Load customer orders
+      const orders = await listOrders();
+      if (orders.length === 0 && myRestaurants.length === 0) {
+        container.innerHTML = '';
+        empty.classList.remove('d-none');
+        return;
+      }
+      empty.classList.add('d-none');
+      if (orders.length > 0) {
+        container.innerHTML = (myRestaurants.length > 0 ? '<h5 class="mb-2 mt-3">Mis pedidos</h5>' : '<h5 class="mb-2">Mis pedidos</h5>') + orders.map(o => `
+          <div class="card p-3 mb-2 order-card" onclick="window.location='/web/orders/${o.id}'">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <strong>#${o.id.slice(0, 8)}</strong>
+                <div class="small text-muted">${new Date(o.placed_at).toLocaleDateString('es-MX', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}</div>
+              </div>
+              <div class="text-end">
+                <span class="status-pill ${STATUS_COLORS[o.status] || 'bg-secondary'}">${STATUS_LABELS[o.status] || o.status}</span>
+                <div class="fw-bold mt-1">$${parseFloat(o.total).toFixed(2)}</div>
+                ${o.status === 'delivered' ? '<div class="small mt-1 text-warning fw-bold"><i class="bi bi-star-fill"></i> Califica tu pedido</div>' : ''}
+              </div>
+            </div>
+          </div>`).join('');
+      } else {
+        container.innerHTML = '';
+      }
+    } catch (ex) {
+      loading.classList.add('d-none');
+      if (!silent) showToast(ex.message, 'danger');
+    } finally {
+      ordersBusy = false;
+    }
+  }
+
+  loadOrders();
+  setInterval(() => { if (!document.hidden) loadOrders(true); }, 15000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadOrders(true); });
+</script>
+{% endblock %}

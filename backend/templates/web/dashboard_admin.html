@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="m-0"><i class="bi bi-speedometer2"></i> Operación en vivo</h4>
+  <button class="btn btn-outline-secondary btn-sm" onclick="loadDashboard()">
+    <i class="bi bi-arrow-clockwise"></i> Actualizar
+  </button>
+</div>
+<div id="dashboardError" class="alert alert-danger d-none"></div>
+<div id="dashboardLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="dashboardContent" class="d-none"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const money = n => '$' + parseFloat(n || 0).toFixed(2);
+
+  function card(label, value, color = '') {
+    return `<div class="col-6 col-md-3"><div class="card p-3 text-center ${color}">
+      <small class="text-muted">${label}</small><strong class="fs-4">${value}</strong>
+    </div></div>`;
+  }
+
+  function alertTable(title, rows, color) {
+    if (!rows || !rows.length) return '';
+    return `<div class="card p-3 mb-3 border-${color}">
+      <h6 class="text-${color}">${title}</h6>
+      <div class="table-responsive"><table class="table table-sm mb-0">
+        <thead><tr><th>Pedido</th><th>Estado</th><th class="text-end">Total</th><th class="text-end">Minutos</th><th></th></tr></thead>
+        <tbody>${rows.map(o => `<tr>
+          <td>#${o.id.slice(0, 8)}</td>
+          <td>${o.status_label}</td>
+          <td class="text-end">${money(o.total)}</td>
+          <td class="text-end">${o.minutes}</td>
+          <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/web/orders/${o.id}">Ver</a></td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+  }
+
+  async function loadDashboard() {
+    const loading = document.getElementById('dashboardLoading');
+    const content = document.getElementById('dashboardContent');
+    const error = document.getElementById('dashboardError');
+    error.classList.add('d-none');
+    loading.classList.remove('d-none');
+    try {
+      const data = await apiRequest('GET', '/admin/dashboard');
+      const statusText = data.active.by_status
+        .filter(s => s.count > 0)
+        .map(s => `${s.label}: ${s.count}`)
+        .join(' · ') || 'Sin pedidos activos';
+
+      content.innerHTML = `
+        <div class="row g-2 mb-3">
+          ${card('Pedidos activos', data.active.total, data.active.total ? 'border-primary' : '')}
+          ${card('Ventas de hoy', money(data.today.sales), 'border-success')}
+          ${card('Pedidos hoy', `${data.today.delivered} entregados / ${data.today.orders}`, '')}
+          ${card('Propinas hoy', money(data.today.tips), '')}
+          ${card('Restaurantes abiertos', `${data.restaurants.open} / ${data.restaurants.total}`, '')}
+          ${card('Repartidores disponibles', `${data.couriers.available} / ${data.couriers.total}`, '')}
+          ${card('Transferencias por confirmar', `${data.transfers.count} · ${money(data.transfers.amount)}`, data.transfers.count ? 'border-warning' : '')}
+          ${card('Avances por aprobar', `${data.advances.count} · ${money(data.advances.amount)}`, data.advances.count ? 'border-warning' : '')}
+        </div>
+        <div class="card p-3 mb-3">
+          <h6>Estado de pedidos activos</h6>
+          <div class="small text-muted">${statusText}</div>
+        </div>
+        ${alertTable('Pedidos pendientes hace más de 10 minutos', data.alerts.pending_10min, 'danger')}
+        ${alertTable('Pedidos en preparación/listos hace más de 45 minutos', data.alerts.late_preparing, 'warning')}
+        <div class="card p-3">
+          <h6>Últimos pedidos</h6>
+          <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Pedido</th><th>Estado</th><th>Pago</th><th class="text-end">Total</th><th>Hora</th><th></th></tr></thead>
+            <tbody>${data.recent_orders.map(o => `<tr>
+              <td>#${o.id.slice(0, 8)}</td>
+              <td>${o.status_label}</td>
+              <td>${o.payment_method === 'transfer' ? 'Transferencia' : 'Efectivo'}</td>
+              <td class="text-end">${money(o.total)}</td>
+              <td class="small">${o.placed_at ? new Date(o.placed_at).toLocaleString() : '—'}${o.scheduled_for ? `<br><span class="text-info">Programado: ${new Date(o.scheduled_for).toLocaleString()}</span>` : ''}</td>
+              <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/web/orders/${o.id}">Ver</a></td>
+            </tr>`).join('')}</tbody>
+          </table></div>
+        </div>`;
+      content.classList.remove('d-none');
+    } catch (ex) {
+      error.textContent = ex.message;
+      error.classList.remove('d-none');
+    } finally {
+      loading.classList.add('d-none');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (sessionStorage.getItem('is_superuser') === 'true') {
+      loadDashboard();
+      setInterval(loadDashboard, 30000);
+    }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-9">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0"><i class="bi bi-bell"></i> Configuración de notificaciones push</h5>
+      <a href="/web/profile" class="btn btn-sm btn-outline-secondary">Volver</a>
+    </div>
+
+    <div id="pushAdminError" class="alert alert-danger d-none"></div>
+    <div id="pushAdminLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+
+    <div id="pushAdminContent" class="d-none">
+      <div class="alert alert-info small">
+        Esta pantalla solo es visible para el superusuario. La <strong>service account</strong> es privada y nunca se muestra
+        de vuelta; si ya está configurada, deja el campo vacío para conservarla.
+      </div>
+
+      <ul class="nav nav-tabs mb-3" id="pushTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="fcm-tab" data-bs-toggle="tab" data-bs-target="#fcm-pane" type="button">Firebase / FCM</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="help-tab" data-bs-toggle="tab" data-bs-target="#help-pane" type="button">Cómo obtener los datos</button>
+        </li>
+      </ul>
+
+      <div class="tab-content">
+        <div class="tab-pane fade show active" id="fcm-pane">
+          <form id="pushConfigForm">
+            <div class="card p-3 mb-3">
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="pushEnabled">
+                <label class="form-check-label" for="pushEnabled"><strong>Notificaciones push activadas</strong></label>
+              </div>
+              <div class="small text-muted">
+                Proyecto: <span id="projectId" class="fw-semibold">-</span> ·
+                Dispositivos registrados: <span id="tokensCount" class="fw-semibold">0</span> ·
+                Service account: <span id="hasServiceAccount" class="fw-semibold">-</span>
+              </div>
+            </div>
+
+            <div class="card p-3 mb-3">
+              <label class="form-label fw-semibold">Service account JSON (privado)</label>
+              <textarea class="form-control font-monospace" id="serviceAccountJson" rows="5"
+                placeholder='{"type":"service_account","project_id":"...","client_email":"...","private_key":"..."}'></textarea>
+              <div class="form-text">Se usa en el servidor para enviar por FCM HTTP v1. Se guarda en la base de datos y no se devuelve al navegador.</div>
+            </div>
+
+            <div class="card p-3 mb-3">
+              <label class="form-label fw-semibold">Configuración web de Firebase (pública)</label>
+              <textarea class="form-control font-monospace" id="webConfigJson" rows="5"
+                placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","messagingSenderId":"...","appId":"..."}'></textarea>
+              <div class="form-text">La usa la PWA (incluido iPhone) para obtener el token. Estos datos son públicos por diseño de Firebase.</div>
+            </div>
+
+            <div class="card p-3 mb-3">
+              <label class="form-label fw-semibold">Configuración Android (pública)</label>
+              <textarea class="form-control font-monospace" id="androidConfigJson" rows="5"
+                placeholder='{"project_id":"tupedidojr","mobilesdk_app_id":"1:...:android:...","api_key":"AIza...","gcm_defaultSenderId":"..."}'></textarea>
+              <div class="form-text">
+                Se usa en el APK para inicializar Firebase y obtener el token sin recompilar la app.
+                Toma los valores de <code>google-services.json</code> de tu app Android.
+              </div>
+            </div>
+
+            <div class="card p-3 mb-3">
+              <label class="form-label fw-semibold">VAPID key (pública)</label>
+              <input type="text" class="form-control font-monospace" id="vapidKey" placeholder="B...">
+              <div class="form-text">Firebase Console → Configuración del proyecto → Cloud Messaging → Certificados push web.</div>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap">
+              <button type="submit" class="btn btn-primary" id="savePushBtn"><i class="bi bi-save"></i> Guardar configuración</button>
+              <button type="button" class="btn btn-outline-success" id="testPushBtn"><i class="bi bi-send"></i> Enviar prueba a mis dispositivos</button>
+            </div>
+            <div id="pushSaveMsg" class="small mt-2"></div>
+          </form>
+        </div>
+
+        <div class="tab-pane fade" id="help-pane">
+          <div class="card p-3">
+            <h6>1. Crear proyecto en Firebase</h6>
+            <p class="small">Entra a <a href="https://console.firebase.google.com/" target="_blank" rel="noopener">console.firebase.google.com</a> y crea un proyecto.</p>
+
+            <h6>2. Service account (privado)</h6>
+            <p class="small mb-1">Firebase Console → ⚙️ Configuración del proyecto → <strong>Cuentas de servicio</strong> → <strong>Generar nueva clave privada</strong>.</p>
+            <p class="small">Descarga el JSON y pégalo completo en el campo “Service account JSON”.</p>
+
+            <h6>3. Configuración web (PWA / iPhone)</h6>
+            <p class="small mb-1">Firebase Console → ⚙️ Configuración del proyecto → <strong>Tus apps</strong> → agrega una app web.</p>
+            <p class="small">Copia el objeto <code>firebaseConfig</code> y pégalo en “Configuración web”.</p>
+
+            <h6>4. VAPID key</h6>
+            <p class="small mb-1">Firebase Console → Cloud Messaging → <strong>Certificados push web</strong> → genera un par de claves.</p>
+            <p class="small">Copia la clave pública (empieza con “B”) en el campo VAPID key.</p>
+
+            <h6>5. APK Android</h6>
+            <p class="small mb-1">En Firebase Console agrega una app Android con el paquete <code>com.tupedidojr.tupedidojr</code> y descarga <code>google-services.json</code>.</p>
+            <p class="small mb-1">De ese archivo toma estos valores y pégalos en “Configuración Android”:</p>
+            <pre class="small bg-light p-2 rounded">{
+  "project_id": "tupedidojr",
+  "mobilesdk_app_id": "1:...:android:...",
+  "api_key": "AIza...",
+  "gcm_defaultSenderId": "..."
+}</pre>
+            <p class="small mb-0">El APK los descarga al iniciar y obtiene su token FCM sin necesidad de recompilar. Luego lo registra en <code>/api/v1/push/tokens</code>.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  let pushConfig = null;
+
+  async function loadPushConfig() {
+    const loading = document.getElementById('pushAdminLoading');
+    const content = document.getElementById('pushAdminContent');
+    const error = document.getElementById('pushAdminError');
+    try {
+      pushConfig = await apiRequest('GET', '/push/admin/config');
+      loading.classList.add('d-none');
+      content.classList.remove('d-none');
+      document.getElementById('pushEnabled').checked = !!pushConfig.enabled;
+      document.getElementById('projectId').textContent = pushConfig.project_id || '-';
+      document.getElementById('tokensCount').textContent = pushConfig.tokens_count || 0;
+      document.getElementById('hasServiceAccount').textContent = pushConfig.has_service_account ? 'Configurada' : 'Sin configurar';
+      document.getElementById('webConfigJson').value = pushConfig.web_config ? JSON.stringify(pushConfig.web_config, null, 2) : '';
+      document.getElementById('androidConfigJson').value = pushConfig.android_config ? JSON.stringify(pushConfig.android_config, null, 2) : '';
+      document.getElementById('vapidKey').value = pushConfig.vapid_key || '';
+    } catch (e) {
+      loading.classList.add('d-none');
+      error.classList.remove('d-none');
+      error.innerHTML = '<strong>Acceso restringido.</strong> Esta configuración solo está disponible para el superusuario.';
+    }
+  }
+
+  document.getElementById('pushConfigForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('pushSaveMsg');
+    const btn = document.getElementById('savePushBtn');
+    btn.disabled = true;
+    msg.className = 'small text-muted';
+    msg.textContent = 'Guardando...';
+    try {
+      const body = {
+        enabled: document.getElementById('pushEnabled').checked,
+        vapid_key: document.getElementById('vapidKey').value.trim(),
+      };
+      const sa = document.getElementById('serviceAccountJson').value.trim();
+      const web = document.getElementById('webConfigJson').value.trim();
+      const android = document.getElementById('androidConfigJson').value.trim();
+      if (sa) body.service_account_json = sa;
+      if (web) body.web_config_json = web;
+      if (android) body.android_config_json = android;
+      pushConfig = await apiRequest('PUT', '/push/admin/config', body);
+      msg.className = 'small text-success';
+      msg.textContent = 'Configuración guardada.';
+      document.getElementById('serviceAccountJson').value = '';
+      document.getElementById('hasServiceAccount').textContent = pushConfig.has_service_account ? 'Configurada' : 'Sin configurar';
+      document.getElementById('projectId').textContent = pushConfig.project_id || '-';
+    } catch (ex) {
+      msg.className = 'small text-danger';
+      msg.textContent = ex.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('testPushBtn')?.addEventListener('click', async () => {
+    const msg = document.getElementById('pushSaveMsg');
+    msg.className = 'small text-muted';
+    msg.textContent = 'Enviando prueba...';
+    try {
+      const stats = await apiRequest('POST', '/push/admin/test', { only_self: true });
+      if (stats.sent > 0) {
+        msg.className = 'small text-success';
+        msg.textContent = `Prueba enviada a ${stats.sent} dispositivo(s).`;
+      } else {
+        msg.className = 'small text-warning';
+        msg.textContent = 'No se envió nada. Verifica que las notificaciones estén activadas y que este dispositivo tenga token registrado.';
+      }
+    } catch (ex) {
+      msg.className = 'small text-danger';
+      msg.textContent = ex.message;
+    }
+  });
+
+  loadPushConfig();
+</script>
+{% endblock %}

@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<h4 class="mb-3">📦 Solicitar mandado</h4>
+
+<div class="card p-3 mb-3">
+  <div class="mb-3">
+    <label class="form-label"><strong>¿Qué necesitas?</strong></label>
+    <textarea class="form-control" id="mandadoDesc" rows="3" placeholder="Ej: 1kg de tortillas, 2L de leche, jabón de trastes..."></textarea>
+  </div>
+  <div class="mb-3">
+    <label class="form-label"><strong>Presupuesto estimado de productos ($)</strong></label>
+    <input type="number" class="form-control" id="budgetInput" step="0.01" min="1" placeholder="Ej: 150">
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
+    <label class="form-label mb-0"><strong>Dirección de entrega</strong></label>
+    <button type="button" class="btn btn-sm btn-outline-primary" id="gpsMandadoBtn">
+      <i class="bi bi-crosshair"></i> Usar ubicación del dispositivo
+    </button>
+  </div>
+  <div class="row g-2 mb-2">
+    <div class="col-5">
+      <input class="form-control" id="postalCode" maxlength="5" inputmode="numeric" placeholder="C.P.">
+    </div>
+    <div class="col-7">
+      <select class="form-select" id="coloniaSelect"><option value="">Colonia...</option></select>
+    </div>
+  </div>
+  <input class="form-control mb-2" id="deliveryAddress" placeholder="Calle y número">
+  <div class="d-flex gap-2 flex-wrap mb-2">
+    <button class="btn btn-sm btn-outline-secondary" id="searchMandadoBtn"><i class="bi bi-search"></i> Buscar calle</button>
+  </div>
+  <div id="mandadoGeoMsg" class="small mb-2 text-muted">
+    Si no escribes la dirección, intentamos usar la ubicación del dispositivo. Puedes corregir la calle y mover el pin.
+  </div>
+  <div id="mandadoMap" style="height: 280px; border-radius: 12px;" class="border"></div>
+  <div class="form-text">Arrastra el pin o toca el mapa para ajustar el punto exacto de entrega.</div>
+</div>
+
+<div class="card p-3 mb-3">
+  <div class="mb-3">
+    <label class="form-label"><strong>Método de pago</strong></label>
+    <div class="form-check">
+      <input class="form-check-input" type="radio" name="payMethod" id="payCash" value="cash" checked>
+      <label class="form-check-label" for="payCash"><i class="bi bi-cash"></i> Efectivo (pagas al repartidor)</label>
+    </div>
+    <div class="form-text">Por el momento solo está disponible el pago en efectivo.</div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3" id="feeSummary">
+  <h6>Desglose estimado</h6>
+  <div class="d-flex justify-content-between small"><span>Productos (presupuesto)</span><span id="estProducts">$0.00</span></div>
+  <div class="d-flex justify-content-between small"><span>Envío</span><span id="estDelivery">—</span></div>
+  <div class="d-flex justify-content-between small"><span id="estRiskLabel">Extra por riesgo</span><span id="estRisk">—</span></div>
+  <div class="d-flex justify-content-between small"><span>Comisión plataforma</span><span id="estPlatform">—</span></div>
+  <hr>
+  <div class="d-flex justify-content-between fw-bold"><span>Total estimado</span><span id="estTotal">—</span></div>
+</div>
+
+<div id="mandadoError" class="alert alert-danger d-none"></div>
+<button class="btn btn-primary w-100" id="submitMandado">Solicitar mandado</button>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let estimateTimer = null;
+  let picked = { lat: null, lng: null };
+  let mmap = null;
+  let mmarker = null;
+  let cpCenter = null;
+  let deviceTried = false;
+  let coordsReady = false;
+
+  function geoMsg(text, kind = 'muted') {
+    const node = document.getElementById('mandadoGeoMsg');
+    node.className = `small mb-2 text-${kind}`;
+    node.textContent = text;
+  }
+
+  function initMandadoMap(lat, lng) {
+    picked = { lat, lng };
+    if (typeof L === 'undefined') return;
+    if (mmap) {
+      mmap.setView([lat, lng], 17);
+      if (mmarker) mmarker.setLatLng([lat, lng]);
+      return;
+    }
+    mmap = L.map('mandadoMap').setView([lat, lng], 17);
+    createLocalTileLayer({
+      attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(mmap);
+    mmarker = L.marker([lat, lng], { draggable: true }).addTo(mmap);
+    mmarker.on('dragend', () => {
+      const p = mmarker.getLatLng();
+      picked = { lat: p.lat, lng: p.lng };
+      coordsReady = true;
+      geoMsg('Pin ajustado. Esta será la ubicación de entrega.', 'success');
+      scheduleEstimate();
+    });
+    mmap.on('click', (e) => {
+      mmarker.setLatLng(e.latlng);
+      picked = { lat: e.latlng.lat, lng: e.latlng.lng };
+      coordsReady = true;
+      geoMsg('Pin ajustado. Esta será la ubicación de entrega.', 'success');
+      scheduleEstimate();
+    });
+    setTimeout(() => mmap.invalidateSize(), 200);
+  }
+
+  function movePin(lat, lng) {
+    picked = { lat, lng };
+    coordsReady = true;
+    if (mmap && mmarker) {
+      mmap.setView([lat, lng], 17);
+      mmarker.setLatLng([lat, lng]);
+    }
+  }
+
+  async function loadColonias(cp, selected = null) {
+    const select = document.getElementById('coloniaSelect');
+    if (!/^\d{5}$/.test(cp)) return;
+    try {
+      const data = await apiRequest('GET', `/geocode/postal-code/${cp}`);
+      cpCenter = data.lat != null ? { lat: data.lat, lng: data.lng } : null;
+      const names = (data.colonias || []).map(c => c.nombre);
+      const chosen = AddressUtils.fillColoniaSelect(select, names, selected);
+      if (chosen) geoMsg(`Colonia: ${chosen}.`, 'muted');
+    } catch (e) { /* sin colonias */ }
+  }
+
+  document.getElementById('postalCode').addEventListener('input', (e) => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 5);
+    if (e.target.value.length === 5) loadColonias(e.target.value);
+  });
+
+  async function reverseFill(lat, lng) {
+    let cp = '', colonia = '', street = '';
+    try {
+      const local = await apiRequest('GET', `/geocode/postal-code-reverse?lat=${lat}&lng=${lng}`);
+      cp = String(local.cp || '');
+      colonia = local.colonia || '';
+    } catch (e) { /* sin polígono */ }
+    try {
+      const rev = await apiRequest('GET', `/geocode/reverse?lat=${lat}&lng=${lng}`);
+      street = [rev.road, rev.house_number].filter(Boolean).join(' ');
+      cp = cp || String(rev.postcode || '');
+      colonia = colonia || rev.suburb || rev.neighbourhood || '';
+    } catch (e) { /* sin geocoder */ }
+    if (cp) {
+      document.getElementById('postalCode').value = cp;
+      await loadColonias(cp, colonia);
+    }
+    if (street) document.getElementById('deliveryAddress').value = street;
+    return { cp, colonia, street };
+  }
+
+  function useDeviceLocation(auto = false) {
+    if (!navigator.geolocation) {
+      geoMsg('Este navegador no permite obtener la ubicación.', 'danger');
+      return;
+    }
+    geoMsg('Obteniendo ubicación del dispositivo...');
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+      movePin(latitude, longitude);
+      const found = await reverseFill(latitude, longitude);
+      const parts = [found.street, found.colonia, found.cp ? `C.P. ${found.cp}` : ''].filter(Boolean);
+      geoMsg(parts.length
+        ? `${auto ? 'Ubicación detectada' : 'Ubicación aplicada'}: ${parts.join(', ')}. Corrige la calle o mueve el pin si hace falta.`
+        : 'Ubicación aplicada. Escribe la calle o mueve el pin.', parts.length ? 'success' : 'warning');
+      scheduleEstimate();
+    }, () => {
+      geoMsg(auto
+        ? 'No se pudo obtener la ubicación. Escribe la dirección manualmente.'
+        : 'No se pudo obtener la ubicación. Revisa los permisos.', 'danger');
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+  }
+
+  document.getElementById('gpsMandadoBtn').addEventListener('click', () => useDeviceLocation(false));
+
+  ['deliveryAddress', 'postalCode'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => { coordsReady = false; });
+  });
+  document.getElementById('coloniaSelect').addEventListener('change', () => { coordsReady = false; });
+
+  async function resolveCoordinates(street, cp, colonia, addr) {
+    if (coordsReady && picked.lat != null && picked.lng != null) return { ...picked };
+    let coords = null;
+    try {
+      let results = [];
+      if (cp && colonia && street) {
+        results = await apiRequest('POST', '/geocode/structured', {
+          street, colonia, postal_code: cp,
+        });
+      }
+      if ((!results || !results.length) && addr) {
+        results = await apiRequest('POST', '/geocode', {
+          address: `${addr}, Santa Cruz de Juventino Rosas, Guanajuato, México`,
+        });
+      }
+      if (results && results.length) {
+        coords = { lat: Number(results[0].lat), lng: Number(results[0].lng) };
+      } else if (cpCenter) {
+        coords = { ...cpCenter };
+      }
+    } catch (err) {
+      coords = null;
+    }
+    if (coords) {
+      movePin(coords.lat, coords.lng);
+      return coords;
+    }
+    return null;
+  }
+
+  document.getElementById('searchMandadoBtn').addEventListener('click', async () => {
+    const street = document.getElementById('deliveryAddress').value.trim();
+    const cp = document.getElementById('postalCode').value.trim();
+    const colonia = document.getElementById('coloniaSelect').value;
+    const addr = [street, colonia, cp ? `C.P. ${cp}` : ''].filter(Boolean).join(', ');
+    if (addr.length < 5) {
+      geoMsg('Escribe la calle, la colonia y el C.P. para buscar.', 'danger');
+      return;
+    }
+    geoMsg('Buscando la calle...');
+    coordsReady = false;
+    const coords = await resolveCoordinates(street, cp, colonia, addr);
+    geoMsg(coords
+      ? 'Calle encontrada. Revisa el pin y confirma el mandado.'
+      : 'No pudimos ubicar la dirección. Ajusta el pin en el mapa.',
+      coords ? 'success' : 'danger');
+  });
+
+  function resetEstimate() {
+    ['estDelivery', 'estRisk', 'estPlatform', 'estTotal'].forEach(id => {
+      document.getElementById(id).textContent = '—';
+    });
+    document.getElementById('estRiskLabel').textContent = 'Extra por riesgo';
+  }
+
+  async function updateEstimate() {
+    const budget = parseFloat(document.getElementById('budgetInput').value) || 0;
+    document.getElementById('estProducts').textContent = '$' + budget.toFixed(2);
+    if (budget <= 0) {
+      resetEstimate();
+      return;
+    }
+    const coords = coordsReady
+      ? picked
+      : await getCoords();
+    try {
+      const est = await apiRequest('POST', '/mandados/estimate', {
+        estimated_budget: budget,
+        delivery_location: { lat: coords.lat, lng: coords.lng },
+      });
+      document.getElementById('estDelivery').textContent = '$' + parseFloat(est.delivery_fee).toFixed(2);
+      document.getElementById('estRisk').textContent = '$' + parseFloat(est.risk_fee).toFixed(2);
+      document.getElementById('estRiskLabel').textContent = est.risk_type === 'percentage'
+        ? `Extra por riesgo (${parseFloat(est.risk_value)}%)`
+        : `Extra por riesgo (monto fijo $${parseFloat(est.risk_value).toFixed(2)})`;
+      document.getElementById('estPlatform').textContent = '$' + parseFloat(est.platform_fee).toFixed(2);
+      document.getElementById('estTotal').textContent = '$' + parseFloat(est.estimated_total).toFixed(2);
+    } catch (ex) {
+      resetEstimate();
+    }
+  }
+
+  function scheduleEstimate() {
+    clearTimeout(estimateTimer);
+    estimateTimer = setTimeout(updateEstimate, 400);
+  }
+
+  document.getElementById('budgetInput').addEventListener('input', scheduleEstimate);
+
+  document.getElementById('submitMandado').addEventListener('click', async () => {
+    const desc = document.getElementById('mandadoDesc').value.trim();
+    const budget = parseFloat(document.getElementById('budgetInput').value);
+    const street = document.getElementById('deliveryAddress').value.trim();
+    const cp = document.getElementById('postalCode').value.trim();
+    const colonia = document.getElementById('coloniaSelect').value;
+    const payMethod = document.querySelector('input[name="payMethod"]:checked')?.value || 'cash';
+    const addr = [street, colonia, cp ? `C.P. ${cp}` : ''].filter(Boolean).join(', ');
+
+    if (desc.length < 10) { showToast('Describe qué necesitas (mín 10 caracteres)', 'danger'); return; }
+    if (!budget || budget <= 0) { showToast('Ingresa un presupuesto válido', 'danger'); return; }
+    if (addr.length < 5) { showToast('Escribe la dirección de entrega', 'danger'); return; }
+
+    let coords = await resolveCoordinates(street, cp, colonia, addr);
+    if (!coords) {
+      geoMsg('No pudimos ubicar la dirección. Ajusta el pin en el mapa.', 'danger');
+      return;
+    }
+
+    try {
+      const m = await apiRequest('POST', '/mandados', {
+        description: desc,
+        estimated_budget: budget,
+        delivery_address: addr,
+        delivery_location: { lat: coords.lat, lng: coords.lng },
+        payment_method: payMethod,
+      });
+      showToast('Mandado solicitado exitosamente');
+      window.location.href = `/web/mandados/${m.id}`;
+    } catch (ex) {
+      const box = document.getElementById('mandadoError');
+      box.textContent = ex.message;
+      box.classList.remove('d-none');
+    }
+  });
+
+  async function init() {
+    initMandadoMap(20.644, -100.993);
+    const street = document.getElementById('deliveryAddress').value.trim();
+    if (!street && !deviceTried) {
+      deviceTried = true;
+      useDeviceLocation(true);
+    }
+    updateEstimate();
+  }
+
+  init();
+</script>
+{% endblock %}

@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h4 class="m-0"><i class="bi bi-graph-up-arrow"></i> Reportes</h4>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary btn-sm" onclick="downloadCsv('orders')"><i class="bi bi-filetype-csv"></i> Pedidos CSV</button>
+    <button class="btn btn-outline-secondary btn-sm" onclick="downloadCsv('payouts')"><i class="bi bi-filetype-csv"></i> Liquidaciones CSV</button>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-6 col-md-3">
+        <label class="form-label small mb-1">Desde</label>
+        <input type="date" class="form-control form-control-sm" id="dateFrom">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small mb-1">Hasta</label>
+        <input type="date" class="form-control form-control-sm" id="dateTo">
+      </div>
+      <div class="col-12 col-md-4 d-none" id="restaurantWrap">
+        <label class="form-label small mb-1">Restaurante</label>
+        <select class="form-select form-select-sm" id="restaurantFilter">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-2">
+        <button class="btn btn-primary btn-sm w-100" onclick="loadReport()"><i class="bi bi-funnel"></i> Aplicar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="reportError" class="alert alert-danger d-none"></div>
+<div id="reportLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="reportContent" class="d-none"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const money = n => '$' + parseFloat(n || 0).toFixed(2);
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function setDefaultDates() {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - 29);
+    document.getElementById('dateTo').value = to.toISOString().slice(0, 10);
+    document.getElementById('dateFrom').value = from.toISOString().slice(0, 10);
+  }
+
+  function filters() {
+    const params = new URLSearchParams();
+    params.set('date_from', document.getElementById('dateFrom').value);
+    params.set('date_to', document.getElementById('dateTo').value);
+    const rid = document.getElementById('restaurantFilter')?.value;
+    if (rid) params.set('restaurant_id', rid);
+    return params;
+  }
+
+  async function loadRestaurantFilter() {
+    try {
+      let restaurants = [];
+      if (sessionStorage.getItem('is_superuser') === 'true') {
+        restaurants = await apiRequest('GET', '/restaurants?limit=100');
+        document.getElementById('restaurantWrap').classList.remove('d-none');
+      } else {
+        restaurants = await apiRequest('GET', '/restaurants/my');
+      }
+      const select = document.getElementById('restaurantFilter');
+      restaurants.forEach(r => {
+        const option = document.createElement('option');
+        option.value = r.id;
+        option.textContent = r.name;
+        select.appendChild(option);
+      });
+    } catch (e) { /* sin restaurantes */ }
+  }
+
+  function summaryCard(label, value, cls = '') {
+    return `<div class="col-6 col-md-3">
+      <div class="card p-3 text-center ${cls}">
+        <small class="text-muted">${label}</small>
+        <strong class="fs-5">${value}</strong>
+      </div>
+    </div>`;
+  }
+
+  function renderReport(data) {
+    const t = data.totals;
+    const rp = data.restaurant_payouts || {};
+    const dp = data.delivery_payouts || {};
+
+    let html = `
+      <div class="mb-2 small text-muted">
+        ${data.date_from} a ${data.date_to} · Zona horaria: ${data.timezone}
+        ${data.restaurant ? ' · ' + data.restaurant.name : ''}
+      </div>
+      <div class="row g-2 mb-3">
+        ${summaryCard('Pedidos', t.orders_total)}
+        ${summaryCard('Entregados', t.orders_delivered)}
+        ${summaryCard('Cancelados', t.orders_cancelled)}
+        ${summaryCard('Ticket promedio', money(t.average_ticket))}
+        ${summaryCard('Ventas (subtotal)', money(t.gross_subtotal))}
+        ${summaryCard('Comisiones', money(t.commissions), 'border-primary')}
+        ${summaryCard('Cuotas fijas', money(t.flat_fees))}
+        ${summaryCard('Ingreso plataforma', money(t.platform_revenue), 'border-success')}
+        ${summaryCard('Envíos cobrados', money(t.delivery_fees))}
+        ${summaryCard('Ganancia repartidores', money(t.delivery_earnings))}
+        ${summaryCard('Efectivo cobrado', money(t.cash_collected))}
+        ${summaryCard('Propinas', money(t.tips))}
+        ${summaryCard('Reembolsos', money(t.refunds), 'border-danger')}
+      </div>`;
+
+    html += `<div class="card p-3 mb-3">
+      <h6>Liquidaciones</h6>
+      <div class="row g-2 small">
+        <div class="col-6 col-md-3"><span class="text-muted">Restaurantes pendientes</span><br><strong>${money(rp.pending)}</strong></div>
+        <div class="col-6 col-md-3"><span class="text-muted">Restaurantes pagadas</span><br><strong class="text-success">${money(parseFloat(rp.paid || 0) + parseFloat(rp.confirmed || 0))}</strong></div>
+        <div class="col-6 col-md-3"><span class="text-muted">Repartidores pendientes</span><br><strong>${money(dp.pending)}</strong></div>
+        <div class="col-6 col-md-3"><span class="text-muted">Repartidores pagadas</span><br><strong class="text-success">${money(parseFloat(dp.paid || 0) + parseFloat(dp.confirmed || 0))}</strong></div>
+      </div>
+    </div>`;
+
+    if ((data.by_restaurant || []).length > 1) {
+      html += `<div class="card p-3 mb-3">
+        <h6>Restaurantes que más venden</h6>
+        <div class="table-responsive"><table class="table table-sm mb-0">
+          <thead><tr><th>Restaurante</th><th class="text-end">Pedidos</th><th class="text-end">Subtotal</th><th class="text-end">Comisión</th><th class="text-end">Cuotas</th><th class="text-end">Total</th></tr></thead>
+          <tbody>${data.by_restaurant.map(r => `<tr>
+            <td>${esc(r.restaurant_name)}</td>
+            <td class="text-end">${r.orders}</td>
+            <td class="text-end">${money(r.subtotal)}</td>
+            <td class="text-end">${money(r.commissions)}</td>
+            <td class="text-end">${money(r.flat_fees)}</td>
+            <td class="text-end">${money(r.total)}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+    }
+
+    if ((data.top_couriers || []).length) {
+      html += `<div class="card p-3 mb-3">
+        <h6>Repartidores con más entregas</h6>
+        <div class="table-responsive"><table class="table table-sm mb-0">
+          <thead><tr><th>Repartidor</th><th class="text-end">Entregas</th><th class="text-end">Ganancia</th><th class="text-end">Ventas</th></tr></thead>
+          <tbody>${data.top_couriers.map(c => `<tr>
+            <td>${esc(c.name)}</td>
+            <td class="text-end">${c.deliveries}</td>
+            <td class="text-end">${money(c.earnings)}</td>
+            <td class="text-end">${money(c.sales)}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+    }
+
+    html += `<div class="card p-3">
+      <h6>Por día</h6>
+      <div class="table-responsive"><table class="table table-sm mb-0">
+        <thead><tr><th>Fecha</th><th class="text-end">Pedidos</th><th class="text-end">Entregados</th><th class="text-end">Cancelados</th><th class="text-end">Subtotal</th><th class="text-end">Comisión</th><th class="text-end">Cuotas</th><th class="text-end">Total</th></tr></thead>
+        <tbody>${(data.daily || []).slice().reverse().map(d => `<tr>
+          <td>${d.date}</td>
+          <td class="text-end">${d.orders}</td>
+          <td class="text-end">${d.delivered}</td>
+          <td class="text-end">${d.cancelled}</td>
+          <td class="text-end">${money(d.subtotal)}</td>
+          <td class="text-end">${money(d.commissions)}</td>
+          <td class="text-end">${money(d.flat_fees)}</td>
+          <td class="text-end">${money(d.total)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+
+    const content = document.getElementById('reportContent');
+    content.innerHTML = html;
+    content.classList.remove('d-none');
+  }
+
+  async function loadReport() {
+    const loading = document.getElementById('reportLoading');
+    const content = document.getElementById('reportContent');
+    const error = document.getElementById('reportError');
+    error.classList.add('d-none');
+    if (content) content.classList.add('d-none');
+    loading.classList.remove('d-none');
+    try {
+      const data = await apiRequest('GET', '/reports/summary?' + filters().toString());
+      renderReport(data);
+    } catch (ex) {
+      error.textContent = ex.message;
+      error.classList.remove('d-none');
+    } finally {
+      loading.classList.add('d-none');
+    }
+  }
+
+  async function downloadCsv(kind) {
+    const token = sessionStorage.getItem('token');
+    const url = `/api/v1/reports/${kind}.csv?` + filters().toString();
+    try {
+      const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || `Error ${response.status}`);
+      }
+      const blob = await response.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${kind === 'orders' ? 'pedidos' : 'liquidaciones'}_${document.getElementById('dateFrom').value}_${document.getElementById('dateTo').value}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(link.href);
+    } catch (ex) {
+      showToast(ex.message, 'danger');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    setDefaultDates();
+    await loadRestaurantFilter();
+    loadReport();
+  });
+</script>
+{% endblock %}

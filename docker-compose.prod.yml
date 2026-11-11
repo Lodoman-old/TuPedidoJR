@@ -1,0 +1,66 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Configura POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configura POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-tupedidojr}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-tupedidojr}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_NAME: ${APP_NAME:-TuPedidoJR}
+      DEBUG: "false"
+      NOINDEX: ${NOINDEX:-true}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-tupedidojr}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-tupedidojr}
+      SECRET_KEY: ${SECRET_KEY:?Configura SECRET_KEY}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      WS_LOCATION_BUFFER_SECONDS: ${WS_LOCATION_BUFFER_SECONDS:-30}
+      WS_LOCATION_BUFFER_COUNT: ${WS_LOCATION_BUFFER_COUNT:-50}
+      APP_URL: ${APP_URL:?Configura APP_URL, por ejemplo https://beta.tudominio.com}
+      TILES_DIR: /app/static/tiles
+      MERCADO_PAGO_ACCESS_TOKEN: ${MERCADO_PAGO_ACCESS_TOKEN:-}
+      MERCADO_PAGO_WEBHOOK_SECRET: ${MERCADO_PAGO_WEBHOOK_SECRET:-}
+      MERCADO_PAGO_SUCCESS_URL: ${MERCADO_PAGO_SUCCESS_URL:-}
+      MERCADO_PAGO_FAILURE_URL: ${MERCADO_PAGO_FAILURE_URL:-}
+      MERCADO_PAGO_PENDING_URL: ${MERCADO_PAGO_PENDING_URL:-}
+    expose:
+      - "8000"
+    volumes:
+      - uploads:/app/static/uploads
+      - tiles:/app/static/tiles
+      - downloads:/app/static/downloads
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  pgdata:
+  uploads:
+  tiles:
+  downloads:

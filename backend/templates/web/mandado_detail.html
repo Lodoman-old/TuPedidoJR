@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<div id="loading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="content" class="d-none"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const MID = '{{ mandado_id }}';
+  const STATUS_LABELS = {
+    pending: 'Pendiente', accepted: 'Aceptado', buying: 'Comprando',
+    purchased: 'Comprado', in_delivery: 'En camino', completed: 'Entregado',
+    delivered: 'Entregado', cancelled: 'Cancelado'
+  };
+  const STATUS_COLORS = {
+    pending: 'bg-warning text-dark', accepted: 'bg-info text-dark', buying: 'bg-primary text-white',
+    purchased: 'bg-primary text-white', in_delivery: 'bg-success text-white',
+    completed: 'bg-secondary text-white', delivered: 'bg-secondary text-white',
+    cancelled: 'bg-danger text-white'
+  };
+  const ACTIVE = ['pending', 'accepted', 'buying', 'purchased', 'in_delivery'];
+  let map = null;
+  let courierMarker = null;
+  let destinationMarker = null;
+  let routeLine = null;
+  let currentTracking = null;
+  let pollTimer = null;
+  let lastStatus = null;
+
+  async function loadMandado() {
+    try {
+      const [m, t] = await Promise.all([
+        apiRequest('GET', `/mandados/${MID}`),
+        apiRequest('GET', `/mandados/${MID}/tracking`),
+      ]);
+      currentTracking = t;
+      lastStatus = m.status;
+      document.getElementById('loading').classList.add('d-none');
+      document.getElementById('content').classList.remove('d-none');
+      renderMandado(m, t);
+      schedulePoll(m.status);
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  function renderTimeline(t) {
+    if (!t || !t.timeline) return '';
+    if (t.status === 'cancelled') {
+      return '<div class="alert alert-danger py-2">Este mandado fue cancelado.</div>';
+    }
+    const eta = t.eta_min
+      ? `<div class="alert alert-info py-2 small mb-2">⏱ Llegada estimada: ~${t.eta_min} min${t.distance_km != null ? ` · ${t.distance_km} km` : ''}</div>`
+      : '';
+    const steps = t.timeline.map(s => `
+      <div class="d-flex align-items-start mb-2">
+        <div class="me-2 flex-shrink-0" style="width:22px;height:22px;border-radius:50%;background:${s.completed ? '#198754' : '#dee2e6'};color:#fff;text-align:center;line-height:22px;font-size:12px;">${s.completed ? '✓' : ''}</div>
+        <div class="${s.completed ? 'fw-semibold' : 'text-muted'}">
+          ${s.label}
+          ${s.at ? `<br><small class="text-muted">${new Date(s.at).toLocaleString()}</small>` : ''}
+        </div>
+      </div>`).join('');
+    return `<div class="card p-3 mb-3"><h6>Seguimiento</h6>${eta}${steps}</div>`;
+  }
+
+  function renderMandado(m, t) {
+    const st = STATUS_LABELS[m.status] || m.status;
+    const sc = STATUS_COLORS[m.status] || 'bg-secondary';
+    const total = m.final_total || m.estimated_total;
+    let html = `
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="m-0">Mandado #${m.id.slice(0, 8)}</h4>
+        <span class="badge ${sc}">${st}</span>
+      </div>
+      <div id="timelineHost">${renderTimeline(t)}</div>
+      <div id="mapContainer" class="mb-3"><div id="map"></div></div>
+      <div class="card p-3 mb-3">
+        <h6>Descripción</h6>
+        <p class="mb-0">${m.description}</p>
+      </div>
+      <div class="card p-3 mb-3">
+        <h6>Desglose</h6>
+        <div class="d-flex justify-content-between small"><span>Productos (${m.product_total ? 'real' : 'presupuesto'})</span><span>$${parseFloat(m.product_total || m.estimated_budget).toFixed(2)}</span></div>
+        <div class="d-flex justify-content-between small"><span>Envío</span><span>$${parseFloat(m.delivery_fee).toFixed(2)}</span></div>
+        <div class="d-flex justify-content-between small"><span>Extra por riesgo</span><span>$${parseFloat(m.risk_fee).toFixed(2)}</span></div>
+        <div class="d-flex justify-content-between small"><span>Comisión plataforma</span><span>$${parseFloat(m.platform_fee).toFixed(2)}</span></div>
+        <hr>
+        <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>$${parseFloat(total).toFixed(2)}</span></div>
+        <small class="text-muted">Método de pago: ${m.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</small>
+        <br><small class="text-muted">Dirección: ${m.delivery_address}</small>
+      </div>`;
+
+    if (m.receipt_photo_url) {
+      html += `<div class="card p-3 mb-3"><h6>📷 Ticket de compra</h6>
+        <img src="${m.receipt_photo_url}" class="img-fluid rounded" alt="Ticket"></div>`;
+    }
+
+    if (m.status === 'pending' || m.status === 'accepted') {
+      html += `<button class="btn btn-outline-danger w-100" id="cancelBtn">Cancelar mandado</button>`;
+    }
+
+    document.getElementById('content').innerHTML = html;
+    initMap(t);
+    document.getElementById('cancelBtn')?.addEventListener('click', async () => {
+      if (!confirm('¿Cancelar este mandado?')) return;
+      try { await apiRequest('POST', `/mandados/${MID}/cancel`); showToast('Mandado cancelado'); loadMandado(); }
+      catch (ex) { showToast(ex.message, 'danger'); }
+    });
+  }
+
+  function initMap(t) {
+    const el = document.getElementById('map');
+    if (!el) return;
+    if (map) { map.remove(); map = null; }
+    const center = (t && (t.courier || t.destination)) || { lat: 20.644, lng: -100.993 };
+    map = L.map('map').setView([center.lat, center.lng], 15);
+    createLocalTileLayer({
+      attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    if (t && t.destination) {
+      destinationMarker = L.marker([t.destination.lat, t.destination.lng]).addTo(map).bindPopup('Tu dirección');
+    }
+    if (t && t.courier) {
+      courierMarker = L.marker([t.courier.lat, t.courier.lng]).addTo(map).bindPopup('Repartidor');
+    }
+    updateRoute(t);
+    fitMap(t);
+  }
+
+  function updateRoute(t) {
+    if (!map || !t) return;
+    if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+    if (t.courier && t.destination) {
+      routeLine = L.polyline([
+        [t.courier.lat, t.courier.lng],
+        [t.destination.lat, t.destination.lng],
+      ], { color: '#0d6efd', weight: 3, dashArray: '6 8' }).addTo(map);
+    }
+  }
+
+  function fitMap(t) {
+    if (!map) return;
+    const pts = [];
+    if (t?.destination) pts.push([t.destination.lat, t.destination.lng]);
+    if (t?.courier) pts.push([t.courier.lat, t.courier.lng]);
+    if (pts.length > 1) map.fitBounds(pts, { padding: [30, 30] });
+    else if (pts.length === 1) map.setView(pts[0], 15);
+  }
+
+  function schedulePoll(status) {
+    if (pollTimer) clearTimeout(pollTimer);
+    if (!ACTIVE.includes(status)) return;
+    pollTimer = setTimeout(async () => {
+      try {
+        const [m, t] = await Promise.all([
+          apiRequest('GET', `/mandados/${MID}`),
+          apiRequest('GET', `/mandados/${MID}/tracking`),
+        ]);
+        currentTracking = t;
+        if (m.status !== lastStatus) {
+          // Cambió el estado: se vuelve a pintar toda la vista (incluye botones).
+          lastStatus = m.status;
+          renderMandado(m, t);
+          schedulePoll(m.status);
+          return;
+        }
+        const host = document.getElementById('timelineHost');
+        if (host) host.innerHTML = renderTimeline(t);
+        if (map) {
+          if (t.courier) {
+            if (!courierMarker) courierMarker = L.marker([t.courier.lat, t.courier.lng]).addTo(map).bindPopup('Repartidor');
+            else courierMarker.setLatLng([t.courier.lat, t.courier.lng]);
+          }
+          updateRoute(t);
+        }
+        schedulePoll(m.status);
+      } catch (e) {
+        schedulePoll(status);
+      }
+    }, 12000);
+  }
+
+  loadMandado();
+</script>
+{% endblock %}
+

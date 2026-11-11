@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-9">
+
+    <div class="card p-4 mb-3 text-center">
+      <div class="mb-2">
+        <img src="/static/logo.png" alt="TuPedidoJR" style="max-height:64px;max-width:100%;object-fit:contain;">
+      </div>
+      <h4 class="mb-1">Lleva TuPedidoJR en tu celular</h4>
+      <p class="text-muted mb-3">Instálala como app en Android o iPhone. Sin tiendas, sin complicaciones.</p>
+      <div class="d-grid d-sm-flex gap-2 justify-content-center">
+        <a class="btn btn-primary btn-lg" href="/static/downloads/TuPedidoJR.apk" download>
+          <i class="bi bi-android2"></i> Descargar APK (Android)
+        </a>
+        <a class="btn btn-outline-primary btn-lg" href="/web/restaurants">
+          <i class="bi bi-globe"></i> Usar versión web
+        </a>
+      </div>
+      <div class="small text-muted mt-3">APK para Android · En iPhone se instala como app web (PWA)</div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-12 col-md-6">
+        <div class="card p-3 h-100">
+          <h5><i class="bi bi-android2 text-success"></i> Instalar en Android (sin Google Play)</h5>
+          <ol class="small ps-3 mb-0">
+            <li class="mb-2">Toca <strong>“Descargar APK”</strong> y espera la descarga.</li>
+            <li class="mb-2">Abre el archivo desde las notificaciones o desde <em>Descargas</em>.</li>
+            <li class="mb-2">Si Android lo pide, activa <strong>“Instalar apps desconocidas”</strong> para tu navegador o gestor de archivos.</li>
+            <li class="mb-2">Toca <strong>Instalar</strong> y luego <strong>Abrir</strong>.</li>
+            <li class="mb-0">Inicia sesión con tu cuenta. Listo.</li>
+          </ol>
+          <div class="alert alert-warning small mt-3 mb-0">
+            Es normal que aparezca un aviso de seguridad: el APK no viene de Google Play. Instálalo solo desde este sitio.
+          </div>
+          <div class="alert alert-info small mt-2 mb-0">
+            Si la app no conecta, abre <strong>“Servidor / conexión”</strong> en la pantalla de login e ingresa la dirección del servidor
+            (por ejemplo <code>http://192.168.0.7:8080</code> o tu dominio). Después de configurarlo, cierra y vuelve a abrir la app
+            para que registre las notificaciones push.
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-md-6">
+        <div class="card p-3 h-100">
+          <h5><i class="bi bi-apple"></i> Instalar en iPhone (como app web)</h5>
+          <ol class="small ps-3 mb-0">
+            <li class="mb-2">Abre este sitio en <strong>Safari</strong> (no Chrome).</li>
+            <li class="mb-2">Toca el botón <strong>Compartir</strong> (el cuadro con la flecha hacia arriba).</li>
+            <li class="mb-2">Elige <strong>“Agregar a pantalla de inicio”</strong>.</li>
+            <li class="mb-2">Confirma con <strong>Agregar</strong>.</li>
+            <li class="mb-0">Abre la app desde el nuevo ícono. Se verá a pantalla completa.</li>
+          </ol>
+          <div class="alert alert-info small mt-3 mb-0">
+            Las notificaciones en iPhone requieren iOS 16.4 o superior y abrir la app desde el ícono agregado a la pantalla de inicio.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-3 mt-3">
+      <h5 class="mb-2"><i class="bi bi-bell"></i> Activar notificaciones</h5>
+      <p class="small text-muted mb-2">Recibe avisos cuando tu pedido cambie de estado o cuando el repartidor vaya en camino.</p>
+      <div id="pushMsg" class="small"></div>
+      <button class="btn btn-success" id="enablePushBtn" onclick="activatePush()">
+        <i class="bi bi-bell-fill"></i> Activar notificaciones en este dispositivo
+      </button>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  if (!sessionStorage.getItem('token')) {
+    document.getElementById('enablePushBtn').disabled = true;
+    document.getElementById('pushMsg').className = 'small text-muted';
+    document.getElementById('pushMsg').textContent = 'Inicia sesión para activar las notificaciones.';
+  }
+
+  async function activatePush() {
+    const btn = document.getElementById('enablePushBtn');
+    const msg = document.getElementById('pushMsg');
+    btn.disabled = true;
+    msg.className = 'small text-muted';
+    msg.textContent = 'Solicitando permiso...';
+    try {
+      await enablePushNotifications();
+      msg.className = 'small text-success';
+      msg.textContent = 'Notificaciones activadas correctamente.';
+    } catch (e) {
+      msg.className = 'small text-danger';
+      msg.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+</script>
+{% endblock %}

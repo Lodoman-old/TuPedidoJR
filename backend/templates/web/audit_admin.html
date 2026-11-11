@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="m-0"><i class="bi bi-journal-text"></i> Auditoría</h4>
+  <button class="btn btn-outline-secondary btn-sm" onclick="loadAudit()">
+    <i class="bi bi-arrow-clockwise"></i> Actualizar
+  </button>
+</div>
+<div id="auditError" class="alert alert-danger d-none"></div>
+<div id="auditLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="auditContent" class="d-none"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  async function loadAudit() {
+    const loading = document.getElementById('auditLoading');
+    const content = document.getElementById('auditContent');
+    const error = document.getElementById('auditError');
+    error.classList.add('d-none');
+    loading.classList.remove('d-none');
+    try {
+      const rows = await apiRequest('GET', '/admin/audit?limit=200');
+      if (!rows.length) {
+        content.innerHTML = '<div class="card p-3"><p class="text-muted mb-0">Sin movimientos registrados.</p></div>';
+      } else {
+        content.innerHTML = `<div class="card p-3"><div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>Detalle</th></tr></thead>
+            <tbody>${rows.map(row => `<tr>
+              <td class="small">${row.created_at ? new Date(row.created_at).toLocaleString() : ''}</td>
+              <td>${esc(row.user_name || 'Sistema')}</td>
+              <td><code>${esc(row.action)}</code></td>
+              <td class="small">${esc(row.entity || '')}${row.entity_id ? '<br>' + esc(row.entity_id.slice(0, 12)) : ''}</td>
+              <td class="small">${esc(row.detail ? JSON.stringify(row.detail) : '')}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </div></div>`;
+      }
+      content.classList.remove('d-none');
+    } catch (ex) {
+      error.textContent = ex.message;
+      error.classList.remove('d-none');
+    } finally {
+      loading.classList.add('d-none');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (sessionStorage.getItem('is_superuser') === 'true') loadAudit();
+  });
+</script>
+{% endblock %}

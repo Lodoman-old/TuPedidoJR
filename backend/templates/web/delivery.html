@@ -1,0 +1,699 @@
+﻿{% extends "base.html" %}
+{% block head_extra %}
+<style>
+  .dp-card { background: #f8f9fa; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  .dp-card h6 { margin-bottom: 4px; }
+  .dp-card small { color: #6c757d; }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+  .bank-fields { display: none; }
+  .bank-fields.visible { display: block; }
+  .mandado-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+  #deliveryTabs { flex-wrap: wrap; }
+  .dp-tab-btn { font-size: 15px; font-weight: 700; padding: 10px 16px; border: none; border-radius: 10px 10px 0 0; cursor: pointer; flex: 1 1 110px; white-space: nowrap; }
+  @media (max-width: 575.98px) {
+    .dp-tab-btn { flex: 1 1 30%; font-size: 13px; padding: 8px 6px; }
+  }
+  .dp-tab-btn.active { background: #fff; color: #000; box-shadow: 0 -2px 4px rgba(0,0,0,0.05); }
+  .dp-tab-btn:not(.active) { background: #ced4da; color: #495057; }
+  .dp-tab-btn:not(.active):hover { background: #adb5bd; }
+  .dp-tab-btn:disabled { pointer-events: none; }
+</style>
+{% endblock %}
+{% block content %}
+<h4 class="mb-3"><i class="bi bi-bicycle"></i> Panel de Repartidor</h4>
+
+  <div class="card mb-3">
+    <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <strong id="dpName" class="fs-5">-</strong><br>
+        <small class="text-muted" id="dpInfo">Cargando...</small>
+        <span id="debtBadge" class="badge bg-danger ms-2 d-none">Deuda: $0</span>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" id="availSwitch">
+          <label class="form-check-label" for="availSwitch">Disponible</label>
+        </span>
+        <button class="btn btn-outline-secondary btn-sm" onclick="loadDeliveryData()"><i class="bi bi-arrow-clockwise"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <strong><i class="bi bi-geo-alt"></i> Mi ubicación</strong><br>
+        <small class="text-muted" id="gpsStatus">Activa tu ubicación para ver distancias y tiempos al restaurante.</small>
+      </div>
+      <button class="btn btn-sm btn-outline-primary" id="gpsBtn" onclick="startGps()">
+        <i class="bi bi-crosshair"></i> Activar ubicación
+      </button>
+    </div>
+  </div>
+
+  <div class="d-flex gap-1 mb-3" id="deliveryTabs" role="tablist">
+    <button class="dp-tab-btn active text-center" data-tab="available" onclick="switchTab('available')">Disponibles <span id="availableBadge" class="badge bg-warning text-dark d-none">0</span></button>
+    <button class="dp-tab-btn text-center" data-tab="myorders" onclick="switchTab('myorders')">Mis repartos</button>
+    <button class="dp-tab-btn text-center" data-tab="payouts" onclick="switchTab('payouts')">Ganancias</button>
+    <button class="dp-tab-btn text-center" data-tab="settings" onclick="switchTab('settings')">Ajustes</button>
+    <button class="dp-tab-btn text-center" data-tab="mandados" onclick="switchTab('mandados')">Mandados</button>
+  </div>
+
+  <div id="tabContent">
+    <div class="tab-pane active" id="tab-available">Cargando...</div>
+    <div class="tab-pane" id="tab-myorders"></div>
+    <div class="tab-pane" id="tab-payouts"></div>
+    <div class="tab-pane" id="tab-settings"></div>
+    <div class="tab-pane" id="tab-mandados"></div>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script>
+let dpProfile = null;
+let gpsCoords = null;
+let gpsWatchId = null;
+let gpsLastSent = 0;
+let gpsLastLat = null;
+let gpsLastLng = null;
+let knownAvailableIds = new Set();
+let firstAvailableLoad = true;
+let availableTimer = null;
+let audioCtx = null;
+let myDeliveryOrdersCache = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadDeliveryData();
+  document.getElementById('availSwitch')?.addEventListener('change', toggleAvailability);
+  startAvailablePolling();
+  document.addEventListener('click', () => {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) { /* audio no disponible */ }
+  }, { once: true });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && document.getElementById('tab-available')?.classList.contains('active')) {
+      loadAvailable(true);
+    }
+  });
+});
+
+function startAvailablePolling() {
+  if (availableTimer) return;
+  availableTimer = setInterval(() => {
+    if (dpProfile) loadAvailable(true);
+  }, 15000);
+}
+
+function playBeep() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.value = 0.14;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.28);
+  } catch (e) { /* audio no disponible */ }
+}
+
+function notifyNewAvailable(count) {
+  const badge = document.getElementById('availableBadge');
+  const current = badge && !badge.classList.contains('d-none') ? Number(badge.textContent) || 0 : 0;
+  if (badge) {
+    badge.textContent = String(current + count);
+    badge.classList.remove('d-none');
+  }
+  playBeep();
+  showToast(`🔔 ${count} pedido(s) nuevo(s) disponible(s)`, 'warning');
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification('Nuevo pedido disponible', {
+        body: `${count} pedido(s) esperando repartidor`,
+        icon: '/static/logo.png',
+      });
+    } catch (e) { /* sin permiso */ }
+  }
+}
+
+function clearAvailableBadge() {
+  const badge = document.getElementById('availableBadge');
+  if (badge) badge.classList.add('d-none');
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.dp-tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelector(`[data-tab="${name}"]`)?.classList.add('active');
+  document.getElementById(`tab-${name}`)?.classList.add('active');
+  if (name === 'available') clearAvailableBadge();
+  if (!dpProfile) { document.getElementById('tabContent').innerHTML = '<p class="text-muted text-center py-4">Cargando...</p>'; return; }
+  if (name === 'available') loadAvailable(true);
+  else if (name === 'myorders') loadMyOrders();
+  else if (name === 'payouts') loadPayouts();
+  else if (name === 'settings') loadSettings();
+  else if (name === 'mandados') loadMandadosWeb();
+}
+
+async function loadDeliveryData() {
+  try {
+    dpProfile = await getDeliveryProfile();
+    sessionStorage.setItem('is_delivery', 'true');
+    hideDeliveryIrrelevantNav();
+  } catch (e) {
+    sessionStorage.removeItem('is_delivery');
+    document.getElementById('tabContent').innerHTML = '<div class="text-center py-5"><i class="bi bi-bicycle" style="font-size:3rem;color:#ccc;"></i><p class="mt-2 text-muted">No eres repartidor. Regístrate como repartidor en la app.</p></div>';
+    document.querySelectorAll('.dp-tab-btn').forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
+    return;
+  }
+  try {
+    document.getElementById('dpName').textContent = 'Repartidor';
+    document.getElementById('dpInfo').textContent = `⭐ ${dpProfile.rating} · ${dpProfile.total_deliveries} repartos`;
+    document.getElementById('availSwitch').checked = dpProfile.is_available;
+    const debt = parseFloat(dpProfile.pending_platform_debt || 0);
+    const badge = document.getElementById('debtBadge');
+    if (debt > 0) { badge.textContent = `Deuda: $${debt.toFixed(2)}`; badge.classList.remove('d-none'); }
+    else badge.classList.add('d-none');
+    loadAvailable();
+  } catch (e) { showToast('Error al cargar perfil: ' + e.message, 'danger'); }
+}
+
+async function toggleAvailability() {
+  const enabled = document.getElementById('availSwitch').checked;
+  try {
+    await setDeliveryAvailability(enabled);
+    if (dpProfile) dpProfile.is_available = enabled;
+    showToast('Disponibilidad actualizada');
+  } catch (e) { showToast('Error: ' + e.message, 'danger'); document.getElementById('availSwitch').checked = !enabled; }
+}
+
+// ===== Ubicación del dispositivo =====
+function startGps() {
+  const status = document.getElementById('gpsStatus');
+  const btn = document.getElementById('gpsBtn');
+  if (!navigator.geolocation) {
+    status.textContent = 'Este navegador no permite obtener la ubicación.';
+    return;
+  }
+  if (gpsWatchId != null) {
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null;
+  }
+  status.textContent = 'Solicitando permiso de ubicación...';
+  btn.disabled = true;
+  gpsWatchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      const { latitude, longitude, accuracy, speed } = pos.coords;
+      gpsCoords = { lat: latitude, lng: longitude };
+      status.textContent = `Ubicación activa (±${Math.round(accuracy || 0)} m)`;
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-crosshair"></i> Ubicación activa';
+      if (document.getElementById('tab-available')?.classList.contains('active')) {
+        loadAvailable(true);
+      }
+
+      const now = Date.now();
+      const moved = (gpsLastLat == null || gpsLastLng == null)
+        ? 999
+        : Math.abs(latitude - gpsLastLat) + Math.abs(longitude - gpsLastLng);
+      if (now - gpsLastSent > 10000 || moved > 0.0002) {
+        gpsLastSent = now;
+        gpsLastLat = latitude;
+        gpsLastLng = longitude;
+        apiRequest('PATCH', '/delivery/location', {
+          lat: latitude,
+          lng: longitude,
+          speed_kmh: speed != null ? Math.round(speed * 3.6) : null,
+        }).catch(() => {});
+      }
+    },
+    (err) => {
+      btn.disabled = false;
+      status.textContent = err.code === 1
+        ? 'Permiso de ubicación denegado. Actívalo en el navegador.'
+        : 'No se pudo obtener la ubicación. Intenta de nuevo.';
+    },
+    { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+  );
+}
+
+// ===== TAB: Disponibles =====
+const statusLabels = { pending: 'Pendiente', confirmed: 'Confirmado', preparing: 'Preparando', ready: 'Listo', in_delivery: 'En reparto', picked_up: 'Recogido', delivered: 'Entregado', cancelled: 'Cancelado' };
+const payoutStatusLabels = { pending: 'Pendiente', paid: 'Pagada', confirmed: 'Confirmada', cancelled: 'Cancelada' };
+const mandadoStatusLabels = { pending: 'Pendiente', accepted: 'Aceptado', buying: 'Comprando', purchased: 'Comprado', completed: 'Completado', cancelled: 'Cancelado' };
+const statusColors = { confirmed: 'primary', preparing: 'warning', ready: 'success', in_delivery: 'info', picked_up: 'teal', delivered: 'secondary', cancelled: 'danger' };
+const statusBadgeColors = { ready: 'success', preparing: 'warning' };
+
+async function loadAvailable(silent = false) {
+  const el = document.getElementById('tab-available');
+  if (!silent) el.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
+  try {
+    const orders = await listAvailableDeliveryOrders(gpsCoords?.lat, gpsCoords?.lng);
+    const ids = orders.map(o => o.id);
+    if (!firstAvailableLoad) {
+      const newCount = ids.filter(id => !knownAvailableIds.has(id)).length;
+      if (newCount > 0 && dpProfile?.is_available) notifyNewAvailable(newCount);
+    }
+    knownAvailableIds = new Set(ids);
+    firstAvailableLoad = false;
+
+    const updated = new Date().toLocaleTimeString();
+    let html = `<div class="d-flex justify-content-between align-items-center small text-muted mb-2 gap-2 flex-wrap">
+      <span><i class="bi bi-arrow-repeat"></i> Actualizado: ${updated}</span>
+      <span class="d-flex gap-2 align-items-center">
+        <span>Se revisa cada 15 s</span>
+        <button class="btn btn-sm btn-outline-secondary py-0" onclick="loadAvailable()">Actualizar</button>
+      </span>
+    </div>`;
+    if (!orders.length) {
+      el.innerHTML = html + '<p class="text-muted text-center py-4">No hay pedidos disponibles</p>';
+      return;
+    }
+    if (!gpsCoords) {
+      html += '<div class="alert alert-warning py-2 small">Activa <strong>Mi ubicación</strong> para ver la distancia y el tiempo al restaurante.</div>';
+    }
+    for (const o of orders) {
+      const badgeColor = statusBadgeColors[o.status] || 'secondary';
+      const distance = o.distance_km != null ? `${o.distance_km} km` : '—';
+      const eta = o.eta_min != null ? `~${o.eta_min} min` : '—';
+      html += `<div class="dp-card">
+        <div class="d-flex justify-content-between">
+          <h6>#${o.id.slice(0, 8)} <span class="badge bg-${badgeColor}">${statusLabels[o.status] || "Desconocido"}</span></h6>
+          <small>$${parseFloat(o.total).toFixed(2)}</small>
+        </div>
+        <small class="text-muted">${o.restaurant_name || 'Restaurante'}</small><br>
+        <small><i class="bi bi-geo-alt"></i> ${distance} al restaurante · <i class="bi bi-clock"></i> ${eta}</small><br>
+        <small>Artículos: ${(o.items || []).length}</small>
+        <button class="btn btn-sm btn-success mt-2" onclick="acceptOrder('${o.id}')">Aceptar pedido</button>
+      </div>`;
+    }
+    el.innerHTML = html;
+  } catch (e) {
+    if (!silent) el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+  }
+}
+
+async function acceptOrder(oid) {
+  try {
+    await acceptDeliveryOrder(oid);
+    showToast('Pedido aceptado — ve a Mis repartos');
+    loadAvailable();
+    loadMyOrders();
+    switchTab('myorders');
+  } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+}
+
+// ===== TAB: Mis repartos =====
+async function loadMyOrders() {
+  const el = document.getElementById('tab-myorders');
+  el.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
+  try {
+    const orders = await listMyDeliveryOrders();
+    myDeliveryOrdersCache = orders;
+    if (!orders.length) { el.innerHTML = '<p class="text-muted text-center py-4">No tienes repartos activos</p>'; return; }
+    let html = '';
+    for (const o of orders) {
+      const color = statusColors[o.status] || 'secondary';
+      const payLabel = o.payment_method === 'transfer'
+        ? (o.payment_status === 'approved' ? 'Transferencia validada por el administrador' : 'Transferencia pendiente de validar')
+        : (o.payment_method === 'cash' ? 'Pago en efectivo' : 'Pago en línea');
+      html += `<div class="dp-card">
+        <div class="d-flex justify-content-between">
+          <h6>#${o.id.slice(0, 8)} <span class="badge bg-${color}">${statusLabels[o.status] || "Desconocido"}</span></h6>
+          <small>$${parseFloat(o.total || 0).toFixed(2)}</small>
+        </div>
+        <small>${o.delivery_address || ''}</small>
+        <div class="mt-1">
+          <small class="text-muted">${o.restaurant_name || ''}</small>
+        </div>
+        <div class="mt-1"><small class="text-muted"><i class="bi bi-credit-card"></i> ${payLabel}</small></div>`;
+      if (o.status === 'in_delivery') {
+        html += `<div class="mt-2 d-flex gap-2 flex-wrap">
+          <button class="btn btn-sm btn-primary" onclick="pickupOrder('${o.id}')">Recoger pedido</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="requestAdvance('${o.id}')">Pedir avance para restaurante</button>
+        </div>`;
+      } else if (o.status === 'picked_up') {
+        html += `<div class="mt-2">
+          <button class="btn btn-sm btn-success" onclick="deliverOrder('${o.id}')">Entregar pedido</button>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+    el.innerHTML = html;
+  } catch (e) { el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
+}
+
+async function pickupOrder(oid) {
+  try {
+    await pickupDeliveryOrder(oid);
+    showToast('Pedido recogido');
+    loadMyOrders();
+  } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+}
+
+async function requestAdvance(oid) {
+  try {
+    const advance = await requestCashAdvance(oid);
+    showToast(`Avance solicitado: $${parseFloat(advance.amount).toFixed(2)}`);
+  } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+}
+
+function deliverOrder(oid) {
+  const order = myDeliveryOrdersCache.find(o => o.id === oid);
+  if (!order) { showToast('No se encontró el pedido', 'danger'); return; }
+
+  const total = parseFloat(order.total || 0);
+  const earnings = parseFloat(order.delivery_earnings || 0);
+  const owed = Math.max(0, total - earnings);
+  const tip = parseFloat(order.tip_amount || 0);
+  const isCash = order.payment_method === 'cash';
+  const isTransfer = order.payment_method === 'transfer';
+  const payMessage = isTransfer
+    ? (order.payment_status === 'approved'
+      ? '<div class="alert alert-success small mb-2"><i class="bi bi-bank"></i> Pago por <strong>transferencia ya validado</strong> por el administrador. <strong>No cobres en efectivo.</strong></div>'
+      : '<div class="alert alert-info small mb-2"><i class="bi bi-bank"></i> Pago por <strong>transferencia</strong>. El cliente ya pagó; el administrador validará la transferencia. <strong>No cobres en efectivo.</strong></div>')
+    : (!isCash
+      ? '<div class="alert alert-info small mb-2"><i class="bi bi-credit-card"></i> Pago en línea ya registrado. <strong>No cobres en efectivo.</strong></div>'
+      : '');
+
+  const modal = document.createElement('div');
+  modal.className = 'modal fade';
+  modal.innerHTML = `
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Confirmar entrega</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-2">Pedido <strong>#${order.id.slice(0, 8)}</strong></p>
+          <div class="d-flex justify-content-between fs-5 mb-1"><span>Total</span><strong>$${total.toFixed(2)}</strong></div>
+          ${tip > 0 ? `<div class="d-flex justify-content-between small text-muted mb-1"><span>Propina incluida</span><span>$${tip.toFixed(2)}</span></div>` : ''}
+          <div class="d-flex justify-content-between small text-muted mb-2"><span>Tu ganancia de reparto</span><span>$${earnings.toFixed(2)}</span></div>
+          ${payMessage}
+          ${isCash ? `
+            <div class="mb-2">
+              <label class="form-label" for="cashReceived">Dinero que recibes</label>
+              <input type="number" step="0.01" min="0" class="form-control" id="cashReceived" placeholder="0.00">
+            </div>
+            <div class="d-flex justify-content-between"><span>Cambio</span><strong id="changeAmount">$0.00</strong></div>
+            <div class="form-text">Debes entregar $${owed.toFixed(2)} a la plataforma/restaurante.</div>
+          ` : ''}
+          <div id="deliverError" class="text-danger small mt-2"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-success" id="confirmDeliverBtn">
+            <i class="bi bi-check2-circle"></i> Confirmar entrega
+          </button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  const bsModal = new bootstrap.Modal(modal);
+  bsModal.show();
+
+  let received = total;
+  if (isCash) {
+    const input = modal.querySelector('#cashReceived');
+    const changeEl = modal.querySelector('#changeAmount');
+    const updateChange = () => {
+      received = parseFloat(input.value);
+      if (Number.isNaN(received)) {
+        changeEl.textContent = '$0.00';
+        changeEl.className = 'text-muted';
+        return;
+      }
+      const change = received - total;
+      changeEl.textContent = change >= 0 ? `$${change.toFixed(2)}` : `Faltan $${Math.abs(change).toFixed(2)}`;
+      changeEl.className = change >= 0 ? 'text-success' : 'text-danger';
+    };
+    input.addEventListener('input', updateChange);
+    input.focus();
+  }
+
+  const errorEl = modal.querySelector('#deliverError');
+  modal.querySelector('#confirmDeliverBtn').addEventListener('click', async () => {
+    if (isCash) {
+      received = parseFloat(modal.querySelector('#cashReceived').value);
+      if (Number.isNaN(received) || received < total) {
+        errorEl.textContent = `El dinero recibido debe ser al menos $${total.toFixed(2)}.`;
+        return;
+      }
+    }
+    const btn = modal.querySelector('#confirmDeliverBtn');
+    btn.disabled = true;
+    try {
+      await deliverDeliveryOrder(order.id);
+      bsModal.hide();
+      if (isCash) {
+        const change = received - total;
+        showToast(`Pedido entregado. Cambio: $${change.toFixed(2)}`);
+      } else if (isTransfer) {
+        showToast(order.payment_status === 'approved'
+          ? 'Pedido entregado. Transferencia ya validada.'
+          : 'Pedido entregado. Transferencia pendiente de validación del administrador.');
+      } else {
+        showToast('Pedido entregado');
+      }
+      loadMyOrders();
+    } catch (e) {
+      errorEl.textContent = e.message;
+      btn.disabled = false;
+    }
+  });
+  modal.addEventListener('hidden.bs.modal', () => modal.remove());
+}
+
+// ===== TAB: Ganancias =====
+async function loadPayouts() {
+  const el = document.getElementById('tab-payouts');
+  el.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
+  try {
+    const [earnings, payouts] = await Promise.all([getDeliveryEarnings(), listDeliveryPayouts()]);
+    let html = `<div class="row g-2 mb-3">
+      <div class="col-6"><div class="card p-2 text-center border-primary"><small class="text-muted">Total ganado</small><strong class="fs-6 text-primary">$${parseFloat(earnings.total_earned).toFixed(2)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-warning"><small class="text-muted">Por cobrar a plataforma (transferencias)</small><strong class="fs-6 text-warning">$${parseFloat(earnings.total_pending_from_platform).toFixed(2)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-secondary"><small class="text-muted">Transferencias por confirmar</small><strong class="fs-6 text-secondary">$${parseFloat(earnings.total_pending_confirmation || 0).toFixed(2)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-danger"><small class="text-muted">Deuda pendiente</small><strong class="fs-6 text-danger">$${parseFloat(earnings.total_pending_debt).toFixed(2)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-warning"><small class="text-muted">Avances por descontar</small><strong class="fs-6 text-warning">$${parseFloat(earnings.total_advance_debt || 0).toFixed(2)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-success"><small class="text-muted">Pagado</small><strong class="fs-6 text-success">$${parseFloat(earnings.total_paid).toFixed(2)}</strong></div></div>
+    </div>
+    <div class="alert alert-info py-2 small">Las transferencias las recibe TuPedidoJR. Tu ganancia por esos pedidos te la paga la plataforma en efectivo o por transferencia, según tu configuración.</div>`;
+    if (!earnings.total_deliveries) {
+      html += '<p class="text-muted text-center py-3">Sin entregas realizadas</p>';
+      el.innerHTML = html;
+      return;
+    }
+    const pendingPayouts = parseFloat(earnings.total_pending_payouts || 0);
+    const available = parseFloat(earnings.total_earned) - parseFloat(earnings.total_pending_confirmation || 0) - parseFloat(earnings.total_paid) - pendingPayouts - parseFloat(earnings.total_pending_debt);
+    if (pendingPayouts > 0) {
+      html += `<div class="alert alert-warning py-2 text-center">Liquidación en proceso: $${pendingPayouts.toFixed(2)}</div>`;
+    }
+    if (available > 0) {
+      html += `<div class="text-center mb-3"><button class="btn btn-success btn-lg w-100" onclick="requestPayout()">Solicitar liquidación — $${available.toFixed(2)}</button></div>`;
+    }
+    html += `<h6 class="mt-3 mb-2">Últimas entregas</h6><div class="list-group mb-3">`;
+    for (const o of earnings.orders) {
+      const pm = o.payment_method === 'transfer' ? 'Transferencia (paga plataforma)' : 'Efectivo';
+      html += `<div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2">
+        <div><small class="text-muted">${new Date(o.placed_at).toLocaleDateString()} · ${pm}</small><br><small>#${o.id.substring(0,8)}</small></div>
+        <div class="text-end"><strong>$${parseFloat(o.total).toFixed(2)}</strong><br><small class="text-success">+$${parseFloat(o.delivery_earnings).toFixed(2)}</small></div>
+      </div>`;
+    }
+    html += `</div>`;
+    if (payouts.length) {
+      html += `<h6 class="mt-3 mb-2">Historial de pagos</h6><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Período</th><th>Órdenes</th><th>Total</th><th>Estado</th></tr></thead><tbody>`;
+      for (const p of payouts) {
+        const badge = p.status === 'paid' ? 'success' : (p.status === 'pending' ? 'warning' : 'secondary');
+        html += `<tr>
+          <td>${p.period_start} a ${p.period_end}</td>
+          <td>${p.orders_count}</td>
+          <td>$${parseFloat(p.total_earnings).toFixed(2)}</td>
+          <td><span class="badge bg-${badge}">${payoutStatusLabels[p.status] || p.status}</span></td>
+        </tr>`;
+      }
+      html += '</tbody></table></div>';
+    }
+    el.innerHTML = html;
+  } catch (e) { el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
+}
+
+// ===== Solicitar liquidación =====
+async function requestPayout() {
+  if (!confirm('¿Solicitar liquidación de tu saldo disponible?')) return;
+  try {
+    const payout = await apiRequest('POST', '/delivery/request-payout');
+    showToast(`Liquidación generada: $${parseFloat(payout.total_earnings).toFixed(2)} (código: ${payout.confirmation_code})`, 'success');
+    loadPayouts();
+  } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+}
+
+// ===== TAB: Ajustes =====
+let payoutMethod = 'cash';
+
+function loadSettings() {
+  const el = document.getElementById('tab-settings');
+  if (!dpProfile) { el.innerHTML = '<p class="text-muted">Carga el perfil primero</p>'; return; }
+  payoutMethod = dpProfile.payout_method || 'cash';
+  const showBank = payoutMethod === 'transfer';
+  const freq = dpProfile.payout_frequency_days == null ? 7 : Number(dpProfile.payout_frequency_days);
+  el.innerHTML = `
+    <div class="dp-card">
+      <strong>Configuración de pago</strong>
+      <div class="mt-2">
+        <div class="btn-group mb-2" role="group">
+          <button class="btn ${payoutMethod === 'cash' ? 'btn-success' : 'btn-outline-secondary'}" onclick="setPayoutMethod('cash')">Efectivo</button>
+          <button class="btn ${payoutMethod === 'transfer' ? 'btn-success' : 'btn-outline-secondary'}" onclick="setPayoutMethod('transfer')">Transferencia</button>
+        </div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label">Frecuencia de pago</label>
+        <select id="freqSelect" class="form-select">
+          <option value="0" ${freq === 0 ? 'selected' : ''}>Otro: a demanda (varias veces al día)</option>
+          <option value="1" ${freq === 1 ? 'selected' : ''}>Diario</option>
+          <option value="3" ${freq === 3 ? 'selected' : ''}>Cada 3 días</option>
+          <option value="7" ${freq === 7 ? 'selected' : ''}>Cada 7 días</option>
+          <option value="15" ${freq === 15 ? 'selected' : ''}>Cada 15 días</option>
+          <option value="30" ${freq === 30 ? 'selected' : ''}>Cada 30 días</option>
+        </select>
+        <div class="form-text">“Otro” te permite solicitar varias veces al día cuando tengas saldo disponible.</div>
+      </div>
+      <div id="bankFields" class="bank-fields ${showBank ? 'visible' : ''}">
+        <div class="mb-2"><label class="form-label">Banco</label><input id="bankName" class="form-control" value="${dpProfile.bank_name || ''}"></div>
+        <div class="mb-2"><label class="form-label">Titular</label><input id="bankHolder" class="form-control" value="${dpProfile.bank_account_holder || ''}"></div>
+        <div class="mb-2"><label class="form-label">CLABE</label><input id="bankClabe" class="form-control" value="${dpProfile.bank_clabe || ''}"></div>
+      </div>
+      <button class="btn btn-primary mt-2" onclick="saveSettings()">Guardar configuración</button>
+      <div id="settingsStatus" class="mt-2"></div>
+    </div>
+  `;
+}
+
+function setPayoutMethod(v) {
+  payoutMethod = v;
+  document.querySelectorAll('#tab-settings .btn-group .btn').forEach(b => {
+    b.classList.remove('btn-success', 'btn-outline-secondary');
+    const isCash = b.textContent.trim() === 'Efectivo';
+    b.classList.add(v === 'cash' && isCash || v === 'transfer' && !isCash ? 'btn-success' : 'btn-outline-secondary');
+  });
+  document.getElementById('bankFields').classList.toggle('visible', v === 'transfer');
+}
+
+async function saveSettings() {
+  const data = {
+    payout_method: payoutMethod,
+    payout_frequency_days: parseInt(document.getElementById('freqSelect').value),
+    bank_name: document.getElementById('bankName')?.value || null,
+    bank_account_holder: document.getElementById('bankHolder')?.value || null,
+    bank_clabe: document.getElementById('bankClabe')?.value || null,
+  };
+  try {
+    await updateDeliveryProfile(data);
+    dpProfile = await getDeliveryProfile();
+    showToast('Configuración guardada');
+  } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+}
+
+// ===== TAB: Mandados =====
+let currentMandadoPhoto = null;
+
+async function loadMandadosWeb() {
+  const el = document.getElementById('tab-mandados');
+  el.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
+  try {
+    const mandados = await listMandados();
+    const available = mandados.filter(m => m.status === 'pending' && !m.delivery_person_id);
+    const active = mandados.filter(m => m.delivery_person_id && ['accepted', 'purchased'].includes(m.status));
+    let html = '';
+
+    html += '<h6>Mandados disponibles</h6>';
+    if (available.length) {
+      for (const m of available) {
+        html += `<div class="dp-card">
+          <strong>${m.description}</strong>
+          <div><small>Presupuesto: $${parseFloat(m.estimated_budget).toFixed(2)} | Envío: $${parseFloat(m.delivery_fee).toFixed(2)}</small></div>
+          <div><small class="text-muted">Riesgo: $${parseFloat(m.risk_fee).toFixed(2)} | Plataforma: $${parseFloat(m.platform_fee).toFixed(2)}</small></div>
+          <div><strong>Total: $${parseFloat(m.estimated_total).toFixed(2)}</strong></div>
+          <button class="btn btn-sm btn-success mt-2" onclick="acceptMandadoWeb('${m.id}')">Aceptar mandado</button>
+        </div>`;
+      }
+    } else { html += '<p class="text-muted">No hay mandados disponibles</p>'; }
+
+    html += '<hr><h6>Mis mandados activos</h6>';
+    if (active.length) {
+      for (const m of active) {
+        const statusColor = m.status === 'accepted' ? 'primary' : 'teal';
+        html += `<div class="dp-card">
+          <strong>${m.description}</strong> <span class="badge bg-${statusColor}">${mandadoStatusLabels[m.status] || m.status}</span>
+          <div><small>Presupuesto: $${parseFloat(m.estimated_budget).toFixed(2)}</small></div>`;
+        if (m.status === 'accepted') {
+          html += `<button class="btn btn-sm btn-primary mt-2" onclick="showPurchaseDialog('${m.id}')">Marcar como comprado</button>`;
+        } else if (m.status === 'purchased') {
+          html += `<button class="btn btn-sm btn-success mt-2" onclick="deliverMandadoWeb('${m.id}')">Entregar mandado</button>`;
+        }
+        html += `</div>`;
+      }
+    } else { html += '<p class="text-muted">No tienes mandados activos</p>'; }
+
+    el.innerHTML = html;
+  } catch (e) { el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
+}
+
+async function acceptMandadoWeb(mid) {
+  try {
+    await acceptMandado(mid);
+    showToast('Mandado aceptado');
+    loadMandadosWeb();
+  } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+}
+
+function showPurchaseDialog(mid) {
+  const el = document.getElementById('tab-mandados');
+  el.innerHTML = `
+    <div class="dp-card">
+      <strong>Registrar compra</strong>
+      <div class="mb-2"><label class="form-label">Total de productos ($)</label><input id="purchaseTotal" class="form-control" type="number" step="0.01"></div>
+      <div class="mb-2"><label class="form-label">Foto del comprobante</label><input id="receiptFile" class="form-control" type="file" accept="image/*"></div>
+      <div id="uploadProgress" class="text-muted small"></div>
+      <button class="btn btn-primary mt-2" onclick="submitPurchase('${mid}')">Confirmar compra</button>
+      <button class="btn btn-outline-secondary mt-2" onclick="loadMandadosWeb()">Cancelar</button>
+      <div id="purchaseStatus" class="mt-2"></div>
+    </div>
+  `;
+}
+
+async function submitPurchase(mid) {
+  const total = parseFloat(document.getElementById('purchaseTotal').value);
+  if (!total || total <= 0) { document.getElementById('purchaseStatus').innerHTML = '<div class="alert alert-warning">Ingresa un total válido</div>'; return; }
+  const fileInput = document.getElementById('receiptFile');
+  let photoUrl = '';
+  if (fileInput.files.length > 0) {
+    document.getElementById('uploadProgress').textContent = 'Subiendo foto...';
+    try {
+      const uploadResult = await uploadFile(fileInput.files[0]);
+      photoUrl = uploadResult.url;
+      document.getElementById('uploadProgress').textContent = 'Foto subida';
+    } catch (e) { document.getElementById('purchaseStatus').innerHTML = `<div class="alert alert-danger">Error al subir foto: ${e.message}</div>`; return; }
+  }
+  try {
+    await purchaseMandado(mid, total, photoUrl);
+    showToast('¡Compra registrada!');
+    loadMandadosWeb();
+  } catch (e) { document.getElementById('purchaseStatus').innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
+}
+
+async function deliverMandadoWeb(mid) {
+  try {
+    await deliverMandado(mid);
+    showToast('Mandado entregado');
+    loadMandadosWeb();
+  } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card p-4">
+      <h4 class="mb-1">Registra tu restaurante</h4>
+      <p class="text-muted small mb-4">Envía tu solicitud. El equipo de TuPedidoJR la revisará y te avisará por correo.</p>
+      <div id="regRestError" class="alert alert-danger d-none"></div>
+      <div id="regRestSuccess" class="alert alert-success d-none"></div>
+      <form id="regRestForm">
+        <h6 class="mt-2">Datos del responsable</h6>
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label">Nombre completo</label><input id="ownerName" class="form-control" required></div>
+          <div class="col-md-6"><label class="form-label">Correo</label><input id="ownerEmail" type="email" class="form-control" required></div>
+          <div class="col-md-6"><label class="form-label">Teléfono</label><input id="ownerPhone" class="form-control"></div>
+          <div class="col-md-6"><label class="form-label">Contraseña</label><input id="ownerPassword" type="password" minlength="6" class="form-control" required></div>
+        </div>
+
+        <h6 class="mt-4">Datos del restaurante</h6>
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label">Nombre del restaurante</label><input id="restName" class="form-control" required></div>
+          <div class="col-md-6"><label class="form-label">Giro / cocina</label><input id="restCuisine" class="form-control" placeholder="Pizza, tacos, sushi..."></div>
+          <div class="col-md-4">
+            <label class="form-label">Código postal</label>
+            <input id="postalCode" class="form-control" maxlength="5" inputmode="numeric" placeholder="Ej. 38240" required>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Colonia</label>
+            <select id="coloniaSelect" class="form-select" required>
+              <option value="">Escribe el C.P. para cargar colonias</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Calle y número</label>
+            <input id="restStreet" class="form-control" placeholder="Ej. Benito Juárez 123" required>
+          </div>
+          <div class="col-12">
+            <div class="alert alert-light py-2 small mb-2">
+              <i class="bi bi-geo-alt"></i> Municipio: <strong>Santa Cruz de Juventino Rosas, Guanajuato</strong>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+              <button type="button" class="btn btn-outline-primary btn-sm" id="findLocation"><i class="bi bi-search"></i> Buscar dirección</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="gpsLocation" title="Detectar ubicación y sugerir C.P. y colonia"><i class="bi bi-crosshair"></i> Usar ubicación del dispositivo</button>
+            </div>
+            <div class="form-text">El GPS llena C.P., colonia y calle automáticamente. Después puedes corregirlos y ajustar el pin.</div>
+            <div id="geoMsg" class="small text-muted mt-2"></div>
+          </div>
+          <input type="hidden" id="restLat">
+          <input type="hidden" id="restLng">
+          <div class="col-12" id="mapHint">
+            <div class="alert alert-light py-2 small mb-0">
+              <i class="bi bi-map"></i> El mapa aparecerá cuando completes el C.P., la colonia y la calle.
+            </div>
+          </div>
+          <div class="col-12 d-none" id="mapSection">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label mb-0">Ubicación exacta</label>
+              <small class="text-muted">Toca o arrastra el pin para ajustar</small>
+            </div>
+            <div id="pickerMap" style="height:320px;border-radius:12px;overflow:hidden;" class="border"></div>
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+              <span class="small text-muted">Ajuste fino:</span>
+              <div class="btn-group btn-group-sm" role="group" aria-label="Mover pin">
+                <button type="button" class="btn btn-outline-secondary" onclick="nudgePin(0, 1)">↑</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="nudgePin(-1, 0)">←</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="nudgePin(1, 0)">→</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="nudgePin(0, -1)">↓</button>
+              </div>
+              <select id="pinStep" class="form-select form-select-sm" style="width:95px">
+                <option value="1">1 metro</option>
+                <option value="3" selected>3 metros</option>
+                <option value="10">10 metros</option>
+              </select>
+            </div>
+            <div class="form-text">La numeración de casas no viene en el mapa. Escribe “5 de Mayo 209” y coloca el pin sobre la casa con los botones o el mapa.</div>
+          </div>
+        </div>
+        <button class="btn btn-primary w-100 mt-4" type="submit">Enviar solicitud</button>
+      </form>
+      <div class="text-center mt-3 small">
+        ¿Ya tienes cuenta? <a href="/web/login">Inicia sesión</a> ·
+        <a href="/manuales/restaurante">Ver manual del restaurante</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const CITY = 'Santa Cruz de Juventino Rosas';
+  const STATE = 'Guanajuato';
+  const geo = { lat: null, lng: null, colonias: [], cpCenter: null };
+  let pickerMap = null;
+  let pickerMarker = null;
+  let lastReverseKey = '';
+
+  const $ = (id) => document.getElementById(id);
+  const msg = (text, kind = 'muted') => {
+    const el = $('geoMsg');
+    el.className = `small mt-2 text-${kind}`;
+    el.textContent = text;
+  };
+
+  function fullAddress() {
+    const street = $('restStreet').value.trim();
+    const colonia = $('coloniaSelect').value;
+    const cp = $('postalCode').value.trim();
+    return [street, colonia, cp ? `C.P. ${cp}` : '', CITY, STATE, 'México']
+      .filter(Boolean).join(', ');
+  }
+
+  function setCoords(lat, lng, text, moveMap = true) {
+    geo.lat = Number(lat); geo.lng = Number(lng);
+    $('restLat').value = geo.lat.toFixed(7);
+    $('restLng').value = geo.lng.toFixed(7);
+    if (text) msg(text, 'success');
+    if (moveMap) updateMap(geo.lat, geo.lng);
+  }
+
+  function clearCoords() {
+    geo.lat = null; geo.lng = null;
+    $('restLat').value = ''; $('restLng').value = '';
+  }
+
+  function initMap() {
+    if (typeof L === 'undefined') {
+      msg('No se pudo cargar el mapa. Revisa tu conexión a internet.', 'danger');
+      return;
+    }
+    if (pickerMap) {
+      setTimeout(() => pickerMap.invalidateSize(), 150);
+      return;
+    }
+    const center = geo.lat != null && geo.lng != null
+      ? { lat: geo.lat, lng: geo.lng }
+      : (geo.cpCenter || { lat: 20.644, lng: -100.993 });
+    pickerMap = L.map('pickerMap').setView([center.lat, center.lng], 16);
+    createLocalTileLayer({ maxZoom: 19 }).addTo(pickerMap);
+    pickerMarker = L.marker([center.lat, center.lng], { draggable: true }).addTo(pickerMap);
+    pickerMarker.on('dragend', () => {
+      const p = pickerMarker.getLatLng();
+      onMapPoint(p.lat, p.lng);
+    });
+    pickerMap.on('click', (e) => {
+      pickerMarker.setLatLng(e.latlng);
+      onMapPoint(e.latlng.lat, e.latlng.lng);
+    });
+    setTimeout(() => pickerMap.invalidateSize(), 250);
+  }
+
+  function addressReady() {
+    return $('postalCode').value.trim().length === 5
+      && Boolean($('coloniaSelect').value)
+      && $('restStreet').value.trim().length >= 3;
+  }
+
+  function refreshMapVisibility() {
+    const ready = addressReady();
+    $('mapHint').classList.toggle('d-none', ready);
+    $('mapSection').classList.toggle('d-none', !ready);
+    if (!ready) return;
+    initMap();
+    if (geo.lat != null && geo.lng != null) {
+      updateMap(geo.lat, geo.lng);
+    } else if (geo.cpCenter) {
+      updateMap(geo.cpCenter.lat, geo.cpCenter.lng);
+    }
+  }
+
+  function updateMap(lat, lng) {
+    if (!pickerMap || !pickerMarker) return;
+    pickerMarker.setLatLng([lat, lng]);
+    pickerMap.setView([lat, lng], Math.max(pickerMap.getZoom(), 17));
+    setTimeout(() => pickerMap.invalidateSize(), 100);
+  }
+
+  function onMapPoint(lat, lng) {
+    setCoords(lat, lng, 'Pin movido. La latitud y longitud se actualizaron.', false);
+  }
+
+  function nudgePin(dx, dy) {
+    if (geo.lat == null || geo.lng == null || !pickerMarker) return;
+    const step = Math.max(1, parseInt($('pinStep').value, 10) || 3);
+    const metersPerDegreeLat = 111320;
+    const metersPerDegreeLng = 111320 * Math.cos(geo.lat * Math.PI / 180);
+    const lat = geo.lat + (dy * step) / metersPerDegreeLat;
+    const lng = geo.lng + (dx * step) / Math.max(metersPerDegreeLng, 1);
+    setCoords(lat, lng, `Pin movido ${step} m. La ubicación se actualizó.`, false);
+    if (pickerMap && pickerMarker) {
+      pickerMarker.setLatLng([lat, lng]);
+      pickerMap.panTo([lat, lng], { animate: true });
+    }
+  }
+
+  async function loadColonias(cp, preferred = '') {
+    geo.colonias = []; geo.cpCenter = null;
+    const select = $('coloniaSelect');
+    select.innerHTML = '<option value="">Cargando colonias...</option>';
+    if (!/^\d{5}$/.test(cp)) {
+      select.innerHTML = '<option value="">Escribe un C.P. válido</option>';
+      return false;
+    }
+    try {
+      const data = await apiRequest('GET', `/geocode/postal-code/${cp}`);
+      geo.colonias = data.colonias || [];
+      geo.cpCenter = data.lat != null ? { lat: data.lat, lng: data.lng } : null;
+      const chosen = AddressUtils.fillColoniaSelect(
+        select, geo.colonias.map(c => c.nombre), preferred
+      );
+      if (chosen) select.value = chosen;
+      msg(chosen
+        ? `Colonia: ${chosen}. ${geo.colonias.length} colonia(s) encontradas para el C.P. ${cp}.`
+        : `${geo.colonias.length} colonia(s) encontradas para el C.P. ${cp}.`, 'success');
+      return true;
+    } catch (e) {
+      select.innerHTML = '<option value="">No se encontraron colonias</option>';
+      msg('Ese C.P. no pertenece a Santa Cruz de Juventino Rosas o no tiene colonias registradas.', 'warning');
+      return false;
+    }
+  }
+
+  async function syncAddressFromCoords(lat, lng, source) {
+    const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+    if (key === lastReverseKey) return;
+    try {
+      let localCp = null;
+      let localColonias = [];
+      let localColonia = '';
+      try {
+        const local = await apiRequest('GET', `/geocode/postal-code-reverse?lat=${lat}&lng=${lng}`);
+        localCp = local?.cp || null;
+        localColonias = local?.colonias || [];
+        localColonia = local?.colonia || '';
+      } catch (e) { /* outside Juventino Rosas CP polygons */ }
+
+      const rev = await apiRequest('GET', `/geocode/reverse?lat=${lat}&lng=${lng}`);
+      lastReverseKey = key;
+
+      const street = [rev.road, rev.house_number].filter(Boolean).join(' ');
+      let colonia = localColonia || rev.suburb || rev.neighbourhood || '';
+      const cp = localCp || String(rev.postcode || '').replace(/\D/g, '').slice(0, 5);
+      if (!colonia && localColonias.length === 1) {
+        colonia = localColonias[0].nombre;
+      }
+      if (!street && !colonia && cp.length !== 5) {
+        msg(`${source}: ubicación aplicada. No se pudo detectar la dirección; escríbela manualmente o ajusta el pin.`, 'warning');
+        return;
+      }
+
+      await applyDetectedData({ street, colonia, cp });
+      msg(`${source}: datos aplicados automáticamente. Corrige la numeración o mueve el pin si hace falta.`, 'success');
+    } catch (e) {
+      msg('Ubicación seleccionada. No se pudo leer la dirección exacta; revisa calle, colonia y C.P.', 'warning');
+    }
+  }
+
+  async function applyDetectedData(detected) {
+    if (detected.cp) {
+      $('postalCode').value = detected.cp;
+      await loadColonias(detected.cp, detected.colonia || '');
+    }
+    if (detected.street) $('restStreet').value = detected.street;
+    if (detected.colonia) {
+      AddressUtils.selectExistingColonia($('coloniaSelect'), detected.colonia);
+    }
+    refreshMapVisibility();
+  }
+
+  async function findLocation() {
+    const street = $('restStreet').value.trim();
+    const colonia = $('coloniaSelect').value;
+    const cp = $('postalCode').value.trim();
+    if (street.length < 3) { msg('Escribe calle y número.', 'danger'); return; }
+    if (!/^\d{5}$/.test(cp)) { msg('Escribe un código postal de 5 dígitos.', 'danger'); return; }
+    msg('Buscando dirección...');
+    try {
+      let results;
+      if (colonia) {
+        results = await apiRequest('POST', '/geocode/structured', {
+          street, colonia, postal_code: cp, city: CITY, state: STATE,
+        });
+      } else {
+        results = await apiRequest('POST', '/geocode', {
+          address: `${street}, ${CITY}, ${STATE}, México`, postal_code: cp,
+        });
+      }
+      if (!results || !results.length) throw new Error('No se encontró la dirección. Ajusta el pin en el mapa.');
+      const exact = results.find(r => (r.postcode || '') === cp) || results[0];
+      setCoords(exact.lat, exact.lng, `Ubicación encontrada: ${exact.display_name || fullAddress()}`);
+    } catch (e) {
+      msg(e.message, 'danger');
+    }
+  }
+
+  function useGps() {
+    if (!navigator.geolocation) { msg('Este dispositivo no permite obtener la ubicación.', 'danger'); return; }
+    msg('Obteniendo ubicación precisa del dispositivo...');
+    let best = null;
+    let finished = false;
+    let watchId = null;
+    let timer = null;
+
+    const finish = async () => {
+      if (finished) return;
+      finished = true;
+      if (timer) clearTimeout(timer);
+      if (watchId != null) navigator.geolocation.clearWatch(watchId);
+      if (!best) {
+        msg('No se pudo obtener una ubicación precisa. Revisa el permiso de ubicación o ajusta el pin en el mapa.', 'danger');
+        return;
+      }
+      const accuracy = Math.round(best.coords.accuracy || 0);
+      setCoords(best.coords.latitude, best.coords.longitude,
+        `GPS aplicado con precisión de ±${accuracy} m. Sincronizando dirección...`);
+      if (accuracy > 50) {
+        msg(`El GPS tiene baja precisión (±${accuracy} m). Ajusta el pin en el mapa para mayor exactitud.`, 'warning');
+      }
+      await syncAddressFromCoords(best.coords.latitude, best.coords.longitude, `GPS ±${accuracy} m`);
+    };
+
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        if (!best || (pos.coords.accuracy || 9999) < (best.coords.accuracy || 9999)) best = pos;
+        if ((pos.coords.accuracy || 9999) <= 20) finish();
+      },
+      (err) => {
+        if (!best) {
+          finished = true;
+          if (timer) clearTimeout(timer);
+          if (watchId != null) navigator.geolocation.clearWatch(watchId);
+          msg(`No se pudo obtener la ubicación: ${err.message}`, 'danger');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+    timer = setTimeout(finish, 7000);
+  }
+
+  $('postalCode').addEventListener('input', async (e) => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 5);
+    if (e.target.value.length === 5) {
+      const loaded = await loadColonias(e.target.value);
+      if (loaded && geo.cpCenter) setCoords(geo.cpCenter.lat, geo.cpCenter.lng, 'Centro del C.P. aplicado.', true);
+    }
+    refreshMapVisibility();
+  });
+  $('coloniaSelect').addEventListener('change', () => {
+    msg('Colonia actualizada. Pulsa Buscar dirección para ubicar la calle exacta.', 'muted');
+    refreshMapVisibility();
+  });
+  $('restStreet').addEventListener('input', refreshMapVisibility);
+  $('findLocation').addEventListener('click', findLocation);
+  $('gpsLocation').addEventListener('click', useGps);
+
+  $('regRestForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const error = $('regRestError');
+    const success = $('regRestSuccess');
+    error.classList.add('d-none'); success.classList.add('d-none');
+    const lat = parseFloat($('restLat').value);
+    const lng = parseFloat($('restLng').value);
+    const street = $('restStreet').value.trim();
+    const colonia = $('coloniaSelect').value;
+    const cp = $('postalCode').value.trim();
+    if (!street || !colonia || cp.length !== 5) {
+      error.textContent = 'Completa código postal, colonia y calle.';
+      error.classList.remove('d-none'); return;
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      error.textContent = 'Busca la dirección, usa el GPS o ajusta el pin en el mapa.';
+      error.classList.remove('d-none'); return;
+    }
+    try {
+      const result = await apiRequest('POST', '/restaurant-registration', {
+        owner_name: $('ownerName').value.trim(),
+        email: $('ownerEmail').value.trim(),
+        phone: $('ownerPhone').value.trim() || null,
+        password: $('ownerPassword').value,
+        restaurant_name: $('restName').value.trim(),
+        cuisine: $('restCuisine').value.trim() || null,
+        address: fullAddress(),
+        lat, lng,
+      });
+      success.textContent = result.message || 'Solicitud enviada. Revisa tu correo.';
+      success.classList.remove('d-none');
+      $('regRestForm').reset();
+      $('coloniaSelect').innerHTML = '<option value="">Escribe el C.P. para cargar colonias</option>';
+      clearCoords();
+      lastReverseKey = '';
+      updateMap(20.644, -100.993);
+      refreshMapVisibility();
+    } catch (ex) {
+      error.textContent = ex.message;
+      error.classList.remove('d-none');
+    }
+  });
+
+  async function autoDetectLocation() {
+    if (!navigator.geolocation) return;
+    const hasAddress = Boolean(
+      $('postalCode').value.trim() ||
+      $('coloniaSelect').value ||
+      $('restStreet').value.trim()
+    );
+    if (hasAddress) {
+      msg('Ya hay una dirección capturada; no se cargó el GPS automáticamente. Usa el botón si quieres actualizarla.', 'muted');
+      return;
+    }
+    if (!window.isSecureContext) {
+      msg('La ubicación automática requiere HTTPS. En localhost funciona, pero en el VPS necesitas dominio con HTTPS.', 'warning');
+      return;
+    }
+    try {
+      const permission = await navigator.permissions.query({ name: 'geolocation' });
+      if (permission.state === 'granted') {
+        useGps();
+      } else if (permission.state === 'denied') {
+        msg('El permiso de ubicación está bloqueado. Actívalo en la configuración del navegador o usa el botón.', 'warning');
+      } else {
+        msg('Pulsa “Usar ubicación del dispositivo” para permitir el acceso a tu ubicación.', 'muted');
+      }
+    } catch (e) {
+      // Some browsers don't support the Permissions API; don't auto-prompt.
+      msg('Pulsa “Usar ubicación del dispositivo” para detectar tu ubicación.', 'muted');
+    }
+  }
+
+  refreshMapVisibility();
+  setTimeout(autoDetectLocation, 700);
+</script>
+{% endblock %}
+

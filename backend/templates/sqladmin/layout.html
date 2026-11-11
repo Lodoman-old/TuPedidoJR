@@ -1,0 +1,44 @@
+{% extends "sqladmin_original/layout.html" %}
+{% block head_tail %}
+{{ super() }}
+<style>
+  .navbar-vertical.navbar-dark {
+    background: linear-gradient(180deg, #0d1b2a 0%, #1b2838 100%) !important;
+  }
+  .navbar-vertical.navbar-dark .nav-link:hover {
+    background: rgba(255,255,255,0.08) !important;
+  }
+  .navbar-vertical.navbar-dark .nav-link.active {
+    background: rgba(255,255,255,0.12) !important;
+    border-left: 3px solid #00fbde;
+  }
+  .navbar-brand-logo {
+    width: 180px !important;
+    height: auto !important;
+    max-height: 90px !important;
+    display: block !important;
+    margin: 0 auto !important;
+    background: rgba(255,255,255,0.95);
+    border-radius: 8px;
+    padding: 8px 12px;
+    box-sizing: border-box;
+  }
+  .navbar-brand-autodark {
+    text-align: center !important;
+    width: 100% !important;
+    padding: 12px 10px !important;
+    display: flex !important;
+    justify-content: center !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+  .navbar-brand-autodark a {
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+  }
+  .page {
+    background: #f0f4ff;
+  }
+</style>
+{% endblock %}

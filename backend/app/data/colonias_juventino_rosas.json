@@ -1,0 +1,886 @@
+{
+  "38240": {
+    "cp": "38240",
+    "municipio": "Santa Cruz de Juventino Rosas",
+    "estado": "Guanajuato",
+    "ciudad": "Santa Cruz Juventino Rosas",
+    "colonias": [
+      {
+        "nombre": "Santa Cruz de Juventino Rosas Centro",
+        "tipo": "Colonia"
+      }
+    ],
+    "lat": 20.6444504,
+    "lng": -100.9928503,
+    "centro_fuente": "correos_cp_polygon"
+  },
+  "38243": {
+    "cp": "38243",
+    "municipio": "Santa Cruz de Juventino Rosas",
+    "estado": "Guanajuato",
+    "ciudad": "Santa Cruz Juventino Rosas",
+    "colonias": [
+      {
+        "nombre": "12 de Octubre",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Ampliación El Puente",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "El Puente",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Guanajuato",
+        "tipo": "Fraccionamiento"
+      },
+      {
+        "nombre": "La Hacienda",
+        "tipo": "Fraccionamiento"
+      },
+      {
+        "nombre": "La Torna",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Lindavista II",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Loma Bonita de América",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Popular 176",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Praderas del Sol II",
+        "tipo": "Fraccionamiento"
+      },
+      {
+        "nombre": "Río Grande",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "San José de las Pilas",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Valle Dorado",
+        "tipo": "Fraccionamiento"
+      },
+      {
+        "nombre": "Villas de Juventino",
+        "tipo": "Colonia"
+      }
+    ],
+    "lat": 20.654799150000002,
+    "lng": -100.98484174999999,
+    "centro_fuente": "correos_cp_polygon"
+  },
+  "38244": {
+    "cp": "38244",
+    "municipio": "Santa Cruz de Juventino Rosas",
+    "estado": "Guanajuato",
+    "ciudad": "Santa Cruz Juventino Rosas",
+    "colonias": [
+      {
+        "nombre": "Magisterial",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Plutarco Elías Calles",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Siglo XXI",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Villas del Sol",
+        "tipo": "Colonia"
+      }
+    ],
+    "lat": 20.6391792,
+    "lng": -100.97997004999999,
+    "centro_fuente": "correos_cp_polygon"
+  },
+  "38245": {
+    "cp": "38245",
+    "municipio": "Santa Cruz de Juventino Rosas",
+    "estado": "Guanajuato",
+    "ciudad": "Santa Cruz Juventino Rosas",
+    "colonias": [
+      {
+        "nombre": "26 de Abril",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Agustin Gallegos",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Anastacio Mendoza",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Andrés Delgado",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Arboledas",
+        "tipo": "Fraccionamiento"
+      },
+      {
+        "nombre": "Articulo 27",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Benito Juárez",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Camino Real",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Campestre",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Chichenitza",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Deportiva",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "El Mirador",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Gustavo Cabrera",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Hacienda de Comuntuoso",
+        "tipo": "Fraccionamiento"
+      },
+      {
+        "nombre": "Josefina Villagomez",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "José Maria Morelos",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Juan Pablo ll",
+        "tipo": "Fraccionamiento"
+      },
+      {
+        "nombre": "Juventino Rosas",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "La Luz",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "La Luz II",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "La Luz III",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Las Arboledas",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Las Flores",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Libertadores",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Lázaro Cárdenas",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Manuel Rocha",
+        "tipo": "Rancho"
+      },
+      {
+        "nombre": "Nueva Santa Cruz",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "San Pablo",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Unión Popular Independiente",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Unión de Allende",
+        "tipo": "Colonia"
+      }
+    ],
+    "lat": 20.63149655,
+    "lng": -100.98453925000001,
+    "centro_fuente": "correos_cp_polygon"
+  },
+  "38246": {
+    "cp": "38246",
+    "municipio": "Santa Cruz de Juventino Rosas",
+    "estado": "Guanajuato",
+    "ciudad": "Santa Cruz Juventino Rosas",
+    "colonias": [
+      {
+        "nombre": "12 de Noviembre",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Agrarismo",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Agrarismo Sección II",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "El Parque",
+        "tipo": "Fraccionamiento"
+      },
+      {
+        "nombre": "Emiliano Zapata",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Enrique Velasco Ibarra",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Leopoldo Zúñiga Godínez (Los Ócalos)",
+        "tipo": "Rancho"
+      }
+    ],
+    "lat": 20.6393536,
+    "lng": -101.0046496,
+    "centro_fuente": "correos_cp_polygon"
+  },
+  "38247": {
+    "cp": "38247",
+    "municipio": "Santa Cruz de Juventino Rosas",
+    "estado": "Guanajuato",
+    "ciudad": "Santa Cruz Juventino Rosas",
+    "colonias": [
+      {
+        "nombre": "Ejidal Lindavista",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Galeana",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "La Haciendita",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Mercado Artesanal",
+        "tipo": "Fraccionamiento"
+      },
+      {
+        "nombre": "Miguel Alemán",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Raymundo Flores",
+        "tipo": "Colonia"
+      }
+    ],
+    "lat": 20.6525273,
+    "lng": -100.99649245,
+    "centro_fuente": "correos_cp_polygon"
+  },
+  "38250": {
+    "cp": "38250",
+    "municipio": "Santa Cruz de Juventino Rosas",
+    "estado": "Guanajuato",
+    "ciudad": "Santa Cruz Juventino Rosas",
+    "colonias": [
+      {
+        "nombre": "Casa Blanca",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "El Rocillito",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "El Rosillo",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "El Tecolote",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "El Tejas (El Pozo)",
+        "tipo": "Hacienda"
+      },
+      {
+        "nombre": "Encinillas Segunda Fracción",
+        "tipo": "Rancho"
+      },
+      {
+        "nombre": "Insurgentes Pípila",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Jaralillo",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "La Huerta",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "La Peña (Peña Colorada)",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "La Trinidad",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Las Palomas",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Los Arellano",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Los Dulces Nombres",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Número 18 [Granja Avícola]",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Número 19 [Granja Avícola]",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Ojo de Agua de Valadez",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Rincón de Centeno",
+        "tipo": "Pueblo"
+      },
+      {
+        "nombre": "San Antonio Nuevo Valencia (La Chiripa)",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "San Carlos",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "San Isidro de Tavera",
+        "tipo": "Rancho"
+      },
+      {
+        "nombre": "San José de los Llanos",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "San Juan de la Cruz",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Santa Ana de Agostadero",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Valencia",
+        "tipo": "Colonia"
+      }
+    ],
+    "lat": 20.6571544,
+    "lng": -100.91796385,
+    "centro_fuente": "correos_cp_polygon"
+  },
+  "38253": {
+    "cp": "38253",
+    "municipio": "Santa Cruz de Juventino Rosas",
+    "estado": "Guanajuato",
+    "ciudad": "Santa Cruz Juventino Rosas",
+    "colonias": [
+      {
+        "nombre": "Felipe Ángeles",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Granja San Luis (El Árbol)",
+        "tipo": "Rancho"
+      },
+      {
+        "nombre": "Insurgentes",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "La Providencia",
+        "tipo": "Rancho"
+      },
+      {
+        "nombre": "Lomas Verdes",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "María Guadalupe Cerrito Cerrito",
+        "tipo": "Rancho"
+      },
+      {
+        "nombre": "San Francisco de Cuenda",
+        "tipo": "Rancho"
+      },
+      {
+        "nombre": "Santiago de Cuenda",
+        "tipo": "Pueblo"
+      }
+    ],
+    "lat": 20.593862700000003,
+    "lng": -100.99544135,
+    "centro_fuente": "correos_cp_polygon"
+  },
+  "38254": {
+    "cp": "38254",
+    "municipio": "Santa Cruz de Juventino Rosas",
+    "estado": "Guanajuato",
+    "ciudad": "Santa Cruz Juventino Rosas",
+    "colonias": [
+      {
+        "nombre": "Bellavista",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Cerrito de Gasca",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Cirino Vázquez Guzmán",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "El Carmen de Arriba",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "El Rinconcillo",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Emiliano Zapata",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Galera Prieta",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Isidro López Galindo",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Juan Mendoza Rangel (Ejidal Zúñiga)",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Juan Álvarez Palo Alto",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "La Purísima",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Laguna Seca de San Isidro",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Las Fuentes",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Los Sauces",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "San José de las Pilas",
+        "tipo": "Pueblo"
+      },
+      {
+        "nombre": "San Nicolás",
+        "tipo": "Colonia"
+      }
+    ],
+    "lat": 20.643757700000002,
+    "lng": -101.0422282,
+    "centro_fuente": "correos_cp_polygon"
+  },
+  "38255": {
+    "cp": "38255",
+    "municipio": "Santa Cruz de Juventino Rosas",
+    "estado": "Guanajuato",
+    "ciudad": "Santa Cruz Juventino Rosas",
+    "colonias": [
+      {
+        "nombre": "Agua Nueva",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Comercializadora El Santuario",
+        "tipo": "Equipamiento"
+      },
+      {
+        "nombre": "El Carmen de Abajo",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "El Cerrito",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "El Garambullo",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "El Pato",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "El Pino",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "El Venado",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Epifanio Moreno Macera",
+        "tipo": "Rancho"
+      },
+      {
+        "nombre": "Ex-Hacienda la Galera",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Familia Montoya",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Familia Olvera",
+        "tipo": "Rancho"
+      },
+      {
+        "nombre": "Franco",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Franco Tavera",
+        "tipo": "Pueblo"
+      },
+      {
+        "nombre": "Granja Guadalupe",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Granja la Bugambilia (Familia Reyes Alberto)",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Guadalupe",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Juan Ramos Torres",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "La Esperanza",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "La Estancia",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "La Gloria",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "La Paloma",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "La Trinidad",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Los Herrera",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Luz Eugenia",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Machi",
+        "tipo": "Rancho"
+      },
+      {
+        "nombre": "Número Ocho [Granja Avícola]",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Número Tres [Granja Avícola]",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Pozo Cuatro",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Pozo de Pablo Mendoza",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Pozo de Rómula Sánchez",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Pozos",
+        "tipo": "Pueblo"
+      },
+      {
+        "nombre": "Rancho Bugambilias",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Rancho Nuevo",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Rancho San Rafael (Hermanos Armenta)",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Rancho Viejo",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Rancho la Herradura",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "San Antonio (El Coyote Blanco)",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "San Antonio de Morales",
+        "tipo": "Pueblo"
+      },
+      {
+        "nombre": "San Antonio de Romerillo",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "San Antonio de las Maravillas",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "San Javier",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "San José de Manantiales",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "San José de Merino",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "San Juan de la Proveedora",
+        "tipo": "Rancho"
+      },
+      {
+        "nombre": "San Julián Tierra Blanca",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "San Luis",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Santa Bárbara (Valerio)",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Santa María de Guadalupe (El Ranchito)",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Tejada",
+        "tipo": "Colonia"
+      },
+      {
+        "nombre": "Zeferino Lerma González",
+        "tipo": "Granja"
+      }
+    ],
+    "lat": 20.5930551,
+    "lng": -100.97249915,
+    "centro_fuente": "correos_cp_polygon"
+  },
+  "38256": {
+    "cp": "38256",
+    "municipio": "Santa Cruz de Juventino Rosas",
+    "estado": "Guanajuato",
+    "ciudad": "Santa Cruz Juventino Rosas",
+    "colonias": [
+      {
+        "nombre": "Cerrito de los Arellano",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "El Chupadero",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "El Murciélago",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "El Naranjillo",
+        "tipo": "Pueblo"
+      },
+      {
+        "nombre": "El Saucillo",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "El Zúñiga (Los Pinos)",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "La Laguna de Guadalupe",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "La Tinaja",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Mandujano",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Ojo de Agua de Otates",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Ojo de Agua del Carrizal",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Romero",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "San Diego de los Dolores",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "San José del Sauz",
+        "tipo": "Colonia"
+      }
+    ],
+    "lat": 20.72762465,
+    "lng": -101.0028112,
+    "centro_fuente": "correos_cp_polygon"
+  },
+  "38257": {
+    "cp": "38257",
+    "municipio": "Santa Cruz de Juventino Rosas",
+    "estado": "Guanajuato",
+    "ciudad": "Santa Cruz Juventino Rosas",
+    "colonias": [
+      {
+        "nombre": "Agua Zarca",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "El Bordito",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "El Jagüey",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "El Zapote (La Nopalera)",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Encinal de Canoas",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Esteban Luna Luna",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Familia Vázquez Rodríguez",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Las Ardillas",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Loma Alta del Santo Niño",
+        "tipo": "Granja"
+      },
+      {
+        "nombre": "Los Patolitos",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Mesas de Acosta",
+        "tipo": "Ranchería"
+      },
+      {
+        "nombre": "Mesas de Almanza",
+        "tipo": "Ranchería"
+      }
+    ],
+    "lat": 20.743873450000002,
+    "lng": -101.06082185,
+    "centro_fuente": "correos_cp_polygon"
+  }
+}

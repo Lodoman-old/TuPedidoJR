@@ -1,0 +1,437 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h4 class="m-0"><i class="bi bi-wallet2"></i> Pagos a restaurantes y repartidores</h4>
+  <button class="btn btn-outline-secondary btn-sm" onclick="loadPayouts()">
+    <i class="bi bi-arrow-clockwise"></i> Actualizar
+  </button>
+</div>
+<div id="payoutsError" class="alert alert-danger d-none"></div>
+<div id="payoutsLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="payoutsContent" class="d-none"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const money = n => '$' + parseFloat(n || 0).toFixed(2);
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function frequencyOptions(selected) {
+    const options = [[0, 'Otro: a demanda (varias veces al día)'], [1, 'Diario'], [3, 'Cada 3 días'], [7, 'Semanal'], [15, 'Quincenal'], [30, 'Mensual']];
+    if (!options.some(([value]) => Number(selected) === value)) {
+      options.push([Number(selected), `Cada ${selected} días`]);
+    }
+    return options.map(([value, label]) =>
+      `<option value="${value}" ${Number(selected) === value ? 'selected' : ''}>${label}</option>`
+    ).join('');
+  }
+
+  function statusBadge(status) {
+    if (status === 'due') return '<span class="badge bg-success">Listo para pagar</span>';
+    if (status === 'scheduled') return '<span class="badge bg-secondary">Programado</span>';
+    return '<span class="badge bg-light text-dark">Sin saldo</span>';
+  }
+
+  function summaryCard(label, value, color = '') {
+    return `<div class="col-6 col-md-3"><div class="card p-3 text-center ${color}">
+      <small class="text-muted">${label}</small><strong class="fs-5">${value}</strong>
+    </div></div>`;
+  }
+
+  function renderRestaurants(restaurants) {
+    return `<div class="card p-3 mb-3">
+      <h6>Restaurantes</h6>
+      <p class="small text-muted">La comisión individual reemplaza la comisión global. Si dejas el campo vacío, se usa la global.</p>
+      <div class="table-responsive"><table class="table table-sm align-middle">
+        <thead><tr>
+          <th>Restaurante</th><th class="text-end">Ventas 30d</th><th class="text-end">Pendiente</th><th class="text-end">Debe a plataforma</th><th>Comisión %</th>
+          <th>Frecuencia</th><th>Próximo pago</th><th>Estado</th><th></th>
+        </tr></thead>
+        <tbody>${restaurants.map(r => `
+          <tr>
+            <td>${esc(r.name)}</td>
+            <td class="text-end">${money(r.monthly_sales)}</td>
+            <td class="text-end fw-bold">${money(r.pending_amount)}</td>
+            <td class="text-end text-danger">${money(r.restaurant_debt || 0)}</td>
+            <td style="min-width:110px">
+              <input type="number" class="form-control form-control-sm" id="r_comm_${r.id}"
+                     min="0" max="100" step="0.1" value="${r.uses_global_commission ? '' : r.commission_percentage}"
+                     placeholder="Global">
+            </td>
+            <td style="min-width:120px">
+              <select class="form-select form-select-sm" id="r_freq_${r.id}">
+                ${frequencyOptions(r.payout_frequency_days)}
+              </select>
+            </td>
+            <td>${r.next_payout_date || '—'}</td>
+            <td>${statusBadge(r.status)}</td>
+            <td class="text-end text-nowrap">
+              <button class="btn btn-sm btn-outline-primary" onclick="saveRestaurant('${r.id}')">Guardar</button>
+              <button class="btn btn-sm btn-success" onclick="payRestaurant('${r.id}')"
+                      ${parseFloat(r.pending_amount) <= 0 ? 'disabled' : ''}>Generar pago</button>
+            </td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+  }
+
+  function renderCouriers(couriers) {
+    return `<div class="card p-3 mb-3">
+      <h6>Repartidores</h6>
+      <p class="small text-muted">El bono por envío se suma a la ganancia base de cada pedido que acepte el repartidor.</p>
+      <div class="table-responsive"><table class="table table-sm align-middle">
+        <thead><tr>
+          <th>Repartidor</th><th class="text-end">Pendiente</th><th>Bono por envío</th>
+          <th>Método de pago</th><th>Frecuencia</th><th class="text-end">Deuda</th><th class="text-end">Avances</th><th>Próximo pago</th><th>Estado</th><th></th>
+        </tr></thead>
+        <tbody>${couriers.map(c => `
+          <tr>
+            <td>${esc(c.name)}</td>
+            <td class="text-end fw-bold">${money(c.pending_amount)}</td>
+            <td style="min-width:120px">
+              <input type="number" class="form-control form-control-sm" id="c_bonus_${c.id}"
+                     min="0" step="0.5" value="${c.delivery_bonus_per_order}">
+            </td>
+            <td style="min-width:120px">
+              <select class="form-select form-select-sm" id="c_method_${c.id}">
+                <option value="cash" ${c.payout_method === 'cash' ? 'selected' : ''}>Efectivo</option>
+                <option value="transfer" ${c.payout_method === 'transfer' ? 'selected' : ''}>Transferencia</option>
+              </select>
+            </td>
+            <td style="min-width:120px">
+              <select class="form-select form-select-sm" id="c_freq_${c.id}">
+                ${frequencyOptions(c.payout_frequency_days)}
+              </select>
+            </td>
+            <td class="text-end text-danger">${money(c.pending_debt)}</td>
+            <td class="text-end text-warning">${money(c.pending_advances)}</td>
+            <td>${c.next_payout_date || '—'}</td>
+            <td>${statusBadge(c.status)}</td>
+            <td class="text-end text-nowrap">
+              <button class="btn btn-sm btn-outline-primary" onclick="saveCourier('${c.id}')">Guardar</button>
+              <button class="btn btn-sm btn-success" onclick="payCourier('${c.id}')"
+                      ${parseFloat(c.pending_amount) <= 0 ? 'disabled' : ''}>Generar pago</button>
+            </td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+  }
+
+  function renderAdvances(advances) {
+    const statusLabel = {
+      pending: 'Solicitado', approved: 'Entregado', settled: 'Liquidado', rejected: 'Rechazado',
+    };
+    const rows = (advances || []).map(a => {
+      let actions = '';
+      if (a.status === 'pending') {
+        actions = `
+          <button class="btn btn-sm btn-success" onclick="approveAdvanceUI('${a.id}', true)">Pagar restaurante</button>
+          <button class="btn btn-sm btn-outline-warning" onclick="approveAdvanceUI('${a.id}', false)">Préstamo</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="rejectAdvanceUI('${a.id}')">Rechazar</button>`;
+      } else if (a.status === 'approved' && !a.pays_restaurant) {
+        actions = `<button class="btn btn-sm btn-outline-primary" onclick="settleAdvanceUI('${a.id}')">Liquidar en efectivo</button>`;
+      } else if (a.status === 'approved' && a.pays_restaurant) {
+        actions = `<button class="btn btn-sm btn-outline-secondary" onclick="settleAdvanceUI('${a.id}')">Marcar pagado</button>`;
+      }
+      return `<tr>
+        <td>${esc(a.courier_name || '—')}</td>
+        <td>${a.order_id ? '#' + a.order_id.slice(0, 8) : '—'}<br><small class="text-muted">${esc(a.restaurant_name || '')}</small></td>
+        <td class="text-end fw-bold">${money(a.amount)}</td>
+        <td><span class="badge bg-${a.status === 'pending' ? 'warning' : a.status === 'approved' ? 'info' : a.status === 'settled' ? 'success' : 'secondary'}">${statusLabel[a.status] || a.status}</span></td>
+        <td class="small">${a.pays_restaurant ? 'Pago al restaurante' : 'Préstamo al repartidor'}</td>
+        <td class="text-end text-nowrap">${actions}</td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="card p-3 mb-3">
+      <h6>Avances de efectivo</h6>
+      <p class="small text-muted">Si se entrega para pagar al restaurante, ese pedido se excluye de la liquidación del restaurante. Si es préstamo, se descuenta del pago del repartidor.</p>
+      ${rows ? `<div class="table-responsive"><table class="table table-sm align-middle">
+        <thead><tr><th>Repartidor</th><th>Pedido</th><th class="text-end">Monto</th><th>Estado</th><th>Tipo</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>` : '<p class="small text-muted mb-0">Sin avances registrados.</p>'}
+    </div>`;
+  }
+
+  function renderTransfers(transfers) {
+    if (!transfers || !transfers.length) {
+      return '<div class="card p-3 mb-3"><h6>Transferencias pendientes</h6><p class="small text-muted mb-0">No hay transferencias pendientes de confirmar.</p></div>';
+    }
+    return `<div class="card p-3 mb-3">
+      <h6>Transferencias pendientes de confirmar</h6>
+      <p class="small text-muted">Estas órdenes aún no cuentan para liquidaciones hasta que confirmes que el dinero llegó a la cuenta de la plataforma.</p>
+      <div class="table-responsive"><table class="table table-sm align-middle">
+        <thead><tr><th>Pedido</th><th>Restaurante</th><th class="text-end">Monto</th><th>Fecha</th><th></th></tr></thead>
+        <tbody>${transfers.map(t => `
+          <tr>
+            <td>#${t.id.slice(0, 8)}</td>
+            <td>${esc(t.restaurant_name)}</td>
+            <td class="text-end fw-bold">${money(t.amount)}</td>
+            <td class="small">${t.placed_at ? new Date(t.placed_at).toLocaleString() : '—'}</td>
+            <td class="text-end"><button class="btn btn-sm btn-success" onclick="confirmTransfer('${t.id}')">Marcar recibida</button></td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+  }
+
+  function renderHistory(history) {
+    if (!history.length) {
+      return '<div class="card p-3"><h6>Historial</h6><p class="small text-muted mb-0">Sin liquidaciones registradas.</p></div>';
+    }
+    const kindLabel = { restaurant: 'Restaurante', courier: 'Repartidor' };
+    const statusLabel = { pending: 'Pendiente', paid: 'Pagada', confirmed: 'Confirmada', cancelled: 'Cancelada' };
+    return `<div class="card p-3">
+      <h6>Historial de liquidaciones</h6>
+      <div class="table-responsive"><table class="table table-sm align-middle">
+        <thead><tr><th>Tipo</th><th>Nombre</th><th>Período</th><th class="text-end">Monto</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${history.map(h => `
+          <tr>
+            <td>${kindLabel[h.kind] || h.kind}</td>
+            <td>${esc(h.name)}</td>
+            <td class="small">${h.period_start} a ${h.period_end}</td>
+            <td class="text-end fw-bold">${money(h.amount)}</td>
+            <td><span class="badge bg-${h.status === 'paid' || h.status === 'confirmed' ? 'success' : h.status === 'cancelled' ? 'secondary' : 'warning'}">${statusLabel[h.status] || h.status}</span></td>
+            <td class="text-end">
+              ${h.status === 'pending' ? `<button class="btn btn-sm btn-success" onclick="markPaid('${h.kind}','${h.id}')">Marcar pagada</button>` : ''}
+            </td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+  }
+
+  function reconciliationShell(today) {
+    const start = today ? today.slice(0, 8) + '01' : '';
+    return `<div class="card p-3 mb-3">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h6 class="m-0"><i class="bi bi-calculator"></i> Conciliación por rango de fechas</h6>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          <input type="date" class="form-control form-control-sm" id="reconStart" value="${start}" style="width:150px">
+          <span class="text-muted">a</span>
+          <input type="date" class="form-control form-control-sm" id="reconEnd" value="${today || ''}" style="width:150px">
+          <button class="btn btn-sm btn-outline-primary" onclick="loadReconciliation()">
+            <i class="bi bi-search"></i> Calcular
+          </button>
+        </div>
+      </div>
+      <div id="reconError" class="alert alert-danger d-none mt-2 mb-0"></div>
+      <div id="reconResults" class="mt-3"><p class="text-muted small mb-0">Selecciona el rango y pulsa Calcular.</p></div>
+    </div>`;
+  }
+
+  function renderReconciliation(data) {
+    const t = data.totals || {};
+    const netPlatform = parseFloat(t.commission || 0) + parseFloat(t.flat_fee || 0) - parseFloat(t.loyalty_discount || 0);
+    return `
+      <div class="row g-2 mb-3">
+        ${summaryCard('Pedidos entregados', t.orders || 0)}
+        ${summaryCard('Ventas', money(t.total))}
+        ${summaryCard('Comisión plataforma', money(t.commission), 'border-success')}
+        ${summaryCard('Cuota fija', money(t.flat_fee), 'border-success')}
+        ${summaryCard('Puntos canjeados (los absorbe la plataforma)', money(t.loyalty_discount), parseFloat(t.loyalty_discount || 0) ? 'border-primary' : '')}
+        ${summaryCard('Ingreso neto plataforma', money(netPlatform), netPlatform < 0 ? 'border-danger' : '')}
+        ${summaryCard('Propinas', money(t.tips))}
+        ${summaryCard('Ganancia repartidores', money(t.courier_earnings))}
+        ${summaryCard('Debe restaurante (efectivo)', money(t.restaurant_owes), parseFloat(t.restaurant_owes || 0) ? 'border-danger' : '')}
+        ${summaryCard('Pedidos efectivo / transferencia', `${t.cash_orders || 0} / ${t.transfer_orders || 0}`)}
+      </div>
+      <div class="table-responsive mb-3">
+        <table class="table table-sm align-middle">
+          <thead><tr>
+            <th>Restaurante</th><th class="text-end">Pedidos</th><th class="text-end">Subtotal</th>
+            <th class="text-end">Comisión</th><th class="text-end">Cuota fija</th>
+            <th class="text-end">Puntos</th>
+            <th class="text-end">Propinas</th><th class="text-end">Total cobrado</th>
+            <th class="text-end">Debe a plataforma</th>
+          </tr></thead>
+          <tbody>${(data.restaurants || []).map(r => `<tr>
+            <td>${esc(r.name)}</td>
+            <td class="text-end">${r.orders}</td>
+            <td class="text-end">${money(r.subtotal)}</td>
+            <td class="text-end">${money(r.commission)}</td>
+            <td class="text-end">${money(r.flat_fee)}</td>
+            <td class="text-end text-primary">${money(r.loyalty_discount)}</td>
+            <td class="text-end">${money(r.tips)}</td>
+            <td class="text-end fw-bold">${money(r.total)}</td>
+            <td class="text-end text-danger">${money(r.restaurant_owes)}</td>
+          </tr>`).join('') || '<tr><td colspan="9" class="text-muted text-center">Sin pedidos entregados en el rango.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <h6 class="small text-muted">Repartidores</h6>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Repartidor</th><th class="text-end">Entregas</th><th class="text-end">Ganancia</th><th class="text-end">Propinas</th><th class="text-end">Pedidos efectivo</th></tr></thead>
+          <tbody>${(data.couriers || []).map(c => `<tr>
+            <td>${esc(c.name || 'Repartidor')}</td>
+            <td class="text-end">${c.orders}</td>
+            <td class="text-end fw-bold">${money(c.earnings)}</td>
+            <td class="text-end">${money(c.tips)}</td>
+            <td class="text-end">${c.cash_orders}</td>
+          </tr>`).join('') || '<tr><td colspan="5" class="text-muted text-center">Sin repartidores en el rango.</td></tr>'}</tbody>
+        </table>
+      </div>`;
+  }
+
+  async function loadReconciliation() {
+    const start = document.getElementById('reconStart')?.value;
+    const end = document.getElementById('reconEnd')?.value;
+    const error = document.getElementById('reconError');
+    const results = document.getElementById('reconResults');
+    if (!start || !end) return;
+    error.classList.add('d-none');
+    results.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+    try {
+      const data = await apiRequest('GET', `/admin/payouts/reconciliation?start_date=${start}&end_date=${end}`);
+      results.innerHTML = renderReconciliation(data);
+    } catch (ex) {
+      results.innerHTML = '';
+      error.textContent = ex.message;
+      error.classList.remove('d-none');
+    }
+  }
+
+  async function loadPayouts() {
+    const loading = document.getElementById('payoutsLoading');
+    const content = document.getElementById('payoutsContent');
+    const error = document.getElementById('payoutsError');
+    error.classList.add('d-none');
+    loading.classList.remove('d-none');
+    try {
+      const [data, history, advances] = await Promise.all([getAdminPayouts(), getPayoutHistory(), getAdminAdvances()]);
+      const restaurants = data.restaurants || [];
+      const couriers = data.couriers || [];
+      const pendingRestaurants = restaurants.reduce((s, r) => s + parseFloat(r.pending_amount || 0), 0);
+      const pendingCouriers = couriers.reduce((s, c) => s + parseFloat(c.pending_amount || 0), 0);
+      const courierDebt = couriers.reduce((s, c) => s + parseFloat(c.pending_debt || 0), 0);
+      const pendingTransfers = (data.pending_transfers || []).reduce((s, t) => s + parseFloat(t.amount || 0), 0);
+      const pendingAdvances = (advances || []).filter(a => a.status === 'pending').reduce((s, a) => s + parseFloat(a.amount || 0), 0);
+      const dueCount = [...restaurants, ...couriers].filter(x => x.status === 'due').length;
+
+      content.innerHTML = `
+        <div class="row g-2 mb-3">
+          ${summaryCard('Pendiente restaurantes', money(pendingRestaurants))}
+          ${summaryCard('Pendiente repartidores', money(pendingCouriers))}
+          ${summaryCard('Transferencias por confirmar', money(pendingTransfers), pendingTransfers ? 'border-warning' : '')}
+          ${summaryCard('Avances por aprobar', money(pendingAdvances), pendingAdvances ? 'border-warning' : '')}
+          ${summaryCard('Efectivo por conciliar', money(courierDebt), courierDebt ? 'border-danger' : '')}
+          ${summaryCard('Liquidaciones listas', dueCount, dueCount ? 'border-success' : '')}
+          ${summaryCard('Hoy', data.today)}
+        </div>
+        ${reconciliationShell(data.today)}
+        ${renderRestaurants(restaurants)}
+        ${renderCouriers(couriers)}
+        ${renderAdvances(advances)}
+        ${renderTransfers(data.pending_transfers || [])}
+        ${renderHistory(history)}`;
+      content.classList.remove('d-none');
+      loadReconciliation();
+    } catch (ex) {
+      error.textContent = ex.message;
+      error.classList.remove('d-none');
+    } finally {
+      loading.classList.add('d-none');
+    }
+  }
+
+  async function saveRestaurant(id) {
+    const commission = document.getElementById(`r_comm_${id}`).value.trim();
+    const frequency = Number(document.getElementById(`r_freq_${id}`).value);
+    try {
+      await updateRestaurantCommission(id, {
+        commission_percentage: commission === '' ? null : Number(commission),
+        payout_frequency_days: frequency,
+      });
+      showToast('Comisión actualizada');
+      loadPayouts();
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  async function saveCourier(id) {
+    const bonus = Number(document.getElementById(`c_bonus_${id}`).value || 0);
+    const frequency = Number(document.getElementById(`c_freq_${id}`).value);
+    const method = document.getElementById(`c_method_${id}`).value;
+    try {
+      await updateDeliveryPersonAdmin(id, {
+        delivery_bonus_per_order: bonus,
+        payout_frequency_days: frequency,
+        payout_method: method,
+      });
+      showToast('Configuración del repartidor actualizada');
+      loadPayouts();
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  async function payRestaurant(id) {
+    if (!confirm('¿Generar la liquidación de este restaurante?')) return;
+    try {
+      await generateRestaurantPayout(id);
+      showToast('Liquidación generada');
+      loadPayouts();
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  async function payCourier(id) {
+    if (!confirm('¿Generar la liquidación de este repartidor?')) return;
+    try {
+      await generateCourierPayout(id);
+      showToast('Liquidación generada');
+      loadPayouts();
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  async function markPaid(kind, id) {
+    if (!confirm('¿Marcar esta liquidación como pagada?')) return;
+    try {
+      await markPayoutPaid(kind, id);
+      showToast('Liquidación marcada como pagada');
+      loadPayouts();
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  async function confirmTransfer(id) {
+    if (!confirm('¿Confirmas que la transferencia llegó a la cuenta de la plataforma?')) return;
+    try {
+      await confirmTransferReceived(id);
+      showToast('Transferencia confirmada');
+      loadPayouts();
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  async function approveAdvanceUI(id, paysRestaurant) {
+    const label = paysRestaurant
+      ? '¿Entregar el efectivo para pagar directamente al restaurante?'
+      : '¿Entregar el efectivo como préstamo al repartidor? Se descontará de su próximo pago.';
+    if (!confirm(label)) return;
+    try {
+      await approveAdvance(id, paysRestaurant);
+      showToast('Avance aprobado');
+      loadPayouts();
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  async function rejectAdvanceUI(id) {
+    if (!confirm('¿Rechazar esta solicitud de avance?')) return;
+    try {
+      await rejectAdvance(id);
+      showToast('Avance rechazado');
+      loadPayouts();
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  async function settleAdvanceUI(id) {
+    if (!confirm('¿Marcar este avance como liquidado?')) return;
+    try {
+      await settleAdvance(id);
+      showToast('Avance liquidado');
+      loadPayouts();
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (sessionStorage.getItem('is_superuser') === 'true') loadPayouts();
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "manuals/manual_base.html" %}
+{% set page = "pedidos" %}
+{% block title %}Manual de pedidos, cobros y liquidaciones{% endblock %}
+{% block heading %}Manual de pedidos, cobros y liquidaciones{% endblock %}
+{% block content %}
+<h2>Pedidos</h2>
+<p>El restaurante debe revisar y avanzar los pedidos desde el panel o desde la app.</p>
+
+<h3>1. Flujo de un pedido</h3>
+<table>
+  <tr><th>Estado</th><th>Acción</th></tr>
+  <tr><td>Pendiente</td><td>Revisar y confirmar el pedido.</td></tr>
+  <tr><td>Confirmado</td><td>Comenzar preparación.</td></tr>
+  <tr><td>Preparando</td><td>Preparar los platillos.</td></tr>
+  <tr><td>Listo</td><td>Avisar al repartidor o al cliente que pasa por él.</td></tr>
+  <tr><td>En reparto</td><td>El repartidor lo lleva al cliente.</td></tr>
+  <tr><td>Entregado / Recogido</td><td>Pedido terminado.</td></tr>
+</table>
+
+<h3>2. Pedido con entrega de plataforma</h3>
+<ol>
+  <li>El cliente paga en efectivo, transferencia o el método habilitado.</li>
+  <li>Un repartidor de TuPedidoJR acepta el pedido.</li>
+  <li>El restaurante prepara y marca listo.</li>
+  <li>El repartidor recoge y entrega.</li>
+</ol>
+
+<h3>3. Costos del repartidor</h3>
+<p>Estos son los valores configurados actualmente para el reparto de la plataforma:</p>
+<table>
+  <tr><th>Concepto</th><th>Valor actual</th></tr>
+  <tr><td>Tarifa base de envío</td><td>${{ '%.2f'|format(delivery_base|float) }}</td></tr>
+  <tr><td>Radio incluido sin costo extra</td><td>{{ '%.1f'|format(free_radius|float) }} km</td></tr>
+  <tr><td>Costo por kilómetro adicional</td><td>${{ '%.2f'|format(extra_km|float) }} por km</td></tr>
+  <tr><td>Bono por hora pico</td><td>{% if peak_enabled %}${{ '%.2f'|format(peak_amount|float) }} por entrega{% else %}Desactivado{% endif %}</td></tr>
+</table>
+<div class="note">El cliente paga el envío. El repartidor recibe ese envío más la propina y los bonos que tenga configurados. Esta página se actualiza automáticamente cuando el administrador cambia los costos.</div>
+
+<h3>4. Pedido con entrega propia</h3>
+<p>El restaurante entrega con su propio personal.</p>
+<ul>
+  <li>El pedido se marca <strong>en reparto por el restaurante</strong>.</li>
+  <li>El envío y la propina son para el restaurante.</li>
+  <li>En efectivo, el restaurante cobra todo y debe a la plataforma la comisión incluida más la cuota fija.</li>
+</ul>
+
+<h3>6. Pedido para recoger</h3>
+<ol>
+  <li>El cliente elige <strong>Recoger en restaurante</strong>.</li>
+  <li>El restaurante prepara y marca listo.</li>
+  <li>El cliente pasa por el pedido.</li>
+  <li>El restaurante marca recogido.</li>
+</ol>
+
+<h3>7. Cobros y comisión</h3>
+<p>Los precios del menú ya incluyen la comisión de plataforma. El restaurante recibe su precio base.</p>
+<table>
+  <tr><th>Forma de pago</th><th>Qué pasa</th></tr>
+  <tr><td>Transferencia</td><td>La plataforma recibe y liquida al restaurante su precio base.</td></tr>
+  <tr><td>Efectivo con repartidor</td><td>El repartidor cobra; la plataforma liquida al restaurante.</td></tr>
+  <tr><td>Efectivo entrega propia</td><td>El restaurante cobra y debe comisión + cuota fija a la plataforma.</td></tr>
+  <tr><td>Efectivo al recoger</td><td>El restaurante cobra y debe comisión + cuota fija a la plataforma.</td></tr>
+</table>
+
+<h3>8. Liquidaciones</h3>
+<ol>
+  <li>Entra a <strong>Ganancias</strong>.</li>
+  <li>Consulta pedidos entregados, comisión, propinas y saldo pendiente.</li>
+  <li>El administrador genera la liquidación según la frecuencia configurada.</li>
+  <li>Cuando se paga, el saldo se actualiza.</li>
+</ol>
+<div class="note">Los pedidos con transferencia se liquidan cuando la plataforma confirma el pago.</div>
+
+<h3>9. Puntos de lealtad</h3>
+<p>Los puntos son financiados por la plataforma. No se descuentan del precio base del restaurante.</p>
+<p>El cliente puede canjearlos al pagar. Si un pedido se cancela, los puntos regresan al cliente.</p>
+
+<h3>10. Cancelaciones</h3>
+<ul>
+  <li>Puedes cancelar mientras el pedido no haya sido recogido.</li>
+  <li>Escribe el motivo para mantener el historial.</li>
+  <li>Los pedidos entregados ya no se pueden cancelar.</li>
+</ul>
+
+<h3>11. Reportes</h3>
+<p>El dueño y el encargado pueden consultar ventas, pedidos, propinas y repartidores desde <strong>Ganancias</strong> y <strong>Reportes</strong>.</p>
+{% endblock %}

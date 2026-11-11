@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1b2a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>TuPedidoJR</title>
+  <link rel="manifest" href="/web/manifest.json">
+  <link rel="apple-touch-icon" href="/static/web/icons/icon-192.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="/static/web/css/style.css?v=20261107">
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  {% block navbar %}
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-0">
+    <div class="container-fluid px-3">
+      <a class="navbar-brand d-flex align-items-center" href="/web/restaurants">
+        <span class="logo-wrapper"><img src="/static/logo.png" alt="TuPedidoJR" height="40"></span>
+      </a>
+      <a href="/web/profile" class="navbar-text text-white ms-auto me-2 d-lg-none text-truncate" id="userNameTop" style="max-width: 130px;"></a>
+      <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item nav-delivery-hide" id="publicRestaurantsNav"><a class="nav-link" href="/web/restaurants"><i class="bi bi-shop"></i> Restaurantes</a></li>
+          <li class="nav-item d-none" id="myRestaurantNav"><a class="nav-link" href="#"><i class="bi bi-shop-window"></i> Mi restaurante</a></li>
+          <li class="nav-item d-none" id="businessProfileNav"><a class="nav-link" href="#"><i class="bi bi-person-gear"></i> Perfil del negocio</a></li>
+          <li class="nav-item nav-delivery-hide"><a class="nav-link" href="/web/mandados"><i class="bi bi-box"></i> Mandados</a></li>
+          <li class="nav-item nav-delivery-hide"><a class="nav-link" href="/web/cart"><i class="bi bi-cart"></i> Carrito <span id="cartBadge" class="badge rounded-pill bg-warning text-dark d-none">0</span></a></li>
+          <li class="nav-item nav-delivery-hide"><a class="nav-link" href="/web/orders"><i class="bi bi-list-check"></i> Pedidos</a></li>
+          <li class="nav-item d-none" id="deliveryNav"><a class="nav-link" href="/web/delivery"><i class="bi bi-bicycle"></i> Repartidor</a></li>
+          <li class="nav-item"><a class="nav-link" href="/web/app"><i class="bi bi-phone"></i> Descargar app</a></li>
+          <li class="nav-item d-none" id="adminPushNav"><a class="nav-link" href="/web/admin/push"><i class="bi bi-bell"></i> Push</a></li>
+          <li class="nav-item d-none" id="adminSettingsNav"><a class="nav-link" href="/web/admin/settings"><i class="bi bi-sliders"></i> Comisiones</a></li>
+          <li class="nav-item d-none" id="adminReportsNav"><a class="nav-link" href="/web/admin/reports"><i class="bi bi-graph-up-arrow"></i> Reportes</a></li>
+          <li class="nav-item d-none" id="adminPayoutsNav"><a class="nav-link" href="/web/admin/payouts"><i class="bi bi-wallet2"></i> Pagos</a></li>
+          <li class="nav-item d-none" id="adminDashboardNav"><a class="nav-link" href="/web/admin/dashboard"><i class="bi bi-speedometer2"></i> Operación</a></li>
+          <li class="nav-item d-none" id="adminAuditNav"><a class="nav-link" href="/web/admin/audit"><i class="bi bi-journal-text"></i> Auditoría</a></li>
+          <li class="nav-item d-none" id="adminRestaurantsNav"><a class="nav-link" href="/web/admin/restaurants"><i class="bi bi-shop"></i> Restaurantes</a></li>
+          <li class="nav-item d-none" id="adminCouriersNav"><a class="nav-link" href="/web/admin/couriers"><i class="bi bi-bicycle"></i> Repartidores</a></li>
+          <li class="nav-item d-none d-lg-block">
+            <a class="nav-link" href="/web/profile" id="userNameNav" title="Mi perfil">
+              <i class="bi bi-person-circle"></i> <span id="userNameText">Mi cuenta</span>
+            </a>
+          </li>
+          <li class="nav-item"><a class="nav-link" href="#" id="logoutBtn"><i class="bi bi-box-arrow-right"></i> Salir</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+  {% endblock %}
+
+  <main class="container py-3">
+    {% block content %}{% endblock %}
+  </main>
+
+  <div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+const API_BASE = '/api/v1';
+async function apiRequest(method, path, body = null) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = sessionStorage.getItem('token');
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(`${API_BASE}${path}`, opts);
+  if (r.status === 204) return null;
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.detail || `Error ${r.status}`);
+  return data;
+}
+async function login(email, password) {
+  const res = await apiRequest('POST', '/auth/login', { email, password });
+  sessionStorage.setItem('token', res.access_token);
+  sessionStorage.setItem('is_superuser', res.is_superuser ? 'true' : 'false');
+  return res;
+}
+async function register(name, email, password, phone, referralCode) {
+  return await apiRequest('POST', '/auth/register', { name, email, password, phone, referral_code: referralCode || null });
+}
+async function listRestaurants(lat, lng, q, extra) {
+  const params = new URLSearchParams();
+  if (lat) { params.set('lat', lat); params.set('lng', lng); }
+  if (q) params.set('q', q);
+  if (extra) {
+    Object.entries(extra).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '') params.set(key, value);
+    });
+  }
+  return await apiRequest('GET', `/restaurants?${params}`);
+}
+function getCoords() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) return resolve({ lat: 20.644, lng: -100.993 });
+    navigator.geolocation.getCurrentPosition(
+      position => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
+      () => resolve({ lat: 20.644, lng: -100.993 }),
+      { timeout: 5000, maximumAge: 300000 }
+    );
+  });
+}
+async function getRestaurant(id) {
+  return await apiRequest('GET', `/restaurants/${id}`);
+}
+async function getRestaurantOpenStatus(id) {
+  return await apiRequest('GET', `/restaurants/${id}/open-status`);
+}
+async function getRestaurantSchedule(id) {
+  return await apiRequest('GET', `/restaurants/${id}/schedule`);
+}
+async function updateRestaurantSchedule(id, entries) {
+  return await apiRequest('PUT', `/restaurants/${id}/schedule`, { entries });
+}
+async function updateRestaurantProfile(id, data) {
+  return await apiRequest('PATCH', `/restaurants/${id}/profile`, data);
+}
+async function uploadRestaurantLogo(restaurantId, file) {
+  const token = sessionStorage.getItem('token');
+  const formData = new FormData();
+  formData.append('file', file);
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const response = await fetch(`${API_BASE}/restaurants/${restaurantId}/logo`, { method: 'POST', headers, body: formData });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || `Error ${response.status}`);
+  }
+  return await response.json();
+}
+async function uploadMenuItemImage(restaurantId, itemId, file) {
+  const token = sessionStorage.getItem('token');
+  const formData = new FormData();
+  formData.append('file', file);
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const response = await fetch(`${API_BASE}/restaurants/${restaurantId}/menu/${itemId}/image`, { method: 'POST', headers, body: formData });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || `Error ${response.status}`);
+  }
+  return await response.json();
+}
+async function updateMenuItemAvailability(restaurantId, itemId, isAvailable) {
+  return await apiRequest('PATCH', `/restaurants/${restaurantId}/menu/${itemId}/availability`, { is_available: isAvailable });
+}
+async function updateMenuItemOptions(restaurantId, itemId, groups) {
+  return await apiRequest('PUT', `/restaurants/${restaurantId}/menu/${itemId}/options`, { groups });
+}
+async function listMyRestaurants() {
+  return await apiRequest('GET', '/restaurants/my');
+}
+async function createMenuCategory(restaurantId, name) {
+  return await apiRequest('POST', `/restaurants/${restaurantId}/categories`, { name });
+}
+async function createMenuItem(restaurantId, name, price, description, categoryId) {
+  const data = { name, price, description: description || null };
+  if (categoryId) data.category_id = categoryId;
+  return await apiRequest('POST', `/restaurants/${restaurantId}/menu`, data);
+}
+async function listRestaurantOrders(restaurantId) {
+  return await apiRequest('GET', `/restaurants/${restaurantId}/orders`);
+}
+async function updateRestaurantOrderStatus(restaurantId, orderId, status) {
+  return await apiRequest('PATCH', `/restaurants/${restaurantId}/orders/${orderId}/status`, { status });
+}
+async function estimateTime(restaurantId, items, lat, lng) {
+  return await apiRequest('POST', '/orders/estimate', { restaurant_id: restaurantId, items, delivery_address: 'placeholder', delivery_location: { lat, lng } });
+}
+async function estimatePrice(restaurantId, items, lat, lng, couponCode, tipAmount, pointsToRedeem, fulfillmentType) {
+  return await apiRequest('POST', '/orders/estimate-price', {
+    restaurant_id: restaurantId,
+    items,
+    delivery_address: 'placeholder',
+    delivery_location: lat != null && lng != null ? { lat, lng } : null,
+    coupon_code: couponCode || null,
+    payment_method: 'cash',
+    tip_amount: tipAmount || 0,
+    points_to_redeem: pointsToRedeem || 0,
+    fulfillment_type: fulfillmentType || 'delivery',
+  });
+}
+async function createOrder(restaurantId, items, deliveryAddress, lat, lng, notes, couponCode, paymentMethod, tipAmount, scheduledFor, pointsToRedeem, fulfillmentType) {
+  const body = {
+    restaurant_id: restaurantId, items,
+    delivery_address: deliveryAddress || null,
+    delivery_location: lat != null && lng != null ? { lat, lng } : null,
+    notes: notes || null, payment_method: paymentMethod || 'mp', tip_amount: tipAmount || 0,
+    fulfillment_type: fulfillmentType || 'delivery',
+  };
+  if (couponCode) body.coupon_code = couponCode;
+  if (scheduledFor) body.scheduled_for = scheduledFor;
+  if (pointsToRedeem) body.points_to_redeem = pointsToRedeem;
+  return await apiRequest('POST', '/orders', body);
+}
+async function listOrders() { return await apiRequest('GET', '/orders'); }
+async function getOrder(id) { return await apiRequest('GET', `/orders/${id}`); }
+async function cancelOrder(id, reason) {
+  return await apiRequest('POST', `/orders/${id}/cancel`, { reason: reason || null });
+}
+async function cancelRestaurantOrder(restaurantId, orderId, reason) {
+  return await apiRequest('POST', `/restaurants/${restaurantId}/orders/${orderId}/cancel`, { reason: reason || null });
+}
+async function getCancellationPolicy() {
+  return await apiRequest('GET', '/orders/cancellation-policy');
+}
+async function getAdminPayouts() {
+  return await apiRequest('GET', '/admin/payouts');
+}
+async function getPayoutHistory() {
+  return await apiRequest('GET', '/admin/payouts/history');
+}
+async function generateRestaurantPayout(id) {
+  return await apiRequest('POST', `/admin/payouts/restaurants/${id}`);
+}
+async function generateCourierPayout(id) {
+  return await apiRequest('POST', `/admin/payouts/couriers/${id}`);
+}
+async function markPayoutPaid(kind, id) {
+  return await apiRequest('POST', `/admin/payouts/${kind}/${id}/mark-paid`);
+}
+async function confirmTransferReceived(orderId) {
+  return await apiRequest('POST', `/admin/payouts/transfers/${orderId}/confirm`);
+}
+async function getAdminAdvances() {
+  return await apiRequest('GET', '/admin/advances');
+}
+async function approveAdvance(id, paysRestaurant) {
+  return await apiRequest('POST', `/admin/advances/${id}/approve`, { pays_restaurant: paysRestaurant });
+}
+async function rejectAdvance(id) {
+  return await apiRequest('POST', `/admin/advances/${id}/reject`);
+}
+async function settleAdvance(id) {
+  return await apiRequest('POST', `/admin/advances/${id}/settle`);
+}
+async function updateRestaurantCommission(id, data) {
+  return await apiRequest('PATCH', `/restaurants/${id}/commission`, data);
+}
+async function updateDeliveryPersonAdmin(id, data) {
+  return await apiRequest('PATCH', `/delivery/persons/${id}`, data);
+}
+async function validateCoupon(code, subtotal, restaurantId) {
+  return await apiRequest('POST', '/coupons/validate', { code, subtotal, restaurant_id: restaurantId });
+}
+async function getBankDetails() { return await apiRequest('GET', '/payments/bank-details'); }
+async function createPreference(orderId) { return await apiRequest('POST', '/payments/create-preference', { order_id: orderId }); }
+async function paymentStatus(orderId) { return await apiRequest('GET', `/payments/${orderId}/status`); }
+async function getProfile() { return await apiRequest('GET', '/profile/me'); }
+async function listAddresses() { return await apiRequest('GET', '/profile/addresses'); }
+async function createAddress(name, address, lat, lng, isDefault, notes) {
+  return await apiRequest('POST', '/profile/addresses', { name, address, location: { lat, lng }, is_default: isDefault, notes: notes || null });
+}
+async function updateAddress(id, data) { return await apiRequest('PUT', `/profile/addresses/${id}`, data); }
+async function deleteAddress(id) { return await apiRequest('DELETE', `/profile/addresses/${id}`); }
+async function listAvailableDeliveryOrders(lat, lng) {
+  const params = new URLSearchParams();
+  if (lat != null && lng != null) { params.set('lat', lat); params.set('lng', lng); }
+  const qs = params.toString();
+  return await apiRequest('GET', '/delivery/available-orders' + (qs ? `?${qs}` : ''));
+}
+async function acceptDeliveryOrder(orderId) { return await apiRequest('POST', `/delivery/accept/${orderId}`); }
+async function pickupDeliveryOrder(orderId) { return await apiRequest('POST', `/delivery/pickup/${orderId}`); }
+async function deliverDeliveryOrder(orderId) { return await apiRequest('POST', `/delivery/deliver/${orderId}`); }
+async function requestCashAdvance(orderId, notes) {
+  return await apiRequest('POST', '/delivery/advances', { order_id: orderId, notes: notes || null });
+}
+async function listCashAdvances() { return await apiRequest('GET', '/delivery/advances'); }
+async function listMyDeliveryOrders() { return await apiRequest('GET', '/delivery/orders'); }
+async function listDeliveryPayouts() { return await apiRequest('GET', '/delivery/payouts'); }
+async function getDeliveryEarnings() { return await apiRequest('GET', '/delivery/earnings'); }
+async function getDeliveryProfile() { return await apiRequest('GET', '/delivery/profile'); }
+async function updateDeliveryProfile(data) { return await apiRequest('PATCH', '/delivery/profile', data); }
+async function setDeliveryAvailability(isAvailable) { return await apiRequest('PATCH', '/delivery/availability', { is_available: isAvailable }); }
+async function uploadFile(file) {
+  const token = sessionStorage.getItem('token');
+  const formData = new FormData();
+  formData.append('file', file);
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const r = await fetch(`${API_BASE}/upload`, { method: 'POST', headers, body: formData });
+  if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Upload error'); }
+  return await r.json();
+}
+async function createMandado(description, estimatedBudget, deliveryAddress, lat, lng, paymentMethod) {
+  return await apiRequest('POST', '/mandados', { description, estimated_budget: estimatedBudget, delivery_address: deliveryAddress, delivery_location: { lat, lng }, payment_method: paymentMethod });
+}
+async function listMandados() { return await apiRequest('GET', '/mandados'); }
+async function getMandado(id) { return await apiRequest('GET', `/mandados/${id}`); }
+async function acceptMandado(id) { return await apiRequest('PATCH', `/mandados/${id}/accept`, {}); }
+async function purchaseMandado(id, productTotal, receiptPhotoUrl) {
+  return await apiRequest('PATCH', `/mandados/${id}/purchase`, { product_total: productTotal, receipt_photo_url: receiptPhotoUrl });
+}
+async function deliverMandado(id) { return await apiRequest('PATCH', `/mandados/${id}/deliver`, {}); }
+async function cancelMandado(id) { return await apiRequest('POST', `/mandados/${id}/cancel`); }
+function getCart() { try { return JSON.parse(sessionStorage.getItem('cart') || '[]'); } catch { return []; } }
+function saveCart(cart) { sessionStorage.setItem('cart', JSON.stringify(cart)); updateCartBadge(); scheduleCartSync(); }
+function clearCart() { sessionStorage.removeItem('cart'); sessionStorage.removeItem('cartRestaurantId'); updateCartBadge(); scheduleCartSync(); }
+async function clearCartNow() {
+  clearTimeout(cartSyncTimer);
+  sessionStorage.removeItem('cart');
+  sessionStorage.removeItem('cartRestaurantId');
+  updateCartBadge();
+  const token = sessionStorage.getItem('token');
+  if (!token) return;
+  try {
+    await fetch(`${API_BASE}/profile/cart`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ items: [], restaurant_id: null }),
+    });
+  } catch (e) { /* limpieza local ya aplicada */ }
+}
+let cartSyncTimer = null;
+function scheduleCartSync() {
+  clearTimeout(cartSyncTimer);
+  cartSyncTimer = setTimeout(() => {
+    const token = sessionStorage.getItem('token');
+    if (!token) return;
+    fetch(`${API_BASE}/profile/cart`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({
+        items: getCart(),
+        restaurant_id: sessionStorage.getItem('cartRestaurantId') || null,
+      }),
+    }).catch(() => {});
+  }, 700);
+}
+async function hydrateCartFromServer() {
+  if (getCart().length) return;
+  try {
+    const data = await apiRequest('GET', '/profile/cart');
+    if (data.items && data.items.length) {
+      sessionStorage.setItem('cart', JSON.stringify(data.items));
+      if (data.restaurant_id) sessionStorage.setItem('cartRestaurantId', data.restaurant_id);
+      updateCartBadge();
+      window.dispatchEvent(new Event('cart:hydrated'));
+    }
+  } catch (e) { /* carrito opcional */ }
+}
+function cartLineKey(item) {
+  const opts = (item.option_ids || []).slice().sort().join(',');
+  return `${item.menu_item_id}|${opts}`;
+}
+function findCartLine(cart, key) {
+  const direct = cart.find(i => (i.line_key || cartLineKey(i)) === key);
+  if (direct) return direct;
+  return cart.find(i => i.menu_item_id === key && !(i.option_ids || []).length);
+}
+function addToCart(item) {
+  item.option_ids = item.option_ids || [];
+  item.option_names = item.option_names || [];
+  item.line_key = cartLineKey(item);
+  const cart = getCart();
+  const existing = cart.find(i => (i.line_key || cartLineKey(i)) === item.line_key);
+  if (existing) existing.quantity += item.quantity;
+  else cart.push(item);
+  saveCart(cart);
+  if (item.restaurant_id) sessionStorage.setItem('cartRestaurantId', item.restaurant_id);
+}
+function removeFromCart(key) {
+  let cart = getCart().filter(i => (i.line_key || cartLineKey(i)) !== key && i.menu_item_id !== key);
+  saveCart(cart);
+  return cart;
+}
+function updateQuantity(key, qty) {
+  const cart = getCart();
+  const item = findCartLine(cart, key);
+  if (item) { item.quantity = qty; saveCart(cart); }
+  return cart;
+}
+function setCartQuantity(menuItemId, qty, meta) {
+  let cart = getCart();
+  const quantity = Math.max(0, Math.min(99, parseInt(qty, 10) || 0));
+  const key = meta ? cartLineKey({ menu_item_id: menuItemId, option_ids: meta.option_ids || [] }) : menuItemId;
+  const existing = findCartLine(cart, key);
+  if (quantity === 0) {
+    cart = cart.filter(i => (i.line_key || cartLineKey(i)) !== key && i.menu_item_id !== menuItemId);
+  } else if (existing) {
+    existing.quantity = quantity;
+  } else if (meta) {
+    cart.push({
+      menu_item_id: menuItemId,
+      name: meta.name,
+      price: meta.price,
+      base_price: meta.base_price,
+      option_ids: meta.option_ids || [],
+      option_names: meta.option_names || [],
+      line_key: key,
+      restaurant_id: meta.restaurant_id,
+      quantity,
+    });
+  }
+  if (meta && meta.restaurant_id) {
+    sessionStorage.setItem('cartRestaurantId', meta.restaurant_id);
+  }
+  if (!cart.length) {
+    sessionStorage.removeItem('cartRestaurantId');
+  }
+  saveCart(cart);
+  return quantity;
+}
+function getCartTotal() { return getCart().reduce((s, i) => s + i.price * i.quantity, 0); }
+function updateCartBadge() { const badge = document.getElementById('cartBadge'); if (!badge) return; const cart = getCart(); const count = cart.reduce((s, i) => s + i.quantity, 0); if (count > 0) { badge.textContent = count; badge.classList.remove('d-none'); } else { badge.classList.add('d-none'); } }
+  </script>
+  <script>
+    async function refreshSession() {
+      try {
+        const me = await apiRequest('GET', '/auth/me');
+        sessionStorage.setItem('is_superuser', me.is_superuser ? 'true' : 'false');
+        const displayName = me.name || me.email || 'Mi cuenta';
+        sessionStorage.setItem('user_name', displayName);
+        applyAdminNav(me.is_superuser);
+        const top = document.getElementById('userNameTop');
+        const nav = document.getElementById('userNameText');
+        if (top) top.textContent = displayName;
+        if (nav) nav.textContent = displayName;
+
+        let isDelivery = false;
+        try {
+          await apiRequest('GET', '/delivery/profile');
+          isDelivery = true;
+        } catch (e) { /* customer or restaurant account */ }
+        sessionStorage.setItem('is_delivery', isDelivery ? 'true' : 'false');
+        applyDeliveryNav(isDelivery);
+        if (isDelivery) hideDeliveryIrrelevantNav();
+        else document.querySelectorAll('.nav-delivery-hide').forEach(el => el.style.display = '');
+
+        let isRestaurantStaff = false;
+        let myRestaurantId = null;
+        if (!me.is_superuser) {
+          try {
+            const mine = await apiRequest('GET', '/restaurants/my');
+            if (Array.isArray(mine) && mine.length) {
+              isRestaurantStaff = true;
+              myRestaurantId = mine[0].id;
+            }
+          } catch (e) { /* customer */ }
+        }
+        sessionStorage.setItem('is_restaurant_staff', isRestaurantStaff ? 'true' : 'false');
+        let isRestaurantManager = false;
+        if (isRestaurantStaff && myRestaurantId) {
+          try {
+            const detail = await apiRequest('GET', `/restaurants/${myRestaurantId}`);
+            isRestaurantManager = ['owner', 'manager', 'admin'].includes(detail.viewer_role);
+          } catch (e) { /* sin permiso para editar */ }
+        }
+        sessionStorage.setItem('is_restaurant_manager', isRestaurantManager ? 'true' : 'false');
+        if (myRestaurantId) sessionStorage.setItem('my_restaurant_id', myRestaurantId);
+        else sessionStorage.removeItem('my_restaurant_id');
+        applyRestaurantNav(isRestaurantStaff, myRestaurantId, isRestaurantManager);
+        if (
+          isRestaurantStaff &&
+          myRestaurantId &&
+          window.location.pathname === '/web/restaurants'
+        ) {
+          window.location.href = `/web/restaurants/${myRestaurantId}`;
+        }
+      } catch (e) { /* sesión expirada: el guard de abajo redirige */ }
+    }
+
+    function applyDeliveryNav(isDelivery) {
+      document.getElementById('deliveryNav')?.classList.toggle('d-none', !isDelivery);
+    }
+
+    function applyRestaurantNav(isStaff, restaurantId, canManage = false) {
+      const myLink = document.getElementById('myRestaurantNav');
+      const publicLink = document.getElementById('publicRestaurantsNav');
+      const profileNav = document.getElementById('businessProfileNav');
+      myLink?.classList.toggle('d-none', !isStaff);
+      if (myLink && restaurantId) {
+        myLink.querySelector('a').href = `/web/restaurants/${restaurantId}`;
+      }
+      publicLink?.classList.toggle('d-none', Boolean(isStaff));
+      const showProfile = Boolean(isStaff && restaurantId && canManage);
+      profileNav?.classList.toggle('d-none', !showProfile);
+      if (profileNav && showProfile) {
+        profileNav.querySelector('a').href = `/web/restaurants/${restaurantId}/profile`;
+      }
+      const top = document.getElementById('userNameTop');
+      const nav = document.getElementById('userNameNav');
+      const profileUrl = showProfile
+        ? `/web/restaurants/${restaurantId}/profile`
+        : '/web/profile';
+      if (top) top.href = profileUrl;
+      if (nav) {
+        nav.href = profileUrl;
+        nav.title = showProfile ? 'Perfil del negocio' : 'Mi perfil';
+      }
+    }
+
+    function applyAdminNav(isSuperuser) {
+      ['adminPushNav', 'adminSettingsNav', 'adminReportsNav', 'adminPayoutsNav', 'adminDashboardNav', 'adminAuditNav', 'adminRestaurantsNav', 'adminCouriersNav'].forEach(id => {
+        document.getElementById(id)?.classList.toggle('d-none', !isSuperuser);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const token = sessionStorage.getItem('token');
+      const publicPaths = [
+        '/web/login',
+        '/web/register',
+        '/web/register-restaurant',
+        '/web/forgot-password',
+        '/web/reset-password',
+        '/web/app',
+      ];
+      const isPublic = publicPaths.some(p => window.location.pathname.startsWith(p));
+      if (!token && !isPublic) {
+        const next = window.location.pathname + window.location.search;
+        window.location.href = `/web/login?next=${encodeURIComponent(next)}`;
+        return;
+      }
+      if (sessionStorage.getItem('is_superuser') === 'true') {
+        applyAdminNav(true);
+      }
+      const cachedName = sessionStorage.getItem('user_name');
+      if (cachedName) {
+        const top = document.getElementById('userNameTop');
+        const nav = document.getElementById('userNameText');
+        if (top) top.textContent = cachedName;
+        if (nav) nav.textContent = cachedName;
+      }
+      if (token) refreshSession();
+      if (token) hydrateCartFromServer();
+      updateCartBadge();
+      document.getElementById('logoutBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('is_superuser');
+        sessionStorage.removeItem('user_name');
+        sessionStorage.removeItem('is_delivery');
+        sessionStorage.removeItem('is_restaurant_staff');
+        sessionStorage.removeItem('is_restaurant_manager');
+        sessionStorage.removeItem('my_restaurant_id');
+        window.location.href = '/web/login';
+      });
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/web/firebase-messaging-sw.js', { scope: '/web/' })
+          .catch(() => { /* PWA opcional */ });
+      }
+    });
+
+    function updateCartBadge() {
+      const badge = document.getElementById('cartBadge');
+      if (!badge) return;
+      try {
+        const cart = JSON.parse(sessionStorage.getItem('cart') || '[]');
+        const count = cart.reduce((s, i) => s + i.quantity, 0);
+        if (count > 0) { badge.textContent = count; badge.classList.remove('d-none'); }
+        else { badge.classList.add('d-none'); }
+      } catch { badge.classList.add('d-none'); }
+    }
+
+    function hideDeliveryIrrelevantNav() {
+      document.querySelectorAll('.nav-delivery-hide').forEach(el => el.style.display = 'none');
+    }
+      if (sessionStorage.getItem('is_delivery') === 'true') {
+      applyDeliveryNav(true);
+      hideDeliveryIrrelevantNav();
+    } else {
+      applyDeliveryNav(false);
+    }
+    if (sessionStorage.getItem('is_restaurant_staff') === 'true') {
+      applyRestaurantNav(
+        true,
+        sessionStorage.getItem('my_restaurant_id'),
+        sessionStorage.getItem('is_restaurant_manager') === 'true'
+      );
+    } else {
+      applyRestaurantNav(false, null, false);
+    }
+
+    function showToast(msg, type = 'success') {
+      const colors = { success: '#198754', danger: '#dc3545', warning: '#ffc107', info: '#0dcaf0' };
+      const el = document.createElement('div');
+      el.className = 'toast align-items-center text-white border-0';
+      el.style.backgroundColor = colors[type] || '#6c757d';
+      el.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
+      document.getElementById('toastContainer').appendChild(el);
+      const t = new bootstrap.Toast(el); t.show();
+      el.addEventListener('hidden.bs.toast', () => el.remove());
+    }
+
+    function loadScriptOnce(src) {
+      return new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('No se pudo cargar el SDK de Firebase'));
+        document.head.appendChild(s);
+      });
+    }
+
+    async function loadFirebaseSdk() {
+      if (window.firebase && window.firebase.messaging) return;
+      await loadScriptOnce('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
+      await loadScriptOnce('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
+    }
+
+    async function enablePushNotifications() {
+      const config = await apiRequest('GET', '/push/config');
+      if (!config.enabled || !config.web_config || !config.vapid_key) {
+        throw new Error('El superusuario todavía no configuró las notificaciones push');
+      }
+      if (!('Notification' in window)) {
+        throw new Error('Este navegador no soporta notificaciones');
+      }
+      const isiOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+      if (isiOS && !isStandalone) {
+        throw new Error('En iPhone primero agrega el sitio a la pantalla de inicio y ábrelo desde ahí');
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        throw new Error('Permiso de notificaciones denegado');
+      }
+      await loadFirebaseSdk();
+      if (!window.firebase.apps.length) {
+        window.firebase.initializeApp(config.web_config);
+      }
+      const messaging = window.firebase.messaging();
+      let swRegistration = null;
+      try { swRegistration = await navigator.serviceWorker.ready; } catch (e) { /* opcional */ }
+      const token = await messaging.getToken({
+        vapidKey: config.vapid_key,
+        ...(swRegistration ? { serviceWorkerRegistration: swRegistration } : {}),
+      });
+      if (!token) throw new Error('No se pudo obtener el token de notificaciones');
+      await apiRequest('POST', '/push/tokens', {
+        token,
+        platform: isiOS ? 'ios' : 'web',
+        device_label: navigator.userAgent.slice(0, 150),
+      });
+      messaging.onMessage((payload) => {
+        const n = payload.notification || {};
+        showToast(n.title || 'Notificación', 'info');
+      });
+      return token;
+    }
+  </script>
+  <script src="/static/js/map_tiles.js"></script>
+  <script src="/static/js/address_utils.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

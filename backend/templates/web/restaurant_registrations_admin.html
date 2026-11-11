@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="m-0"><i class="bi bi-shop"></i> Solicitudes de restaurantes</h4>
+  <button class="btn btn-outline-secondary btn-sm" onclick="loadRegistrations()"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+</div>
+<div id="regAdminError" class="alert alert-danger d-none"></div>
+<div id="regAdminLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="regAdminContent" class="d-none"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function badge(status) {
+    const map = { pending: ['warning', 'Pendiente'], active: ['success', 'Activo'], rejected: ['danger', 'Rechazado'] };
+    const item = map[status] || ['secondary', status];
+    return `<span class="badge bg-${item[0]}">${item[1]}</span>`;
+  }
+  async function loadRegistrations() {
+    const loading = document.getElementById('regAdminLoading');
+    const content = document.getElementById('regAdminContent');
+    const error = document.getElementById('regAdminError');
+    error.classList.add('d-none'); loading.classList.remove('d-none');
+    try {
+      const rows = await apiRequest('GET', '/admin/restaurant-registrations');
+      const pending = rows.filter(r => r.status === 'pending');
+      content.innerHTML = `
+        <div class="card p-3">
+          <h6>Pendientes: ${pending.length}</h6>
+          <div class="table-responsive"><table class="table table-sm align-middle">
+            <thead><tr><th>Restaurante</th><th>Responsable</th><th>Contacto</th><th>Estado</th><th>Fecha</th><th></th></tr></thead>
+            <tbody>${rows.map(r => `<tr>
+              <td><strong>${esc(r.name)}</strong><br><small class="text-muted">${esc(r.cuisine || '')}</small><br><small>${esc(r.address)}</small></td>
+              <td>${esc(r.owner_name)}</td>
+              <td><small>${esc(r.owner_email)}<br>${esc(r.phone || '')}</small></td>
+              <td>${badge(r.status)}${r.rejection_reason ? `<br><small class="text-danger">${esc(r.rejection_reason)}</small>` : ''}</td>
+              <td class="small">${r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
+              <td class="text-nowrap">
+                ${r.status === 'pending' ? `
+                  <button class="btn btn-sm btn-success" onclick="approve('${r.id}')">Aprobar</button>
+                  <button class="btn btn-sm btn-outline-danger" onclick="reject('${r.id}')">Rechazar</button>` : ''}
+              </td>
+            </tr>`).join('') || '<tr><td colspan="6" class="text-center text-muted">Sin solicitudes.</td></tr>'}</tbody>
+          </table></div>
+        </div>`;
+      content.classList.remove('d-none');
+    } catch (ex) {
+      error.textContent = ex.message; error.classList.remove('d-none');
+    } finally { loading.classList.add('d-none'); }
+  }
+  async function approve(id) {
+    if (!confirm('¿Aprobar este restaurante y activar la cuenta del dueño?')) return;
+    try {
+      const res = await apiRequest('POST', `/admin/restaurant-registrations/${id}/approve`, {});
+      showToast(res.email_sent ? 'Restaurante aprobado y correo enviado' : 'Restaurante aprobado');
+      loadRegistrations();
+    } catch (ex) { alert(ex.message); }
+  }
+  async function reject(id) {
+    const reason = prompt('Motivo del rechazo (opcional):');
+    if (reason === null) return;
+    try {
+      const res = await apiRequest('POST', `/admin/restaurant-registrations/${id}/reject`, { reason: reason || null });
+      showToast(res.email_sent ? 'Solicitud rechazada y correo enviado' : 'Solicitud rechazada');
+      loadRegistrations();
+    } catch (ex) { alert(ex.message); }
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    if (sessionStorage.getItem('is_superuser') === 'true') loadRegistrations();
+  });
+</script>
+{% endblock %}

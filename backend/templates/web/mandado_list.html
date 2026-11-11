@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="mb-3">📦 Mis mandados</h4>
+<div id="mandadoList"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const STATUS_LABELS = {
+    pending: 'Pendiente', accepted: 'Aceptado', buying: 'Comprando',
+    purchased: 'Comprado', in_delivery: 'En camino', completed: 'Entregado',
+    delivered: 'Entregado', cancelled: 'Cancelado'
+  };
+  const STATUS_COLORS = {
+    pending: 'bg-warning text-dark', accepted: 'bg-info text-dark', buying: 'bg-primary text-white',
+    purchased: 'bg-primary text-white', in_delivery: 'bg-success text-white',
+    completed: 'bg-secondary text-white', delivered: 'bg-secondary text-white',
+    cancelled: 'bg-danger text-white'
+  };
+
+  async function loadMandados() {
+    try {
+      const list = await apiRequest('GET', '/mandados');
+      const container = document.getElementById('mandadoList');
+      if (list.length === 0) {
+        container.innerHTML = `<div class="text-center py-5"><p class="text-muted">No tienes mandados aún</p>
+          <a href="/web/mandados/new" class="btn btn-primary">Solicitar mandado</a></div>`;
+        return;
+      }
+      let html = '';
+      list.forEach(m => {
+        const st = STATUS_LABELS[m.status] || m.status;
+        const sc = STATUS_COLORS[m.status] || 'bg-secondary';
+        html += `<div class="card mb-2 p-3" onclick="window.location='/web/mandados/${m.id}'" style="cursor:pointer">
+          <div class="d-flex justify-content-between align-items-center">
+            <div><strong>#${m.id.slice(0, 8)}</strong><br><small class="text-muted">$${parseFloat(m.estimated_total).toFixed(2)}</small></div>
+            <span class="badge ${sc}">${st}</span>
+          </div>
+          <small class="text-muted mt-1">${m.description.slice(0, 60)}${m.description.length > 60 ? '...' : ''}</small>
+        </div>`;
+      });
+      container.innerHTML = html;
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  loadMandados();
+</script>
+{% endblock %}

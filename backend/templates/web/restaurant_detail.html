@@ -1,0 +1,904 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-2">
+  <a href="/web/restaurants" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <a href="/web/cart" class="btn btn-sm btn-outline-primary ms-auto">
+    <i class="bi bi-cart"></i> Ver carrito
+  </a>
+</div>
+<div id="restaurantHeader" class="mb-3"></div>
+<div id="ownerPanel" class="d-none mb-3"></div>
+
+<div id="menuContainer"></div>
+<div id="menuLoading" class="text-center py-3"><div class="spinner-border text-primary"></div></div>
+
+<div class="modal fade" id="menuImageModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="menuImageTitle"></h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body text-center p-2">
+        <img id="menuImageLarge" class="menu-lightbox-img" alt="">
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+  let restaurantData = null;
+  let isOwner = false;
+  let viewerIsStaff = false;
+  let commissionRate = 0;
+  let scheduleState = [];
+  let pendingItemId = null;
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function customerPrice(base) {
+    const value = Number(base || 0);
+    return Math.round((value * (1 + commissionRate / 100) + Number.EPSILON) * 100) / 100;
+  }
+
+  function menuPrice(item) {
+    return isOwner ? Number(item.price) : customerPrice(item.price);
+  }
+
+  function cartQty(itemId) {
+    const item = getCart().find(i => i.menu_item_id === String(itemId));
+    return item ? item.quantity : 0;
+  }
+
+  function qtyControl(item) {
+    return `<div class="qty-control d-flex align-items-center gap-1">
+      <button type="button" class="btn btn-sm btn-outline-secondary qty-minus"
+              data-mid="${item.id}" aria-label="Quitar uno">−</button>
+      <input type="number" min="0" max="99" step="1" inputmode="numeric"
+             class="form-control form-control-sm qty-input"
+             data-mid="${item.id}"
+             data-name="${esc(item.name)}"
+             data-price="${menuPrice(item)}"
+             value="${cartQty(item.id)}"
+             aria-label="Cantidad de ${esc(item.name)}">
+      <button type="button" class="btn btn-sm btn-outline-secondary qty-plus"
+              data-mid="${item.id}" aria-label="Agregar uno">+</button>
+    </div>`;
+  }
+
+  function menuItemCard(item) {
+    const image = item.image_url
+      ? `<button type="button" class="menu-image-btn"
+                 data-src="${esc(item.image_url)}" data-title="${esc(item.name)}"
+                 title="Ver foto de ${esc(item.name)}">
+           <img src="${esc(item.image_url)}" alt="${esc(item.name)}" class="menu-thumb"
+                onerror="this.parentElement.style.display='none'">
+         </button>`
+      : `<div class="menu-thumb menu-thumb-empty"><i class="bi bi-image"></i></div>`;
+
+    const availabilityButton = isOwner
+      ? `<button type="button" class="btn btn-sm ${item.is_available ? 'btn-outline-warning' : 'btn-outline-success'} item-avail-btn"
+                 data-id="${item.id}" data-available="${item.is_available}">
+           ${item.is_available ? 'Agotar' : 'Activar'}
+         </button>`
+      : '';
+    const hasOptions = (item.option_groups || []).length > 0;
+    const staffReadOnly = viewerIsStaff && !isOwner;
+    const ownerActions = isOwner
+      ? `<div class="d-flex align-items-center gap-1">
+           <span class="badge bg-secondary">Dueño</span>
+           <button type="button" class="btn btn-sm btn-outline-primary item-image-btn"
+                   data-id="${item.id}" title="Cambiar foto">
+             <i class="bi bi-camera"></i>
+           </button>
+           <button type="button" class="btn btn-sm btn-outline-dark item-options-btn" data-id="${item.id}">Opciones</button>
+           ${availabilityButton}
+         </div>`
+      : (staffReadOnly
+          ? (item.is_available ? '' : '<span class="badge bg-secondary">Agotado</span>')
+          : (item.is_available
+              ? (hasOptions
+                  ? `<button type="button" class="btn btn-sm btn-outline-dark customize-btn" data-id="${item.id}">Personalizar</button>`
+                  : qtyControl(item))
+              : '<span class="badge bg-secondary">Agotado</span>'));
+
+    return `<div class="menu-item d-flex justify-content-between align-items-center gap-2">
+      <div class="d-flex align-items-center gap-2 min-w-0">
+        ${image}
+        <div class="min-w-0">
+          <strong>${esc(item.name)}</strong>
+          <p class="mb-0 text-muted small">${esc(item.description || '')}</p>
+          <small class="text-muted">$${menuPrice(item).toFixed(2)}</small>
+        </div>
+      </div>
+      <div class="text-end">${ownerActions}</div>
+    </div>`;
+  }
+
+  async function loadMenu() {
+    const header = document.getElementById('restaurantHeader');
+    const container = document.getElementById('menuContainer');
+    const loading = document.getElementById('menuLoading');
+    const ownerPanel = document.getElementById('ownerPanel');
+    try {
+      const r = await getRestaurant(RID);
+      restaurantData = r;
+      commissionRate = Number(r.effective_commission_percentage || 0);
+      loading.classList.add('d-none');
+
+      const cuisine = r.cuisine
+        ? `<span class="badge bg-dark ms-1">${esc(r.cuisine)}</span>`
+        : '';
+      const openBadge = r.is_open_now === false
+        ? '<span class="badge bg-secondary">Cerrado</span>'
+        : '<span class="badge bg-success">Abierto</span>';
+      const deliveryBadge = r.delivery_mode === 'own'
+        ? '<span class="badge bg-info text-dark">Entrega propia</span>'
+        : (r.pickup_enabled
+          ? '<span class="badge bg-info text-dark">También para recoger</span>'
+          : (r.delivery_mode === 'own' ? '' : ''));
+      const pickupBadge = r.pickup_enabled
+        ? '<span class="badge bg-primary">Recoger en restaurante</span>'
+        : '';
+
+      header.innerHTML = `
+        <div class="card p-3">
+          <div class="d-flex align-items-center">
+            <img src="${esc(r.logo_url || '/static/logo.png')}" height="80"
+                 style="border-radius:12px;object-fit:cover;width:80px;"
+                 onerror="this.src='/static/logo.png'" alt="${esc(r.name)}">
+            <div class="ms-3 min-w-0">
+              <h4 class="mb-1">${esc(r.name)}</h4>
+              <div class="mb-1">
+                <span class="badge bg-warning text-dark">${r.rating || '0.0'}</span>
+                ${cuisine}
+                ${openBadge}
+                ${deliveryBadge}
+                ${pickupBadge}
+                <small class="text-muted ms-2">${r.pickup_enabled ? 'Envío o recoger en restaurante' : `Envío $${parseFloat(r.delivery_fee).toFixed(2)}`}</small>
+              </div>
+              <p class="text-muted mb-1">${esc(r.description || '')}</p>
+              <small class="text-muted">${esc(r.open_message || '')}</small>
+            </div>
+          </div>
+        </div>`;
+
+      let owner = false;
+      let canManage = false;
+      let canFinance = false;
+      let isStaff = false;
+      try {
+        const role = r.viewer_role || null;
+        isStaff = Boolean(role);
+        viewerIsStaff = isStaff;
+        owner = role === 'owner' || role === 'admin';
+        canManage = ['owner', 'manager', 'admin'].includes(role);
+        canFinance = ['owner', 'manager', 'admin'].includes(role);
+        isOwner = canManage;
+        if (isStaff) {
+          ownerPanel.classList.remove('d-none');
+          const buttons = [];
+          if (canManage) {
+            buttons.push('<button class="btn btn-sm btn-outline-primary" onclick="showAddCategory()">+ Categoría</button>');
+            buttons.push('<button class="btn btn-sm btn-outline-success" onclick="showAddItem()">+ Platillo</button>');
+            buttons.push(`<a href="/web/restaurants/${RID}/profile" class="btn btn-sm btn-outline-dark"><i class="bi bi-shop-window"></i> Perfil del negocio</a>`);
+          }
+          buttons.push(`<a href="/web/restaurants/${RID}/orders" class="btn btn-sm btn-outline-info">Pedidos</a>`);
+          if (canFinance) {
+            buttons.push(`<a href="/web/restaurants/${RID}/earnings" class="btn btn-sm btn-outline-warning">Ganancias</a>`);
+          }
+          if (owner) {
+            buttons.push(`<a href="/web/restaurants/${RID}/team" class="btn btn-sm btn-outline-dark">Equipo</a>`);
+          }
+          if (r.slug) {
+            buttons.push(`<a href="/r/${r.slug}" target="_blank" class="btn btn-sm btn-outline-dark">Página pública</a>`);
+          }
+          buttons.push('<a href="/manuales/restaurante" target="_blank" class="btn btn-sm btn-outline-secondary">Manual</a>');
+          ownerPanel.innerHTML = `
+            <div class="card p-3">
+              <h6>Panel del restaurante</h6>
+              <div class="d-flex gap-2 flex-wrap">${buttons.join('')}</div>
+              ${canManage ? '<div class="form-text mt-2">Los datos, el logo, el horario y la ubicación se editan en el perfil del negocio.</div>' : ''}
+              <input type="file" id="logoFile" accept="image/jpeg,image/png,image/webp" class="d-none">
+              <input type="file" id="itemImageFile" accept="image/jpeg,image/png,image/webp" class="d-none">
+            </div>`;
+          if (canManage) {
+            document.getElementById('itemImageFile')?.addEventListener('change', handleItemImageUpload);
+          }
+        }
+      } catch (e) { /* usuario no autenticado o sin perfil */ }
+
+      if (commissionRate > 0 && canManage) {
+        const note = `Tus precios son la base. Al cliente se le suma ${commissionRate.toFixed(1)}% de comisión de plataforma y ese porcentaje ya está incluido en el precio que ve.`;
+        header.insertAdjacentHTML('beforeend', `<div class="alert alert-info py-2 small mt-2 mb-0">${esc(note)}</div>`);
+      }
+
+      container.innerHTML = '';
+      const cats = {};
+      (r.categories || []).forEach(c => { cats[c.id] = c.name; });
+      const categorized = {};
+      (r.menu || []).forEach(item => {
+        const key = item.category_id || 'sin-categoria';
+        if (!categorized[key]) categorized[key] = { name: cats[key] || 'General', items: [] };
+        categorized[key].items.push(item);
+      });
+
+      Object.entries(categorized).forEach(([catId, cat]) => {
+        const sec = document.createElement('div');
+        sec.className = 'card p-3 mb-3';
+        sec.innerHTML = `<h6 class="mb-2">${esc(cat.name)}</h6>
+          <div class="menu-list">${cat.items.map(menuItemCard).join('')}</div>`;
+        container.appendChild(sec);
+      });
+
+      attachQuantityEvents(container);
+      attachItemImageEvents(container);
+      attachImageLightbox(container);
+      attachAvailabilityEvents(container);
+      attachCustomizeEvents(container);
+      updateCartBadge();
+    } catch (ex) {
+      loading.classList.add('d-none');
+      showToast(ex.message, 'danger');
+    }
+  }
+
+  function itemMeta(el) {
+    return {
+      menu_item_id: el.dataset.mid,
+      name: el.dataset.name,
+      price: parseFloat(el.dataset.price),
+      restaurant_id: RID,
+    };
+  }
+
+  function inputFor(itemId) {
+    return document.querySelector(`.qty-input[data-mid="${itemId}"]`);
+  }
+
+  function applyQty(input, qty) {
+    const value = Math.max(0, Math.min(99, parseInt(qty, 10) || 0));
+    input.value = value;
+    setCartQuantity(input.dataset.mid, value, itemMeta(input));
+    updateCartBadge();
+  }
+
+  function attachQuantityEvents(container) {
+    container.querySelectorAll('.qty-input').forEach(input => {
+      input.addEventListener('input', () => {
+        const value = Math.max(0, Math.min(99, parseInt(input.value, 10) || 0));
+        setCartQuantity(input.dataset.mid, value, itemMeta(input));
+        updateCartBadge();
+      });
+      input.addEventListener('blur', () => applyQty(input, input.value));
+    });
+    container.querySelectorAll('.qty-plus').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const input = inputFor(btn.dataset.mid);
+        if (input) applyQty(input, (parseInt(input.value, 10) || 0) + 1);
+      });
+    });
+    container.querySelectorAll('.qty-minus').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const input = inputFor(btn.dataset.mid);
+        if (input) applyQty(input, (parseInt(input.value, 10) || 0) - 1);
+      });
+    });
+  }
+
+  function attachImageLightbox(container) {
+    container.querySelectorAll('.menu-image-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('menuImageLarge').src = btn.dataset.src;
+        document.getElementById('menuImageTitle').textContent = btn.dataset.title || '';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('menuImageModal')).show();
+      });
+    });
+  }
+
+  function attachAvailabilityEvents(container) {
+    container.querySelectorAll('.item-avail-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const isAvailable = btn.dataset.available === 'true';
+        try {
+          await updateMenuItemAvailability(RID, btn.dataset.id, !isAvailable);
+          showToast(isAvailable ? 'Platillo marcado como agotado' : 'Platillo disponible');
+          loadMenu();
+        } catch (ex) { showToast(ex.message, 'danger'); }
+      });
+    });
+  }
+
+  function attachCustomizeEvents(container) {
+    container.querySelectorAll('.customize-btn').forEach(btn => {
+      btn.addEventListener('click', () => openItemCustomizer(btn.dataset.id));
+    });
+  }
+
+  function openItemCustomizer(itemId) {
+    const item = (restaurantData?.menu || []).find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    const groups = item.option_groups || [];
+    const body = `
+      <div class="mb-3">
+        <label class="form-label small mb-1">Cantidad</label>
+        <input type="number" min="1" max="99" step="1" value="1" id="customQty" class="form-control" style="max-width:110px">
+      </div>
+      ${groups.map(group => `
+        <div class="mb-3 option-group" data-group="${group.id}" data-pricing="${group.pricing_mode || 'delta'}"
+             data-type="${group.selection_type}" data-min="${group.min_selections}"
+             data-max="${group.max_selections}" data-required="${group.is_required}">
+          <strong>${esc(group.name)} ${group.is_required ? '<span class="text-danger">*</span>' : ''}</strong>
+          <div class="small text-muted mb-1">${group.pricing_mode === 'max'
+            ? `Elige hasta ${group.max_selections} ingredientes. La pizza se divide en partes iguales.`
+            : (group.selection_type === 'single' ? 'Elige una opción' : `Puedes elegir hasta ${group.max_selections}`)}</div>
+          ${(group.options || []).map((option, optionIndex) => `
+            <div class="form-check">
+              <input class="form-check-input option-choice" type="${group.selection_type === 'single' ? 'radio' : 'checkbox'}"
+                     name="group_${group.id}" value="${option.id}"
+                     data-name="${esc(group.name + ': ' + option.name)}"
+                     data-group-name="${esc(group.name)}"
+                     data-price="${option.price_delta}"
+                     ${group.pricing_mode === 'max' && group.is_required && optionIndex === 0 ? 'checked' : ''}
+                     ${option.is_available ? '' : 'disabled'}>
+              <label class="form-check-label ${option.is_available ? '' : 'text-muted'}">
+                ${esc(option.name)}
+                ${group.pricing_mode === 'max'
+                  ? ` $${customerPrice(option.price_delta).toFixed(2)} completo`
+                  : (parseFloat(option.price_delta) > 0 ? ` +$${customerPrice(option.price_delta).toFixed(2)}` : '')}
+                ${option.is_available ? '' : ' (agotado)'}
+              </label>
+            </div>`).join('')}
+        </div>`).join('')}
+      <div class="alert alert-light py-2 small d-none" id="divisionPreview"></div>
+      <div class="fw-bold fs-5">Precio unitario: <span id="customPrice">$${customerPrice(item.price).toFixed(2)}</span></div>`;
+    function readSelection(modalEl) {
+      const selected = [...modalEl.querySelectorAll('.option-choice:checked')];
+      let unit = parseFloat(item.price);
+      const names = [];
+      const ids = [];
+      for (const groupEl of modalEl.querySelectorAll('.option-group')) {
+        const chosen = selected.filter(input => input.name === `group_${groupEl.dataset.group}`);
+        if (!chosen.length) continue;
+        if (groupEl.dataset.pricing === 'max') {
+          unit = Math.max(unit, ...chosen.map(input => parseFloat(input.dataset.price || 0)));
+          chosen.forEach(input => {
+            names.push(`${input.dataset.name} (1/${chosen.length})`);
+            ids.push(input.value);
+          });
+        } else {
+          unit += chosen.reduce((sum, input) => sum + parseFloat(input.dataset.price || 0), 0);
+          chosen.forEach(input => {
+            names.push(input.dataset.name);
+            ids.push(input.value);
+          });
+        }
+      }
+      unit = customerPrice(unit);
+      return { selected, unit, names, ids };
+    }
+
+    const { el } = openFormModal({
+      title: item.name,
+      size: 'modal-lg',
+      saveLabel: 'Agregar al carrito',
+      body,
+      onSave: (modalEl) => {
+        const qtyInput = modalEl.querySelector('#customQty');
+        const quantity = Math.max(1, Math.min(99, parseInt(qtyInput.value, 10) || 1));
+        const selected = [...modalEl.querySelectorAll('.option-choice:checked')];
+        for (const groupEl of modalEl.querySelectorAll('.option-group')) {
+          const chosen = selected.filter(input => input.name === `group_${groupEl.dataset.group}`);
+          const min = Number(groupEl.dataset.min || 0);
+          const max = Number(groupEl.dataset.max || 1);
+          if (groupEl.dataset.required === 'true' && chosen.length < Math.max(min, 1)) {
+            showToast(`Elige una opción en ${groupEl.querySelector('strong').textContent.trim()}`, 'warning');
+            return false;
+          }
+          if (chosen.length < min || chosen.length > max) {
+            showToast(`Revisa las opciones de ${groupEl.querySelector('strong').textContent.trim()}`, 'warning');
+            return false;
+          }
+        }
+        const result = readSelection(modalEl);
+        addToCart({
+          menu_item_id: item.id,
+          name: item.name,
+          price: result.unit,
+          base_price: parseFloat(item.price),
+          option_ids: result.ids,
+          option_names: result.names,
+          quantity,
+          restaurant_id: RID,
+        });
+        showToast(`${item.name} agregado al carrito`);
+      },
+    });
+    const updatePrice = () => {
+      const qty = Math.max(1, parseInt(el.querySelector('#customQty').value, 10) || 1);
+      const { unit } = readSelection(el);
+      el.querySelector('#customPrice').textContent = `$${(unit * qty).toFixed(2)}`;
+      const parts = [];
+      for (const groupEl of el.querySelectorAll('.option-group')) {
+        if (groupEl.dataset.pricing !== 'max') continue;
+        const chosen = [...groupEl.querySelectorAll('.option-choice:checked')];
+        if (!chosen.length) continue;
+        const names = chosen.map(input => input.dataset.name.split(': ').slice(1).join(': '));
+        parts.push(`${names.join(' · ')} — 1/${chosen.length} cada uno`);
+      }
+      const preview = el.querySelector('#divisionPreview');
+      if (preview) {
+        preview.classList.toggle('d-none', !parts.length);
+        preview.textContent = parts.length ? `División de la pizza: ${parts.join(' | ')}` : '';
+      }
+    };
+    el.querySelectorAll('.option-choice').forEach(input => input.addEventListener('change', updatePrice));
+    el.querySelector('#customQty').addEventListener('input', updatePrice);
+    updatePrice();
+  }
+
+  function attachItemImageEvents(container) {
+    container.querySelectorAll('.item-image-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        pendingItemId = btn.dataset.id;
+        document.getElementById('itemImageFile')?.click();
+      });
+    });
+    container.querySelectorAll('.item-options-btn').forEach(btn => {
+      btn.addEventListener('click', () => openOptionsEditor(btn.dataset.id));
+    });
+  }
+
+  async function handleLogoUpload(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      await uploadRestaurantLogo(RID, file);
+      showToast('Logo actualizado');
+      loadMenu();
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  async function handleItemImageUpload(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !pendingItemId) return;
+    try {
+      await uploadMenuItemImage(RID, pendingItemId, file);
+      showToast('Foto del platillo actualizada');
+      loadMenu();
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  // ===== Reusable modal form =====
+  function openFormModal({ title, body, size = '', saveLabel = 'Guardar', onSave }) {
+    const el = document.createElement('div');
+    el.className = 'modal fade';
+    el.innerHTML = `
+      <div class="modal-dialog ${size} modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">${esc(title)}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">${body}</div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="formSaveBtn">${esc(saveLabel)}</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    const modal = new bootstrap.Modal(el);
+    const saveBtn = el.querySelector('#formSaveBtn');
+    modal.show();
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      try {
+        const keepOpen = await onSave(el);
+        if (keepOpen !== false) modal.hide();
+      } catch (ex) {
+        showToast(ex.message || String(ex), 'danger');
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+    el.addEventListener('hidden.bs.modal', () => el.remove());
+    return { el, modal };
+  }
+
+  // ===== Editar negocio =====
+  function showBusinessEditor() {
+    const r = restaurantData || {};
+    openFormModal({
+      title: 'Editar negocio',
+      size: 'modal-lg',
+      body: `
+        <div class="row g-2">
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1">Nombre</label>
+            <input type="text" id="bizName" class="form-control" value="${esc(r.name || '')}">
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1">Giro</label>
+            <input type="text" id="bizCuisine" class="form-control" list="cuisineOptions"
+                   placeholder="Sushi, Pizza, Tacos..." value="${esc(r.cuisine || '')}">
+            <datalist id="cuisineOptions">
+              <option value="Sushi"></option><option value="Pizza"></option>
+              <option value="Tacos"></option><option value="Hamburguesas"></option>
+              <option value="Mariscos"></option><option value="Postres"></option>
+              <option value="Cafetería"></option><option value="Comida corrida"></option>
+            </datalist>
+          </div>
+          <div class="col-12">
+            <label class="form-label small mb-1">Descripción</label>
+            <textarea id="bizDescription" class="form-control" rows="2">${esc(r.description || '')}</textarea>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1">Teléfono</label>
+            <input type="text" id="bizPhone" class="form-control" value="${esc(r.phone || '')}">
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1">Tipo de entrega</label>
+            <select class="form-select" id="bizDeliveryMode">
+              <option value="platform" ${r.delivery_mode !== 'own' ? 'selected' : ''}>Repartidor de TuPedidoJR</option>
+              <option value="own" ${r.delivery_mode === 'own' ? 'selected' : ''}>Repartidor propio del restaurante</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="bizPickup" ${r.pickup_enabled ? 'checked' : ''}>
+              <label class="form-check-label" for="bizPickup">Permitir que el cliente recoja en el restaurante</label>
+            </div>
+            <div class="form-text">El pedido no lleva envío ni propina. El cliente pasa cuando esté listo.</div>
+          </div>
+          <div class="col-12 col-md-6 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="bizIsOpen" ${r.is_open ? 'checked' : ''}>
+              <label class="form-check-label" for="bizIsOpen">Recibiendo pedidos</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="bizPublicPage" ${r.public_page_enabled ? 'checked' : ''}>
+              <label class="form-check-label" for="bizPublicPage">Página pública activada</label>
+            </div>
+            ${r.slug ? `<div class="form-text">Enlace: <a href="/r/${r.slug}" target="_blank">/r/${r.slug}</a></div>` : ''}
+          </div>
+        </div>`,
+      onSave: async (el) => {
+        const data = {
+          name: el.querySelector('#bizName').value.trim(),
+          cuisine: el.querySelector('#bizCuisine').value.trim() || null,
+          description: el.querySelector('#bizDescription').value.trim() || null,
+          phone: el.querySelector('#bizPhone').value.trim() || null,
+          is_open: el.querySelector('#bizIsOpen').checked,
+          public_page_enabled: el.querySelector('#bizPublicPage').checked,
+          delivery_mode: el.querySelector('#bizDeliveryMode').value,
+          pickup_enabled: el.querySelector('#bizPickup').checked,
+        };
+        if (!data.name) { showToast('El nombre es obligatorio', 'warning'); return false; }
+        await updateRestaurantProfile(RID, data);
+        showToast('Negocio actualizado');
+        loadMenu();
+      },
+    });
+  }
+
+  // ===== Categorías y platillos =====
+  function showAddCategory() {
+    openFormModal({
+      title: 'Nueva categoría',
+      body: `
+        <label class="form-label small mb-1">Nombre de la categoría</label>
+        <input type="text" id="catName" class="form-control" placeholder="Ej. Entradas, Bebidas, Postres">`,
+      onSave: async (el) => {
+        const name = el.querySelector('#catName').value.trim();
+        if (!name) { showToast('Ingresa un nombre', 'warning'); return false; }
+        await createMenuCategory(RID, name);
+        showToast('Categoría creada');
+        loadMenu();
+      },
+    });
+  }
+
+  function showAddItem() {
+    const categories = restaurantData?.categories || [];
+    const options = '<option value="">Sin categoría</option>' +
+      categories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    openFormModal({
+      title: 'Nuevo platillo',
+      body: `
+        <div class="mb-2">
+          <label class="form-label small mb-1">Nombre</label>
+          <input type="text" id="itemName" class="form-control" placeholder="Ej. Taco de bistec">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Descripción</label>
+          <textarea id="itemDesc" class="form-control" rows="2" placeholder="Ingredientes o detalles"></textarea>
+        </div>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small mb-1">Precio</label>
+            <input type="number" id="itemPrice" class="form-control" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">Categoría</label>
+            <select id="itemCategory" class="form-select">${options}</select>
+          </div>
+        </div>`,
+      onSave: async (el) => {
+        const name = el.querySelector('#itemName').value.trim();
+        const description = el.querySelector('#itemDesc').value.trim();
+        const price = parseFloat(el.querySelector('#itemPrice').value);
+        const categoryId = el.querySelector('#itemCategory').value || undefined;
+        if (!name || !price || price <= 0) {
+          showToast('Nombre y precio válido requeridos', 'warning');
+          return false;
+        }
+        await createMenuItem(RID, name, price, description, categoryId);
+        showToast('Platillo creado');
+        loadMenu();
+      },
+    });
+  }
+
+  // ===== Horario =====
+  async function showScheduleEditor() {
+    try {
+      scheduleState = (await getRestaurantSchedule(RID)).map(e => ({ ...e }));
+    } catch (e) {
+      scheduleState = [];
+      showToast('No se pudo cargar el horario: ' + e.message, 'danger');
+    }
+    openFormModal({
+      title: 'Horario de atención',
+      size: 'modal-lg',
+      saveLabel: 'Guardar horario',
+      body: `
+        <p class="text-muted small">Los días sin turnos se consideran cerrados. Puedes agregar varios turnos por día.</p>
+        <div id="scheduleBody"></div>`,
+      onSave: async () => {
+        const body = document.getElementById('scheduleBody');
+        const entries = [];
+        body.querySelectorAll('.schedule-row').forEach(row => {
+          const open = row.querySelector('.schedule-open').value;
+          const close = row.querySelector('.schedule-close').value;
+          if (open && close) {
+            entries.push({
+              day_of_week: Number(row.dataset.day),
+              open_time: open,
+              close_time: close,
+              is_closed: false,
+            });
+          }
+        });
+        await updateRestaurantSchedule(RID, entries);
+        showToast('Horario guardado');
+        loadMenu();
+      },
+    });
+    renderScheduleBody();
+  }
+
+  function renderScheduleBody() {
+    const body = document.getElementById('scheduleBody');
+    if (!body) return;
+    let html = '';
+    for (let day = 0; day < 7; day++) {
+      html += `<div class="mb-2 pb-2 border-bottom">
+        <div class="d-flex justify-content-between align-items-center">
+          <strong class="small">${DAY_NAMES[day]}</strong>
+          <button type="button" class="btn btn-sm btn-link p-0" onclick="addScheduleEntry(${day})">+ turno</button>
+        </div>`;
+      const entries = scheduleState
+        .map((entry, index) => ({ ...entry, index }))
+        .filter(entry => entry.day_of_week === day);
+      if (!entries.length) {
+        html += `<small class="text-muted">Cerrado</small>`;
+      } else {
+        entries.forEach(entry => {
+          html += `<div class="d-flex gap-1 align-items-center mt-1 schedule-row" data-day="${day}">
+            <input type="time" class="form-control form-control-sm schedule-open" value="${entry.open_time}"
+                   onchange="updateScheduleEntry(${entry.index}, 'open_time', this.value)">
+            <span class="small">a</span>
+            <input type="time" class="form-control form-control-sm schedule-close" value="${entry.close_time}"
+                   onchange="updateScheduleEntry(${entry.index}, 'close_time', this.value)">
+            <button type="button" class="btn btn-sm btn-outline-danger" title="Quitar turno"
+                    onclick="removeScheduleEntry(${entry.index})">&times;</button>
+          </div>`;
+        });
+      }
+      html += `</div>`;
+    }
+    body.innerHTML = html;
+  }
+
+  function addScheduleEntry(day) {
+    scheduleState.push({ day_of_week: day, open_time: '09:00', close_time: '22:00', is_closed: false });
+    renderScheduleBody();
+  }
+
+  function updateScheduleEntry(index, field, value) {
+    if (scheduleState[index]) scheduleState[index][field] = value;
+  }
+
+  function removeScheduleEntry(index) {
+    scheduleState.splice(index, 1);
+    renderScheduleBody();
+  }
+
+  let optionEditorState = [];
+
+  function openOptionsEditor(itemId) {
+    const item = (restaurantData?.menu || []).find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    optionEditorState = JSON.parse(JSON.stringify(item.option_groups || []));
+    optionEditorState.forEach(group => {
+      group.selection_type = group.selection_type || 'single';
+      group.pricing_mode = group.pricing_mode || 'delta';
+      group.is_required = Boolean(group.is_required);
+      group.min_selections = Number(group.min_selections || 0);
+      group.max_selections = Number(group.max_selections || 1);
+      group.options = (group.options || []).map(option => ({
+        name: option.name,
+        price_delta: parseFloat(option.price_delta || 0),
+        is_available: option.is_available !== false,
+      }));
+    });
+    openFormModal({
+      title: `Opciones de ${item.name}`,
+      size: 'modal-lg',
+      saveLabel: 'Guardar opciones',
+      body: `<div id="optionEditorBody"></div>`,
+      onSave: async () => {
+        const groups = optionEditorState
+          .filter(group => (group.name || '').trim())
+          .map((group, index) => ({
+            name: group.name.trim(),
+            selection_type: group.selection_type,
+            pricing_mode: group.pricing_mode || 'delta',
+            is_required: Boolean(group.is_required),
+            min_selections: group.selection_type === 'single' ? (group.is_required ? 1 : 0) : Number(group.min_selections || 0),
+            max_selections: group.selection_type === 'single' ? 1 : Number(group.max_selections || 1),
+            sort_order: index,
+            options: (group.options || [])
+              .filter(option => (option.name || '').trim())
+              .map((option, optionIndex) => ({
+                name: option.name.trim(),
+                price_delta: Number(option.price_delta || 0),
+                is_available: option.is_available !== false,
+                sort_order: optionIndex,
+              })),
+          }));
+        await updateMenuItemOptions(RID, itemId, groups);
+        showToast('Opciones guardadas');
+        loadMenu();
+      },
+    });
+    renderOptionsEditor();
+  }
+
+  function renderOptionsEditor() {
+    const body = document.getElementById('optionEditorBody');
+    if (!body) return;
+    body.innerHTML = `
+      ${optionEditorState.map((group, gi) => `
+        <div class="border rounded p-2 mb-2">
+          <div class="row g-2 align-items-center">
+            <div class="col-12 col-md-6">
+              <input class="form-control form-control-sm" value="${esc(group.name || '')}"
+                     placeholder="Nombre del grupo (Ej. Tamaño)" oninput="updateOptionGroup(${gi}, 'name', this.value)">
+            </div>
+            <div class="col-6 col-md-3">
+              <select class="form-select form-select-sm" onchange="updateOptionGroup(${gi}, 'pricing_mode', this.value)">
+                <option value="delta" ${group.pricing_mode !== 'max' ? 'selected' : ''}>Precio adicional</option>
+                <option value="max" ${group.pricing_mode === 'max' ? 'selected' : ''}>Ingredientes (precio máximo)</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-3">
+              <select class="form-select form-select-sm" onchange="updateOptionGroup(${gi}, 'selection_type', this.value)">
+                <option value="single" ${group.selection_type === 'single' ? 'selected' : ''}>Una opción</option>
+                <option value="multiple" ${group.selection_type === 'multiple' ? 'selected' : ''}>Varias opciones</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-check small mb-0">
+                <input class="form-check-input" type="checkbox" ${group.is_required ? 'checked' : ''}
+                       onchange="updateOptionGroup(${gi}, 'is_required', this.checked)"> Obligatorio
+              </label>
+            </div>
+            ${group.selection_type === 'multiple' ? `
+              <div class="col-6 col-md-3">
+                <label class="form-label small mb-0">Mínimo</label>
+                <input type="number" min="0" class="form-control form-control-sm" value="${group.min_selections || 0}"
+                       oninput="updateOptionGroup(${gi}, 'min_selections', this.value)">
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small mb-0">Máximo</label>
+                <input type="number" min="1" class="form-control form-control-sm" value="${group.max_selections || 1}"
+                       oninput="updateOptionGroup(${gi}, 'max_selections', this.value)">
+              </div>` : ''}
+          </div>
+          <div class="mt-2">
+            ${(group.options || []).map((option, oi) => `
+              <div class="d-flex gap-2 align-items-center mb-1">
+                <input class="form-control form-control-sm" value="${esc(option.name || '')}" placeholder="Opción"
+                       oninput="updateOption(${gi}, ${oi}, 'name', this.value)">
+                <div class="input-group input-group-sm" style="max-width:140px">
+                  <span class="input-group-text">$</span>
+                  <input type="number" step="0.5" min="0" class="form-control" value="${option.price_delta || 0}"
+                         oninput="updateOption(${gi}, ${oi}, 'price_delta', this.value)">
+                </div>
+                <label class="form-check small mb-0 text-nowrap">
+                  <input class="form-check-input" type="checkbox" ${option.is_available !== false ? 'checked' : ''}
+                         onchange="updateOption(${gi}, ${oi}, 'is_available', this.checked)"> Disponible
+                </label>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeOption(${gi}, ${oi})">&times;</button>
+              </div>`).join('')}
+            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="addOption(${gi})">+ Opción</button>
+          </div>
+          <div class="text-end mt-1">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeOptionGroup(${gi})">Quitar grupo</button>
+          </div>
+        </div>`).join('')}
+      <button type="button" class="btn btn-sm btn-primary" onclick="addOptionGroup()">+ Agregar grupo</button>`;
+  }
+
+  function updateOptionGroup(gi, field, value) {
+    if (!optionEditorState[gi]) return;
+    optionEditorState[gi][field] = value;
+    if (field === 'pricing_mode' && value === 'max') {
+      optionEditorState[gi].selection_type = 'multiple';
+      optionEditorState[gi].is_required = true;
+      optionEditorState[gi].min_selections = 1;
+      optionEditorState[gi].max_selections = 4;
+    }
+    if (field === 'selection_type' || field === 'is_required' || field === 'pricing_mode') renderOptionsEditor();
+  }
+
+  function updateOption(gi, oi, field, value) {
+    if (!optionEditorState[gi]?.options?.[oi]) return;
+    optionEditorState[gi].options[oi][field] = value;
+  }
+
+  function addOptionGroup() {
+    optionEditorState.push({
+      name: '', selection_type: 'single', is_required: false,
+      min_selections: 0, max_selections: 1, options: [],
+    });
+    renderOptionsEditor();
+  }
+
+  function removeOptionGroup(gi) {
+    optionEditorState.splice(gi, 1);
+    renderOptionsEditor();
+  }
+
+  function addOption(gi) {
+    if (!optionEditorState[gi]) return;
+    optionEditorState[gi].options = optionEditorState[gi].options || [];
+    optionEditorState[gi].options.push({ name: '', price_delta: 0, is_available: true });
+    renderOptionsEditor();
+  }
+
+  function removeOption(gi, oi) {
+    if (!optionEditorState[gi]?.options) return;
+    optionEditorState[gi].options.splice(oi, 1);
+    renderOptionsEditor();
+  }
+
+  loadMenu();
+</script>
+{% endblock %}

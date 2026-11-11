@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<h4 class="mb-3">Mi perfil</h4>
+<div id="profileContent"></div>
+<div id="profileLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+  const TILE_ATTR = 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors';
+
+  let addrMap = null;
+  let addrMarker = null;
+  let addrCoords = { lat: 20.644, lng: -100.993 };
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function copyReferral(code) {
+    navigator.clipboard?.writeText(code);
+    showToast('Código copiado: ' + code);
+  }
+
+  async function loadProfile() {
+    const loading = document.getElementById('profileLoading');
+    const content = document.getElementById('profileContent');
+    try {
+      const profile = await getProfile();
+      const addresses = await listAddresses();
+      let loyaltyConfig = { loyalty_visible: false, loyalty_enabled: false, loyalty_value_per_point: '1' };
+      try { loyaltyConfig = await apiRequest('GET', '/payments/config'); } catch (e) { /* ignore */ }
+      const loyaltyVisible = Boolean(loyaltyConfig.loyalty_enabled && loyaltyConfig.loyalty_visible);
+      const loyaltyValue = parseFloat(loyaltyConfig.loyalty_value_per_point || 1) || 1;
+      loading.classList.add('d-none');
+      let html = `
+        <div class="card p-3 mb-3">
+          <h6>Datos personales</h6>
+          <p class="mb-1"><strong>Nombre:</strong> ${esc(profile.name)}</p>
+          <p class="mb-1"><strong>Correo:</strong> ${esc(profile.email)}</p>
+          ${profile.phone ? `<p class="mb-0"><strong>Teléfono:</strong> ${esc(profile.phone)}</p>` : ''}
+        </div>
+        <div class="card p-3 mb-3 ${loyaltyVisible ? '' : 'd-none'}">
+          <div class="d-flex justify-content-between align-items-center">
+            <h6 class="m-0"><i class="bi bi-stars"></i> Puntos de lealtad</h6>
+            <span class="badge bg-primary">${Number(profile.loyalty_points || 0)} pts</span>
+          </div>
+          <p class="small text-muted mb-2 mt-2">Gana puntos con cada pedido entregado y canjéalos en tu próximo pedido.</p>
+          <p class="small text-muted mb-2">Cada punto vale $${loyaltyValue.toFixed(2)}.</p>
+          ${profile.referral_code ? `
+          <div class="mb-2">
+            <span class="small text-muted">Tu código para invitar:</span>
+            <div class="d-flex gap-2 align-items-center mt-1">
+              <code class="fs-6">${esc(profile.referral_code)}</code>
+              <button class="btn btn-sm btn-outline-secondary" onclick="copyReferral('${esc(profile.referral_code)}')"><i class="bi bi-clipboard"></i> Copiar</button>
+            </div>
+            <div class="form-text">Quien se registre con tu código gana puntos, y tú también.</div>
+          </div>` : ''}
+        </div>
+        <div class="card p-3 mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="m-0">Direcciones guardadas</h6>
+            <button class="btn btn-sm btn-primary" id="addAddrBtn"><i class="bi bi-plus"></i> Agregar</button>
+          </div>
+          <div id="addressesList">`;
+      if (addresses.length === 0) {
+        html += `<p class="text-muted small mb-0">No tienes direcciones guardadas</p>`;
+      } else {
+        addresses.forEach(a => {
+          html += `
+            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid #eee;">
+              <div class="min-w-0">
+                <strong>${esc(a.name)}</strong>${a.is_default ? ' <span class="badge bg-primary">Predeterminada</span>' : ''}
+                <p class="mb-0 small text-muted">${esc(a.address)}</p>
+              </div>
+              <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-outline-secondary edit-addr"
+                        data-id="${a.id}" data-name="${esc(a.name)}" data-addr="${esc(a.address)}"
+                        data-lat="${a.location?.lat || 0}" data-lng="${a.location?.lng || 0}"
+                        data-default="${a.is_default}" data-notes="${esc(a.notes || '')}">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger del-addr" data-id="${a.id}"><i class="bi bi-trash"></i></button>
+              </div>
+            </div>`;
+        });
+      }
+      html += `</div></div>
+        <div class="card p-3 mb-3">
+          <h6>Notificaciones</h6>
+          <p class="small text-muted mb-2">Recibe avisos cuando tu pedido cambie de estado o cuando el repartidor vaya en camino.</p>
+          <div><button class="btn btn-success btn-sm" onclick="activatePushProfile()"><i class="bi bi-bell"></i> Activar notificaciones</button></div>
+          <div id="profilePushMsg" class="small mt-2"></div>
+        </div>`;
+      content.innerHTML = html;
+      attachAddressEvents(addresses);
+    } catch (ex) { loading.classList.add('d-none'); showToast(ex.message, 'danger'); }
+  }
+
+  function attachAddressEvents(addresses) {
+    document.getElementById('addAddrBtn')?.addEventListener('click', () => showAddressModal());
+    document.querySelectorAll('.edit-addr').forEach(btn => {
+      btn.addEventListener('click', () => showAddressModal(btn.dataset));
+    });
+    document.querySelectorAll('.del-addr').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('¿Eliminar esta dirección?')) return;
+        try { await deleteAddress(btn.dataset.id); showToast('Dirección eliminada'); loadProfile(); }
+        catch (ex) { showToast(ex.message, 'danger'); }
+      });
+    });
+  }
+
+  function showAddressModal(data) {
+    const isEdit = !!data?.id;
+    addrCoords = {
+      lat: parseFloat(data?.lat) || 20.644,
+      lng: parseFloat(data?.lng) || -100.993,
+    };
+    if (!addrCoords.lat || !addrCoords.lng) addrCoords = { lat: 20.644, lng: -100.993 };
+
+    // Try to recover C.P. from an existing address string.
+    const cpMatch = (data?.addr || '').match(/(?:C\.?P\.?|CP)\s*(\d{5})/i);
+    const initialCp = cpMatch ? cpMatch[1] : '';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.style.display = 'block';
+    modal.innerHTML = `
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">${isEdit ? 'Editar' : 'Agregar'} dirección</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-2">
+              <label class="form-label">Nombre</label>
+              <input type="text" class="form-control" id="addrName" value="${esc(data?.name || '')}" placeholder="Casa, trabajo, mamá...">
+            </div>
+
+            <div class="row g-2 mb-2">
+              <div class="col-4 col-md-3">
+                <label class="form-label small mb-1">C.P.</label>
+                <input type="text" class="form-control" id="addrCp" maxlength="5" inputmode="numeric"
+                       value="${esc(initialCp)}" placeholder="38240">
+              </div>
+              <div class="col-8 col-md-9">
+                <label class="form-label small mb-1">Colonia</label>
+                <select class="form-select" id="addrColonia">
+                  <option value="">Escribe el C.P. primero</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label small mb-1">Calle y número</label>
+              <input type="text" class="form-control" id="addrStreet" placeholder="Calle 5 de Mayo 209">
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label small mb-1">Dirección completa</label>
+              <textarea class="form-control" id="addrAddress" rows="2" placeholder="Calle, colonia, C.P.">${esc(data?.addr || '')}</textarea>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <button type="button" class="btn btn-sm btn-outline-primary" id="geocodeAddrBtn">
+                <i class="bi bi-search"></i> Buscar calle
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="gpsAddrBtn">
+                <i class="bi bi-crosshair"></i> Mi ubicación
+              </button>
+              <span id="geocodeAddrMsg" class="small text-muted"></span>
+            </div>
+
+            <div class="mb-2">
+              <div id="addrMap" style="height: 300px; border-radius: 12px;"></div>
+              <div class="form-text">Arrastra el pin o toca el mapa para ajustar el punto exacto de entrega.</div>
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label small mb-1">Notas</label>
+              <input type="text" class="form-control" id="addrNotes" value="${esc(data?.notes || '')}" placeholder="Portón negro, casa de dos pisos...">
+            </div>
+            <div class="form-check mb-2">
+              <input type="checkbox" class="form-check-input" id="addrDefault" ${data?.default === 'true' ? 'checked' : ''}>
+              <label class="form-check-label">Dirección predeterminada</label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="saveAddrBtn">Guardar</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    const msg = document.getElementById('geocodeAddrMsg');
+    let coordsSource = isEdit ? 'saved' : 'none';
+    const markTextSource = () => { coordsSource = 'text'; };
+    const setMsg = (text, kind = 'muted') => {
+      msg.className = `small text-${kind}`;
+      msg.textContent = text;
+    };
+
+    function setCoords(lat, lng, recenter = true) {
+      addrCoords = { lat: Number(lat), lng: Number(lng) };
+      if (!addrMap) return;
+      addrMarker.setLatLng([addrCoords.lat, addrCoords.lng]);
+      if (recenter) addrMap.setView([addrCoords.lat, addrCoords.lng], 17);
+    }
+
+    function initMap() {
+      if (addrMap || typeof L === 'undefined') return;
+      addrMap = L.map('addrMap').setView([addrCoords.lat, addrCoords.lng], 16);
+      createLocalTileLayer().addTo(addrMap);
+      addrMarker = L.marker([addrCoords.lat, addrCoords.lng], { draggable: true }).addTo(addrMap);
+      addrMarker.on('dragend', () => {
+        const p = addrMarker.getLatLng();
+        addrCoords = { lat: p.lat, lng: p.lng };
+        coordsSource = 'map';
+        setMsg('Punto ajustado en el mapa', 'success');
+      });
+      addrMap.on('click', (e) => {
+        addrMarker.setLatLng(e.latlng);
+        addrCoords = { lat: e.latlng.lat, lng: e.latlng.lng };
+        coordsSource = 'map';
+        setMsg('Punto ajustado en el mapa', 'success');
+      });
+      setTimeout(() => addrMap.invalidateSize(), 200);
+    }
+
+    async function loadColonias(cp, recenter = true, selected = '') {
+      const select = document.getElementById('addrColonia');
+      if (!/^\d{5}$/.test(cp)) {
+        select.innerHTML = '<option value="">Escribe el C.P. primero</option>';
+        return;
+      }
+      try {
+        const data = await apiRequest('GET', `/geocode/postal-code/${cp}`);
+        const colonias = data.colonias || [];
+        const chosen = AddressUtils.fillColoniaSelect(select, colonias.map(c => c.nombre), selected);
+        if (recenter && data.lat != null && data.lng != null) {
+          setCoords(data.lat, data.lng);
+        }
+        setMsg(chosen ? `Colonia: ${chosen}. ${colonias.length} colonia(s) encontradas` : `${colonias.length} colonia(s) encontradas`, 'success');
+        return chosen;
+      } catch (e) {
+        select.innerHTML = '<option value="">C.P. no encontrado</option>';
+        setMsg(e.message, 'danger');
+      }
+    }
+
+    document.getElementById('addrCp').addEventListener('input', (e) => {
+      const cp = e.target.value.replace(/\D/g, '').slice(0, 5);
+      e.target.value = cp;
+      markTextSource();
+      if (cp.length === 5) loadColonias(cp);
+    });
+    document.getElementById('addrStreet').addEventListener('input', markTextSource);
+    document.getElementById('addrAddress').addEventListener('input', markTextSource);
+    document.getElementById('addrColonia').addEventListener('change', markTextSource);
+
+    document.getElementById('geocodeAddrBtn').addEventListener('click', async () => {
+      const cp = document.getElementById('addrCp').value.trim();
+      const colonia = document.getElementById('addrColonia').value;
+      const street = document.getElementById('addrStreet').value.trim();
+      if (!/^\d{5}$/.test(cp) || !colonia || street.length < 3) {
+        setMsg('Completa C.P., colonia y calle para buscar', 'danger');
+        return;
+      }
+      setMsg('Buscando calle...');
+      try {
+        const results = await apiRequest('POST', '/geocode/structured', {
+          street,
+          colonia,
+          postal_code: cp,
+        });
+        if (!results.length) throw new Error('No se encontró la calle. Puedes ajustar el pin en el mapa.');
+        const found = results[0];
+        setCoords(found.lat, found.lng);
+        coordsSource = 'geo';
+        document.getElementById('addrAddress').value = `${street}, ${colonia}, C.P. ${cp}`;
+        setMsg(found.display_name || 'Ubicación encontrada', 'success');
+      } catch (e) {
+        setMsg(e.message, 'danger');
+      }
+    });
+
+    async function applyDeviceLocation(auto = false) {
+      if (!navigator.geolocation) return setMsg('Este navegador no permite la ubicación', 'danger');
+      setMsg('Obteniendo ubicación del dispositivo...');
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setCoords(latitude, longitude);
+          coordsSource = 'device';
+          let cp = '';
+          let colonia = '';
+          let street = '';
+          try {
+            const local = await apiRequest('GET', `/geocode/postal-code-reverse?lat=${latitude}&lng=${longitude}`);
+            cp = String(local.cp || '');
+            colonia = local.colonia || '';
+          } catch (e) { /* sin polígono */ }
+          try {
+            const rev = await apiRequest('GET', `/geocode/reverse?lat=${latitude}&lng=${longitude}`);
+            street = [rev.road, rev.house_number].filter(Boolean).join(' ');
+            cp = cp || String(rev.postcode || '');
+            colonia = colonia || rev.suburb || rev.neighbourhood || '';
+          } catch (e) { /* sin geocoder */ }
+          if (cp) {
+            document.getElementById('addrCp').value = cp;
+            const chosen = await loadColonias(cp, false, colonia);
+            if (chosen) colonia = chosen;
+          }
+          if (street) document.getElementById('addrStreet').value = street;
+          const parts = [street, colonia, cp ? `C.P. ${cp}` : ''].filter(Boolean);
+          if (parts.length) document.getElementById('addrAddress').value = parts.join(', ');
+          setMsg(parts.length
+            ? `${auto ? 'Ubicación detectada' : 'Ubicación aplicada'}: ${parts.join(', ')}. Corrige la calle o mueve el pin si hace falta.`
+            : 'Ubicación del dispositivo aplicada. Escribe la calle o ajusta el pin.', parts.length ? 'success' : 'warning');
+        },
+        () => setMsg(auto
+          ? 'No se pudo obtener la ubicación. Escribe la dirección manualmente.'
+          : 'No se pudo obtener la ubicación', 'danger'),
+        { enableHighAccuracy: true, timeout: 15000 }
+      );
+    }
+
+    document.getElementById('gpsAddrBtn').addEventListener('click', () => applyDeviceLocation(false));
+
+    modal.addEventListener('shown.bs.modal', () => {
+      initMap();
+      setTimeout(() => addrMap && addrMap.invalidateSize(), 250);
+      if (initialCp) loadColonias(initialCp, !isEdit);
+      const emptyAddress = !document.getElementById('addrAddress').value.trim() &&
+        !document.getElementById('addrStreet').value.trim() &&
+        !document.getElementById('addrCp').value.trim();
+      if (!isEdit && emptyAddress) applyDeviceLocation(true);
+    }, { once: true });
+
+    document.getElementById('saveAddrBtn').addEventListener('click', async () => {
+      const name = document.getElementById('addrName').value.trim();
+      let address = document.getElementById('addrAddress').value.trim();
+      const cp = document.getElementById('addrCp').value.trim();
+      const colonia = document.getElementById('addrColonia').value;
+      const street = document.getElementById('addrStreet').value.trim();
+      const notes = document.getElementById('addrNotes').value.trim();
+      const isDefault = document.getElementById('addrDefault').checked;
+
+      if (!address && street && colonia && cp) {
+        address = `${street}, ${colonia}, C.P. ${cp}`;
+      }
+      if (!name || !address) { showToast('Completa nombre y dirección', 'warning'); return; }
+
+      let finalCoords = { ...addrCoords };
+      if (coordsSource === 'text') {
+        try {
+          let results = [];
+          if (/^\d{5}$/.test(cp) && colonia && street) {
+            results = await apiRequest('POST', '/geocode/structured', {
+              street, colonia, postal_code: cp,
+            });
+          }
+          if ((!results || !results.length) && address) {
+            results = await apiRequest('POST', '/geocode', {
+              address: `${address}, Santa Cruz de Juventino Rosas, Guanajuato, México`,
+            });
+          }
+          if (results && results.length) {
+            finalCoords = { lat: Number(results[0].lat), lng: Number(results[0].lng) };
+          }
+        } catch (e) { /* conservar las coordenadas actuales */ }
+      }
+
+      try {
+        if (isEdit) {
+          await updateAddress(data.id, {
+            name, address,
+            location: { lat: finalCoords.lat, lng: finalCoords.lng },
+            is_default: isDefault,
+            notes: notes || null,
+          });
+          showToast('Dirección actualizada');
+        } else {
+          await createAddress(name, address, finalCoords.lat, finalCoords.lng, isDefault, notes || null);
+          showToast('Dirección agregada');
+        }
+        bsModal.hide();
+        loadProfile();
+      } catch (ex) { showToast(ex.message, 'danger'); }
+    });
+
+    modal.addEventListener('hidden.bs.modal', () => {
+      if (addrMap) { addrMap.remove(); addrMap = null; addrMarker = null; }
+      modal.remove();
+    });
+  }
+
+  async function activatePushProfile() {
+    const msg = document.getElementById('profilePushMsg');
+    msg.className = 'small text-muted';
+    msg.textContent = 'Solicitando permiso...';
+    try {
+      await enablePushNotifications();
+      msg.className = 'small text-success';
+      msg.textContent = 'Notificaciones activadas correctamente.';
+    } catch (e) {
+      msg.className = 'small text-danger';
+      msg.textContent = e.message;
+    }
+  }
+
+  loadProfile();
+</script>
+{% endblock %}
+

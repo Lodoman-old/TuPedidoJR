@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0"><i class="bi bi-geo-alt"></i> Ubicación del restaurante</h5>
+      <a class="btn btn-sm btn-outline-secondary" href="/web/restaurants/{{ restaurant_id }}/orders">Volver</a>
+    </div>
+
+    <div id="locLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+    <div id="locError" class="alert alert-danger d-none"></div>
+
+    <div id="locContent" class="d-none">
+      <div class="card p-3 mb-3">
+        <h6>Ubicación actual</h6>
+        <p class="mb-1 small" id="currentAddress">-</p>
+        <p class="mb-0 small text-muted" id="currentCoords">-</p>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h6>Establecer por dirección</h6>
+        <p class="small text-muted">No necesitas marcar el mapa: escribe la calle, el C.P. y elige la colonia.</p>
+        <div class="row g-2 mb-2">
+          <div class="col-5">
+            <input class="form-control" id="postalCode" maxlength="5" inputmode="numeric" placeholder="C.P.">
+          </div>
+          <div class="col-7">
+            <select class="form-select" id="coloniaSelect"><option value="">Colonia...</option></select>
+          </div>
+        </div>
+        <input class="form-control mb-2" id="street" placeholder="Calle y número">
+        <div id="geoMsg" class="small mb-2"></div>
+        <button class="btn btn-primary" id="saveLocationBtn"><i class="bi bi-search"></i> Buscar y guardar ubicación</button>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h6>Ajustar en el mapa</h6>
+        <p class="small text-muted">Si la calle no aparece en el mapa, arrastra el marcador al punto exacto del restaurante.</p>
+        <div id="restaurantMap" style="height: 300px; border-radius: 12px;"></div>
+      </div>
+
+      <div class="alert alert-info small mb-0">
+        La distancia de envío se calcula desde esta ubicación hasta la dirección del cliente.
+        Si configuras OSRM, se usará la ruta real por calles; si no, la distancia lineal.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  let restaurant = null;
+  let cpCenter = null;
+  let rmap = null;
+  let rmarker = null;
+  let pickedCoords = null;
+  let pickedMoved = false;
+
+  function initRestaurantMap(lat, lng) {
+    if (typeof L === 'undefined') return;
+    if (rmap) {
+      rmap.setView([lat, lng], 17);
+      if (rmarker) rmarker.setLatLng([lat, lng]);
+      return;
+    }
+    rmap = L.map('restaurantMap').setView([lat, lng], 17);
+    createLocalTileLayer({
+      attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(rmap);
+    rmarker = L.marker([lat, lng], { draggable: true }).addTo(rmap);
+    pickedCoords = { lat, lng };
+    rmarker.on('dragend', () => {
+      const p = rmarker.getLatLng();
+      pickedCoords = { lat: p.lat, lng: p.lng };
+      pickedMoved = true;
+    });
+    rmap.on('click', (e) => {
+      rmarker.setLatLng(e.latlng);
+      pickedCoords = { lat: e.latlng.lat, lng: e.latlng.lng };
+      pickedMoved = true;
+    });
+    setTimeout(() => rmap.invalidateSize(), 200);
+  }
+
+  async function loadRestaurant() {
+    const loading = document.getElementById('locLoading');
+    const content = document.getElementById('locContent');
+    const error = document.getElementById('locError');
+    try {
+      restaurant = await apiRequest('GET', `/restaurants/${RID}/location`);
+      loading.classList.add('d-none');
+      content.classList.remove('d-none');
+      document.getElementById('currentAddress').textContent = restaurant.address || 'Sin dirección registrada';
+      document.getElementById('currentCoords').textContent =
+        restaurant.lat != null ? `Lat: ${restaurant.lat} · Lng: ${restaurant.lng}` : 'Sin coordenadas registradas';
+      initRestaurantMap(
+        restaurant.lat != null ? restaurant.lat : 20.644,
+        restaurant.lng != null ? restaurant.lng : -100.993
+      );
+    } catch (e) {
+      loading.classList.add('d-none');
+      error.classList.remove('d-none');
+      error.textContent = e.message;
+    }
+  }
+
+  async function loadColonias(cp) {
+    const select = document.getElementById('coloniaSelect');
+    if (!/^\d{5}$/.test(cp)) return;
+    try {
+      const data = await apiRequest('GET', `/geocode/postal-code/${cp}`);
+      cpCenter = data.lat != null ? { lat: data.lat, lng: data.lng } : null;
+      select.innerHTML = '<option value="">Colonia...</option>' +
+        (data.colonias || []).map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
+      document.getElementById('geoMsg').textContent = `${(data.colonias || []).length} colonias encontradas.`;
+    } catch (e) {
+      select.innerHTML = '<option value="">Colonia...</option>';
+      document.getElementById('geoMsg').className = 'small mb-2 text-danger';
+      document.getElementById('geoMsg').textContent = e.message;
+    }
+  }
+
+  document.getElementById('postalCode').addEventListener('input', (e) => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 5);
+    if (e.target.value.length === 5) loadColonias(e.target.value);
+  });
+
+  document.getElementById('saveLocationBtn').addEventListener('click', async () => {
+    const cp = document.getElementById('postalCode').value.trim();
+    const colonia = document.getElementById('coloniaSelect').value;
+    const street = document.getElementById('street').value.trim();
+    const msg = document.getElementById('geoMsg');
+    msg.className = 'small mb-2 text-muted';
+
+    // Manual pin on the map takes precedence over address geocoding.
+    if (pickedMoved && pickedCoords) {
+      const manualAddress = street || colonia || cp
+        ? [street, colonia, cp ? `C.P. ${cp}` : ''].filter(Boolean).join(', ')
+        : 'Ubicación marcada en el mapa';
+      try {
+        await apiRequest('PATCH', `/restaurants/${RID}/location`, {
+          lat: pickedCoords.lat, lng: pickedCoords.lng, address: manualAddress,
+        });
+        msg.className = 'small mb-2 text-success';
+        msg.textContent = 'Ubicación guardada desde el mapa.';
+        await loadRestaurant();
+      } catch (e) {
+        msg.className = 'small mb-2 text-danger';
+        msg.textContent = e.message;
+      }
+      return;
+    }
+
+    if (!cp || !colonia || !street) {
+      msg.className = 'small mb-2 text-danger';
+      msg.textContent = 'Completa C.P., colonia y calle, o ajusta el marcador en el mapa.';
+      return;
+    }
+    msg.textContent = 'Buscando dirección...';
+    try {
+      const results = await apiRequest('POST', '/geocode/structured', {
+        street, colonia, postal_code: cp,
+      });
+      const exact = results.find(r => (r.postcode || '') === cp);
+      let r = exact;
+      if (!r && cpCenter) {
+        if (!confirm(`No encontramos esa calle exacta en el C.P. ${cp}. ¿Guardar el centro del C.P. como ubicación aproximada?`)) {
+          msg.textContent = '';
+          return;
+        }
+        r = { lat: cpCenter.lat, lng: cpCenter.lng, display_name: `Centro del C.P. ${cp} (aproximado)` };
+      }
+      if (!r && results.length) r = results[0];
+      if (!r) throw new Error('No se encontró la dirección');
+      if (rmap && rmarker) {
+        rmap.setView([r.lat, r.lng], 17);
+        rmarker.setLatLng([r.lat, r.lng]);
+      }
+      pickedMoved = false;
+      const fullAddress = `${street}, ${colonia}, Santa Cruz de Juventino Rosas, Guanajuato, C.P. ${cp}`;
+      await apiRequest('PATCH', `/restaurants/${RID}/location`, {
+        lat: r.lat, lng: r.lng, address: fullAddress,
+      });
+      msg.className = 'small mb-2 text-success';
+      msg.textContent = `Ubicación guardada: ${r.display_name}`;
+      await loadRestaurant();
+    } catch (e) {
+      msg.className = 'small mb-2 text-danger';
+      msg.textContent = e.message;
+    }
+  });
+
+  loadRestaurant();
+</script>
+{% endblock %}
+

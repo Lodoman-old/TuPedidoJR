@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="m-0"><i class="bi bi-people"></i> Equipo del restaurante</h4>
+  <a class="btn btn-outline-secondary btn-sm" href="/web/restaurants/{{ restaurant_id }}">Volver al panel</a>
+</div>
+<div id="teamError" class="alert alert-danger d-none"></div>
+<div id="teamLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="teamContent" class="d-none"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = "{{ restaurant_id }}";
+  function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  const ROLE_LABELS = { owner: 'Dueño', manager: 'Encargado', staff: 'Personal', cashier: 'Cajero', kitchen: 'Cocina' };
+  async function loadTeam() {
+    const loading = document.getElementById('teamLoading');
+    const content = document.getElementById('teamContent');
+    const error = document.getElementById('teamError');
+    error.classList.add('d-none'); loading.classList.remove('d-none');
+    try {
+      const rows = await apiRequest('GET', `/restaurants/${RID}/team`);
+      content.innerHTML = `
+        <div class="row g-3">
+          <div class="col-lg-7">
+            <div class="card p-3">
+              <h6>Usuarios</h6>
+              <div class="table-responsive"><table class="table table-sm align-middle">
+                <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
+                <tbody>${rows.map(m => `<tr>
+                  <td>${esc(m.name)}</td><td><small>${esc(m.email)}</small></td>
+                  <td>${ROLE_LABELS[m.role] || esc(m.role)}</td>
+                  <td>${m.is_active ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>'}</td>
+                  <td class="text-end">${m.role === 'owner' ? '' : `<button class="btn btn-sm btn-outline-danger" onclick="removeMember('${m.id}')">Quitar</button>`}</td>
+                </tr>`).join('')}</tbody>
+              </table></div>
+            </div>
+          </div>
+          <div class="col-lg-5">
+            <div class="card p-3">
+              <h6>Agregar usuario</h6>
+              <div id="addMsg" class="alert d-none"></div>
+              <input id="tmName" class="form-control form-control-sm mb-2" placeholder="Nombre">
+              <input id="tmEmail" type="email" class="form-control form-control-sm mb-2" placeholder="Correo">
+              <input id="tmPassword" type="password" minlength="6" class="form-control form-control-sm mb-2" placeholder="Contraseña temporal">
+              <select id="tmRole" class="form-select form-select-sm mb-2">
+                <option value="manager">Encargado</option>
+                <option value="staff" selected>Personal</option>
+                <option value="cashier">Cajero</option>
+                <option value="kitchen">Cocina</option>
+              </select>
+              <button class="btn btn-primary btn-sm w-100" onclick="addMember()">Crear usuario</button>
+              <div class="form-text">Se enviará un correo con el acceso y los manuales si el correo está configurado.</div>
+            </div>
+          </div>
+        </div>`;
+      content.classList.remove('d-none');
+    } catch (ex) {
+      error.textContent = ex.message; error.classList.remove('d-none');
+    } finally { loading.classList.add('d-none'); }
+  }
+  async function addMember() {
+    const msg = document.getElementById('addMsg');
+    msg.className = 'alert d-none';
+    try {
+      await apiRequest('POST', `/restaurants/${RID}/team`, {
+        name: document.getElementById('tmName').value.trim(),
+        email: document.getElementById('tmEmail').value.trim(),
+        password: document.getElementById('tmPassword').value,
+        role: document.getElementById('tmRole').value,
+      });
+      showToast('Usuario agregado');
+      loadTeam();
+    } catch (ex) { msg.className = 'alert alert-danger'; msg.textContent = ex.message; }
+  }
+  async function removeMember(id) {
+    if (!confirm('¿Quitar el acceso a este usuario?')) return;
+    try {
+      await apiRequest('DELETE', `/restaurants/${RID}/team/${id}`);
+      showToast('Acceso eliminado');
+      loadTeam();
+    } catch (ex) { alert(ex.message); }
+  }
+  loadTeam();
+</script>
+{% endblock %}

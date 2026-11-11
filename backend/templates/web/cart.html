@@ -1,0 +1,998 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<h4 class="mb-3">Carrito</h4>
+<div id="cartContent"></div>
+<div id="cartEmpty" class="text-center py-5 d-none">
+  <i class="bi bi-cart" style="font-size:3rem;color:#ccc;"></i>
+  <p class="mt-2 text-muted">Carrito vacío</p>
+  <a href="/web/restaurants" class="btn btn-primary">Ver restaurantes</a>
+</div>
+
+<div class="modal fade" id="mapPickerModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Ajustar ubicación en el mapa</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2">Arrastra el marcador o toca el punto exacto de entrega. Úsalo cuando la calle no aparezca en OpenStreetMap.</p>
+        <div id="pickerMap" style="height: 350px; border-radius: 12px;"></div>
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+          <span class="small text-muted">Ajuste fino:</span>
+          <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" onclick="nudgeCartPin(0, 1)">↑</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="nudgeCartPin(-1, 0)">←</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="nudgeCartPin(1, 0)">→</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="nudgeCartPin(0, -1)">↓</button>
+          </div>
+          <select id="cartPinStep" class="form-select form-select-sm" style="width:95px">
+            <option value="1">1 metro</option>
+            <option value="3" selected>3 metros</option>
+            <option value="10">10 metros</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="usePickedLocation">Usar esta ubicación</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  let paymentConfig = { cash_enabled: true, mp_enabled: false, transfer_enabled: false };
+  let appliedCoupon = null;
+  let bankDetails = null;
+  let colonias = [];
+  let cpCenter = null;
+  let addressState = { street: '', cp: '', colonia: '', lat: null, lng: null, source: '', full: '' };
+  let pickerMap = null;
+  let pickerMarker = null;
+  let pickedCoords = null;
+  let savedAddresses = [];
+  let selectedAddressId = null;
+  let tipAmount = 0;
+  let loyaltyPoints = 0;
+  let pointsToRedeem = 0;
+  let loyaltyVisible = false;
+  let loyaltyValue = 1;
+  let restaurantInfo = null;
+  let fulfillment = 'delivery';
+let scheduleState = { enabled: false, value: '' };
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  const money = n => '$' + parseFloat(n || 0).toFixed(2);
+
+  function renderCart() {
+    const cart = getCart();
+    if (cart.length && !sessionStorage.getItem('cartRestaurantId')) {
+      const first = cart.find(i => i.restaurant_id);
+      if (first) sessionStorage.setItem('cartRestaurantId', first.restaurant_id);
+    }
+    const container = document.getElementById('cartContent');
+    const empty = document.getElementById('cartEmpty');
+    if (cart.length === 0) {
+      container.innerHTML = '';
+      empty.classList.remove('d-none');
+      return;
+    }
+    empty.classList.add('d-none');
+    let subtotal = 0;
+    let html = '<div class="card p-3 mb-3">';
+    cart.forEach((item, idx) => {
+      const st = item.price * item.quantity;
+      subtotal += st;
+      const options = (item.option_names || []).length
+        ? `<br><small class="text-muted">${item.option_names.join(' · ')}</small>`
+        : '';
+      html += `
+        <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom:1px solid #eee;">
+          <div><strong>${item.name}</strong>${options}<br><small>$${parseFloat(item.price).toFixed(2)} c/u</small></div>
+          <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-sm btn-outline-secondary qty-minus" data-idx="${idx}">−</button>
+            <span class="fw-bold">${item.quantity}</span>
+            <button class="btn btn-sm btn-outline-secondary qty-plus" data-idx="${idx}">+</button>
+            <span class="fw-bold ms-2">$${st.toFixed(2)}</span>
+            <button class="btn btn-sm btn-outline-danger remove-btn" data-idx="${idx}"><i class="bi bi-trash"></i></button>
+          </div>
+        </div>`;
+    });
+    html += '</div>';
+
+    if (restaurantInfo && restaurantInfo.pickup_enabled) {
+      html += `<div class="card p-3 mb-3">
+        <div class="mb-2"><strong>¿Cómo quieres recibir tu pedido?</strong></div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="fulfillment" id="fulDelivery" value="delivery" ${fulfillment === 'delivery' ? 'checked' : ''}>
+          <label class="form-check-label" for="fulDelivery"><i class="bi bi-scooter"></i> Entrega a domicilio</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="fulfillment" id="fulPickup" value="pickup" ${fulfillment === 'pickup' ? 'checked' : ''}>
+          <label class="form-check-label" for="fulPickup"><i class="bi bi-shop"></i> Recoger en el restaurante</label>
+        </div>
+        <div class="form-text">Si recoges, no hay costo de envío ni propina.</div>
+      </div>`;
+    }
+
+    html += `<div class="card p-3 mb-3" id="deliveryAddressCard">
+      <div class="mb-2"><strong>Dirección de entrega</strong></div>
+      <div id="savedAddressBlock" class="mb-2 d-none">
+        <label class="form-label small mb-1" for="savedAddressSelect">Dirección guardada</label>
+        <select class="form-select mb-1" id="savedAddressSelect"></select>
+        <div class="small text-muted" id="savedAddressDetail"></div>
+        <a href="/web/profile" class="small">Administrar mis direcciones</a>
+      </div>
+      <div id="manualAddressBlock">
+        <div class="row g-2 mb-2">
+          <div class="col-5">
+            <input class="form-control" id="postalCode" maxlength="5" inputmode="numeric" placeholder="C.P. (opcional)" value="${addressState.cp}">
+          </div>
+          <div class="col-7">
+            <select class="form-select" id="coloniaSelect">
+              <option value="">Colonia (opcional)...</option>
+              ${colonias.map(c => `<option value="${c.nombre}" ${addressState.colonia === c.nombre ? 'selected' : ''}>${c.nombre}</option>`).join('')}
+              ${addressState.colonia && !colonias.some(c => c.nombre === addressState.colonia) ? `<option value="${addressState.colonia}" selected>${addressState.colonia}</option>` : ''}
+            </select>
+          </div>
+        </div>
+        <textarea class="form-control mb-2" id="deliveryAddress" rows="2" placeholder="Calle y número">${addressState.street}</textarea>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-outline-primary btn-sm" id="geocodeBtn"><i class="bi bi-search"></i> Buscar dirección</button>
+          <button class="btn btn-outline-secondary btn-sm" id="gpsBtn"><i class="bi bi-geo-alt"></i> Usar mi ubicación</button>
+          <button class="btn btn-outline-secondary btn-sm" id="mapPickerBtn"><i class="bi bi-pin-map"></i> Ajustar en el mapa</button>
+        </div>
+        <div id="geocodeMsg" class="small mt-2 text-muted">Si eliges una dirección guardada no necesitas C.P. ni colonia. Para otra ubicación escribe la calle o usa tu GPS/mapa.</div>
+        <div id="geocodeResults" class="small mt-2"></div>
+      </div>
+      <div class="mb-2 mt-2"><strong>Notas (opcional)</strong></div>
+      <textarea class="form-control mb-2" id="orderNotes" rows="1" placeholder="Ej: Sin cebolla"></textarea>
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" id="scheduleToggle">
+        <label class="form-check-label" for="scheduleToggle"><strong>Programar pedido</strong></label>
+      </div>
+      <input type="datetime-local" class="form-control mb-2 d-none" id="scheduledFor">
+      <div class="form-text mb-2 d-none" id="scheduleHint">Elige la fecha y hora. Debe ser al menos 10 minutos después.</div>
+      <div class="mb-2"><strong>Cupón de descuento</strong></div>
+      <div class="input-group mb-2">
+        <input type="text" class="form-control" id="couponInput" placeholder="EJ: BIENVENIDO10">
+        <button class="btn btn-outline-primary" id="applyCoupon">Aplicar</button>
+      </div>
+      <div id="couponMsg" class="small mb-2"></div>
+    </div>`;
+
+    html += `<div class="card p-3 mb-3 d-none" id="pickupInfoCard">
+      <div class="alert alert-info py-2 mb-2"><i class="bi bi-shop"></i> Recoger en el restaurante</div>
+      <div class="small"><strong>${esc(restaurantInfo?.name || '')}</strong><br>${esc(restaurantInfo?.address || '')}</div>
+      <div class="form-text">Te avisaremos cuando el pedido esté listo. No se cobra envío ni propina.</div>
+    </div>`;
+
+    html += `<div class="card p-3 mb-3">
+      <div class="mb-2"><strong>Método de pago</strong></div>`;
+    if (paymentConfig.mp_enabled) {
+      html += `<div class="form-check mb-1">
+        <input class="form-check-input" type="radio" name="paymentMethod" id="payMP" value="mp">
+        <label class="form-check-label" for="payMP"><i class="bi bi-credit-card"></i> Mercado Pago</label>
+      </div>`;
+    }
+    if (paymentConfig.transfer_enabled) {
+      html += `<div class="form-check mb-1">
+        <input class="form-check-input" type="radio" name="paymentMethod" id="payTransfer" value="transfer">
+        <label class="form-check-label" for="payTransfer"><i class="bi bi-bank"></i> Transferencia</label>
+      </div>
+      <div id="bankInfo" class="d-none small text-muted mt-1 p-2 bg-light rounded"></div>`;
+    }
+    html += `<div class="form-check">
+        <input class="form-check-input" type="radio" name="paymentMethod" id="payCash" value="cash" checked>
+        <label class="form-check-label" for="payCash"><i class="bi bi-cash"></i> Efectivo (pago al recibir)</label>
+      </div>
+    </div>`;
+
+    html += `<div class="card p-3 mb-3" id="tipCard">
+      <div class="mb-2"><strong>Propina para el repartidor</strong></div>
+      <div class="d-flex gap-2 flex-wrap align-items-center" id="tipOptions">
+        <button type="button" class="btn btn-sm btn-outline-secondary tip-btn" data-tip="0">Sin propina</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary tip-btn" data-tip="10">$10</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary tip-btn" data-tip="20">$20</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary tip-btn" data-tip="30">$30</button>
+        <input type="number" min="0" max="1000" step="1" class="form-control form-control-sm" id="tipCustom" placeholder="Otra" style="width:90px">
+      </div>
+      <div class="form-text">La propina es 100 % para el repartidor.</div>
+    </div>`;
+
+    html += `<div class="card p-3 mb-3 d-none" id="loyaltyCard">
+      <div class="d-flex justify-content-between align-items-center">
+        <strong><i class="bi bi-stars"></i> Puntos de lealtad</strong>
+        <span class="badge bg-primary" id="loyaltyBalance">0 pts</span>
+      </div>
+      <div class="d-flex gap-2 mt-2">
+        <input type="number" min="0" step="1" class="form-control form-control-sm" id="pointsInput" placeholder="Puntos a canjear">
+        <button type="button" class="btn btn-sm btn-outline-primary" id="useAllPoints">Usar todos</button>
+      </div>
+      <div class="form-text" id="pointsHint">Cada punto descuenta $1.00 del total.</div>
+    </div>`;
+
+    html += `<div class="card p-3 mb-3">
+      <div class="d-flex justify-content-between"><span>Subtotal</span><span id="summarySubtotal">${money(subtotal)}</span></div>
+      <div class="d-flex justify-content-between"><span>Envío</span><span id="deliveryFee">—</span></div>
+      <div class="d-flex justify-content-between"><span>Comisión por uso de la plataforma</span><span id="flatFee">—</span></div>
+      <div class="d-flex justify-content-between"><span>Propina</span><span id="tipRow">$0.00</span></div>
+      <div id="loyaltyRow" class="d-none d-flex justify-content-between text-primary"><span>Puntos canjeados</span><span id="loyaltyAmount">-$0.00</span></div>
+      <div id="discountRow" class="d-none d-flex justify-content-between text-success"><span>Descuento</span><span id="discountAmount">-$0.00</span></div>
+      <hr>
+      <div class="d-flex justify-content-between fw-bold fs-5"><span>Total</span><span id="totalAmount">${money(subtotal)}</span></div>
+      <div id="estimateMsg" class="small text-muted mt-1"></div>
+    </div>`;
+
+    html += `<div id="cartError" class="alert alert-danger d-none"></div>`;
+    html += `<button class="btn btn-primary w-100" id="placeOrderBtn">Confirmar pedido</button>`;
+    container.innerHTML = html;
+
+    attachCartEvents(cart);
+    setupScheduleToggle();
+    renderAddressSection();
+    document.getElementById('savedAddressSelect')?.addEventListener('change', onSavedAddressChange);
+    if (!savedAddresses.length && !addressState.street && !addressState.cp && !addressState.lat) {
+      setTimeout(useMyLocation, 500);
+    }
+    refreshEstimate();
+  }
+
+  function renderAddressSection() {
+    const block = document.getElementById('savedAddressBlock');
+    const select = document.getElementById('savedAddressSelect');
+    const manual = document.getElementById('manualAddressBlock');
+    const detail = document.getElementById('savedAddressDetail');
+    if (!block || !select || !manual) return;
+
+    if (!savedAddresses.length) {
+      block.classList.add('d-none');
+      manual.classList.remove('d-none');
+      return;
+    }
+
+    block.classList.remove('d-none');
+    let options = savedAddresses.map(a => {
+      const label = `${a.name}${a.is_default ? ' (Predeterminada)' : ''} — ${a.address}`;
+      return `<option value="saved:${a.id}" ${selectedAddressId === a.id ? 'selected' : ''}>${esc(label)}</option>`;
+    }).join('');
+    options += `<option value="manual" ${selectedAddressId ? '' : 'selected'}>Otra dirección / usar mi ubicación</option>`;
+    select.innerHTML = options;
+
+    const isSaved = Boolean(selectedAddressId);
+    manual.classList.toggle('d-none', isSaved);
+    if (isSaved) {
+      const address = savedAddresses.find(a => a.id === selectedAddressId);
+      if (detail) detail.textContent = address ? `Se entregará en: ${address.address}` : '';
+    } else if (detail) {
+      detail.textContent = '';
+    }
+  }
+
+  function selectSavedAddress(address) {
+    selectedAddressId = address.id;
+    addressState.street = address.address || '';
+    addressState.full = address.address || '';
+    addressState.colonia = '';
+    addressState.cp = '';
+    addressState.lat = address.location?.lat ?? null;
+    addressState.lng = address.location?.lng ?? null;
+    addressState.source = 'saved';
+  }
+
+  function selectManualAddress() {
+    selectedAddressId = null;
+    addressState.street = '';
+    addressState.full = '';
+    addressState.colonia = '';
+    addressState.cp = '';
+    addressState.lat = null;
+    addressState.lng = null;
+    addressState.source = '';
+    colonias = [];
+    cpCenter = null;
+  }
+
+  function onSavedAddressChange(event) {
+    const value = event.target.value;
+    if (value === 'manual') {
+      selectManualAddress();
+      renderAddressSection();
+      const street = document.getElementById('deliveryAddress');
+      if (street) street.value = '';
+      const msg = document.getElementById('geocodeMsg');
+      if (msg) {
+        msg.className = 'small mt-2 text-muted';
+        msg.textContent = 'Escribe calle y número, usa tu GPS o ajusta el pin en el mapa.';
+      }
+      refreshEstimate();
+      return;
+    }
+    const address = savedAddresses.find(a => `saved:${a.id}` === value);
+    if (address) {
+      selectSavedAddress(address);
+      renderAddressSection();
+      refreshEstimate();
+    }
+  }
+
+  function updateTipButtons() {
+    document.querySelectorAll('.tip-btn').forEach(btn => {
+      const active = Number(btn.dataset.tip) === Number(tipAmount);
+      btn.classList.toggle('btn-success', active);
+      btn.classList.toggle('btn-outline-secondary', !active);
+    });
+    const row = document.getElementById('tipRow');
+    if (row) row.textContent = money(tipAmount);
+  }
+
+  function invalidateLocation() {
+    addressState.lat = null;
+    addressState.lng = null;
+    addressState.source = '';
+    refreshEstimate();
+  }
+
+  async function loadColonias(cp) {
+    const msg = document.getElementById('geocodeMsg');
+    if (!/^\d{5}$/.test(cp)) {
+      colonias = [];
+      cpCenter = null;
+      return;
+    }
+    try {
+      const data = await apiRequest('GET', `/geocode/postal-code/${cp}`);
+      colonias = data.colonias || [];
+      cpCenter = data.lat != null ? { lat: data.lat, lng: data.lng } : null;
+      const sel = document.getElementById('coloniaSelect');
+      if (sel) {
+        const names = colonias.map(c => c.nombre);
+        const chosen = AddressUtils.fillColoniaSelect(sel, names, addressState.colonia);
+        if (chosen) addressState.colonia = chosen;
+      }
+      if (msg) {
+        msg.className = 'small mt-2 text-success';
+        msg.textContent = `${colonias.length} colonias encontradas en el C.P. ${cp}.`;
+      }
+    } catch (e) {
+      colonias = [];
+      if (msg) {
+        msg.className = 'small mt-2 text-danger';
+        msg.textContent = e.message;
+      }
+    }
+  }
+
+  function applyGeoResult(r, source) {
+    addressState.lat = r.lat;
+    addressState.lng = r.lng;
+    addressState.source = source;
+    const msg = document.getElementById('geocodeMsg');
+    if (msg) {
+      msg.className = 'small mt-2 text-success';
+      msg.textContent = `Ubicación seleccionada: ${r.display_name}`;
+    }
+    refreshEstimate();
+  }
+
+  async function geocodeAddress() {
+    const msg = document.getElementById('geocodeMsg');
+    const listEl = document.getElementById('geocodeResults');
+    if (listEl) listEl.innerHTML = '';
+    const street = (addressState.street || '').trim();
+    if (!street) {
+      if (msg) {
+        msg.className = 'small mt-2 text-danger';
+        msg.textContent = 'Escribe calle y número para buscar la dirección.';
+      }
+      return false;
+    }
+    if (msg) {
+      msg.className = 'small mt-2 text-muted';
+      msg.textContent = 'Buscando dirección...';
+    }
+    try {
+      const structured = Boolean(addressState.colonia) && addressState.cp.length === 5;
+      const results = structured
+        ? await apiRequest('POST', '/geocode/structured', {
+            street,
+            colonia: addressState.colonia,
+            postal_code: addressState.cp,
+          })
+        : await apiRequest('POST', '/geocode', {
+            address: `${street}, Santa Cruz de Juventino Rosas, Guanajuato, México`,
+            postal_code: addressState.cp || null,
+          });
+      const exact = structured
+        ? results.find(r => (r.postcode || '') === addressState.cp)
+        : results[0];
+
+      if (listEl && (results.length || cpCenter)) {
+        if (results.length) {
+          listEl.innerHTML = results.slice(0, 5).map((r, i) => `
+            <div class="form-check mb-1">
+              <input class="form-check-input" type="radio" name="geoResult" id="geoResult${i}" value="${i}" ${exact === r ? 'checked' : ''}>
+              <label class="form-check-label" for="geoResult${i}">
+                ${r.display_name} <span class="badge bg-secondary">C.P. ${r.postcode || '?'}</span>
+              </label>
+            </div>`).join('');
+        }
+        listEl.innerHTML += `<div class="d-flex gap-2 flex-wrap mt-1">
+          ${results.length ? '<button class="btn btn-sm btn-outline-primary" id="useGeoBtn">Usar la seleccionada</button>' : ''}
+          ${cpCenter ? `<button class="btn btn-sm btn-outline-warning" id="useCpCenterBtn">Usar centro del C.P. ${addressState.cp}</button>` : ''}
+        </div>`;
+        document.getElementById('useGeoBtn')?.addEventListener('click', () => {
+          const sel = document.querySelector('input[name="geoResult"]:checked');
+          if (sel) applyGeoResult(results[Number(sel.value)], 'geocode');
+        });
+        document.getElementById('useCpCenterBtn')?.addEventListener('click', () => {
+          applyGeoResult(
+            { lat: cpCenter.lat, lng: cpCenter.lng, display_name: `Centro del C.P. ${addressState.cp}` },
+            'cp_center'
+          );
+        });
+      }
+
+      if (exact) {
+        applyGeoResult(exact, 'geocode');
+        return true;
+      }
+      if (results.length) {
+        if (msg) {
+          msg.className = 'small mt-2 text-warning';
+          msg.textContent = structured
+            ? `No hay una coincidencia con el C.P. ${addressState.cp}. Revisa las opciones o usa el centro del C.P.`
+            : 'Selecciona una de las opciones encontradas.';
+        }
+      } else if (cpCenter) {
+        if (msg) {
+          msg.className = 'small mt-2 text-warning';
+          msg.textContent = `No encontramos esa calle en OpenStreetMap. Puedes usar el centro del C.P. ${addressState.cp}.`;
+        }
+      } else {
+        throw new Error('No se encontró la dirección. Usa tu ubicación o ajusta el pin en el mapa.');
+      }
+      return false;
+    } catch (e) {
+      if (msg) {
+        msg.className = 'small mt-2 text-danger';
+        msg.textContent = e.message;
+      }
+      return false;
+    }
+  }
+
+  function _selectOrAddColonia(name) {
+    const sel = document.getElementById('coloniaSelect');
+    if (!sel || !name) return;
+    const chosen = AddressUtils.selectExistingColonia(sel, name);
+    addressState.colonia = chosen || name;
+  }
+
+  function useMyLocation() {
+    const msg = document.getElementById('geocodeMsg');
+    if (!navigator.geolocation) {
+      if (msg) {
+        msg.className = 'small mt-2 text-danger';
+        msg.textContent = 'Este dispositivo no permite obtener la ubicación.';
+      }
+      return;
+    }
+    if (msg) {
+      msg.className = 'small mt-2 text-muted';
+      msg.textContent = 'Obteniendo ubicación y dirección...';
+    }
+    navigator.geolocation.getCurrentPosition(
+      async p => {
+        addressState.lat = p.coords.latitude;
+        addressState.lng = p.coords.longitude;
+        addressState.source = 'gps';
+        try {
+          let local = null;
+          try {
+            local = await apiRequest(
+              'GET',
+              `/geocode/postal-code-reverse?lat=${p.coords.latitude}&lng=${p.coords.longitude}`
+            );
+          } catch (e) { /* outside Juventino Rosas CP polygons */ }
+
+          const rev = await apiRequest(
+            'GET',
+            `/geocode/reverse?lat=${p.coords.latitude}&lng=${p.coords.longitude}`
+          );
+          const cp = local?.cp || String(rev.postcode || '').replace(/\D/g, '').slice(0, 5);
+          const colonia = local?.colonia || rev.suburb || rev.neighbourhood || '';
+          const street = [rev.road, rev.house_number].filter(Boolean).join(' ');
+
+          if (cp.length === 5) {
+            addressState.cp = cp;
+            const postal = document.getElementById('postalCode');
+            if (postal) postal.value = cp;
+            addressState.colonia = colonia;
+            await loadColonias(cp);
+            if (colonia) _selectOrAddColonia(colonia);
+          }
+          if (street) {
+            addressState.street = street;
+            const input = document.getElementById('deliveryAddress');
+            if (input) input.value = street;
+          }
+          if (msg) {
+            msg.className = 'small mt-2 text-success';
+            msg.textContent = street
+              ? `Ubicación detectada: ${street}${colonia ? ', ' + colonia : ''}${cp ? ', C.P. ' + cp : ''}. Corrige la numeración o ajusta el pin si hace falta.`
+              : 'Ubicación aplicada. Revisa C.P., colonia y calle; ajusta el pin si hace falta.';
+          }
+        } catch (e) {
+          if (msg) {
+            msg.className = 'small mt-2 text-warning';
+            msg.textContent = 'Ubicación aplicada, pero no se pudo leer la dirección. Corrige C.P., colonia y calle manualmente.';
+          }
+        }
+        await refreshEstimate();
+      },
+      () => {
+        if (msg) {
+          msg.className = 'small mt-2 text-danger';
+          msg.textContent = 'No se pudo obtener la ubicación. Revisa permisos o usa “Buscar dirección”.';
+        }
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+  }
+
+  async function loadLoyalty() {
+    try {
+      const me = await apiRequest('GET', '/profile/me');
+      loyaltyPoints = Number(me.loyalty_points || 0);
+    } catch (e) {
+      loyaltyPoints = 0;
+    }
+  }
+
+  function updateLoyaltyUi() {
+    const card = document.getElementById('loyaltyCard');
+    if (!card) return;
+    if (!loyaltyVisible) {
+      card.classList.add('d-none');
+      return;
+    }
+    if (loyaltyPoints <= 0 && pointsToRedeem <= 0) {
+      card.classList.add('d-none');
+      return;
+    }
+    card.classList.remove('d-none');
+    const balance = document.getElementById('loyaltyBalance');
+    if (balance) balance.textContent = `${loyaltyPoints} pts`;
+    const input = document.getElementById('pointsInput');
+    if (input) {
+      input.max = String(loyaltyPoints);
+      if (document.activeElement !== input) input.value = pointsToRedeem || '';
+    }
+    const hint = document.getElementById('pointsHint');
+    if (hint) {
+      hint.textContent = loyaltyPoints > 0
+        ? `Tienes ${loyaltyPoints} puntos. Cada punto descuenta $${loyaltyValue.toFixed(2)}.`
+        : 'No tienes puntos disponibles por ahora.';
+    }
+  }
+
+  function setPointsToRedeem(value) {
+    const parsed = Math.max(0, Math.min(loyaltyPoints, parseInt(value, 10) || 0));
+    pointsToRedeem = parsed;
+    updateLoyaltyUi();
+    refreshEstimate();
+  }
+
+  function toLocalInput(date) {
+    const offset = date.getTimezoneOffset();
+    return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
+  }
+
+  function updateScheduleHint() {
+    const hint = document.getElementById('scheduleHint');
+    if (!hint) return;
+    hint.textContent = fulfillment === 'pickup'
+      ? 'Selecciona la hora a la que pasas a recoger. Debe ser al menos 10 minutos después.'
+      : 'Selecciona la hora a la que quieres recibir. Debe ser al menos 10 minutos después.';
+  }
+
+  function setupScheduleToggle() {
+    const toggle = document.getElementById('scheduleToggle');
+    const input = document.getElementById('scheduledFor');
+    if (!toggle || !input) return;
+    toggle.checked = scheduleState.enabled;
+    input.value = scheduleState.value || '';
+    input.min = toLocalInput(new Date(Date.now() + 10 * 60000));
+
+    const apply = () => {
+      const on = toggle.checked;
+      scheduleState.enabled = on;
+      input.classList.toggle('d-none', !on);
+      updateScheduleHint();
+      document.getElementById('scheduleHint')?.classList.toggle('d-none', !on);
+      if (!on) {
+        scheduleState.value = '';
+        input.value = '';
+        return;
+      }
+      if (!input.value) {
+        const suggested = new Date(Date.now() + 15 * 60000);
+        suggested.setSeconds(0, 0);
+        input.value = toLocalInput(suggested);
+        scheduleState.value = input.value;
+      }
+    };
+
+    toggle.addEventListener('change', apply);
+    input.addEventListener('input', () => { scheduleState.value = input.value; });
+    apply();
+  }
+
+  function updateFulfillmentUi() {
+    const pickup = fulfillment === 'pickup';
+    document.getElementById('deliveryAddressCard')?.classList.toggle('d-none', pickup);
+    document.getElementById('pickupInfoCard')?.classList.toggle('d-none', !pickup);
+    document.getElementById('tipCard')?.classList.toggle('d-none', pickup);
+    updateScheduleHint();
+    if (pickup) {
+      tipAmount = 0;
+      const custom = document.getElementById('tipCustom');
+      if (custom) custom.value = '';
+      updateTipButtons();
+    }
+    refreshEstimate();
+  }
+
+  async function refreshEstimate() {
+    const cart = getCart();
+    const feeEl = document.getElementById('deliveryFee');
+    const flatEl = document.getElementById('flatFee');
+    const totalEl = document.getElementById('totalAmount');
+    const discountRow = document.getElementById('discountRow');
+    const discountEl = document.getElementById('discountAmount');
+    const loyaltyRow = document.getElementById('loyaltyRow');
+    const loyaltyEl = document.getElementById('loyaltyAmount');
+    const estimateMsg = document.getElementById('estimateMsg');
+    if (!feeEl || !cart.length) return;
+
+    const items = cart.map(i => ({ menu_item_id: i.menu_item_id, quantity: i.quantity, option_ids: i.option_ids || [] }));
+    const rid = sessionStorage.getItem('cartRestaurantId');
+    const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+
+    if (fulfillment !== 'pickup' && (addressState.lat == null || addressState.lng == null)) {
+      feeEl.textContent = '—';
+      flatEl.textContent = '—';
+      totalEl.textContent = money(subtotal + tipAmount);
+      if (loyaltyRow) loyaltyRow.classList.add('d-none');
+      updateTipButtons();
+      if (estimateMsg) estimateMsg.textContent = 'Ingresa tu dirección y pulsa “Buscar dirección” para calcular el envío.';
+      return;
+    }
+    try {
+      const res = await estimatePrice(
+        rid, items,
+        fulfillment === 'pickup' ? null : addressState.lat,
+        fulfillment === 'pickup' ? null : addressState.lng,
+        appliedCoupon, tipAmount, pointsToRedeem, fulfillment,
+      );
+      feeEl.textContent = money(res.delivery_fee);
+      flatEl.textContent = money(res.flat_usage_fee);
+      const discount = parseFloat(res.discount || 0);
+      if (discount > 0) {
+        discountRow.classList.remove('d-none');
+        discountEl.textContent = '-' + money(discount);
+      } else {
+        discountRow.classList.add('d-none');
+      }
+      const pointsUsed = Number(res.points_redeemed || 0);
+      const loyaltyDiscount = parseFloat(res.loyalty_discount || 0);
+      pointsToRedeem = pointsUsed;
+      if (loyaltyDiscount > 0 && loyaltyRow) {
+        loyaltyRow.classList.remove('d-none');
+        loyaltyEl.textContent = '-' + money(loyaltyDiscount) + ` (${pointsUsed} pts)`;
+      } else if (loyaltyRow) {
+        loyaltyRow.classList.add('d-none');
+      }
+      updateLoyaltyUi();
+      const appliedTip = parseFloat(res.tip_amount != null ? res.tip_amount : tipAmount) || 0;
+      const tipRow = document.getElementById('tipRow');
+      if (tipRow) tipRow.textContent = money(appliedTip);
+      totalEl.textContent = money(res.total);
+      if (estimateMsg) {
+        estimateMsg.textContent = res.distance_km != null
+          ? `Distancia estimada: ${parseFloat(res.distance_km).toFixed(2)} km.`
+          : '';
+        if (res.delivery_mode === 'own') {
+          estimateMsg.textContent = (estimateMsg.textContent + ' Entrega propia del restaurante.').trim();
+        }
+      }
+    } catch (e) {
+      if (estimateMsg) estimateMsg.textContent = 'No se pudo calcular el envío: ' + e.message;
+    }
+  }
+
+  function nudgeCartPin(dx, dy) {
+    if (!pickedCoords || !pickerMarker) return;
+    const step = Math.max(1, parseInt(document.getElementById('cartPinStep')?.value || 3, 10) || 3);
+    const lat = pickedCoords.lat + (dy * step) / 111320;
+    const lng = pickedCoords.lng + (dx * step) / Math.max(111320 * Math.cos(pickedCoords.lat * Math.PI / 180), 1);
+    pickedCoords = { lat, lng };
+    pickerMarker.setLatLng([lat, lng]);
+    if (pickerMap) pickerMap.panTo([lat, lng], { animate: true });
+  }
+
+  function openMapPicker() {
+    const modalEl = document.getElementById('mapPickerModal');
+    if (!modalEl || typeof L === 'undefined') {
+      showToast('El mapa no está disponible. Revisa tu conexión.', 'warning');
+      return;
+    }
+    const center = (addressState.lat != null && addressState.lng != null)
+      ? { lat: addressState.lat, lng: addressState.lng }
+      : (cpCenter || { lat: 20.644, lng: -100.993 });
+    pickedCoords = { lat: center.lat, lng: center.lng };
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modalEl.addEventListener('shown.bs.modal', () => {
+      if (!pickerMap) {
+        pickerMap = L.map('pickerMap').setView([center.lat, center.lng], 17);
+        createLocalTileLayer({
+          attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors',
+          maxZoom: 19,
+        }).addTo(pickerMap);
+        pickerMarker = L.marker([center.lat, center.lng], { draggable: true }).addTo(pickerMap);
+        pickerMarker.on('dragend', () => {
+          const p = pickerMarker.getLatLng();
+          pickedCoords = { lat: p.lat, lng: p.lng };
+        });
+        pickerMap.on('click', (e) => {
+          pickerMarker.setLatLng(e.latlng);
+          pickedCoords = { lat: e.latlng.lat, lng: e.latlng.lng };
+        });
+      } else {
+        pickerMap.setView([center.lat, center.lng], 17);
+        pickerMarker.setLatLng([center.lat, center.lng]);
+      }
+      setTimeout(() => pickerMap.invalidateSize(), 200);
+    }, { once: true });
+    modal.show();
+  }
+
+  function attachCartEvents(cart) {
+    document.querySelectorAll('.tip-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        tipAmount = Number(btn.dataset.tip || 0);
+        const custom = document.getElementById('tipCustom');
+        if (custom) custom.value = tipAmount || '';
+        updateTipButtons();
+        refreshEstimate();
+      });
+    });
+    const customTip = document.getElementById('tipCustom');
+    if (customTip) {
+      customTip.addEventListener('input', () => {
+        tipAmount = Math.max(0, Math.min(1000, parseFloat(customTip.value) || 0));
+        updateTipButtons();
+        refreshEstimate();
+      });
+    }
+    const pointsInput = document.getElementById('pointsInput');
+    if (pointsInput) {
+      pointsInput.addEventListener('input', () => setPointsToRedeem(pointsInput.value));
+    }
+    const useAllPoints = document.getElementById('useAllPoints');
+    if (useAllPoints) {
+      useAllPoints.addEventListener('click', () => setPointsToRedeem(loyaltyPoints));
+    }
+    updateLoyaltyUi();
+    updateTipButtons();
+    document.querySelectorAll('input[name="fulfillment"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        fulfillment = radio.value;
+        updateFulfillmentUi();
+      });
+    });
+    updateFulfillmentUi();
+    document.querySelectorAll('.qty-minus').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        if (cart[idx].quantity > 1) { cart[idx].quantity -= 1; saveCart(cart); renderCart(); }
+        else { cart.splice(idx, 1); saveCart(cart); renderCart(); }
+      });
+    });
+    document.querySelectorAll('.qty-plus').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        cart[idx].quantity += 1;
+        saveCart(cart);
+        renderCart();
+      });
+    });
+    document.querySelectorAll('.remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        cart.splice(parseInt(btn.dataset.idx), 1);
+        saveCart(cart);
+        renderCart();
+      });
+    });
+
+    document.getElementById('postalCode').addEventListener('input', async (e) => {
+      addressState.cp = e.target.value.replace(/\D/g, '').slice(0, 5);
+      invalidateLocation();
+      if (addressState.cp.length === 5) await loadColonias(addressState.cp);
+    });
+    document.getElementById('coloniaSelect').addEventListener('change', (e) => {
+      addressState.colonia = e.target.value;
+      invalidateLocation();
+    });
+    document.getElementById('deliveryAddress').addEventListener('input', (e) => {
+      addressState.street = e.target.value;
+      invalidateLocation();
+    });
+    document.getElementById('geocodeBtn').addEventListener('click', geocodeAddress);
+    document.getElementById('gpsBtn').addEventListener('click', useMyLocation);
+    document.getElementById('mapPickerBtn').addEventListener('click', openMapPicker);
+
+    document.getElementById('applyCoupon').addEventListener('click', async () => {
+      const code = document.getElementById('couponInput').value.trim().toUpperCase();
+      if (!code) return;
+      try {
+        const res = await validateCoupon(code, getCartTotal());
+        document.getElementById('couponMsg').innerHTML = res.valid
+          ? `<span class="text-success">${res.message}</span>`
+          : `<span class="text-danger">${res.message}</span>`;
+        appliedCoupon = res.valid ? code : null;
+        refreshEstimate();
+      } catch (ex) {
+        document.getElementById('couponMsg').innerHTML = `<span class="text-danger">${ex.message}</span>`;
+      }
+    });
+
+    document.querySelectorAll('input[name="paymentMethod"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        const bankInfo = document.getElementById('bankInfo');
+        if (radio.value === 'transfer' && bankInfo) {
+          const hasData = bankDetails && (bankDetails.bank_name || bankDetails.clabe || bankDetails.account_holder);
+          bankInfo.innerHTML = hasData
+            ? `<strong>Transferencia a TuPedidoJR (plataforma)</strong><br>Banco: ${bankDetails.bank_name || '—'}<br>Titular: ${bankDetails.account_holder || '—'}<br>CLABE: ${bankDetails.clabe || '—'}${bankDetails.card ? `<br>Tarjeta: ${bankDetails.card}` : ''}<br><small class="text-muted">El dinero entra a la plataforma. El repartidor no te cobrará en efectivo por este pedido; su pago lo cubre TuPedidoJR.</small>`
+            : '<span class="text-danger">La plataforma aún no configuró la cuenta bancaria. Elige efectivo o pide al negocio que contacte a TuPedidoJR.</span>';
+          bankInfo.classList.remove('d-none');
+        } else if (bankInfo) {
+          bankInfo.classList.add('d-none');
+        }
+      });
+    });
+
+    document.getElementById('placeOrderBtn').addEventListener('click', async () => {
+      document.getElementById('cartError').classList.add('d-none');
+      let rid = sessionStorage.getItem('cartRestaurantId');
+      if (!rid) {
+        const first = cart.find(i => i.restaurant_id);
+        if (first) {
+          rid = first.restaurant_id;
+          sessionStorage.setItem('cartRestaurantId', rid);
+        }
+      }
+      if (!rid) { showToast('Error: no se encontró el restaurante', 'danger'); return; }
+
+      const pickup = fulfillment === 'pickup';
+      let fullAddress = '';
+      let lat = addressState.lat;
+      let lng = addressState.lng;
+
+      if (!pickup && selectedAddressId) {
+        const saved = savedAddresses.find(a => a.id === selectedAddressId);
+        if (!saved) { showToast('Selecciona una dirección válida', 'danger'); return; }
+        fullAddress = saved.address;
+        lat = saved.location?.lat ?? null;
+        lng = saved.location?.lng ?? null;
+        if (lat == null || lng == null) {
+          addressState.street = fullAddress;
+          const ok = await geocodeAddress();
+          if (!ok) return;
+          lat = addressState.lat;
+          lng = addressState.lng;
+        }
+      } else if (!pickup) {
+        const addr = (addressState.street || '').trim();
+        if (addr.length < 5) { showToast('Escribe calle y número', 'danger'); return; }
+        if (lat == null || lng == null) {
+          const ok = await geocodeAddress();
+          if (!ok) return;
+          lat = addressState.lat;
+          lng = addressState.lng;
+        }
+        const parts = [addr];
+        if (addressState.colonia) parts.push(addressState.colonia);
+        parts.push('Santa Cruz de Juventino Rosas', 'Guanajuato');
+        if (addressState.cp.length === 5) parts.push(`C.P. ${addressState.cp}`);
+        fullAddress = parts.join(', ');
+      }
+
+      if (!pickup && (lat == null || lng == null)) {
+        showToast('No pudimos ubicar la dirección. Usa tu ubicación o ajusta el pin en el mapa.', 'danger');
+        return;
+      }
+
+      const notes = document.getElementById('orderNotes').value.trim();
+      const scheduledInput = scheduleState.enabled ? scheduleState.value : '';
+      const scheduledFor = scheduledInput ? new Date(scheduledInput).toISOString() : null;
+      const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked')?.value || 'cash';
+      const itemsData = cart.map(i => ({ menu_item_id: i.menu_item_id, quantity: i.quantity, option_ids: i.option_ids || [] }));
+      try {
+        const order = await createOrder(
+          rid, itemsData, pickup ? null : fullAddress,
+          pickup ? null : lat, pickup ? null : lng,
+          notes || null, appliedCoupon, paymentMethod,
+          pickup ? 0 : tipAmount, scheduledFor, pointsToRedeem, pickup ? 'pickup' : 'delivery',
+        );
+        await clearCartNow();
+        if (paymentMethod === 'cash') showToast(pickup ? 'Pedido creado — pagarás al recoger' : 'Pedido creado — pagarás en efectivo al recibir');
+        else showToast(`Pedido #${order.id.slice(0, 8)} creado`);
+        window.location.href = `/web/orders/${order.id}`;
+      } catch (ex) {
+        document.getElementById('cartError').textContent = ex.message;
+        document.getElementById('cartError').classList.remove('d-none');
+      }
+    });
+  }
+
+  // Precarga la dirección predeterminada (o la primera) y deja disponible
+  // la opción de capturar otra ubicación.
+  async function loadSavedAddresses() {
+    try {
+      savedAddresses = await listAddresses();
+    } catch (e) {
+      savedAddresses = [];
+    }
+    if (savedAddresses.length) {
+      const defaultAddress = savedAddresses.find(a => a.is_default) || savedAddresses[0];
+      selectSavedAddress(defaultAddress);
+    } else {
+      selectManualAddress();
+    }
+  }
+
+  document.getElementById('usePickedLocation').addEventListener('click', () => {
+    if (!pickedCoords) return;
+    applyGeoResult(
+      { lat: pickedCoords.lat, lng: pickedCoords.lng, display_name: 'Ubicación ajustada en el mapa' },
+      'map'
+    );
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('mapPickerModal')).hide();
+  });
+
+  window.addEventListener('cart:hydrated', () => { renderCart(); });
+
+  (async () => {
+    try { paymentConfig = await apiRequest('GET', '/payments/config'); } catch (e) { /* ignore */ }
+    loyaltyVisible = Boolean(paymentConfig?.loyalty_enabled && paymentConfig?.loyalty_visible);
+    loyaltyValue = parseFloat(paymentConfig?.loyalty_value_per_point || 1) || 1;
+    try { bankDetails = await getBankDetails(); } catch (e) { /* ignore */ }
+    const cartRid = sessionStorage.getItem('cartRestaurantId')
+      || (getCart().find(i => i.restaurant_id) || {}).restaurant_id;
+    if (cartRid) {
+      try { restaurantInfo = await apiRequest('GET', `/restaurants/${cartRid}`); } catch (e) { /* ignore */ }
+    }
+    await loadLoyalty();
+    await loadSavedAddresses();
+    if (restaurantInfo?.pickup_enabled && !savedAddresses.length) {
+      fulfillment = 'pickup';
+    }
+    renderCart();
+  })();
+</script>
+{% endblock %}
+

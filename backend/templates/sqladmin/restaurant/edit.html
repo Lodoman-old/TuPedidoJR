@@ -1,0 +1,71 @@
+{% extends "sqladmin/edit.html" %}
+{% block head %}
+{{ super() }}
+<style>
+  .geocode-card { background: #f0f7ff; border: 1px solid #cce5ff; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+  .geocode-card h6 { margin-top: 0; color: #0056b3; }
+  .geocode-result { background: #fff; border: 1px solid #dee2e6; border-radius: 6px; padding: 10px; margin-top: 8px; display: none; }
+  .geocode-result.show { display: block; }
+</style>
+{% endblock %}
+{% block edit_form %}
+<div class="geocode-card">
+  <h6><i class="bi bi-geo-alt"></i> Geocodificación rápida</h6>
+  <p class="small text-muted mb-2">Ingresa una dirección completa para obtener las coordenadas y copiarlas al campo <strong>Location</strong>.</p>
+  <div class="input-group input-group-sm mb-2">
+    <input type="text" class="form-control" id="adminGeocodeInput" placeholder="Ej: Av. Juárez 100, Centro, Mérida, Yucatán">
+    <button class="btn btn-primary btn-sm" type="button" id="adminGeocodeBtn"><i class="bi bi-search"></i> Buscar</button>
+  </div>
+  <div id="adminGeocodeMsg" class="small"></div>
+  <div class="geocode-result" id="adminGeocodeResult">
+    <div class="d-flex justify-content-between align-items-center">
+      <span id="adminGeocodeDisplay" class="small"></span>
+      <button class="btn btn-sm btn-outline-primary" id="adminGeocodeCopy">Copiar POINT(lng lat)</button>
+    </div>
+    <p class="small text-muted mt-1 mb-0">Pega el valor en el campo <strong>Location</strong> de abajo (formato: <code>POINT(lng lat)</code>).</p>
+  </div>
+</div>
+{{ super() }}
+{% endblock %}
+{% block script %}
+{{ super() }}
+<script>
+  (function() {
+    const btn = document.getElementById('adminGeocodeBtn');
+    const input = document.getElementById('adminGeocodeInput');
+    const msg = document.getElementById('adminGeocodeMsg');
+    const result = document.getElementById('adminGeocodeResult');
+    const display = document.getElementById('adminGeocodeDisplay');
+    const copyBtn = document.getElementById('adminGeocodeCopy');
+    let lastPoint = '';
+    btn.addEventListener('click', doGeocode);
+    input.addEventListener('keydown', function(e) { if (e.key === 'Enter') doGeocode(); });
+    async function doGeocode() {
+      const addr = input.value.trim();
+      if (addr.length < 3) { msg.innerHTML = '<span class="text-danger">Dirección muy corta</span>'; return; }
+      msg.innerHTML = '<span class="text-muted">Buscando...</span>';
+      result.classList.remove('show');
+      try {
+        const r = await fetch('/api/v1/geocode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: addr }),
+        });
+        if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Error'); }
+        const data = await r.json();
+        if (data.length === 0) { msg.innerHTML = '<span class="text-warning">Sin resultados</span>'; return; }
+        const best = data[0];
+        lastPoint = 'POINT(' + best.lng + ' ' + best.lat + ')';
+        display.textContent = best.display_name + ' → ' + lastPoint;
+        result.classList.add('show');
+        msg.innerHTML = '<span class="text-success">Resultado encontrado</span>';
+      } catch (ex) { msg.innerHTML = '<span class="text-danger">' + ex.message + '</span>'; }
+    }
+    copyBtn.addEventListener('click', function() {
+      navigator.clipboard.writeText(lastPoint).then(function() {
+        msg.innerHTML = '<span class="text-success">¡Copiado!</span>';
+      });
+    });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,562 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
+      <h5 class="mb-0"><i class="bi bi-shop-window"></i> Perfil del negocio</h5>
+      <a class="btn btn-sm btn-outline-secondary" href="/web/restaurants/{{ restaurant_id }}">
+        <i class="bi bi-arrow-left"></i> Volver al panel
+      </a>
+    </div>
+
+    <div id="profileLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+    <div id="profileError" class="alert alert-danger d-none"></div>
+    <div id="profileDenied" class="alert alert-warning d-none">
+      Solo el dueño o el encargado pueden editar el perfil del negocio.
+    </div>
+
+    <div id="profileContent" class="d-none">
+      <div class="card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
+          <h6 class="mb-0">Datos del negocio</h6>
+          <span class="badge bg-secondary" id="profileRole"></span>
+        </div>
+        <div class="row g-2">
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="bizName">Nombre</label>
+            <input type="text" id="bizName" class="form-control">
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="bizCuisine">Giro</label>
+            <input type="text" id="bizCuisine" class="form-control" list="cuisineOptions" placeholder="Sushi, Pizza, Tacos...">
+            <datalist id="cuisineOptions">
+              <option value="Sushi"></option><option value="Pizza"></option>
+              <option value="Tacos"></option><option value="Hamburguesas"></option>
+              <option value="Mariscos"></option><option value="Postres"></option>
+              <option value="Cafetería"></option><option value="Comida corrida"></option>
+            </datalist>
+          </div>
+          <div class="col-12">
+            <label class="form-label small mb-1" for="bizDescription">Descripción</label>
+            <textarea id="bizDescription" class="form-control" rows="2"></textarea>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="bizPhone">Teléfono</label>
+            <input type="text" id="bizPhone" class="form-control">
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="bizDeliveryMode">Tipo de entrega</label>
+            <select class="form-select" id="bizDeliveryMode">
+              <option value="platform">Repartidor de TuPedidoJR</option>
+              <option value="own">Repartidor propio del restaurante</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="bizPickup">
+              <label class="form-check-label" for="bizPickup">Permitir que el cliente recoja en el restaurante</label>
+            </div>
+            <div class="form-text">El pedido no lleva envío ni propina. El cliente pasa cuando esté listo.</div>
+          </div>
+          <div class="col-12 col-md-6">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="bizIsOpen">
+              <label class="form-check-label" for="bizIsOpen">Recibiendo pedidos</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="bizPublicPage">
+              <label class="form-check-label" for="bizPublicPage">Página pública activada</label>
+            </div>
+            <div class="form-text d-none" id="bizPublicLink"></div>
+          </div>
+        </div>
+        <div class="mt-3 d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary" id="saveBusinessBtn"><i class="bi bi-check2"></i> Guardar datos</button>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h6 class="mb-2">Logo del negocio</h6>
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <div class="logo-preview" id="logoPreviewWrap">
+            <i class="bi bi-shop"></i>
+          </div>
+          <div class="flex-grow-1">
+            <input type="file" id="logoInput" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp">
+            <div class="form-text">Se recorta a un cuadrado de 800×800 y se convierte a WebP.</div>
+            <button class="btn btn-sm btn-primary mt-2" id="uploadLogoBtn"><i class="bi bi-upload"></i> Subir logo</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
+          <h6 class="mb-0">Horario de atención</h6>
+          <small class="text-muted">Los días sin turnos se consideran cerrados.</small>
+        </div>
+        <div id="scheduleBody"></div>
+        <button class="btn btn-primary mt-3" id="saveScheduleBtn"><i class="bi bi-clock"></i> Guardar horario</button>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h6 class="mb-1">Dirección y ubicación</h6>
+        <p class="small text-muted mb-2">
+          Esta dirección se usa para los envíos y para los mandados. Si el pin no está en el lugar correcto,
+          arrástralo o toca el mapa. También puedes corregir la calle y volver a buscar.
+        </p>
+        <div class="row g-2 mb-2">
+          <div class="col-5">
+            <input class="form-control" id="postalCode" maxlength="5" inputmode="numeric" placeholder="C.P.">
+          </div>
+          <div class="col-7">
+            <select class="form-select" id="coloniaSelect"><option value="">Colonia...</option></select>
+          </div>
+        </div>
+        <input class="form-control mb-2" id="street" placeholder="Calle y número">
+        <div class="d-flex gap-2 flex-wrap mb-2">
+          <button class="btn btn-sm btn-outline-primary" id="gpsLocationBtn"><i class="bi bi-crosshair"></i> Usar ubicación del dispositivo</button>
+          <button class="btn btn-sm btn-outline-secondary" id="searchAddressBtn"><i class="bi bi-search"></i> Buscar calle</button>
+        </div>
+        <div id="geoMsg" class="small mb-2"></div>
+        <div id="restaurantMap" style="height: 300px; border-radius: 12px;" class="border"></div>
+        <div class="form-text">Arrastra el pin o toca el mapa para ajustar el punto exacto.</div>
+        <div class="mt-2 small text-muted" id="currentLocationText"></div>
+        <button class="btn btn-primary mt-3" id="saveLocationBtn"><i class="bi bi-geo-alt"></i> Guardar ubicación</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const ROLE_LABELS = { owner: 'Dueño', manager: 'Encargado', staff: 'Personal', cashier: 'Cajero', kitchen: 'Cocina', admin: 'Administrador' };
+
+  let restaurant = null;
+  let scheduleState = [];
+  let rmap = null;
+  let rmarker = null;
+  let picked = { lat: null, lng: null };
+  let pinMoved = false;
+  let cpCenter = null;
+  let canManage = false;
+  let coordsReady = false;
+
+  function el(id) { return document.getElementById(id); }
+
+  function setGeoMsg(text, kind = 'muted') {
+    const node = el('geoMsg');
+    node.className = `small mb-2 text-${kind}`;
+    node.textContent = text || '';
+  }
+
+  function fillBusinessForm() {
+    const r = restaurant || {};
+    el('bizName').value = r.name || '';
+    el('bizCuisine').value = r.cuisine || '';
+    el('bizDescription').value = r.description || '';
+    el('bizPhone').value = r.phone || '';
+    el('bizDeliveryMode').value = r.delivery_mode === 'own' ? 'own' : 'platform';
+    el('bizPickup').checked = Boolean(r.pickup_enabled);
+    el('bizIsOpen').checked = Boolean(r.is_open);
+    el('bizPublicPage').checked = Boolean(r.public_page_enabled);
+    el('profileRole').textContent = ROLE_LABELS[r.viewer_role] || r.viewer_role || '';
+    if (r.slug) {
+      const link = el('bizPublicLink');
+      link.classList.remove('d-none');
+      link.innerHTML = `Enlace: <a href="/r/${r.slug}" target="_blank">/r/${r.slug}</a>`;
+    }
+    renderLogo();
+  }
+
+  function renderLogo() {
+    const wrap = el('logoPreviewWrap');
+    if (!wrap) return;
+    if (restaurant && restaurant.logo_url) {
+      wrap.innerHTML = `<img src="${restaurant.logo_url}" alt="Logo">`;
+    } else {
+      wrap.innerHTML = '<i class="bi bi-shop"></i>';
+    }
+  }
+
+  async function loadRestaurant() {
+    restaurant = await apiRequest('GET', `/restaurants/${RID}`);
+    canManage = ['owner', 'manager', 'admin'].includes(restaurant.viewer_role);
+    el('profileLoading').classList.add('d-none');
+    if (!canManage) {
+      el('profileDenied').classList.remove('d-none');
+      return;
+    }
+    el('profileContent').classList.remove('d-none');
+    fillBusinessForm();
+    await loadSchedule();
+    await loadLocationAndMap();
+  }
+
+  // ===== Datos del negocio =====
+  el('saveBusinessBtn').addEventListener('click', async () => {
+    const name = el('bizName').value.trim();
+    if (!name) { showToast('El nombre es obligatorio', 'warning'); return; }
+    const data = {
+      name,
+      cuisine: el('bizCuisine').value.trim() || null,
+      description: el('bizDescription').value.trim() || null,
+      phone: el('bizPhone').value.trim() || null,
+      is_open: el('bizIsOpen').checked,
+      public_page_enabled: el('bizPublicPage').checked,
+      delivery_mode: el('bizDeliveryMode').value,
+      pickup_enabled: el('bizPickup').checked,
+    };
+    try {
+      el('saveBusinessBtn').disabled = true;
+      await updateRestaurantProfile(RID, data);
+      restaurant = await apiRequest('GET', `/restaurants/${RID}`);
+      fillBusinessForm();
+      showToast('Datos del negocio actualizados');
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      el('saveBusinessBtn').disabled = false;
+    }
+  });
+
+  // ===== Logo =====
+  el('uploadLogoBtn').addEventListener('click', async () => {
+    const file = el('logoInput').files[0];
+    if (!file) { showToast('Selecciona una imagen', 'warning'); return; }
+    try {
+      el('uploadLogoBtn').disabled = true;
+      const res = await uploadRestaurantLogo(RID, file);
+      restaurant.logo_url = res.logo_url || res.url || restaurant.logo_url;
+      renderLogo();
+      el('logoInput').value = '';
+      showToast('Logo actualizado');
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      el('uploadLogoBtn').disabled = false;
+    }
+  });
+
+  // ===== Horario =====
+  async function loadSchedule() {
+    try {
+      scheduleState = (await getRestaurantSchedule(RID)).map(e => ({ ...e }));
+    } catch (e) {
+      scheduleState = [];
+    }
+    renderScheduleBody();
+  }
+
+  function renderScheduleBody() {
+    const body = el('scheduleBody');
+    if (!body) return;
+    let html = '';
+    for (let day = 0; day < 7; day++) {
+      html += `<div class="mb-2 pb-2 border-bottom">
+        <div class="d-flex justify-content-between align-items-center">
+          <strong class="small">${DAY_NAMES[day]}</strong>
+          <button type="button" class="btn btn-sm btn-link p-0" onclick="addScheduleEntry(${day})">+ turno</button>
+        </div>`;
+      const entries = scheduleState
+        .map((entry, index) => ({ ...entry, index }))
+        .filter(entry => entry.day_of_week === day);
+      if (!entries.length) {
+        html += '<small class="text-muted">Cerrado</small>';
+      } else {
+        entries.forEach(entry => {
+          html += `<div class="d-flex gap-1 align-items-center mt-1 schedule-row" data-day="${day}">
+            <input type="time" class="form-control form-control-sm schedule-open" value="${entry.open_time}"
+                   onchange="updateScheduleEntry(${entry.index}, 'open_time', this.value)">
+            <span class="small">a</span>
+            <input type="time" class="form-control form-control-sm schedule-close" value="${entry.close_time}"
+                   onchange="updateScheduleEntry(${entry.index}, 'close_time', this.value)">
+            <button type="button" class="btn btn-sm btn-outline-danger" title="Quitar turno"
+                    onclick="removeScheduleEntry(${entry.index})">&times;</button>
+          </div>`;
+        });
+      }
+      html += '</div>';
+    }
+    body.innerHTML = html;
+  }
+
+  function addScheduleEntry(day) {
+    scheduleState.push({ day_of_week: day, open_time: '09:00', close_time: '22:00', is_closed: false });
+    renderScheduleBody();
+  }
+  function updateScheduleEntry(index, field, value) {
+    if (scheduleState[index]) scheduleState[index][field] = value;
+  }
+  function removeScheduleEntry(index) {
+    scheduleState.splice(index, 1);
+    renderScheduleBody();
+  }
+
+  el('saveScheduleBtn').addEventListener('click', async () => {
+    const entries = [];
+    document.querySelectorAll('#scheduleBody .schedule-row').forEach(row => {
+      const open = row.querySelector('.schedule-open').value;
+      const close = row.querySelector('.schedule-close').value;
+      if (open && close) {
+        entries.push({
+          day_of_week: Number(row.dataset.day),
+          open_time: open,
+          close_time: close,
+          is_closed: false,
+        });
+      }
+    });
+    try {
+      el('saveScheduleBtn').disabled = true;
+      await updateRestaurantSchedule(RID, entries);
+      showToast('Horario guardado');
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      el('saveScheduleBtn').disabled = false;
+    }
+  });
+
+  // ===== Ubicación =====
+  function initMap(lat, lng) {
+    picked = { lat, lng };
+    if (typeof L === 'undefined') return;
+    if (rmap) {
+      rmap.setView([lat, lng], 17);
+      if (rmarker) rmarker.setLatLng([lat, lng]);
+      return;
+    }
+    rmap = L.map('restaurantMap').setView([lat, lng], 17);
+    createLocalTileLayer({
+      attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(rmap);
+    rmarker = L.marker([lat, lng], { draggable: true }).addTo(rmap);
+    rmarker.on('dragend', () => {
+      const p = rmarker.getLatLng();
+      picked = { lat: p.lat, lng: p.lng };
+      pinMoved = true;
+      coordsReady = true;
+      setGeoMsg('Pin ajustado. Guarda para confirmar la ubicación.', 'success');
+    });
+    rmap.on('click', (e) => {
+      rmarker.setLatLng(e.latlng);
+      picked = { lat: e.latlng.lat, lng: e.latlng.lng };
+      pinMoved = true;
+      coordsReady = true;
+      setGeoMsg('Pin ajustado. Guarda para confirmar la ubicación.', 'success');
+    });
+    setTimeout(() => rmap.invalidateSize(), 200);
+  }
+
+  function movePin(lat, lng) {
+    picked = { lat, lng };
+    coordsReady = true;
+    pinMoved = false;
+    if (rmap && rmarker) {
+      rmap.setView([lat, lng], 17);
+      rmarker.setLatLng([lat, lng]);
+    }
+  }
+
+  async function loadLocationAndMap() {
+    let loc = { address: '', lat: null, lng: null };
+    try {
+      loc = await apiRequest('GET', `/restaurants/${RID}/location`);
+    } catch (e) { /* sin ubicación */ }
+    el('currentLocationText').textContent = loc.lat != null
+      ? `Ubicación actual: ${loc.address || 'Sin dirección'} · Lat ${loc.lat}, Lng ${loc.lng}`
+      : 'El negocio todavía no tiene una ubicación guardada.';
+    initMap(loc.lat != null ? loc.lat : 20.644, loc.lng != null ? loc.lng : -100.993);
+    if (loc.lat != null && loc.lng != null) {
+      movePin(loc.lat, loc.lng);
+      const found = await reverseFill(loc.lat, loc.lng);
+      if (!found.street && loc.address) {
+        el('street').value = loc.address;
+      }
+      if (!el('postalCode').value && loc.address) {
+        const cpMatch = loc.address.match(/\b(\d{5})\b/);
+        if (cpMatch) {
+          el('postalCode').value = cpMatch[1];
+          await loadColonias(cpMatch[1]);
+        }
+      }
+    } else if (loc.address) {
+      el('street').value = loc.address;
+      const cpMatch = loc.address.match(/\b(\d{5})\b/);
+      if (cpMatch) {
+        el('postalCode').value = cpMatch[1];
+        await loadColonias(cpMatch[1]);
+      }
+    }
+    if (loc.lat == null || loc.lng == null || !el('street').value.trim()) {
+      setGeoMsg('Buscando la ubicación del dispositivo para llenar la dirección...');
+      await useDeviceLocation(true);
+    }
+  }
+
+  async function loadColonias(cp, selected = null) {
+    const select = el('coloniaSelect');
+    if (!/^\d{5}$/.test(cp)) return;
+    try {
+      const data = await apiRequest('GET', `/geocode/postal-code/${cp}`);
+      cpCenter = data.lat != null ? { lat: data.lat, lng: data.lng } : null;
+      const names = (data.colonias || []).map(c => c.nombre);
+      const chosen = AddressUtils.fillColoniaSelect(select, names, selected);
+      if (chosen) setGeoMsg(`Colonia: ${chosen}. ${names.length} colonia(s) en el C.P. ${cp}.`, 'muted');
+      else setGeoMsg(`${names.length} colonias encontradas.`, 'muted');
+    } catch (e) {
+      setGeoMsg(e.message, 'danger');
+    }
+  }
+
+  el('postalCode').addEventListener('input', (e) => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 5);
+    coordsReady = false;
+    if (e.target.value.length === 5) loadColonias(e.target.value);
+  });
+  el('street').addEventListener('input', () => { coordsReady = false; });
+  el('coloniaSelect').addEventListener('change', () => { coordsReady = false; });
+
+  async function reverseFill(lat, lng) {
+    let cp = '';
+    let colonia = '';
+    let street = '';
+    try {
+      const local = await apiRequest('GET', `/geocode/postal-code-reverse?lat=${lat}&lng=${lng}`);
+      cp = String(local.cp || '');
+      colonia = local.colonia || '';
+    } catch (e) { /* sin polígono */ }
+    try {
+      const rev = await apiRequest('GET', `/geocode/reverse?lat=${lat}&lng=${lng}`);
+      street = [rev.road, rev.house_number].filter(Boolean).join(' ');
+      cp = cp || String(rev.postcode || '');
+      colonia = colonia || rev.suburb || rev.neighbourhood || '';
+    } catch (e) { /* sin geocoder */ }
+    if (cp) {
+      el('postalCode').value = cp;
+      await loadColonias(cp, colonia);
+    }
+    if (street) el('street').value = street;
+    return { cp, colonia, street };
+  }
+
+  async function useDeviceLocation(auto = false) {
+    if (!navigator.geolocation) {
+      setGeoMsg('Este navegador no permite obtener la ubicación.', 'danger');
+      return;
+    }
+    setGeoMsg('Obteniendo ubicación del dispositivo...');
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+      movePin(latitude, longitude);
+      const found = await reverseFill(latitude, longitude);
+      const parts = [found.street, found.colonia, found.cp ? `C.P. ${found.cp}` : ''].filter(Boolean);
+      if (parts.length) {
+        setGeoMsg(`${auto ? 'Ubicación detectada' : 'Ubicación aplicada'}: ${parts.join(', ')}. Revisa y guarda.`, 'success');
+      } else {
+        setGeoMsg('Ubicación aplicada. Escribe la calle o ajusta el pin.', 'warning');
+      }
+    }, () => {
+      setGeoMsg(auto
+        ? 'No se pudo obtener la ubicación del dispositivo. Escribe la dirección manualmente.'
+        : 'No se pudo obtener la ubicación. Revisa los permisos del navegador.', 'danger');
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+  }
+
+  el('gpsLocationBtn').addEventListener('click', () => useDeviceLocation(false));
+
+  el('searchAddressBtn').addEventListener('click', async () => {
+    const cp = el('postalCode').value.trim();
+    const colonia = el('coloniaSelect').value;
+    const street = el('street').value.trim();
+    if (!cp || !colonia || !street) {
+      setGeoMsg('Completa C.P., colonia y calle, o usa tu ubicación.', 'danger');
+      return;
+    }
+    setGeoMsg('Buscando la calle...');
+    try {
+      const results = await apiRequest('POST', '/geocode/structured', {
+        street, colonia, postal_code: cp,
+      });
+      const exact = results.find(r => (r.postcode || '') === cp);
+      let r = exact || results[0];
+      if (!r && cpCenter) r = { lat: cpCenter.lat, lng: cpCenter.lng };
+      if (!r) throw new Error('No encontramos esa calle. Ajusta el pin en el mapa.');
+      movePin(r.lat, r.lng);
+      setGeoMsg(`Calle encontrada: ${r.display_name || street}. Revisa el pin y guarda.`, 'success');
+    } catch (e) {
+      setGeoMsg(e.message, 'danger');
+    }
+  });
+
+  el('saveLocationBtn').addEventListener('click', async () => {
+    const cp = el('postalCode').value.trim();
+    const colonia = el('coloniaSelect').value;
+    const street = el('street').value.trim();
+    const address = [street, colonia, cp ? `C.P. ${cp}` : ''].filter(Boolean).join(', ');
+    if (!address) {
+      setGeoMsg('Escribe la calle, la colonia y el C.P., o usa tu ubicación.', 'danger');
+      return;
+    }
+    let lat = picked.lat;
+    let lng = picked.lng;
+    if (!coordsReady || lat == null || lng == null) {
+      try {
+        let results = [];
+        if (cp && colonia && street) {
+          results = await apiRequest('POST', '/geocode/structured', {
+            street, colonia, postal_code: cp,
+          });
+        }
+        if ((!results || !results.length) && address) {
+          results = await apiRequest('POST', '/geocode', {
+            address: `${address}, Santa Cruz de Juventino Rosas, Guanajuato, México`,
+          });
+        }
+        if (results && results.length) {
+          lat = Number(results[0].lat);
+          lng = Number(results[0].lng);
+          movePin(lat, lng);
+        } else if (cpCenter) {
+          lat = cpCenter.lat;
+          lng = cpCenter.lng;
+        }
+      } catch (e) { /* conservar el pin actual */ }
+    }
+    if (lat == null || lng == null) {
+      setGeoMsg('Usa tu ubicación, busca la calle o ajusta el pin en el mapa.', 'danger');
+      return;
+    }
+    try {
+      el('saveLocationBtn').disabled = true;
+      await apiRequest('PATCH', `/restaurants/${RID}/location`, {
+        lat, lng, address,
+      });
+      pinMoved = false;
+      el('currentLocationText').textContent = `Ubicación actual: ${address} · Lat ${lat}, Lng ${lng}`;
+      setGeoMsg('Ubicación guardada.', 'success');
+      showToast('Ubicación guardada');
+    } catch (e) {
+      setGeoMsg(e.message, 'danger');
+    } finally {
+      el('saveLocationBtn').disabled = false;
+    }
+  });
+
+  loadRestaurant().catch((e) => {
+    el('profileLoading').classList.add('d-none');
+    const box = el('profileError');
+    box.classList.remove('d-none');
+    box.textContent = e.message;
+  });
+</script>
+{% endblock %}

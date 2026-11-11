@@ -1,0 +1,54 @@
+{% extends "manuals/manual_base.html" %}
+{% set page = "restaurante" %}
+{% block title %}Manual general del restaurante{% endblock %}
+{% block heading %}Manual general del restaurante{% endblock %}
+{% block content %}
+<h2>Bienvenido a TuPedidoJR</h2>
+<p>Este manual explica cómo registrar tu restaurante, entrar al panel, configurar el negocio y trabajar con tu equipo.</p>
+
+<h3>1. Registro del restaurante</h3>
+<ol>
+  <li>Entra a <a href="/web/register-restaurant">Registrar restaurante</a>.</li>
+  <li>Captura los datos del responsable y del negocio.</li>
+  <li>Selecciona la ubicación exacta en el mapa.</li>
+  <li>Envía la solicitud.</li>
+</ol>
+<div class="note">La solicitud queda pendiente de revisión. Cuando sea aprobada podrás iniciar sesión y recibir pedidos.</div>
+
+<h3>2. Inicio de sesión</h3>
+<p>Entra en <a href="/web/login">/web/login</a> con el correo y contraseña del dueño o de un usuario del equipo.</p>
+<p>En la app puedes activar <strong>Entrar con huella o rostro</strong> desde <strong>Mi perfil → Seguridad</strong>.</p>
+
+<h3>3. Panel del restaurante</h3>
+<table>
+  <tr><th>Sección</th><th>Para qué sirve</th></tr>
+  <tr><td>Platillos y categorías</td><td>Crear el menú, precios, fotos y opciones.</td></tr>
+  <tr><td>Pedidos</td><td>Confirmar, preparar, marcar listo y entregar.</td></tr>
+  <tr><td>Ganancias</td><td>Consultar ventas, comisión y liquidaciones.</td></tr>
+  <tr><td>Equipo</td><td>Crear usuarios para caja, cocina o encargados.</td></tr>
+  <tr><td>Horario</td><td>Definir días y horas de atención.</td></tr>
+  <tr><td>Editar negocio</td><td>Logo, descripción, entrega propia y recoger en restaurante.</td></tr>
+</table>
+
+<h3>4. Usuarios del equipo</h3>
+<p>El dueño puede crear varios usuarios. Cada uno entra con su propio correo y contraseña.</p>
+<table>
+  <tr><th>Rol</th><th>Permisos</th></tr>
+  <tr><td>Dueño</td><td>Todo: menú, pedidos, equipo, ganancias y configuración.</td></tr>
+  <tr><td>Encargado</td><td>Menú, pedidos, reportes y ganancias.</td></tr>
+  <tr><td>Personal</td><td>Pedidos y consulta del menú.</td></tr>
+  <tr><td>Cajero</td><td>Pedidos y cambios de estado.</td></tr>
+  <tr><td>Cocina</td><td>Pedidos y marcar listo.</td></tr>
+</table>
+<div class="warn">No compartas la cuenta del dueño. Crea un usuario por empleado para saber quién hizo cada cambio.</div>
+
+<h3>5. Seguridad</h3>
+<ul>
+  <li>Usa una contraseña diferente para cada empleado.</li>
+  <li>Desactiva el acceso cuando alguien deje de trabajar en el restaurante.</li>
+  <li>Puedes restablecer tu contraseña desde <a href="/web/forgot-password">Olvidé mi contraseña</a>.</li>
+</ul>
+
+<h3>6. Soporte</h3>
+<p>Si tienes problemas con un pedido, una liquidación o tu cuenta, contacta al administrador de TuPedidoJR por el canal de soporte configurado.</p>
+{% endblock %}

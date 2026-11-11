@@ -1,0 +1,52 @@
+# Secretos y configuración local
+.env
+.env.*
+!.env.example
+!.env.production.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Contenido generado o pesado
+backend/static/tiles/*
+!backend/static/tiles/.gitkeep
+backend/static/uploads/*
+!backend/static/uploads/.gitkeep
+backend/static/downloads/*
+!backend/static/downloads/.gitkeep
+*.sqlite3
+*.db
+
+# Builds móviles y binarios
+mobile/build/
+mobile/.flet/
+mobile/.dart_tool/
+mobile/.packages
+mobile/__pycache__/
+*.apk
+*.aab
+
+# Logs y temporales
+*.log
+logs/
+tmp/
+htmlcov/
+.coverage
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

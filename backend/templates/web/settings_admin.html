@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="m-0"><i class="bi bi-sliders"></i> Comisiones y configuración</h4>
+  <button class="btn btn-primary btn-sm" id="saveBtn" onclick="saveSettings()">
+    <i class="bi bi-check2-circle"></i> Guardar cambios
+  </button>
+</div>
+<div id="settingsError" class="alert alert-danger d-none"></div>
+<div id="settingsDenied" class="alert alert-warning d-none">
+  Solo el superusuario puede editar la configuración del negocio.
+</div>
+<div id="settingsLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="settingsContent" class="d-none"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const settingsValues = {};
+
+  function inputFor(groupName, item) {
+    const id = `set_${item.key}`;
+    let control = '';
+    if (item.type === 'bool') {
+      control = `<select class="form-select form-select-sm" id="${id}" data-key="${item.key}" data-type="bool">
+        <option value="true" ${String(item.value) === 'true' ? 'selected' : ''}>Activado</option>
+        <option value="false" ${String(item.value) === 'false' ? 'selected' : ''}>Desactivado</option>
+      </select>`;
+    } else if (item.type === 'select') {
+      control = `<select class="form-select form-select-sm" id="${id}" data-key="${item.key}" data-type="select">` +
+        (item.options || []).map(o => `<option value="${o.value}" ${String(item.value) === o.value ? 'selected' : ''}>${o.label}</option>`).join('') +
+        `</select>`;
+    } else if (item.type === 'text') {
+      control = `<input type="text" class="form-control form-control-sm" id="${id}" data-key="${item.key}" data-type="text" value="${item.value ?? ''}">`;
+    } else if (item.type === 'password') {
+      control = `<input type="password" class="form-control form-control-sm" id="${id}" data-key="${item.key}" data-type="text" value="${item.value ?? ''}" autocomplete="new-password">`;
+    } else {
+      const step = item.type === 'int' ? '1' : (item.type === 'percent' ? '0.1' : '0.01');
+      const suffix = item.type === 'percent' ? ' %' : (item.type === 'money' ? ' $' : (item.type === 'int' ? ' min' : ' km'));
+      control = `<div class="input-group input-group-sm">
+        <input type="number" min="0" step="${step}" class="form-control" id="${id}" data-key="${item.key}" data-type="${item.type}" value="${item.value ?? ''}">
+        <span class="input-group-text">${suffix}</span>
+      </div>`;
+    }
+    return `<div class="col-12 col-md-6">
+      <label class="form-label small fw-semibold mb-1" for="${id}">${item.label}</label>
+      ${control}
+      <div class="form-text">${item.description || ''}</div>
+    </div>`;
+  }
+
+  function renderSettings(groups) {
+    const content = document.getElementById('settingsContent');
+    content.innerHTML = groups.map(group => `
+      <div class="card mb-3">
+        <div class="card-body">
+          <h6 class="mb-3 text-uppercase text-muted small">${group.name}</h6>
+          <div class="row g-3">
+            ${group.settings.map(item => inputFor(group.name, item)).join('')}
+          </div>
+        </div>
+      </div>`).join('') + `
+      <div class="card mb-3">
+        <div class="card-body">
+          <h6 class="mb-2">Probar correo</h6>
+          <p class="small text-muted">Guarda los cambios antes de probar. Se enviará un correo de prueba con la configuración SMTP actual.</p>
+          <div class="input-group">
+            <input id="testEmailTo" type="email" class="form-control" placeholder="correo@ejemplo.com">
+            <button class="btn btn-outline-primary" onclick="sendTestEmail()">Enviar prueba</button>
+          </div>
+        </div>
+      </div>`;
+    content.querySelectorAll('[data-key]').forEach(el => {
+      settingsValues[el.dataset.key] = el.value;
+      el.addEventListener('input', () => { settingsValues[el.dataset.key] = el.value; });
+      el.addEventListener('change', () => { settingsValues[el.dataset.key] = el.value; });
+    });
+    document.getElementById('set_MANDADO_RISK_FEE_TYPE')?.addEventListener('change', applyMandadoRiskVisibility);
+    applyMandadoRiskVisibility();
+  }
+
+  function applyMandadoRiskVisibility() {
+    const type = document.getElementById('set_MANDADO_RISK_FEE_TYPE')?.value;
+    if (!type) return;
+    const percent = document.getElementById('set_MANDADO_RISK_PERCENTAGE')?.closest('.col-12');
+    const fixed = document.getElementById('set_MANDADO_RISK_FIXED_AMOUNT')?.closest('.col-12');
+    percent?.classList.toggle('d-none', type !== 'percentage');
+    fixed?.classList.toggle('d-none', type !== 'fixed');
+  }
+
+  async function loadSettings() {
+    const loading = document.getElementById('settingsLoading');
+    const content = document.getElementById('settingsContent');
+    try {
+      if (sessionStorage.getItem('is_superuser') !== 'true') {
+        loading.classList.add('d-none');
+        document.getElementById('settingsDenied').classList.remove('d-none');
+        return;
+      }
+      const data = await apiRequest('GET', '/settings');
+      loading.classList.add('d-none');
+      content.classList.remove('d-none');
+      renderSettings(data.groups || []);
+    } catch (ex) {
+      loading.classList.add('d-none');
+      const error = document.getElementById('settingsError');
+      error.textContent = ex.message;
+      error.classList.remove('d-none');
+    }
+  }
+
+  async function saveSettings() {
+    const btn = document.getElementById('saveBtn');
+    const error = document.getElementById('settingsError');
+    error.classList.add('d-none');
+    btn.disabled = true;
+    try {
+      await apiRequest('PATCH', '/settings', { values: settingsValues });
+      showToast('Configuración guardada');
+    } catch (ex) {
+      error.textContent = ex.message;
+      error.classList.remove('d-none');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function sendTestEmail() {
+    const to = document.getElementById('testEmailTo')?.value.trim();
+    if (!to) { showToast('Escribe un correo de destino', 'warning'); return; }
+    try {
+      const res = await apiRequest('POST', '/admin/email/test', { to });
+      showToast(res.message || 'Correo enviado');
+    } catch (ex) { showToast(ex.message, 'danger'); }
+  }
+
+  document.addEventListener('DOMContentLoaded', loadSettings);
+</script>
+{% endblock %}

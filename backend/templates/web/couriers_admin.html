@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h4 class="m-0"><i class="bi bi-bicycle"></i> Repartidores en vivo</h4>
+  <div class="d-flex align-items-center gap-2">
+    <span class="small text-muted" id="lastRefresh">—</span>
+    <button class="btn btn-outline-secondary btn-sm" onclick="loadCouriers()">
+      <i class="bi bi-arrow-clockwise"></i> Actualizar
+    </button>
+  </div>
+</div>
+<div id="couriersError" class="alert alert-danger d-none"></div>
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card p-2">
+      <div id="couriersMap" style="height:560px;border-radius:10px;"></div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card p-3">
+      <h6>Estado</h6>
+      <div id="couriersList" class="small"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  let map = null;
+  let markers = {};
+  let firstCenter = true;
+  let loadingCouriers = false;
+
+  function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function initMap() {
+    if (map) return;
+    map = L.map('couriersMap').setView([20.644, -100.993], 14);
+    createLocalTileLayer({ maxZoom: 19 }).addTo(map);
+    setTimeout(() => map.invalidateSize(), 200);
+  }
+
+  function statusInfo(c) {
+    if (c.current_order_id) return { color: '#fd7e14', label: 'En reparto' };
+    if (!c.is_available) return { color: '#6c757d', label: 'No disponible' };
+    if (!c.lat || !c.lng) return { color: '#adb5bd', label: 'Sin ubicación' };
+    return { color: '#198754', label: 'Disponible' };
+  }
+
+  function renderList(couriers) {
+    const box = document.getElementById('couriersList');
+    if (!couriers.length) {
+      box.innerHTML = '<p class="text-muted mb-0">No hay repartidores registrados.</p>';
+      return;
+    }
+    box.innerHTML = couriers.map(c => {
+      const info = statusInfo(c);
+      const seen = c.updated_at ? new Date(c.updated_at).toLocaleString() : 'Sin dato';
+      return `<div class="border-bottom py-2">
+        <div class="d-flex justify-content-between">
+          <strong>${esc(c.name)}</strong>
+          <span class="badge" style="background:${info.color}">${info.label}</span>
+        </div>
+        <div class="text-muted">${esc(c.phone || c.email || '')}</div>
+        <div class="text-muted">Última señal: ${esc(seen)}</div>
+        ${c.current_order_id ? `<div class="text-muted">Pedido: ${esc(c.current_order_id.slice(0, 8))}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  function renderMarkers(couriers) {
+    initMap();
+    const activeIds = new Set(couriers.map(c => c.id));
+    Object.keys(markers).forEach(id => {
+      if (!activeIds.has(id)) { map.removeLayer(markers[id]); delete markers[id]; }
+    });
+    const points = [];
+    couriers.forEach(c => {
+      if (!c.lat || !c.lng) return;
+      const info = statusInfo(c);
+      points.push([c.lat, c.lng]);
+      const popup = `<strong>${esc(c.name)}</strong><br>${info.label}<br>
+        ${c.phone ? esc(c.phone) + '<br>' : ''}
+        ${c.updated_at ? 'Última señal: ' + new Date(c.updated_at).toLocaleString() : ''}`;
+      if (!markers[c.id]) {
+        markers[c.id] = L.circleMarker([c.lat, c.lng], {
+          radius: 9, color: '#fff', weight: 2, fillColor: info.color, fillOpacity: 1,
+        }).addTo(map).bindPopup(popup);
+      } else {
+        markers[c.id].setLatLng([c.lat, c.lng]);
+        markers[c.id].setStyle({ fillColor: info.color });
+        markers[c.id].setPopupContent(popup);
+      }
+    });
+    if (firstCenter && points.length) {
+      map.fitBounds(points, { padding: [40, 40], maxZoom: 16 });
+      firstCenter = false;
+    }
+  }
+
+  async function loadCouriers() {
+    if (loadingCouriers) return;
+    loadingCouriers = true;
+    const error = document.getElementById('couriersError');
+    error.classList.add('d-none');
+    try {
+      const couriers = await apiRequest('GET', `/admin/couriers/locations?t=${Date.now()}`);
+      renderList(couriers);
+      renderMarkers(couriers);
+      document.getElementById('lastRefresh').textContent =
+        'Actualización automática cada 5 s · ' + new Date().toLocaleTimeString();
+    } catch (ex) {
+      error.textContent = ex.message.includes('403') || ex.message.includes('Token')
+        ? 'Tu sesión de administrador expiró. Vuelve a iniciar sesión.'
+        : ex.message;
+      error.classList.remove('d-none');
+    } finally {
+      loadingCouriers = false;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (sessionStorage.getItem('is_superuser') !== 'true') {
+      const error = document.getElementById('couriersError');
+      error.textContent = 'Inicia sesión como administrador para ver el mapa en vivo.';
+      error.classList.remove('d-none');
+      return;
+    }
+    initMap();
+    loadCouriers();
+    setInterval(loadCouriers, 5000);
+  });
+</script>
+{% endblock %}

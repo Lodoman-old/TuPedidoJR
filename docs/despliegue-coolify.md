@@ -62,6 +62,12 @@ Genera `SECRET_KEY` con:
 python -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
 
+Para `POSTGRES_PASSWORD` usa una contraseña URL-safe (letras, números, `-` y `_`) para que no rompa la cadena de conexión, por ejemplo:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
 Ejemplo:
 
 ```text
@@ -171,6 +177,22 @@ La descarga queda en:
 https://beta.tudominio.com/static/downloads/TuPedidoJR.apk
 ```
 
+### APK apuntando a producción
+
+Antes de compilar el APK de producción, cambia:
+
+```text
+mobile/server_default.txt
+```
+
+a:
+
+```text
+https://beta.tudominio.com
+```
+
+Luego recompila el APK. En una instalación existente, el archivo `server.json` del teléfono puede conservar la URL anterior; cambia el campo **Servidor** en la pantalla de login o borra los datos de la app.
+
 ## 10. Respaldos
 
 Respaldo manual de PostgreSQL:
@@ -186,7 +208,26 @@ Recomendado en Coolify:
 - Guardar los respaldos fuera del VPS.
 - Respaldar también los volúmenes `uploads` y `downloads`.
 
-## 11. Notas importantes
+## 11. Prueba limpia en producción
+
+Para validar desde cero, **no restaures la base local**. Usa una base nueva y:
+
+1. Crea el administrador con `create_admin.py`.
+2. Entra a `/web/register-restaurant` y registra un restaurante de prueba.
+3. Apruébalo en `/web/admin/restaurants`.
+4. Crea un cliente desde `/web/register` o desde la app.
+5. Crea un repartidor desde la app.
+6. Prueba:
+   - Pedido a domicilio con efectivo y transferencia.
+   - Pedido para recoger.
+   - Pedido programado.
+   - Cambio de estatus por restaurante y repartidor.
+   - Calificación de restaurante y repartidor.
+   - Ganancias y liquidaciones.
+
+Así los saldos y deudas empiezan en cero.
+
+## 12. Notas importantes
 
 - **Un solo worker:** la app usa WebSockets y estado en memoria. No escales a varios workers/contenedores sin mover ese estado a Redis.
 - **HTTPS obligatorio:** el GPS del navegador solo funciona en HTTPS fuera de localhost.
@@ -195,7 +236,7 @@ Recomendado en Coolify:
 - **OSRM:** si no configuras `OSRM_URL` en ajustes, se usa distancia lineal. Es suficiente para la prueba inicial.
 - **Correo:** configura SMTP en `/web/admin/settings` para bienvenida, manuales y recuperación de contraseña.
 
-## 12. Actualizaciones
+## 13. Actualizaciones
 
 Cada `git push` a `main` puede redeployar en Coolify. Las migraciones se aplican solas al arrancar.
 

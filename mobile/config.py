@@ -3,7 +3,21 @@ import os
 from pathlib import Path
 
 
-DEFAULT_SERVER_URL = os.getenv("API_URL", "http://localhost:8080").rstrip("/")
+def _default_server_url() -> str:
+    env_url = os.getenv("API_URL")
+    if env_url:
+        return env_url.rstrip("/")
+    default_file = Path(__file__).with_name("server_default.txt")
+    try:
+        bundled = default_file.read_text(encoding="utf-8").strip()
+        if bundled:
+            return bundled.rstrip("/")
+    except OSError:
+        pass
+    return "http://localhost:8080"
+
+
+DEFAULT_SERVER_URL = _default_server_url()
 
 
 def _app_data_dir() -> Path:

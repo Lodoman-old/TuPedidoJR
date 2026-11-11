@@ -36,7 +36,7 @@ services:
       APP_NAME: TuPedidoJR
       DEBUG: "true"
       DATABASE_URL: postgresql+asyncpg://tupedido:tupedido123@db:5432/tupedidojr
-      DATABASE_URL_SYNC: postgresql://tupedido:tupedido123@db:5432/tupedidojr
+      DATABASE_URL_SYNC: postgresql+psycopg2://tupedido:tupedido123@db:5432/tupedidojr
       SECRET_KEY: supersecretkey-cambiar-en-produccion
     depends_on:
       db:
@@ -51,3 +51,4 @@ volumes:
   osrm_data:
     external: true
     name: tupedidojr_osrm_data
+

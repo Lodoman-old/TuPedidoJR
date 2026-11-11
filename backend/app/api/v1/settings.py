@@ -90,6 +90,11 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Zona horaria usada para los horarios de los restaurantes.",
         "type": "text", "default": "America/Mexico_City",
     },
+    "OSRM_URL": {
+        "group": "Rutas", "label": "Servidor OSRM",
+        "description": "URL de OSRM, por ejemplo http://osrm:5000. Vacío usa distancia lineal.",
+        "type": "text", "default": "",
+    },
     "MP_ENABLED": {
         "group": "Pagos", "label": "Mercado Pago",
         "description": "Habilitar pagos en línea con Mercado Pago.",

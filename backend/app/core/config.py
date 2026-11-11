@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "*"
     ALLOWED_HOSTS: str = "*"
     DATABASE_URL: str = "postgresql+asyncpg://tupedido:tupedido123@localhost:5432/tupedidojr"
-    DATABASE_URL_SYNC: str = "postgresql://tupedido:tupedido123@localhost:5432/tupedidojr"
+    DATABASE_URL_SYNC: str = "postgresql+psycopg2://tupedido:tupedido123@localhost:5432/tupedidojr"
     SECRET_KEY: str = "supersecretkey-cambiar-en-produccion"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
@@ -26,3 +26,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

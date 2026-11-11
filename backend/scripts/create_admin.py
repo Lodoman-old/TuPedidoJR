@@ -11,6 +11,10 @@ import asyncio
 import os
 import sys
 import uuid
+from pathlib import Path
+
+# Permite ejecutar `python scripts/create_admin.py` desde /app.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select
 

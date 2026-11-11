@@ -1,5 +1,7 @@
 # Version para pegar directamente en el editor Docker Compose de Coolify.
 # El backend se construye desde el repositorio publico.
+name: tupedidojr
+
 services:
   db:
     image: postgis/postgis:16-3.4
@@ -66,8 +68,12 @@ services:
 
 volumes:
   pgdata:
+    name: tupedidojr_pgdata
   uploads:
+    name: tupedidojr_uploads
   tiles:
+    name: tupedidojr_tiles
   downloads:
+    name: tupedidojr_downloads
 
 

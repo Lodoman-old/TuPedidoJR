@@ -29,6 +29,47 @@ git push -u origin main
 
 No se suben `backend/.env`, tiles, uploads, APK ni builds móviles.
 
+## 3.1 Aislamiento entre proyectos
+
+Este VPS puede tener otros proyectos. Para que TuPedidoJR no se mezcle:
+
+- El compose usa un nombre propio de proyecto:
+
+```yaml
+name: tupedidojr
+```
+
+- Los volúmenes tienen nombres exclusivos:
+
+```text
+tupedidojr_pgdata
+tupedidojr_uploads
+tupedidojr_tiles
+tupedidojr_downloads
+```
+
+- La base de datos no publica puertos al host; solo el backend la alcanza dentro de la red `tupedidojr_default`.
+- No reutilices variables, volúmenes ni contenedores de otros proyectos.
+
+### En Coolify
+
+Crea un **Team** exclusivo para TuPedidoJR:
+
+1. Selector de equipo arriba a la izquierda.
+2. **Create Team** → `TuPedidoJR`.
+3. Invita solo al usuario que debe administrar este proyecto.
+4. Dentro de ese team crea el proyecto `TuPedidoJR`.
+
+Así, en la interfaz de Coolify, ese usuario no ve los demás proyectos.
+
+### En GitHub
+
+- Repositorio público: no necesitas GitHub App ni cuenta adicional. Usa **Public repository** o el compose pegado.
+- Repositorio privado: usa una **Deploy Key** o una **GitHub App instalada solo en `TuPedidoJR`**. No reutilices una cuenta compartida con otros proyectos.
+- Si quieres una cuenta dedicada, crea un usuario máquina (por ejemplo `tupedidojr-bot`) y dale acceso solo a este repositorio.
+
+> Los equipos de Coolify separan la interfaz y los permisos. Para aislamiento total a nivel de sistema operativo harían falta VPS o instancias separadas.
+
 ## 4. Crear el recurso en Coolify
 
 1. Entra a Coolify.

@@ -16,6 +16,7 @@ from app.models.push_token import PushToken
 from app.models.restaurant import Restaurant
 from app.models.restaurant_user import RestaurantUser
 from app.models.setting import Setting
+from app.models.user import User
 from app.services.restaurant_access import ORDER_ROLES
 
 logger = logging.getLogger(__name__)
@@ -322,6 +323,35 @@ async def notify_mandado_status(mandado_id: str, status: str) -> None:
         logger.exception("Push mandado notification failed for %s", mandado_id)
 
 
+async def notify_new_restaurant_registration(restaurant_id: str) -> None:
+    """Notify every active administrator that a restaurant is waiting for approval."""
+    try:
+        async with async_session() as db:
+            result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
+            restaurant = result.scalar_one_or_none()
+            if not restaurant:
+                return
+            admins = await db.execute(
+                select(User.id).where(
+                    User.is_superuser.is_(True),
+                    User.is_active.is_(True),
+                )
+            )
+            for admin_id in admins.scalars().all():
+                await send_to_user(
+                    db,
+                    admin_id,
+                    "Nueva solicitud de restaurante",
+                    f"{restaurant.name} está esperando aprobación.",
+                    {
+                        "type": "restaurant_registration",
+                        "restaurant_id": str(restaurant.id),
+                    },
+                )
+    except Exception:
+        logger.exception("Push restaurant-registration notification failed for %s", restaurant_id)
+
+
 def schedule_order_status(order_id: str, status: str) -> None:
     try:
         asyncio.create_task(notify_order_status(order_id, status))
@@ -332,6 +362,13 @@ def schedule_order_status(order_id: str, status: str) -> None:
 def schedule_new_order(order_id: str) -> None:
     try:
         asyncio.create_task(notify_new_order(order_id))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
+def schedule_new_restaurant_registration(restaurant_id: str) -> None:
+    try:
+        asyncio.create_task(notify_new_restaurant_registration(restaurant_id))
     except RuntimeError:
         logger.debug("No event loop for push notification")
 

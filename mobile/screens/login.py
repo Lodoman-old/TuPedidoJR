@@ -136,7 +136,7 @@ def register_view(page: ft.Page):
                     error_text, loading,
                     ft.FilledButton("Registrarse", on_click=do_register, width=300),
                     ft.TextButton("¿Ya tienes cuenta? Inicia sesión", on_click=lambda _: page.run_task(page.push_route, "/login")),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
             )
         ]
     )

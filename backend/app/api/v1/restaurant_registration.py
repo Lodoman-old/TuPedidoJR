@@ -16,6 +16,7 @@ from app.models.restaurant_user import RestaurantUser
 from app.models.user import User
 from app.schemas.restaurant import RestaurantRegistrationCreate
 from app.services.email_service import send_restaurant_welcome
+from app.services.push_service import schedule_new_restaurant_registration
 
 router = APIRouter()
 
@@ -83,6 +84,8 @@ async def register_restaurant(
         is_active=True,
     ))
     await db.commit()
+
+    schedule_new_restaurant_registration(restaurant.id)
 
     sent, detail = await send_restaurant_welcome(
         db, user.email, user.name, restaurant.name, pending=True,

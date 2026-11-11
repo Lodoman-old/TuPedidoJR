@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_superuser
@@ -67,6 +67,17 @@ async def list_restaurant_registrations(
     return [_row(restaurant, owner) for restaurant, owner in result.all()]
 
 
+@router.get("/restaurant-registrations/pending-count")
+async def pending_restaurant_registrations(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    total = await db.scalar(
+        select(func.count()).select_from(Restaurant).where(Restaurant.status == "pending")
+    )
+    return {"pending": int(total or 0)}
+
+
 @router.post("/restaurant-registrations/{restaurant_id}/approve")
 async def approve_restaurant(
     restaurant_id: str,
@@ -118,7 +129,46 @@ async def approve_restaurant(
         sent, detail = await send_restaurant_welcome(
             db, owner.email, owner.name, restaurant.name, pending=False,
         )
-    return {"status": "active", "email_sent": sent, "email_detail": None if sent else detail}
+    return {
+        "status": "active",
+        "restaurant_name": restaurant.name,
+        "owner_email": owner.email if owner else None,
+        "email_sent": sent,
+        "email_detail": None if sent else detail,
+    }
+
+
+@router.post("/restaurant-registrations/{restaurant_id}/resend-welcome")
+async def resend_welcome_email(
+    restaurant_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    try:
+        rid = uuid.UUID(restaurant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Restaurante inválido") from exc
+    result = await db.execute(select(Restaurant).where(Restaurant.id == rid))
+    restaurant = result.scalar_one_or_none()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurante no encontrado")
+    if restaurant.status != "active":
+        raise HTTPException(status_code=400, detail="El restaurante todavía no está aprobado")
+
+    owner_result = await db.execute(select(User).where(User.id == restaurant.owner_id))
+    owner = owner_result.scalar_one_or_none()
+    if not owner:
+        raise HTTPException(status_code=400, detail="El restaurante no tiene dueño registrado")
+
+    sent, detail = await send_restaurant_welcome(
+        db, owner.email, owner.name, restaurant.name, pending=False,
+    )
+    return {
+        "email_sent": sent,
+        "email_detail": None if sent else detail,
+        "owner_email": owner.email,
+        "restaurant_name": restaurant.name,
+    }
 
 
 @router.post("/restaurant-registrations/{restaurant_id}/reject")

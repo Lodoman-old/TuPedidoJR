@@ -86,9 +86,17 @@ async def main(page: ft.Page):
     # Persistir la URL efectiva para que la capa nativa (FCM) sepa a qué servidor pedir la configuración.
     save_server_url(get_server_url())
     page.theme = ft.Theme(color_scheme=ft.ColorScheme(
-        primary=ft.Colors.GREEN,
-        primary_container=ft.Colors.GREEN_100,
-        surface_container_high=ft.Colors.GREY_100,
+        primary="#1B2F6B",
+        on_primary="#FFFFFF",
+        primary_container="#DCE4F7",
+        on_primary_container="#0B1A45",
+        secondary="#F58220",
+        on_secondary="#FFFFFF",
+        secondary_container="#FFE6D2",
+        on_secondary_container="#5A2A00",
+        surface="#FFFFFF",
+        on_surface="#1B2430",
+        surface_container_high="#F2F5FB",
     ))
     page.run_task(watch_device_token)
 
@@ -96,10 +104,12 @@ async def main(page: ft.Page):
         troute = page.route
         page.views.clear()
 
-        if troute == "/login" or not api.token:
+        if troute == "/login":
             page.views.append(login_view(page))
         elif troute == "/register":
             page.views.append(register_view(page))
+        elif not api.token:
+            page.views.append(login_view(page))
         elif troute == "/restaurants":
             v = restaurants_view(page)
             v.navigation_bar = _nav_bar(page)

@@ -42,7 +42,7 @@
           <li class="nav-item d-none" id="adminPayoutsNav"><a class="nav-link" href="/web/admin/payouts"><i class="bi bi-wallet2"></i> Pagos</a></li>
           <li class="nav-item d-none" id="adminDashboardNav"><a class="nav-link" href="/web/admin/dashboard"><i class="bi bi-speedometer2"></i> Operación</a></li>
           <li class="nav-item d-none" id="adminAuditNav"><a class="nav-link" href="/web/admin/audit"><i class="bi bi-journal-text"></i> Auditoría</a></li>
-          <li class="nav-item d-none" id="adminRestaurantsNav"><a class="nav-link" href="/web/admin/restaurants"><i class="bi bi-shop"></i> Restaurantes</a></li>
+          <li class="nav-item d-none" id="adminRestaurantsNav"><a class="nav-link" href="/web/admin/restaurants"><i class="bi bi-shop"></i> Restaurantes <span id="pendingRestaurantsBadge" class="badge rounded-pill bg-danger d-none">0</span></a></li>
           <li class="nav-item d-none" id="adminCouriersNav"><a class="nav-link" href="/web/admin/couriers"><i class="bi bi-bicycle"></i> Repartidores</a></li>
           <li class="nav-item d-none d-lg-block">
             <a class="nav-link" href="/web/profile" id="userNameNav" title="Mi perfil">
@@ -501,7 +501,36 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
       ['adminPushNav', 'adminSettingsNav', 'adminReportsNav', 'adminPayoutsNav', 'adminDashboardNav', 'adminAuditNav', 'adminRestaurantsNav', 'adminCouriersNav'].forEach(id => {
         document.getElementById(id)?.classList.toggle('d-none', !isSuperuser);
       });
+      if (isSuperuser) startPendingRestaurantWatch();
     }
+
+    let _pendingRestaurants = null;
+    let _pendingRestaurantTimer = null;
+
+    function startPendingRestaurantWatch() {
+      refreshPendingRegistrations();
+      if (_pendingRestaurantTimer) return;
+      _pendingRestaurantTimer = setInterval(refreshPendingRegistrations, 60000);
+    }
+
+    async function refreshPendingRegistrations() {
+      try {
+        const res = await apiRequest('GET', '/admin/restaurant-registrations/pending-count');
+        const count = Number(res.pending || 0);
+        const badge = document.getElementById('pendingRestaurantsBadge');
+        if (badge) {
+          badge.textContent = count;
+          badge.classList.toggle('d-none', count === 0);
+        }
+        if (_pendingRestaurants !== null && count > _pendingRestaurants) {
+          showToast('Nueva solicitud de restaurante pendiente de aprobar', 'warning');
+        }
+        _pendingRestaurants = count;
+        const baseTitle = document.title.replace(/^\(\d+\)\s*/, '');
+        document.title = count > 0 ? `(${count}) ${baseTitle}` : baseTitle;
+      } catch (e) { /* solo aplica a administradores */ }
+    }
+    window.refreshPendingRegistrations = refreshPendingRegistrations;
 
     document.addEventListener('DOMContentLoaded', () => {
       const token = sessionStorage.getItem('token');

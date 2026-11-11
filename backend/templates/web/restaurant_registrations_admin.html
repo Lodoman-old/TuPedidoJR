@@ -1,21 +1,88 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <h4 class="m-0"><i class="bi bi-shop"></i> Solicitudes de restaurantes</h4>
   <button class="btn btn-outline-secondary btn-sm" onclick="loadRegistrations()"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
 </div>
 <div id="regAdminError" class="alert alert-danger d-none"></div>
 <div id="regAdminLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
 <div id="regAdminContent" class="d-none"></div>
+
+<div class="modal fade" id="approveModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-check-circle text-success"></i> Aprobar restaurante</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Vas a activar <strong id="approveRestaurantName">este restaurante</strong> y la cuenta de su dueño.</p>
+        <p class="text-muted small mb-0">
+          Al aprobarlo se envía un correo de bienvenida con el enlace de acceso y los manuales.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success" id="approveConfirmBtn" onclick="confirmApprove()">Aprobar y enviar correo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-x-circle text-danger"></i> Rechazar solicitud</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Vas a rechazar la solicitud de <strong id="rejectRestaurantName">este restaurante</strong>.</p>
+        <label class="form-label small text-muted" for="rejectReason">Motivo (opcional)</label>
+        <textarea id="rejectReason" class="form-control" rows="3" maxlength="400"
+                  placeholder="Ej. datos incompletos, fuera de la zona de cobertura"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="rejectConfirmBtn" onclick="confirmReject()">Rechazar y avisar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="resultModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="resultTitle">Listo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="resultBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary d-none" id="resultResendBtn" onclick="resendWelcome()">
+          <i class="bi bi-envelope-arrow-up"></i> Reenviar correo
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
+  let registrationsById = {};
+  let pendingApproveId = null;
+  let pendingRejectId = null;
+  let resendRestaurantId = null;
+
   function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function badge(status) {
     const map = { pending: ['warning', 'Pendiente'], active: ['success', 'Activo'], rejected: ['danger', 'Rechazado'] };
     const item = map[status] || ['secondary', status];
     return `<span class="badge bg-${item[0]}">${item[1]}</span>`;
   }
+  function modal(id) { return bootstrap.Modal.getOrCreateInstance(document.getElementById(id)); }
+
   async function loadRegistrations() {
     const loading = document.getElementById('regAdminLoading');
     const content = document.getElementById('regAdminContent');
@@ -23,13 +90,19 @@
     error.classList.add('d-none'); loading.classList.remove('d-none');
     try {
       const rows = await apiRequest('GET', '/admin/restaurant-registrations');
+      registrationsById = {};
+      rows.forEach(r => { registrationsById[r.id] = r; });
       const pending = rows.filter(r => r.status === 'pending');
       content.innerHTML = `
         <div class="card p-3">
-          <h6>Pendientes: ${pending.length}</h6>
+          <h6 class="d-flex align-items-center gap-2">
+            Pendientes
+            <span class="badge rounded-pill ${pending.length ? 'bg-warning text-dark' : 'bg-secondary'}">${pending.length}</span>
+          </h6>
+          ${pending.length ? '<p class="small text-muted mb-2">Aprueba o rechaza las solicitudes. Al aprobar se envía el correo de bienvenida.</p>' : ''}
           <div class="table-responsive"><table class="table table-sm align-middle">
             <thead><tr><th>Restaurante</th><th>Responsable</th><th>Contacto</th><th>Estado</th><th>Fecha</th><th></th></tr></thead>
-            <tbody>${rows.map(r => `<tr>
+            <tbody>${rows.map(r => `<tr class="${r.status === 'pending' ? 'table-warning' : ''}">
               <td><strong>${esc(r.name)}</strong><br><small class="text-muted">${esc(r.cuisine || '')}</small><br><small>${esc(r.address)}</small></td>
               <td>${esc(r.owner_name)}</td>
               <td><small>${esc(r.owner_email)}<br>${esc(r.phone || '')}</small></td>
@@ -37,8 +110,10 @@
               <td class="small">${r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
               <td class="text-nowrap">
                 ${r.status === 'pending' ? `
-                  <button class="btn btn-sm btn-success" onclick="approve('${r.id}')">Aprobar</button>
-                  <button class="btn btn-sm btn-outline-danger" onclick="reject('${r.id}')">Rechazar</button>` : ''}
+                  <button class="btn btn-sm btn-success" onclick="askApprove('${r.id}')">Aprobar</button>
+                  <button class="btn btn-sm btn-outline-danger" onclick="askReject('${r.id}')">Rechazar</button>`
+                : r.status === 'active' ? `
+                  <button class="btn btn-sm btn-outline-secondary" onclick="askResend('${r.id}')">Reenviar correo</button>` : ''}
               </td>
             </tr>`).join('') || '<tr><td colspan="6" class="text-center text-muted">Sin solicitudes.</td></tr>'}</tbody>
           </table></div>
@@ -48,23 +123,115 @@
       error.textContent = ex.message; error.classList.remove('d-none');
     } finally { loading.classList.add('d-none'); }
   }
-  async function approve(id) {
-    if (!confirm('¿Aprobar este restaurante y activar la cuenta del dueño?')) return;
-    try {
-      const res = await apiRequest('POST', `/admin/restaurant-registrations/${id}/approve`, {});
-      showToast(res.email_sent ? 'Restaurante aprobado y correo enviado' : 'Restaurante aprobado');
-      loadRegistrations();
-    } catch (ex) { alert(ex.message); }
+
+  function askApprove(id) {
+    pendingApproveId = id;
+    document.getElementById('approveRestaurantName').textContent = registrationsById[id]?.name || 'este restaurante';
+    modal('approveModal').show();
   }
-  async function reject(id) {
-    const reason = prompt('Motivo del rechazo (opcional):');
-    if (reason === null) return;
+
+  async function confirmApprove() {
+    if (!pendingApproveId) return;
+    const btn = document.getElementById('approveConfirmBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Aprobando...';
     try {
-      const res = await apiRequest('POST', `/admin/restaurant-registrations/${id}/reject`, { reason: reason || null });
-      showToast(res.email_sent ? 'Solicitud rechazada y correo enviado' : 'Solicitud rechazada');
+      const res = await apiRequest('POST', `/admin/restaurant-registrations/${pendingApproveId}/approve`, {});
+      modal('approveModal').hide();
+      resendRestaurantId = res.email_sent ? null : pendingApproveId;
+      setTimeout(() => showResult(
+        res.email_sent ? 'success' : 'warning',
+        res.email_sent ? 'Restaurante aprobado' : 'Aprobado, pero sin correo',
+        res.email_sent
+          ? `<p class="mb-1"><strong>${esc(res.restaurant_name)}</strong> ya está activo.</p>
+             <p class="mb-0">Se envió el correo de bienvenida a <strong>${esc(res.owner_email || '')}</strong>.</p>`
+          : `<p class="mb-1"><strong>${esc(res.restaurant_name)}</strong> ya está activo.</p>
+             <p class="mb-1">No se pudo enviar el correo de bienvenida:</p>
+             <p class="small text-danger mb-0">${esc(res.email_detail || 'error desconocido')}</p>`
+      ), 300);
       loadRegistrations();
-    } catch (ex) { alert(ex.message); }
+      window.refreshPendingRegistrations?.();
+    } catch (ex) {
+      modal('approveModal').hide();
+      setTimeout(() => showResult('danger', 'No se pudo aprobar', `<p class="mb-0">${esc(ex.message)}</p>`), 300);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Aprobar y enviar correo';
+    }
   }
+
+  function askReject(id) {
+    pendingRejectId = id;
+    document.getElementById('rejectRestaurantName').textContent = registrationsById[id]?.name || 'este restaurante';
+    document.getElementById('rejectReason').value = '';
+    modal('rejectModal').show();
+  }
+
+  async function confirmReject() {
+    if (!pendingRejectId) return;
+    const btn = document.getElementById('rejectConfirmBtn');
+    const reason = document.getElementById('rejectReason').value.trim();
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Rechazando...';
+    try {
+      const res = await apiRequest('POST', `/admin/restaurant-registrations/${pendingRejectId}/reject`, { reason: reason || null });
+      modal('rejectModal').hide();
+      resendRestaurantId = null;
+      setTimeout(() => showResult(
+        res.email_sent ? 'success' : 'warning',
+        'Solicitud rechazada',
+        res.email_sent
+          ? '<p class="mb-0">Se avisó al restaurante por correo.</p>'
+          : `<p class="mb-1">La solicitud quedó rechazada.</p>
+             <p class="small text-danger mb-0">${esc(res.email_detail || 'No se pudo enviar el correo')}</p>`
+      ), 300);
+      loadRegistrations();
+      window.refreshPendingRegistrations?.();
+    } catch (ex) {
+      modal('rejectModal').hide();
+      setTimeout(() => showResult('danger', 'No se pudo rechazar', `<p class="mb-0">${esc(ex.message)}</p>`), 300);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Rechazar y avisar';
+    }
+  }
+
+  function askResend(id) {
+    resendRestaurantId = id;
+    showResult('info', 'Reenviar correo', '<p class="mb-0">Se enviará de nuevo el correo de bienvenida al dueño.</p>');
+  }
+
+  async function resendWelcome() {
+    if (!resendRestaurantId) return;
+    const btn = document.getElementById('resultResendBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+    try {
+      const res = await apiRequest('POST', `/admin/restaurant-registrations/${resendRestaurantId}/resend-welcome`, {});
+      resendRestaurantId = res.email_sent ? null : resendRestaurantId;
+      showResult(
+        res.email_sent ? 'success' : 'warning',
+        res.email_sent ? 'Correo enviado' : 'No se pudo enviar',
+        res.email_sent
+          ? `<p class="mb-0">Se envió el correo de bienvenida a <strong>${esc(res.owner_email || '')}</strong>.</p>`
+          : `<p class="small text-danger mb-0">${esc(res.email_detail || 'error desconocido')}</p>`
+      );
+    } catch (ex) {
+      showResult('danger', 'No se pudo enviar', `<p class="mb-0">${esc(ex.message)}</p>`);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-envelope-arrow-up"></i> Reenviar correo';
+    }
+  }
+
+  function showResult(type, title, html) {
+    const icons = { success: 'check-circle-fill text-success', warning: 'exclamation-triangle-fill text-warning', danger: 'x-circle-fill text-danger', info: 'info-circle-fill text-primary' };
+    document.getElementById('resultTitle').innerHTML = `<i class="bi bi-${icons[type] || icons.info}"></i> ${esc(title)}`;
+    document.getElementById('resultBody').innerHTML = html;
+    document.getElementById('resultResendBtn').classList.toggle('d-none', !resendRestaurantId);
+    modal('resultModal').show();
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     if (sessionStorage.getItem('is_superuser') === 'true') loadRegistrations();
   });

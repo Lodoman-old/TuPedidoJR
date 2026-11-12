@@ -554,29 +554,52 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
       }
     }
 
-    async function initCapacitorPush() {
-      if (!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) return;
-      const Push = window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications;
-      if (!Push) return;
+    async function capLog(message, detail) {
       try {
+        await fetch('/api/v1/debug/client-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, detail, version: 'cap-push', route: window.location.pathname }),
+        });
+      } catch (e) { /* diagnóstico */ }
+    }
+
+    async function initCapacitorPush() {
+      const info = {
+        ua: (navigator.userAgent || '').slice(0, 140),
+        cap: !!window.Capacitor,
+        native: null,
+        plugins: [],
+        perm: null,
+      };
+      try {
+        info.native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+        if (!info.native) { await capLog('push: no nativo', JSON.stringify(info)); return; }
+        const Push = window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications;
+        info.plugins = Object.keys(window.Capacitor.Plugins || {});
+        if (!Push) { await capLog('push: sin plugin', JSON.stringify(info)); return; }
         let perm = await Push.checkPermissions();
         if (perm.receive !== 'granted') perm = await Push.requestPermissions();
-        if (perm.receive !== 'granted') return;
+        info.perm = perm;
+        if (perm.receive !== 'granted') { await capLog('push: permiso denegado', JSON.stringify(info)); return; }
         Push.addListener('registration', async (t) => {
           const token = sessionStorage.getItem('token');
-          if (!token) return;
           try {
             await fetch('/api/v1/push/tokens', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
               body: JSON.stringify({ token: t.value, platform: 'android', device_label: 'App Android' })
             });
-          } catch (e) { /* reintento en la próxima apertura */ }
+            await capLog('push: token registrado', String(t.value).slice(0, 16));
+          } catch (e) {
+            await capLog('push: error al guardar token', String(e));
+          }
         });
-        Push.addListener('registrationError', (e) => console.warn('Push registration error', e));
+        Push.addListener('registrationError', (e) => capLog('push: error registro', JSON.stringify(e)));
         await Push.register();
+        await capLog('push: register llamado', JSON.stringify(info));
       } catch (e) {
-        console.warn('Capacitor push no disponible', e);
+        await capLog('push: excepcion', String(e) + ' ' + JSON.stringify(info));
       }
     }
 

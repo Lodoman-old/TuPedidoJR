@@ -4,6 +4,7 @@ import flet as ft
 from mobile.api import api, ApiError
 from mobile.location_service import compose_address, current_position, pick_colonia, reverse_address
 from mobile.screens.restaurant_detail import cart
+from mobile.cart_sync import sync_cart
 from mobile.utils import snack
 from mobile.map_widget import map_image, update_map
 
@@ -16,7 +17,7 @@ def cart_view(page: ft.Page, rid: str):
         return ft.View(
             route=f"/cart/{rid}",
             controls=[
-                ft.AppBar(title=ft.Text("Carrito")),
+                ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, title=ft.Text("Carrito")),
                 ft.SafeArea(ft.Column([
                     ft.Container(height=60),
                     ft.Text("Carrito vacío", size=20, text_align=ft.TextAlign.CENTER),
@@ -28,9 +29,10 @@ def cart_view(page: ft.Page, rid: str):
     total = ft.Text("$0.00", size=24, weight=ft.FontWeight.BOLD)
     estimate_text = ft.Text("", size=14, color=ft.Colors.GREY)
     items_list = ft.ListView(spacing=6, padding=10, expand=True)
-    address = ft.TextField(label="Calle y número", multiline=False)
+    usable = max(280, int((page.width or 360) - 20))
+    address = ft.TextField(label="Calle y número", multiline=False, width=usable)
     _cp = ft.TextField(label="C.P.", width=118, max_length=5, keyboard_type=ft.KeyboardType.NUMBER)
-    _colonia = ft.Dropdown(label="Colonia", expand=True, options=[], text_size=13)
+    _colonia = ft.Dropdown(label="Colonia", width=usable - 124, options=[], text_size=13)
     notes = ft.TextField(label="Notas (opcional)", multiline=True, min_lines=1)
     error_text = ft.Text("", color=ft.Colors.RED)
     loading = ft.ProgressBar(visible=False)
@@ -40,7 +42,7 @@ def cart_view(page: ft.Page, rid: str):
     _detecting = ft.Text("", size=12, color=ft.Colors.GREY)
     _user_lat = ft.TextField(label="Latitud", value=str(_COORDS[0]), visible=False)
     _user_lng = ft.TextField(label="Longitud", value=str(_COORDS[1]), visible=False)
-    _loc_btn = ft.FilledTonalButton("Usar mi ubicación")
+    _loc_btn = ft.FilledTonalButton("Usar mi ubicación", expand=True)
     fee_subtotal = ft.Text("", size=13)
     fee_delivery = ft.Text("", size=13)
     fee_flat = ft.Text("", size=13)
@@ -64,7 +66,7 @@ def cart_view(page: ft.Page, rid: str):
     _bank_info = ft.Column([], spacing=4, visible=False)
     _geo_state = {"address": ""}
     _geocode_msg = ft.Text("", size=11, color=ft.Colors.GREY)
-    _geocode_btn = ft.FilledTonalButton("Buscar dirección")
+    _geocode_btn = ft.FilledTonalButton("Buscar dirección", expand=True)
 
     _map_size = 280
     _map_zoom = 16
@@ -597,8 +599,13 @@ def cart_view(page: ft.Page, rid: str):
     def go_back(e=None):
         page.run_task(page.push_route, f"/restaurant/{rid}")
 
-    appbar = ft.AppBar(
-        title=ft.Image(src="logo.png", height=28),
+    appbar = ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, 
+        title=ft.Container(
+            content=ft.Image(src="logo.png", height=26),
+            bgcolor=ft.Colors.WHITE,
+            padding=ft.Padding(8, 4, 8, 4),
+            border_radius=8,
+        ),
         leading=ft.IconButton(ft.Icons.ARROW_BACK, on_click=go_back),
         center_title=True,
         toolbar_height=48,
@@ -616,15 +623,13 @@ def cart_view(page: ft.Page, rid: str):
     )
 
     address_row = ft.Column([
-        ft.Row([_cp, _colonia], spacing=6),
+        ft.Text("Dirección de entrega", size=15, weight=ft.FontWeight.BOLD),
+        ft.Row([_cp, _colonia], spacing=6, width=usable),
         address,
-        ft.Row([
-            _geocode_btn,
-            ft.IconButton(ft.Icons.MY_LOCATION, tooltip="Detectar ubicación", on_click=lambda e: page.run_task(_detect_location, e)),
-            _loc_btn,
-        ], spacing=4, alignment=ft.MainAxisAlignment.START, wrap=True),
+        ft.Row([_geocode_btn, _loc_btn], spacing=6, width=usable),
         _geocode_msg,
-    ], spacing=4)
+        ft.Text("Toca el mapa o usa tu ubicación para ajustar el pin.", size=11, color=ft.Colors.GREY),
+    ], spacing=8)
 
     coupon_row = ft.Column([
         ft.Row([coupon_input, ft.FilledButton("Aplicar", on_click=apply_coupon)], spacing=6),
@@ -638,7 +643,10 @@ def cart_view(page: ft.Page, rid: str):
     address_container = ft.Container(address_row, padding=PAD)
     coords_row = ft.Row([_user_lat, _user_lng], spacing=4)
     map_container = ft.Container(
-        ft.Column([_map_gesture, _detecting], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+        ft.Column([
+            ft.Row([_map_gesture], alignment=ft.MainAxisAlignment.CENTER),
+            _detecting,
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
         padding=PAD,
     )
     tip_container = ft.Container(ft.Column([

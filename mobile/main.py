@@ -113,7 +113,7 @@ async def main(page: ft.Page):
             page.views.append(ft.View(
                 route=troute,
                 controls=[
-                    ft.AppBar(title=ft.Text("TuPedidoJR")),
+                    ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, title=ft.Text("TuPedidoJR")),
                     ft.SafeArea(ft.Column([
                         ft.Text("No se pudo abrir esta pantalla", size=16, weight=ft.FontWeight.BOLD),
                         ft.Text(str(ex), size=12, color=ft.Colors.RED, selectable=True),

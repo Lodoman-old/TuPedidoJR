@@ -92,7 +92,7 @@ def restaurant_team_view(page: ft.Page, rid: str):
     return ft.View(
         route=f"/restaurant-team/{rid}",
         controls=[
-            ft.AppBar(
+            ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, 
                 title=ft.Text("Equipo del restaurante"),
                 leading=ft.IconButton(
                     ft.Icons.ARROW_BACK,

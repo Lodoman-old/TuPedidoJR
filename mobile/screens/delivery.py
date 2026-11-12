@@ -77,7 +77,7 @@ def delivery_hub_view(page: ft.Page, is_dp=True):
 
     page.run_task(auto_refresh)
 
-    appbar = ft.AppBar(
+    appbar = ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, 
         title=ft.Text("Repartidor"),
         actions=[
             ft.IconButton(ft.Icons.MY_LOCATION, on_click=lambda e: page.run_task(page.push_route, "/delivery/location")),
@@ -932,7 +932,7 @@ def deliver_location_view(page: ft.Page):
     return ft.View(
         route="/delivery/location",
         controls=[
-            ft.AppBar(title=ft.Text("Actualizar ubicación")),
+            ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, title=ft.Text("Actualizar ubicación")),
             ft.SafeArea(ft.Column([
                 lat_input, lng_input, speed_input,
                 map_display,
@@ -988,7 +988,7 @@ def delivery_track_view(page: ft.Page, oid: str):
     return ft.View(
         route=f"/delivery/track/{oid}",
         controls=[
-            ft.AppBar(title=ft.Text(f"Reparto #{oid[:8]}")),
+            ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, title=ft.Text(f"Reparto #{oid[:8]}")),
             ft.SafeArea(ft.Column([
                 status_text, ws_status,
                 ft.Divider(),

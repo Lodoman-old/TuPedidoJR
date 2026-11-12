@@ -531,7 +531,7 @@ def restaurant_profile_view(page: ft.Page, rid: str):
     return ft.View(
         route=f"/restaurant-profile/{rid}",
         controls=[
-            ft.AppBar(
+            ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, 
                 title=ft.Text("Perfil del negocio"),
                 leading=ft.IconButton(
                     ft.Icons.ARROW_BACK,

@@ -131,7 +131,7 @@ def profile_view(page: ft.Page):
 
     page.run_task(load)
 
-    appbar = ft.AppBar(title=ft.Text("Mi perfil"))
+    appbar = ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, title=ft.Text("Mi perfil"))
 
     return ft.View(
         route="/profile",

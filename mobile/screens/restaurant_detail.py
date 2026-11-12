@@ -249,8 +249,13 @@ def restaurant_detail_view(page: ft.Page, rid: str):
         visible=False,
     )
 
-    appbar = ft.AppBar(
-        title=ft.Image(src="logo.png", height=28),
+    appbar = ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, 
+        title=ft.Container(
+            content=ft.Image(src="logo.png", height=26),
+            bgcolor=ft.Colors.WHITE,
+            padding=ft.Padding(8, 4, 8, 4),
+            border_radius=8,
+        ),
         leading=leading_btn,
         actions=[
             cart_btn,

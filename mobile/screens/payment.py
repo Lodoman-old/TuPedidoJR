@@ -63,7 +63,7 @@ def payment_view(page: ft.Page, order_id: str):
 
     pay_btn.on_click = lambda e: page.run_task(pay, e)
 
-    appbar = ft.AppBar(title=ft.Text(f"Pago - #{order_id[:8]}"))
+    appbar = ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, title=ft.Text(f"Pago - #{order_id[:8]}"))
 
     return ft.View(
         route=f"/payment/{order_id}",

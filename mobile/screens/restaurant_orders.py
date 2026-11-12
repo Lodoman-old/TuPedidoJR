@@ -121,7 +121,7 @@ def restaurant_orders_view(page: ft.Page, rid: str):
     page.run_task(load)
     page.run_task(auto_refresh)
 
-    appbar = ft.AppBar(
+    appbar = ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, 
         leading=ft.IconButton(ft.Icons.ARROW_BACK, on_click=lambda e: page.run_task(page.push_route, f"/restaurant/{rid}")),
         title=ft.Text("Pedidos del restaurante"),
     )

@@ -51,7 +51,7 @@ def orders_view(page: ft.Page):
     page.run_task(load)
     page.run_task(auto_refresh)
 
-    appbar = ft.AppBar(title=ft.Text("Mis pedidos"))
+    appbar = ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, title=ft.Text("Mis pedidos"))
 
     return ft.View(
         route="/orders",

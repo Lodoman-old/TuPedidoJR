@@ -77,8 +77,13 @@ def restaurants_view(page: ft.Page):
 
     page.on_resume = lambda: None
 
-    appbar = ft.AppBar(
-        title=ft.Image(src="logo.png", height=28),
+    appbar = ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, 
+        title=ft.Container(
+            content=ft.Image(src="logo.png", height=26),
+            bgcolor=ft.Colors.WHITE,
+            padding=ft.Padding(8, 4, 8, 4),
+            border_radius=8,
+        ),
         actions=[
             ft.IconButton(ft.Icons.PERSON, on_click=lambda _: page.run_task(page.push_route, "/profile")),
             ft.IconButton(ft.Icons.LOGOUT, on_click=lambda e: page.run_task(logout, e)),

@@ -298,7 +298,7 @@ def order_detail_view(page: ft.Page, oid: str):
     page.run_task(connect)
     page.run_task(status_poll)
 
-    appbar = ft.AppBar(
+    appbar = ft.AppBar(bgcolor="#1B2F6B", color=ft.Colors.WHITE, 
         leading=ft.IconButton(ft.Icons.ARROW_BACK, on_click=lambda _: page.run_task(page.push_route, "/orders")),
         title=ft.Text(f"Pedido #{oid[:8]}"),
     )

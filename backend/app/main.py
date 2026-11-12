@@ -80,6 +80,14 @@ if settings.ALLOWED_HOSTS and settings.ALLOWED_HOSTS.strip() != "*":
 
 
 @app.middleware("http")
+async def no_cache_pages(request: Request, call_next):
+    response = await call_next(request)
+    if request.method == "GET" and not request.url.path.startswith(("/static", "/tiles")):
+        response.headers.setdefault("Cache-Control", "no-store, max-age=0")
+    return response
+
+
+@app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")

@@ -26,9 +26,12 @@ PACKAGE_DIRS = {"screens", "components"}
 
 
 def stage() -> None:
-    if STAGE.exists():
-        shutil.rmtree(STAGE)
-    STAGE.mkdir(parents=True)
+    STAGE.mkdir(parents=True, exist_ok=True)
+    # Se conserva STAGE/build (caché de Flutter) para que las compilaciones
+    # siguientes sean incrementales y no fallen al borrar rutas largas.
+    for target in (STAGE / "mobile", STAGE / "assets"):
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
 
     shutil.copy2(MOBILE / "main.py", STAGE / "main.py")
 

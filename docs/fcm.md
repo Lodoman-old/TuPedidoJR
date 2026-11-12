@@ -108,11 +108,10 @@ Si el contador está en 0, todavía no hay dispositivos registrados.
 
 ## 8. APK
 
-1. Instala la APK más reciente.
-2. En **Cambiar servidor**, elige producción o escribe tu dominio HTTPS.
-3. Inicia sesión.
-4. Acepta el permiso de notificaciones.
-5. Espera unos segundos o vuelve a abrir la app.
+1. Instala la APK más reciente desde `/web/app`.
+2. Inicia sesión.
+3. Acepta el permiso de notificaciones.
+4. Espera unos segundos o vuelve a abrir la app.
 
 La app:
 

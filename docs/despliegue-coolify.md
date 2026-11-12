@@ -212,44 +212,45 @@ El volumen `downloads` queda montado en:
 /app/static/downloads
 ```
 
-Sube el APK:
+La app Android vive en `capacitor/` y carga el panel web en vivo. Para compilarla:
+
+```bash
+cd capacitor
+npm install
+npx cap sync android
+cd android
+JAVA_HOME=/ruta/a/jdk-21 ./gradlew assembleRelease
+```
+
+El APK queda en:
+
+```text
+capacitor/android/app/build/outputs/apk/release/app-release.apk
+```
+
+Súbelo con:
 
 ```bash
 # Desde tu computadora al VPS
-scp backend/static/downloads/TuPedidoJR.apk usuario@vps:/opt/TuPedidoJR.apk
+scp capacitor/android/app/build/outputs/apk/release/app-release.apk usuario@vps:/opt/TuPedidoJR.apk
 
 # En el VPS
 docker cp /opt/TuPedidoJR.apk NOMBRE_CONTENEDOR:/app/static/downloads/TuPedidoJR.apk
 ```
 
-La descarga queda en:
+La descarga oficial es:
 
 ```text
-https://beta.tudominio.com/static/downloads/TuPedidoJR.apk
+https://beta.tudominio.com/web/app
 ```
 
-### APK apuntando a producción
+que entrega el archivo con un nombre distinto en cada actualización para evitar la caché.
 
-La app trae un selector de servidor en el login y en el perfil. Puedes cambiar entre:
+### URL de la app
 
-- **Local**: `mobile/server_local.txt`
-- **Producción**: `mobile/server_production.txt`
-- URL manual.
+La URL del panel se configura en `capacitor/capacitor.config.json`, en `server.url`. Para apuntar a otro servidor, cambia ese valor y recompila.
 
-Antes de compilar el APK de producción, cambia:
-
-```text
-mobile/server_default.txt
-mobile/server_production.txt
-```
-
-a:
-
-```text
-https://beta.tudominio.com
-```
-
-Luego recompila el APK. En una instalación existente, el archivo `server.json` del teléfono puede conservar la URL anterior; usa **Cambiar servidor** en el login o borra los datos de la app.
+La huella, las notificaciones push y el GPS funcionan con los plugins de Capacitor declarados en `capacitor/package.json`.
 
 ## 10. Respaldos
 

@@ -24,5 +24,5 @@ Resumen:
 ## Estructura
 
 - `backend/`: API FastAPI, panel web, WebSockets y base de datos.
-- `mobile/`: app Flet/Flutter.
+- `capacitor/`: app Android que envuelve el panel web con huella, push y GPS.
 - `docs/`: documentación de operación y despliegue.

@@ -34,11 +34,11 @@ backend/static/downloads/*
 
 # Builds móviles y binarios
 .apk_build/
-mobile/build/
-mobile/.flet/
-mobile/.dart_tool/
-mobile/.packages
-mobile/__pycache__/
+capacitor/node_modules/
+capacitor/android/.gradle/
+capacitor/android/build/
+capacitor/android/app/build/
+capacitor/android/local.properties
 *.apk
 *.aab
 

@@ -244,11 +244,11 @@ function startGps() {
 }
 
 // ===== TAB: Disponibles =====
-const statusLabels = { pending: 'Pendiente', confirmed: 'Confirmado', preparing: 'Preparando', ready: 'Listo', in_delivery: 'En reparto', picked_up: 'Recogido', delivered: 'Entregado', cancelled: 'Cancelado' };
+const statusLabels = { pending: 'Pendiente', confirmed: 'Confirmado', awaiting_courier: 'Esperando repartidor', preparing: 'Preparando', ready: 'Listo', in_delivery: 'En reparto', picked_up: 'Recogido', delivered: 'Entregado', cancelled: 'Cancelado' };
 const payoutStatusLabels = { pending: 'Pendiente', paid: 'Pagada', confirmed: 'Confirmada', cancelled: 'Cancelada' };
 const mandadoStatusLabels = { pending: 'Pendiente', accepted: 'Aceptado', buying: 'Comprando', purchased: 'Comprado', completed: 'Completado', cancelled: 'Cancelado' };
-const statusColors = { confirmed: 'primary', preparing: 'warning', ready: 'success', in_delivery: 'info', picked_up: 'teal', delivered: 'secondary', cancelled: 'danger' };
-const statusBadgeColors = { ready: 'success', preparing: 'warning' };
+const statusColors = { confirmed: 'primary', awaiting_courier: 'warning', preparing: 'warning', ready: 'success', in_delivery: 'info', picked_up: 'teal', delivered: 'secondary', cancelled: 'danger' };
+const statusBadgeColors = { ready: 'success', preparing: 'warning', awaiting_courier: 'warning' };
 
 async function loadAvailable(silent = false) {
   const el = document.getElementById('tab-available');
@@ -290,6 +290,7 @@ async function loadAvailable(silent = false) {
         <small class="text-muted">${o.restaurant_name || 'Restaurante'}</small><br>
         <small><i class="bi bi-geo-alt"></i> ${distance} al restaurante · <i class="bi bi-clock"></i> ${eta}</small><br>
         <small>Artículos: ${(o.items || []).length}</small>
+        ${o.status === 'awaiting_courier' ? '<div class="small text-warning fw-bold mt-1">Pedido lejano: si lo aceptas, el restaurante empezará a prepararlo y tú te comprometes a entregarlo.</div>' : ''}
         <button class="btn btn-sm btn-success mt-2" onclick="acceptOrder('${o.id}')">Aceptar pedido</button>
       </div>`;
     }

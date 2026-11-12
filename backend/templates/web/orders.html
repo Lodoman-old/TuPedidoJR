@@ -13,12 +13,14 @@
 {% block scripts %}
 <script>
   const STATUS_COLORS = {
-    pending: 'bg-warning text-dark', confirmed: 'bg-info text-dark', preparing: 'bg-primary text-white',
+    pending: 'bg-warning text-dark', confirmed: 'bg-info text-dark', awaiting_courier: 'bg-warning text-dark',
+    preparing: 'bg-primary text-white',
     ready: 'bg-success text-white', in_delivery: 'bg-info text-white', picked_up: 'bg-teal text-white',
     delivered: 'bg-secondary text-white', cancelled: 'bg-danger text-white'
   };
   const STATUS_LABELS = {
-    pending: 'Pendiente', confirmed: 'Confirmado', preparing: 'Preparando',
+    pending: 'Pendiente', confirmed: 'Confirmado', awaiting_courier: 'Esperando repartidor',
+    preparing: 'Preparando',
     ready: 'Listo', in_delivery: 'En reparto', picked_up: 'Recogido',
     delivered: 'Entregado', cancelled: 'Cancelado'
   };

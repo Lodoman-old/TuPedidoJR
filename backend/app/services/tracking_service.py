@@ -20,6 +20,8 @@ TRACKING_STEPS: list[tuple[str, str]] = [
     ("delivered", "Entregado"),
 ]
 
+AWAITING_COURIER_STEP = ("awaiting_courier", "Esperando repartidor")
+
 
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     """Great-circle distance in km. Free, no external routing service needed."""
@@ -34,6 +36,7 @@ def _step_timestamps(order: Order) -> dict[str, datetime | None]:
     return {
         "pending": order.placed_at,
         "confirmed": order.confirmed_at,
+        "awaiting_courier": order.awaiting_courier_at,
         "preparing": None,
         "ready": None,
         "in_delivery": None,
@@ -118,6 +121,14 @@ async def build_tracking(db: AsyncSession, order: Order) -> dict:
             ("delivered", "Entregado"),
         ]
     keys = [key for key, _ in tracking_steps]
+    if order.requires_courier_approval:
+        insert_at = keys.index("confirmed") + 1
+        tracking_steps = (
+            tracking_steps[:insert_at]
+            + [AWAITING_COURIER_STEP]
+            + tracking_steps[insert_at:]
+        )
+        keys = [key for key, _ in tracking_steps]
     current_index = keys.index(order.status) if order.status in keys else -1
 
     timeline = [

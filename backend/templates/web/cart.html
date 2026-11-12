@@ -50,6 +50,7 @@
   let paymentConfig = { cash_enabled: true, mp_enabled: false, transfer_enabled: false };
   let appliedCoupon = null;
   let bankDetails = null;
+  let estimateState = { requires_courier_approval: false, approval_km: 8, distance_km: null };
   let colonias = [];
   let cpCenter = null;
   let addressState = { street: '', cp: '', colonia: '', lat: null, lng: null, source: '', full: '' };
@@ -221,6 +222,17 @@ let scheduleState = { enabled: false, value: '' };
         <button type="button" class="btn btn-sm btn-outline-primary" id="useAllPoints">Usar todos</button>
       </div>
       <div class="form-text" id="pointsHint">Cada punto descuenta $1.00 del total.</div>
+    </div>`;
+
+    html += `<div class="card p-3 mb-3 d-none" id="approvalCard">
+      <div class="alert alert-warning py-2 mb-2" id="approvalNotice"></div>
+      <div class="d-none" id="refundAccountBlock">
+        <div class="small fw-bold mb-1"><i class="bi bi-bank"></i> Cuenta para reembolso</div>
+        <div class="form-text mt-0 mb-2">Solo se usará si ningún repartidor acepta el pedido. Si pagaste por transferencia, te devolveremos el dinero a esta cuenta.</div>
+        <input class="form-control form-control-sm mb-2" id="refundHolder" maxlength="150" placeholder="Titular de la cuenta">
+        <input class="form-control form-control-sm mb-2" id="refundBank" maxlength="100" placeholder="Banco">
+        <input class="form-control form-control-sm" id="refundClabe" inputmode="numeric" maxlength="18" placeholder="CLABE de 18 dígitos">
+      </div>
     </div>`;
 
     html += `<div class="card p-3 mb-3">
@@ -656,7 +668,29 @@ let scheduleState = { enabled: false, value: '' };
     refreshEstimate();
   }
 
-  async function refreshEstimate() {
+  function selectedPaymentMethod() {
+  return document.querySelector('input[name="paymentMethod"]:checked')?.value || 'cash';
+}
+
+function updateApprovalUi() {
+  const card = document.getElementById('approvalCard');
+  if (!card) return;
+  const required = Boolean(estimateState.requires_courier_approval);
+  card.classList.toggle('d-none', !required);
+  if (required) {
+    const notice = document.getElementById('approvalNotice');
+    const km = estimateState.distance_km != null ? `${Number(estimateState.distance_km).toFixed(1)} km` : '';
+    if (notice) {
+      notice.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Tu pedido está a ${km} del restaurante. ` +
+        `<strong>Primero un repartidor debe aceptarlo antes de que el restaurante lo prepare.</strong> ` +
+        `Así evitamos que se gasten ingredientes si nadie puede llevarlo. Si nadie lo acepta, el pedido se cancela y se te devuelve el dinero.`;
+    }
+  }
+  const refund = document.getElementById('refundAccountBlock');
+  if (refund) refund.classList.toggle('d-none', !(required && selectedPaymentMethod() === 'transfer'));
+}
+
+async function refreshEstimate() {
     const cart = getCart();
     const feeEl = document.getElementById('deliveryFee');
     const flatEl = document.getElementById('flatFee');
@@ -690,6 +724,12 @@ let scheduleState = { enabled: false, value: '' };
       );
       feeEl.textContent = money(res.delivery_fee);
       flatEl.textContent = money(res.flat_usage_fee);
+      estimateState = {
+        requires_courier_approval: Boolean(res.requires_courier_approval),
+        approval_km: Number(res.approval_km || 0),
+        distance_km: res.distance_km != null ? Number(res.distance_km) : null,
+      };
+      updateApprovalUi();
       const distanceWarn = document.getElementById('distanceWarning');
       if (distanceWarn) {
         if (res.distance_warning) {
@@ -882,6 +922,7 @@ let scheduleState = { enabled: false, value: '' };
         } else if (bankInfo) {
           bankInfo.classList.add('d-none');
         }
+        updateApprovalUi();
       });
     });
 
@@ -940,6 +981,18 @@ let scheduleState = { enabled: false, value: '' };
       const scheduledInput = scheduleState.enabled ? scheduleState.value : '';
       const scheduledFor = scheduledInput ? new Date(scheduledInput).toISOString() : null;
       const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked')?.value || 'cash';
+      let refundAccount = null;
+      if (estimateState.requires_courier_approval && paymentMethod === 'transfer') {
+        const holder = (document.getElementById('refundHolder')?.value || '').trim();
+        const bank = (document.getElementById('refundBank')?.value || '').trim();
+        const clabe = (document.getElementById('refundClabe')?.value || '').replace(/\D/g, '');
+        if (holder.length < 3 || bank.length < 2 || clabe.length !== 18) {
+          showToast('Escribe titular, banco y CLABE de 18 dígitos para el reembolso', 'danger');
+          document.getElementById('approvalCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+        refundAccount = { holder, bank, clabe };
+      }
       const itemsData = cart.map(i => ({ menu_item_id: i.menu_item_id, quantity: i.quantity, option_ids: i.option_ids || [] }));
       try {
         const order = await createOrder(
@@ -947,6 +1000,7 @@ let scheduleState = { enabled: false, value: '' };
           pickup ? null : lat, pickup ? null : lng,
           notes || null, appliedCoupon, paymentMethod,
           pickup ? 0 : tipAmount, scheduledFor, pointsToRedeem, pickup ? 'pickup' : 'delivery',
+          refundAccount,
         );
         await clearCartNow();
         if (paymentMethod === 'cash') showToast(pickup ? 'Pedido creado — pagarás al recoger' : 'Pedido creado — pagarás en efectivo al recibir');

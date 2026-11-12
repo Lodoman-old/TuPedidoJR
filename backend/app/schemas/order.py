@@ -26,6 +26,9 @@ class OrderCreate(BaseModel):
     scheduled_for: datetime | None = None
     points_to_redeem: int = Field(default=0, ge=0, le=100000)
     fulfillment_type: str = Field(default="delivery", pattern="^(delivery|pickup)$")
+    refund_account_holder: str | None = Field(default=None, max_length=150)
+    refund_bank: str | None = Field(default=None, max_length=100)
+    refund_clabe: str | None = Field(default=None, max_length=18)
 
 
 class OrderItemOptionOut(BaseModel):
@@ -81,6 +84,11 @@ class OrderOut(BaseModel):
     restaurant_owes_platform: Decimal = Decimal("0")
     points_redeemed: int = 0
     loyalty_discount: Decimal = Decimal("0")
+    requires_courier_approval: bool = False
+    awaiting_courier_at: datetime | None = None
+    refund_account_holder: str | None = None
+    refund_bank: str | None = None
+    refund_clabe: str | None = None
     placed_at: datetime
     confirmed_at: datetime | None
     picked_up_at: datetime | None
@@ -100,6 +108,12 @@ class CancelOrderRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=300)
 
 
+class RefundAccountUpdate(BaseModel):
+    refund_account_holder: str = Field(..., min_length=3, max_length=150)
+    refund_bank: str = Field(..., min_length=2, max_length=100)
+    refund_clabe: str = Field(..., min_length=18, max_length=18)
+
+
 class CancellationPolicyOut(BaseModel):
     customer_allowed_statuses: list[str]
     restaurant_allowed_statuses: list[str]
@@ -117,7 +131,7 @@ class AvailableOrderOut(OrderOut):
 
 
 class OrderStatusUpdate(BaseModel):
-    status: str = Field(..., pattern=r"^(pending|confirmed|preparing|ready|in_delivery|picked_up|delivered|cancelled)$")
+    status: str = Field(..., pattern=r"^(pending|confirmed|awaiting_courier|preparing|ready|in_delivery|picked_up|delivered|cancelled)$")
 
 
 class TrackPoint(BaseModel):

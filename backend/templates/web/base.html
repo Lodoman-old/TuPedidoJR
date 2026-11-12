@@ -245,7 +245,7 @@ async function estimatePrice(restaurantId, items, lat, lng, couponCode, tipAmoun
     fulfillment_type: fulfillmentType || 'delivery',
   });
 }
-async function createOrder(restaurantId, items, deliveryAddress, lat, lng, notes, couponCode, paymentMethod, tipAmount, scheduledFor, pointsToRedeem, fulfillmentType) {
+async function createOrder(restaurantId, items, deliveryAddress, lat, lng, notes, couponCode, paymentMethod, tipAmount, scheduledFor, pointsToRedeem, fulfillmentType, refundAccount) {
   const body = {
     restaurant_id: restaurantId, items,
     delivery_address: deliveryAddress || null,
@@ -256,7 +256,17 @@ async function createOrder(restaurantId, items, deliveryAddress, lat, lng, notes
   if (couponCode) body.coupon_code = couponCode;
   if (scheduledFor) body.scheduled_for = scheduledFor;
   if (pointsToRedeem) body.points_to_redeem = pointsToRedeem;
+  if (refundAccount) {
+    body.refund_account_holder = refundAccount.holder;
+    body.refund_bank = refundAccount.bank;
+    body.refund_clabe = refundAccount.clabe;
+  }
   return await apiRequest('POST', '/orders', body);
+}
+async function updateRefundAccount(orderId, holder, bank, clabe) {
+  return await apiRequest('PATCH', `/orders/${orderId}/refund-account`, {
+    refund_account_holder: holder, refund_bank: bank, refund_clabe: clabe,
+  });
 }
 async function listOrders() { return await apiRequest('GET', '/orders'); }
 async function getOrder(id) { return await apiRequest('GET', `/orders/${id}`); }
@@ -634,6 +644,8 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
             target = '/web/orders';
           } else if (data.type === 'affiliation' && data.restaurant_id) {
             target = '/web/restaurants/' + data.restaurant_id + '/profile';
+          } else if (data.type === 'assigned_order') {
+            target = '/web/delivery';
           } else if (data.order_id) {
             target = '/web/orders/' + data.order_id;
             if (data.type === 'order_status' && data.status === 'delivered') {

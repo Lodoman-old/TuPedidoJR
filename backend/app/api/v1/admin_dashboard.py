@@ -17,10 +17,11 @@ from app.services.schedule_service import get_timezone, open_state_map
 
 router = APIRouter()
 
-ACTIVE_STATUSES = ["pending", "confirmed", "preparing", "ready", "in_delivery", "picked_up"]
+ACTIVE_STATUSES = ["pending", "confirmed", "awaiting_courier", "preparing", "ready", "in_delivery", "picked_up"]
 STATUS_LABELS = {
     "pending": "Pendiente",
     "confirmed": "Confirmado",
+    "awaiting_courier": "Esperando repartidor",
     "preparing": "Preparando",
     "ready": "Listo",
     "in_delivery": "En reparto",

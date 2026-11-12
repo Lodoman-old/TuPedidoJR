@@ -61,6 +61,11 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Si el pedido supera esta distancia se avisa al cliente que podría no tener repartidor.",
         "type": "float", "default": "8",
     },
+    "DELIVERY_APPROVAL_KM": {
+        "group": "Envíos", "label": "Aprobación del repartidor (km)",
+        "description": "Los pedidos que superen esta distancia no se preparan hasta que un repartidor los acepte. Vacío o 0 desactiva la retención.",
+        "type": "float", "default": "8",
+    },
     "MANDADO_ACTIVE": {
         "group": "Mandados", "label": "Permitir mandados",
         "description": "Activa o desactiva el servicio de mandados.",

@@ -10,14 +10,16 @@
 {% block scripts %}
 <script>
   const OID = '{{ order_id }}';
-  const ACTIVE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'in_delivery', 'picked_up'];
+  const ACTIVE_STATUSES = ['pending', 'confirmed', 'awaiting_courier', 'preparing', 'ready', 'in_delivery', 'picked_up'];
   const STATUS_COLORS = {
-    pending: 'bg-warning text-dark', confirmed: 'bg-info text-dark', preparing: 'bg-primary text-white',
+    pending: 'bg-warning text-dark', confirmed: 'bg-info text-dark', awaiting_courier: 'bg-warning text-dark',
+    preparing: 'bg-primary text-white',
     ready: 'bg-success text-white', in_delivery: 'bg-info text-white', picked_up: 'bg-primary text-white',
     delivered: 'bg-secondary text-white', cancelled: 'bg-danger text-white'
   };
   const STATUS_LABELS = {
-    pending: 'Pendiente', confirmed: 'Confirmado', preparing: 'Preparando',
+    pending: 'Pendiente', confirmed: 'Confirmado', awaiting_courier: 'Esperando repartidor',
+    preparing: 'Preparando',
     ready: 'Listo', in_delivery: 'En reparto', picked_up: 'Recogido',
     delivered: 'Entregado', cancelled: 'Cancelado'
   };
@@ -107,6 +109,12 @@
       ${o.fulfillment_type === 'pickup'
         ? `<div class="alert alert-info py-2 small"><i class="bi bi-shop"></i> Pedido para recoger en el restaurante</div>`
         : (o.delivery_mode === 'own' ? '<div class="alert alert-info py-2 small"><i class="bi bi-shop"></i> Entrega propia del restaurante</div>' : '')}
+      ${o.status === 'awaiting_courier' ? `<div class="alert alert-warning py-2 small">
+        <i class="bi bi-hourglass-split"></i> <strong>Esperando repartidor.</strong>
+        Tu pedido está lejos del restaurante. Primero debe aceptarlo un repartidor y hasta entonces
+        el restaurante lo prepara, para no gastar ingredientes si nadie puede llevarlo.
+        Si nadie lo acepta, el pedido se cancela y se te devuelve el dinero.
+      </div>` : ''}
       <div id="mapContainer" class="mb-3 ${o.fulfillment_type === 'pickup' ? 'd-none' : ''}">
         <div id="map"></div>
       </div>
@@ -149,6 +157,31 @@
              El dinero entra a la plataforma. TuPedidoJR liquida al restaurante y paga al repartidor; no pagas en efectivo al recibir.</small></div>`
         : `<div class="alert alert-warning mb-2"><i class="bi bi-bank"></i> Pago por transferencia. La plataforma aún no configuró la cuenta bancaria.</div>`;
     }
+    if (
+      o.payment_method === 'transfer'
+      && o.requires_courier_approval
+      && (o.status === 'awaiting_courier' || (o.status === 'cancelled' && o.refund_status === 'pending'))
+    ) {
+      const amount = o.refund_amount && parseFloat(o.refund_amount) > 0
+        ? `$${parseFloat(o.refund_amount).toFixed(2)}`
+        : `$${parseFloat(o.total || 0).toFixed(2)}`;
+      html += `<div class="card p-3 mb-3 border-warning">
+        <h6 class="mb-1"><i class="bi bi-bank"></i> Cuenta para reembolso</h6>
+        <p class="small text-muted mb-2">
+          ${o.status === 'cancelled'
+            ? `Tu pedido se canceló y hay ${amount} pendientes de devolver.`
+            : `Si ningún repartidor acepta el pedido, se te devolverán ${amount} a esta cuenta.`}
+          Escribe el titular, el banco y la CLABE.
+        </p>
+        <input class="form-control form-control-sm mb-2" id="refundHolder" maxlength="150"
+               placeholder="Titular de la cuenta" value="${o.refund_account_holder || ''}">
+        <input class="form-control form-control-sm mb-2" id="refundBank" maxlength="100"
+               placeholder="Banco" value="${o.refund_bank || ''}">
+        <input class="form-control form-control-sm mb-2" id="refundClabe" inputmode="numeric" maxlength="18"
+               placeholder="CLABE de 18 dígitos" value="${o.refund_clabe || ''}">
+        <button class="btn btn-sm btn-warning" id="saveRefundBtn">Guardar cuenta de reembolso</button>
+      </div>`;
+    }
     if (o.status === 'cancelled') {
       html += `<div class="alert alert-secondary mb-2">
         <i class="bi bi-x-circle"></i> Pedido cancelado
@@ -165,7 +198,7 @@
         <i class="bi bi-whatsapp"></i> Contactar a soporte
       </a>`;
     }
-    if (o.status === 'pending' || o.status === 'confirmed') {
+    if (o.status === 'pending' || o.status === 'confirmed' || o.status === 'awaiting_courier') {
       html += `<button class="btn btn-outline-danger w-100" id="cancelBtn">Cancelar pedido</button>
         <div class="form-text text-center mt-1" id="cancelPolicy"></div>`;
     }
@@ -177,7 +210,7 @@
       renderReviewUI(o);
     }
 
-    if (o.status === 'pending' || o.status === 'confirmed') {
+    if (o.status === 'pending' || o.status === 'confirmed' || o.status === 'awaiting_courier') {
       getCancellationPolicy()
         .then(policy => {
           const el = document.getElementById('cancelPolicy');
@@ -185,6 +218,21 @@
         })
         .catch(() => {});
     }
+
+    document.getElementById('saveRefundBtn')?.addEventListener('click', async () => {
+      const holder = (document.getElementById('refundHolder')?.value || '').trim();
+      const bank = (document.getElementById('refundBank')?.value || '').trim();
+      const clabe = (document.getElementById('refundClabe')?.value || '').replace(/\D/g, '');
+      if (holder.length < 3 || bank.length < 2 || clabe.length !== 18) {
+        showToast('Escribe titular, banco y CLABE de 18 dígitos', 'danger');
+        return;
+      }
+      try {
+        await updateRefundAccount(OID, holder, bank, clabe);
+        showToast('Cuenta de reembolso guardada');
+        loadOrder(false);
+      } catch (ex) { showToast(ex.message, 'danger'); }
+    });
 
     document.getElementById('cancelBtn')?.addEventListener('click', async () => {
       const reason = prompt('Motivo de la cancelación (opcional):');

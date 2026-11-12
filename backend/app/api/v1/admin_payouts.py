@@ -59,6 +59,56 @@ def _due_state(pending, next_date: date | None) -> str:
     return "scheduled"
 
 
+@router.get("/refunds/pending")
+async def pending_refunds(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    result = await db.execute(
+        select(Order, User, Restaurant)
+        .outerjoin(User, User.id == Order.user_id)
+        .outerjoin(Restaurant, Restaurant.id == Order.restaurant_id)
+        .where(Order.refund_status == "pending")
+        .order_by(Order.cancelled_at.desc().nullslast())
+    )
+    rows = []
+    for order, customer, restaurant in result.all():
+        rows.append({
+            "id": str(order.id),
+            "restaurant_name": restaurant.name if restaurant else "",
+            "customer_name": customer.name if customer else "",
+            "customer_email": customer.email if customer else "",
+            "total": str(order.refund_amount or order.total or 0),
+            "account_holder": order.refund_account_holder,
+            "bank": order.refund_bank,
+            "clabe": order.refund_clabe,
+            "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
+        })
+    return rows
+
+
+@router.post("/refunds/{order_id}/mark-refunded")
+async def mark_refunded(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if order.refund_status != "pending":
+        raise HTTPException(status_code=400, detail="El pedido no tiene un reembolso pendiente")
+    order.refund_status = "refunded"
+    order.payment_status = "refunded"
+    await log_action(
+        db, current_user.id, "refund.marked", "order", order.id,
+        {"amount": str(order.refund_amount or 0)},
+    )
+    await db.commit()
+    return {"ok": True, "refund_status": order.refund_status}
+
+
 @router.get("/payouts")
 async def admin_payouts(
     db: AsyncSession = Depends(get_db),

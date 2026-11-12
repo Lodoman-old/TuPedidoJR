@@ -29,6 +29,7 @@ router = APIRouter()
 STATUS_LABELS = {
     "pending": "Pendiente",
     "confirmed": "Confirmado",
+    "awaiting_courier": "Esperando repartidor",
     "preparing": "Preparando",
     "ready": "Listo",
     "in_delivery": "En reparto",
@@ -380,6 +381,9 @@ async def export_orders_csv(
             order.cancellation_reason or "",
             f"{_money(order.refund_amount):.2f}",
             REFUND_STATUS_LABELS.get(order.refund_status, order.refund_status or "none"),
+            (order.refund_account_holder or "") if current_user.is_superuser else "",
+            (order.refund_bank or "") if current_user.is_superuser else "",
+            (order.refund_clabe or "") if current_user.is_superuser else "",
         ])
 
     return _csv_response(
@@ -389,6 +393,7 @@ async def export_orders_csv(
             "Estado del pago", "Subtotal", "Envío", "Cuota fija", "Comisión",
             "Descuento", "Propina", "Total", "Ganancia repartidor", "Distancia km",
             "Motivo de cancelación", "Reembolso", "Estado del reembolso",
+            "Titular reembolso", "Banco reembolso", "CLABE reembolso",
         ],
         f"pedidos_{date_from}_{date_to}.csv",
     )

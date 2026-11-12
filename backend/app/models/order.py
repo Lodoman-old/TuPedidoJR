@@ -58,5 +58,10 @@ class Order(TimestampMixin, Base):
     points_redeemed = Column(Integer, default=0, nullable=False)
     loyalty_discount = Column(DECIMAL(10, 2), default=0, nullable=False)
     points_awarded = Column(Boolean, default=False, nullable=False)
+    requires_courier_approval = Column(Boolean, default=False, nullable=False)
+    awaiting_courier_at = Column(DateTime(timezone=True), nullable=True)
+    refund_account_holder = Column(String(150), nullable=True)
+    refund_bank = Column(String(100), nullable=True)
+    refund_clabe = Column(String(18), nullable=True)
 
     items = relationship("OrderItem", backref="order", lazy="selectin")

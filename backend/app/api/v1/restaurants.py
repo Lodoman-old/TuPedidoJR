@@ -32,7 +32,7 @@ from app.services.cancellation_service import apply_cancellation
 from app.services.file_service import delete_upload, save_upload
 from app.services.geo_service import get_nearby_restaurants
 from app.services.loyalty_service import award_on_delivery
-from app.services.push_service import schedule_order_status
+from app.services.push_service import schedule_available_order, schedule_courier_ready, schedule_order_status
 from app.services.schedule_service import (
     get_schedules,
     get_timezone,
@@ -41,6 +41,7 @@ from app.services.schedule_service import (
 )
 from app.services.settlement_service import is_order_settleable
 from app.services.order_service import get_commission_rate
+from app.services.order_serialization import order_out
 from app.services.restaurant_access import (
     FINANCE_ROLES, MANAGE_ROLES, ORDER_ROLES, OWNER_ROLES,
     have_role, my_restaurants, restaurant_role,
@@ -599,7 +600,10 @@ async def list_restaurant_orders(
         .order_by(Order.created_at.desc())
     )
     result = await db.execute(stmt)
-    return result.scalars().all()
+    return [
+        order_out(order, can_see_refund=bool(current_user.is_superuser))
+        for order in result.scalars().all()
+    ]
 
 
 @router.patch("/{restaurant_id}/orders/{order_id}/status", response_model=OrderOut)
@@ -625,22 +629,64 @@ async def update_restaurant_order_status(
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
-    order.status = body.status
+    if (
+        order.status == "awaiting_courier"
+        and body.status == "preparing"
+        and not order.delivery_person_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Espera a que un repartidor acepte el pedido antes de prepararlo",
+        )
+
+    requested = body.status
+    if (
+        requested == "confirmed"
+        and order.requires_courier_approval
+        and order.delivery_mode == "platform"
+        and not order.delivery_person_id
+    ):
+        requested = "awaiting_courier"
+
+    order.status = requested
     now = datetime.now(timezone.utc)
-    if body.status == "confirmed" and order.confirmed_at is None:
+    if requested == "awaiting_courier":
+        order.awaiting_courier_at = now
+        if order.confirmed_at is None:
+            order.confirmed_at = now
+    elif requested == "confirmed" and order.confirmed_at is None:
         order.confirmed_at = now
-    elif body.status == "picked_up" and order.picked_up_at is None:
+    elif requested == "picked_up" and order.picked_up_at is None:
         order.picked_up_at = now
-    elif body.status == "delivered" and order.delivered_at is None:
+    elif requested == "delivered" and order.delivered_at is None:
         order.delivered_at = now
-    if body.status == "delivered":
+
+    if (
+        requested == "ready"
+        and order.requires_courier_approval
+        and order.delivery_person_id
+    ):
+        order.status = "in_delivery"
+    final_status = order.status
+
+    if final_status == "delivered":
         await award_on_delivery(db, order)
     await db.commit()
     await db.refresh(order)
     ws = _get_ws_manager()
-    await ws.notify_order_status(str(order.id), body.status)
-    schedule_order_status(str(order.id), body.status)
-    return order
+    await ws.notify_order_status(str(order.id), final_status)
+    schedule_order_status(str(order.id), final_status)
+    if final_status == "awaiting_courier":
+        schedule_available_order(str(order.id), False)
+    elif (
+        final_status in ("confirmed", "ready")
+        and order.delivery_mode == "platform"
+        and not order.delivery_person_id
+    ):
+        schedule_available_order(str(order.id), final_status == "ready")
+    elif final_status == "in_delivery" and order.requires_courier_approval:
+        schedule_courier_ready(str(order.id))
+    return order_out(order, can_see_refund=bool(current_user.is_superuser))
 
 
 @router.post("/{restaurant_id}/orders/{order_id}/cancel", response_model=OrderOut)
@@ -687,7 +733,7 @@ async def cancel_restaurant_order(
     ws = _get_ws_manager()
     await ws.notify_order_status(str(order.id), "cancelled")
     schedule_order_status(str(order.id), "cancelled")
-    return order
+    return order_out(order, can_see_refund=bool(current_user.is_superuser))
 
 
 @router.patch("/{restaurant_id}/profile", response_model=RestaurantOut)

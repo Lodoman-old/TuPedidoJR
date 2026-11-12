@@ -32,7 +32,8 @@ from app.services.cash_advance_service import create_advance_request
 from app.services.geo_service import find_nearby_delivery_persons
 from app.services.loyalty_service import award_on_delivery
 from app.services.order_service import get_setting_value
-from app.services.push_service import schedule_order_status, schedule_arrival
+from app.services.order_serialization import order_out
+from app.services.push_service import schedule_courier_assigned, schedule_order_status, schedule_arrival
 from app.services.route_service import route_info
 from app.services.schedule_service import get_timezone
 from app.services.settlement_service import is_order_settleable
@@ -98,7 +99,7 @@ async def available_orders(
     result = await db.execute(
         select(Order)
         .where(
-            Order.status.in_(["ready", "preparing"]),
+            Order.status.in_(["awaiting_courier", "ready", "preparing"]),
             Order.delivery_person_id.is_(None),
             Order.delivery_mode == "platform",
         )
@@ -127,6 +128,9 @@ async def available_orders(
     items: list[AvailableOrderOut] = []
     for order in orders:
         item = AvailableOrderOut.model_validate(order)
+        item.refund_account_holder = None
+        item.refund_bank = None
+        item.refund_clabe = None
         restaurant = restaurants.get(order.restaurant_id)
         if restaurant:
             item.restaurant_name = restaurant["name"]
@@ -174,7 +178,9 @@ async def accept_order(
     order = order_result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
-    if order.status not in ("ready", "preparing"):
+    if order.delivery_person_id:
+        raise HTTPException(status_code=400, detail="Este pedido ya tiene repartidor")
+    if order.status not in ("awaiting_courier", "ready", "preparing"):
         raise HTTPException(status_code=400, detail="El pedido no está listo para reparto")
     if order.delivery_mode in ("own", "pickup"):
         detail = (
@@ -184,8 +190,9 @@ async def accept_order(
         )
         raise HTTPException(status_code=400, detail=detail)
 
+    approval_flow = order.status == "awaiting_courier"
     order.delivery_person_id = dp.id
-    order.status = "in_delivery"
+    order.status = "preparing" if approval_flow else "in_delivery"
     # Apply the courier's individual per-delivery bonus, if configured.
     bonus = dp.delivery_bonus_per_order or Decimal("0")
     if bonus:
@@ -211,9 +218,14 @@ async def accept_order(
     dp.is_available = False
     await db.commit()
     await db.refresh(order)
-    await _get_ws_manager().notify_order_status(str(order.id), "in_delivery")
-    schedule_order_status(str(order.id), "in_delivery")
-    return order
+    if approval_flow:
+        await _get_ws_manager().notify_order_status(str(order.id), "preparing")
+        schedule_order_status(str(order.id), "preparing")
+        schedule_courier_assigned(str(order.id))
+    else:
+        await _get_ws_manager().notify_order_status(str(order.id), "in_delivery")
+        schedule_order_status(str(order.id), "in_delivery")
+    return order_out(order, can_see_refund=False)
 
 
 @router.post("/pickup/{order_id}", response_model=OrderOut)
@@ -455,7 +467,7 @@ async def delivery_orders(
         .options(selectinload(Order.items))
         .order_by(Order.created_at.desc())
     )
-    return result.scalars().all()
+    return [order_out(order, can_see_refund=False) for order in result.scalars().all()]
 
 
 @router.get("/payouts", response_model=list[DeliveryPayoutOut])

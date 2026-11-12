@@ -22,12 +22,13 @@ from app.models.coupon import Coupon
 from app.models.order import Order
 from app.services.order_service import get_setting_value
 
-CUSTOMER_DEFAULT_STATUSES = ["pending", "confirmed"]
-RESTAURANT_DEFAULT_STATUSES = ["pending", "confirmed", "preparing", "ready"]
+CUSTOMER_DEFAULT_STATUSES = ["pending", "confirmed", "awaiting_courier"]
+RESTAURANT_DEFAULT_STATUSES = ["pending", "confirmed", "awaiting_courier", "preparing", "ready"]
 
 STATUS_LABELS = {
     "pending": "pendiente",
     "confirmed": "confirmado",
+    "awaiting_courier": "esperando repartidor",
     "preparing": "en preparación",
     "ready": "listo",
     "in_delivery": "en reparto",
@@ -88,6 +89,8 @@ def can_cancel(order: Order, role: str, window_min: int, now: datetime | None = 
 
     # Customer
     if status == "pending":
+        return True, ""
+    if status == "awaiting_courier":
         return True, ""
     if status == "confirmed":
         if _check_window(order, window_min, now):
@@ -173,6 +176,7 @@ async def apply_cancellation(
         courier = result.scalar_one_or_none()
         if courier and courier.current_order_id == order.id:
             courier.current_order_id = None
+            courier.is_available = True
 
     return {
         "refund_amount": refund_amount,

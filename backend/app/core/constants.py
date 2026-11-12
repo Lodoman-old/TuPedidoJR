@@ -4,6 +4,7 @@ from enum import StrEnum
 class OrderStatus(StrEnum):
     PENDING = "pending"
     CONFIRMED = "confirmed"
+    AWAITING_COURIER = "awaiting_courier"
     PREPARING = "preparing"
     READY = "ready"
     IN_DELIVERY = "in_delivery"

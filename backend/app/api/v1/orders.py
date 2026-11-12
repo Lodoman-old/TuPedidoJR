@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, text, update
@@ -22,14 +23,16 @@ from app.schemas.order import (
     OrderCreate,
     OrderOut,
     OrderStatusUpdate,
+    RefundAccountUpdate,
     TrackingOut,
 )
 from app.services.cancellation_service import apply_cancellation, can_cancel, get_policy
 from app.services.restaurant_access import ORDER_ROLES, have_role
 from app.services.estimation_service import calculate_estimated_time
 from app.services.order_service import calculate_order_totals, get_setting_value, resolve_item_options
+from app.services.order_serialization import order_out
 from app.services.loyalty_service import apply_redemption, preview_redemption, award_on_delivery
-from app.services.push_service import schedule_new_order, schedule_order_status, schedule_available_order
+from app.services.push_service import schedule_available_order, schedule_courier_ready, schedule_new_order, schedule_order_status
 from app.services.schedule_service import restaurant_open_state
 from app.services.tracking_service import build_tracking
 from app.ws.manager import ConnectionManager
@@ -118,6 +121,37 @@ async def _check_max_distance(db: AsyncSession, distance_km, pickup: bool) -> No
         )
 
 
+async def _courier_approval_km(db: AsyncSession) -> float:
+    raw = await get_setting_value(db, "DELIVERY_APPROVAL_KM", "8")
+    try:
+        km = float(raw)
+    except (TypeError, ValueError):
+        km = 8.0
+    return max(km, 0.0)
+
+
+async def _requires_courier_approval(
+    db: AsyncSession,
+    restaurant: Restaurant,
+    pickup: bool,
+    distance_km,
+) -> tuple[bool, float]:
+    """Los pedidos lejanos se retienen hasta que un repartidor los acepte."""
+    threshold = await _courier_approval_km(db)
+    if (
+        pickup
+        or restaurant.delivery_mode != "platform"
+        or distance_km is None
+        or threshold <= 0
+    ):
+        return False, threshold
+    return float(distance_km) > threshold, threshold
+
+
+def _clean_clabe(value: str | None) -> str:
+    return "".join(ch for ch in (value or "") if ch.isdigit())
+
+
 @router.post("/estimate-price")
 async def estimate_price(
     body: OrderCreate,
@@ -175,8 +209,22 @@ async def estimate_price(
         warn_km = float(warn_raw)
     except (TypeError, ValueError):
         warn_km = 8.0
+    requires_approval, approval_km = await _requires_courier_approval(
+        db, restaurant, pickup, distance_km
+    )
     distance_warning = None
-    if not pickup and distance_km is not None and warn_km > 0 and float(distance_km) > warn_km:
+    if requires_approval:
+        distance_warning = (
+            f"Tu pedido está a {float(distance_km):.1f} km del restaurante. "
+            "Primero un repartidor debe aceptarlo y, hasta entonces, el restaurante "
+            "no lo prepara. Si nadie lo acepta, se cancela y se te devuelve el dinero."
+        )
+    elif (
+        not pickup
+        and distance_km is not None
+        and warn_km > 0
+        and float(distance_km) > warn_km
+    ):
         distance_warning = (
             f"Tu pedido está a {float(distance_km):.1f} km del restaurante. "
             "Podría no ser aceptado por ningún repartidor por la distancia."
@@ -194,6 +242,8 @@ async def estimate_price(
         "total": f"{total:.2f}",
         "distance_km": distance_km,
         "distance_warning": distance_warning,
+        "requires_courier_approval": requires_approval,
+        "approval_km": approval_km,
         "delivery_mode": "pickup" if pickup else restaurant.delivery_mode,
         "fulfillment_type": body.fulfillment_type,
     }
@@ -295,6 +345,22 @@ async def create_order(
     )
 
     await _check_max_distance(db, distance_km, pickup)
+    requires_approval, _approval_km = await _requires_courier_approval(
+        db, restaurant, pickup, distance_km
+    )
+    refund_holder = (body.refund_account_holder or "").strip()
+    refund_bank = (body.refund_bank or "").strip()
+    refund_clabe = _clean_clabe(body.refund_clabe)
+    if requires_approval and payment_method == "transfer":
+        if not refund_holder or not refund_bank or len(refund_clabe) != 18:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Este pedido está lejos y se paga por transferencia. "
+                    "Escribe el titular, el banco y la CLABE de 18 dígitos donde "
+                    "se te devolvería el dinero si ningún repartidor acepta."
+                ),
+            )
 
     points_redeemed, loyalty_discount = await apply_redemption(
         db, current_user, body.points_to_redeem,
@@ -339,6 +405,10 @@ async def create_order(
         scheduled_for=scheduled_for,
         points_redeemed=points_redeemed,
         loyalty_discount=loyalty_discount,
+        requires_courier_approval=requires_approval,
+        refund_account_holder=refund_holder or None,
+        refund_bank=refund_bank or None,
+        refund_clabe=refund_clabe or None,
     )
     db.add(order)
     await db.flush()
@@ -376,6 +446,37 @@ async def create_order(
     )
     schedule_new_order(str(order.id))
     return result.scalar_one()
+
+
+@router.patch("/{order_id}/refund-account", response_model=OrderOut)
+async def update_refund_account(
+    order_id: str,
+    body: RefundAccountUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.items))
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if order.user_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="No puedes editar este pedido")
+    if order.payment_method != "transfer":
+        raise HTTPException(
+            status_code=400,
+            detail="Solo los pedidos pagados por transferencia necesitan cuenta de reembolso",
+        )
+    clabe = _clean_clabe(body.refund_clabe)
+    if len(clabe) != 18:
+        raise HTTPException(status_code=400, detail="La CLABE debe tener 18 dígitos")
+    order.refund_account_holder = body.refund_account_holder.strip()
+    order.refund_bank = body.refund_bank.strip()
+    order.refund_clabe = clabe
+    await db.commit()
+    await db.refresh(order)
+    return order
 
 
 @router.get("", response_model=list[OrderOut])
@@ -432,7 +533,10 @@ async def get_order(
             allowed = bool(dp and order.delivery_person_id == dp.id)
         if not allowed:
             raise HTTPException(status_code=403, detail="No tienes acceso a este pedido")
-    return order
+    return order_out(
+        order,
+        can_see_refund=bool(current_user.is_superuser or order.user_id == current_user.id),
+    )
 
 
 @router.get("/{order_id}/tracking", response_model=TrackingOut)
@@ -489,27 +593,65 @@ async def update_order_status(
     if not current_user.is_superuser and not (restaurant and await have_role(db, restaurant.id, current_user, ORDER_ROLES)):
         raise HTTPException(status_code=403, detail="No puedes cambiar el estado de este pedido")
 
-    order.status = body.status
+    if (
+        order.status == "awaiting_courier"
+        and body.status == "preparing"
+        and not order.delivery_person_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Espera a que un repartidor acepte el pedido antes de prepararlo",
+        )
+
+    requested = body.status
+    if (
+        requested == "confirmed"
+        and order.requires_courier_approval
+        and order.delivery_mode == "platform"
+        and not order.delivery_person_id
+    ):
+        requested = "awaiting_courier"
+
+    order.status = requested
     now = datetime.now(timezone.utc)
-    if body.status == "confirmed" and order.confirmed_at is None:
+    if requested == "awaiting_courier":
+        order.awaiting_courier_at = now
+        if order.confirmed_at is None:
+            order.confirmed_at = now
+    elif requested == "confirmed" and order.confirmed_at is None:
         order.confirmed_at = now
-    elif body.status == "picked_up" and order.picked_up_at is None:
+    elif requested == "picked_up" and order.picked_up_at is None:
         order.picked_up_at = now
-    elif body.status == "delivered" and order.delivered_at is None:
+    elif requested == "delivered" and order.delivered_at is None:
         order.delivered_at = now
-    if body.status == "delivered":
+
+    # En los pedidos lejanos el repartidor ya está asignado: al quedar listo
+    # pasa directo a reparto para que pueda recogerlo.
+    if (
+        requested == "ready"
+        and order.requires_courier_approval
+        and order.delivery_person_id
+    ):
+        order.status = "in_delivery"
+    final_status = order.status
+
+    if final_status == "delivered":
         await award_on_delivery(db, order)
     await db.commit()
     await db.refresh(order)
     ws_manager = _get_ws_manager()
-    await ws_manager.notify_order_status(str(order.id), body.status)
-    schedule_order_status(str(order.id), body.status)
-    if (
-        body.status in ("confirmed", "ready")
+    await ws_manager.notify_order_status(str(order.id), final_status)
+    schedule_order_status(str(order.id), final_status)
+    if final_status == "awaiting_courier":
+        schedule_available_order(str(order.id), False)
+    elif (
+        final_status in ("confirmed", "ready")
         and order.delivery_mode == "platform"
         and not order.delivery_person_id
     ):
-        schedule_available_order(str(order.id), body.status == "ready")
+        schedule_available_order(str(order.id), final_status == "ready")
+    elif final_status == "in_delivery" and order.requires_courier_approval:
+        schedule_courier_ready(str(order.id))
     return order
 
 

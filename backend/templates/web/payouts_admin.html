@@ -7,6 +7,7 @@
   </button>
 </div>
 <div id="payoutsError" class="alert alert-danger d-none"></div>
+<div id="refundsCard" class="mb-3"></div>
 <div id="payoutsLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
 <div id="payoutsContent" class="d-none"></div>
 {% endblock %}
@@ -293,6 +294,56 @@
     }
   }
 
+  async function loadRefunds() {
+    const card = document.getElementById('refundsCard');
+    if (!card) return;
+    try {
+      const rows = await apiRequest('GET', '/admin/refunds/pending');
+      if (!rows.length) { card.innerHTML = ''; return; }
+      card.innerHTML = `<div class="card p-3 border-warning">
+        <h6 class="text-danger"><i class="bi bi-arrow-counterclockwise"></i> Reembolsos pendientes
+          <span class="badge bg-danger">${rows.length}</span></h6>
+        <p class="small text-muted mb-2">Pedidos cancelados con dinero por devolver. Verifica la cuenta y marca el reembolso al terminar.</p>
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Pedido</th><th>Cliente</th><th class="text-end">Monto</th><th>Titular</th><th>Banco</th><th>CLABE</th><th></th></tr></thead>
+          <tbody>${rows.map(r => `<tr>
+            <td><strong>#${esc(r.id.slice(0, 8))}</strong><br><small class="text-muted">${esc(r.restaurant_name)}</small></td>
+            <td><small>${esc(r.customer_name)}<br>${esc(r.customer_email)}</small></td>
+            <td class="text-end fw-bold">${money(r.total)}</td>
+            <td><small>${esc(r.account_holder || 'Sin capturar')}</small></td>
+            <td><small>${esc(r.bank || '—')}</small></td>
+            <td><small>${esc(r.clabe || '—')} ${r.clabe ? `<button class="btn btn-sm btn-link p-0" onclick="copyClabe('${esc(r.clabe)}')">copiar</button>` : ''}</small></td>
+            <td class="text-end"><button class="btn btn-sm btn-success" onclick="markRefunded('${r.id}', this)">Marcar reembolsado</button></td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+    } catch (e) {
+      card.innerHTML = `<div class="alert alert-danger py-2">${esc(e.message)}</div>`;
+    }
+  }
+
+  function copyClabe(clabe) {
+    navigator.clipboard?.writeText(clabe).then(
+      () => showToast('CLABE copiada'),
+      () => showToast('No se pudo copiar', 'warning'),
+    );
+  }
+
+  async function markRefunded(id, btn) {
+    if (!confirm('¿Confirmas que ya devolviste el dinero?')) return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    try {
+      await apiRequest('POST', `/admin/refunds/${id}/mark-refunded`);
+      showToast('Reembolso marcado');
+      loadRefunds();
+    } catch (e) {
+      showToast(e.message, 'danger');
+      btn.disabled = false;
+      btn.textContent = 'Marcar reembolsado';
+    }
+  }
+
   async function loadPayouts() {
     const loading = document.getElementById('payoutsLoading');
     const content = document.getElementById('payoutsContent');
@@ -431,7 +482,10 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    if (sessionStorage.getItem('is_superuser') === 'true') loadPayouts();
+    if (sessionStorage.getItem('is_superuser') === 'true') {
+      loadPayouts();
+      loadRefunds();
+    }
   });
 </script>
 {% endblock %}

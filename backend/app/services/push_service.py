@@ -32,6 +32,10 @@ FCM_VAPID_KEY = "FCM_VAPID_KEY"
 FCM_ANDROID_CONFIG_JSON = "FCM_ANDROID_CONFIG_JSON"
 
 STATUS_MESSAGES = {    "confirmed": ("Pedido confirmado", "El restaurante confirmó tu pedido."),
+    "awaiting_courier": (
+        "Esperando repartidor",
+        "Tu pedido está lejos: un repartidor debe aceptarlo antes de que el restaurante lo prepare.",
+    ),
     "preparing": ("Preparando tu pedido", "El restaurante está preparando tu pedido."),
     "ready": ("Pedido listo", "Tu pedido está listo y espera al repartidor."),
     "in_delivery": ("Repartidor en camino", "Tu pedido ya va en camino."),
@@ -55,6 +59,7 @@ STYLE_IMAGES = {
 }
 STATUS_STYLES = {
     "confirmed": "amber",
+    "awaiting_courier": "amber",
     "preparing": "amber",
     "ready": "red",
     "in_delivery": "amber",
@@ -300,6 +305,15 @@ async def notify_order_status(order_id: str, status: str) -> None:
                 minutes = await _eta_minutes(db, order)
                 if minutes:
                     body = f"{body} Llega en aproximadamente {minutes} min."
+            if (
+                status == "cancelled"
+                and order.refund_status == "pending"
+                and order.payment_method == "transfer"
+            ):
+                body = (
+                    "Tu pedido fue cancelado. Para devolverte el dinero, captura "
+                    "tu cuenta bancaria en el detalle del pedido."
+                )
             await send_to_user(
                 db,
                 order.user_id,
@@ -480,6 +494,80 @@ async def notify_available_order(order_id: str, ready: bool = False) -> None:
         logger.exception("Push available-order notification failed for %s", order_id)
 
 
+async def notify_courier_assigned(order_id: str) -> None:
+    """Confirma al repartidor que tomó el pedido y avisa al restaurante."""
+    try:
+        async with async_session() as db:
+            result = await db.execute(select(Order).where(Order.id == order_id))
+            order = result.scalar_one_or_none()
+            if not order or not order.delivery_person_id:
+                return
+            resto = await db.execute(
+                select(Restaurant).where(Restaurant.id == order.restaurant_id)
+            )
+            restaurant = resto.scalar_one_or_none()
+            name = restaurant.name if restaurant else "Restaurante"
+            dp = await db.get(DeliveryPerson, order.delivery_person_id)
+            if dp:
+                await send_to_user(
+                    db,
+                    dp.user_id,
+                    "Pedido asignado",
+                    f"{name}: espera a que el restaurante termine de prepararlo. Te avisaremos cuando esté listo.",
+                    {"type": "assigned_order", "order_id": str(order.id)},
+                    "green",
+                )
+            if not restaurant:
+                return
+            members = await db.execute(
+                select(RestaurantUser.user_id).where(
+                    RestaurantUser.restaurant_id == restaurant.id,
+                    RestaurantUser.is_active.is_(True),
+                    RestaurantUser.role.in_(ORDER_ROLES),
+                )
+            )
+            user_ids = {restaurant.owner_id, *members.scalars().all()}
+            for user_id in user_ids:
+                await send_to_user(
+                    db,
+                    user_id,
+                    "Repartidor asignado",
+                    f"{name}: un repartidor aceptó el pedido. Ya puedes prepararlo.",
+                    {"type": "new_order", "order_id": str(order.id)},
+                    "green",
+                )
+    except Exception:
+        logger.exception("Push courier-assigned notification failed for %s", order_id)
+
+
+async def notify_courier_order_ready(order_id: str) -> None:
+    """Avisa al repartidor asignado que el pedido ya está listo para recoger."""
+    try:
+        async with async_session() as db:
+            result = await db.execute(select(Order).where(Order.id == order_id))
+            order = result.scalar_one_or_none()
+            if not order or not order.delivery_person_id:
+                return
+            dp = await db.get(DeliveryPerson, order.delivery_person_id)
+            if not dp:
+                return
+            resto = await db.execute(
+                select(Restaurant).where(Restaurant.id == order.restaurant_id)
+            )
+            restaurant = resto.scalar_one_or_none()
+            name = restaurant.name if restaurant else "Restaurante"
+            await send_to_user(
+                db,
+                dp.user_id,
+                "Pedido listo para recoger",
+                f"{name}: el pedido #${str(order.id)[:8]} ya está listo.",
+                {"type": "assigned_order", "order_id": str(order.id)},
+                "red",
+            )
+    except Exception:
+        logger.exception("Push courier-ready notification failed for %s", order_id)
+
+
 def schedule_order_status(order_id: str, status: str) -> None:
     try:
         asyncio.create_task(notify_order_status(order_id, status))
@@ -490,6 +578,20 @@ def schedule_order_status(order_id: str, status: str) -> None:
 def schedule_available_order(order_id: str, ready: bool = False) -> None:
     try:
         asyncio.create_task(notify_available_order(order_id, ready))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
+def schedule_courier_assigned(order_id: str) -> None:
+    try:
+        asyncio.create_task(notify_courier_assigned(order_id))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
+def schedule_courier_ready(order_id: str) -> None:
+    try:
+        asyncio.create_task(notify_courier_order_ready(order_id))
     except RuntimeError:
         logger.debug("No event loop for push notification")
 

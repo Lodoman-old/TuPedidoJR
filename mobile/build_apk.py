@@ -66,6 +66,8 @@ def build() -> Path:
         "build",
         "apk",
         "--verbose",
+        "--arch",
+        "arm64-v8a",
         "--splash-color",
         "#FFFFFF",
         "--splash-dark-color",

@@ -102,7 +102,25 @@ img { max-width: 100%; height: auto; }
   img { max-width: 100%; }
   .menu-item { align-items: flex-start !important; }
   .menu-item .text-end { flex-shrink: 0; }
+  .menu-item-actions { flex-shrink: 0; }
+  .menu-item > .flex-grow-1 { flex: 1 1 auto; min-width: 0; }
+  .menu-item-actions .btn { white-space: nowrap; }
   .navbar-nav .nav-link { padding: .55rem .25rem; }
+}
+
+@media (max-width: 767.98px) {
+  /* En el panel del restaurante los botones del dueño bajan a otra fila
+     para que el nombre y el precio no se partan letra por letra. */
+  .menu-item { flex-wrap: wrap; }
+  .menu-item > .flex-grow-1 { flex: 1 1 100%; width: 100%; }
+  .menu-item-actions {
+    width: 100%;
+    text-align: left !important;
+  }
+  .menu-item-actions > .d-flex {
+    justify-content: flex-start !important;
+  }
+  .menu-item-actions .btn { margin-top: .25rem; }
 }
 
 @media (max-width: 359.98px) {

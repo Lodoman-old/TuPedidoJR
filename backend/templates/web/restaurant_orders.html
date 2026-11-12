@@ -12,7 +12,8 @@
 {% block scripts %}
 <script>
   const RID = '{{ restaurant_id }}';
-  const STATUS_ORDER = ["pending", "confirmed", "awaiting_courier", "preparing", "ready"];
+  const STATUS_ORDER = ["pending", "confirmed", "preparing", "ready"];
+  const STATUS_ORDER_FAR = ["pending", "confirmed", "awaiting_courier", "preparing", "ready"];
   const STATUS_LABELS = { pending: "Pendiente", confirmed: "Confirmado", awaiting_courier: "Esperando repartidor", preparing: "Preparando", ready: "Listo", in_delivery: "En reparto", picked_up: "Recogido", delivered: "Entregado", cancelled: "Cancelado" };
   function portionLabel(value) {
     const p = parseFloat(value || 0);
@@ -108,7 +109,7 @@
           ? ['pending', 'confirmed', 'preparing', 'ready', 'delivered']
           : (isOwn
             ? ['pending', 'confirmed', 'preparing', 'ready', 'in_delivery', 'delivered']
-            : STATUS_ORDER);
+            : (o.requires_courier_approval ? STATUS_ORDER_FAR : STATUS_ORDER));
         const idx = flow.indexOf(status);
         const canAdvance = idx >= 0 && idx < flow.length - 1 && status !== 'awaiting_courier';
         const nextStatus = canAdvance ? flow[idx + 1] : null;
@@ -161,7 +162,7 @@
         ? ['pending', 'confirmed', 'preparing', 'ready', 'delivered']
         : (isOwn
           ? ['pending', 'confirmed', 'preparing', 'ready', 'in_delivery', 'delivered']
-          : STATUS_ORDER);
+          : (order.requires_courier_approval ? STATUS_ORDER_FAR : STATUS_ORDER));
       const status = order.status;
       if (status === 'awaiting_courier') return showToast('Espera a que un repartidor acepte el pedido', 'warning');
       const idx = flow.indexOf(status);

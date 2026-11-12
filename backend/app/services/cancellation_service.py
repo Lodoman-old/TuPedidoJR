@@ -53,7 +53,8 @@ async def get_policy(db: AsyncSession) -> dict:
         "refund_enabled": refund_enabled,
         "customer_message": (
             "Puedes cancelar sin costo mientras el restaurante no acepte el pedido. "
-            f"Después de confirmado tienes {max(window, 0)} minutos."
+            f"Después de confirmado tienes {max(window, 0)} minutos. "
+            "Si el pedido está esperando repartidor, puedes cancelarlo sin costo."
         ),
     }
 

@@ -111,7 +111,7 @@ class CancelOrderRequest(BaseModel):
 class RefundAccountUpdate(BaseModel):
     refund_account_holder: str = Field(..., min_length=3, max_length=150)
     refund_bank: str = Field(..., min_length=2, max_length=100)
-    refund_clabe: str = Field(..., min_length=18, max_length=18)
+    refund_clabe: str = Field(..., min_length=1, max_length=30)
 
 
 class CancellationPolicyOut(BaseModel):

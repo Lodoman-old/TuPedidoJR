@@ -21,6 +21,7 @@ from app.api.v1.admin_audit import router as admin_audit_router
 from app.api.v1.admin_restaurants import router as admin_restaurants_router
 from app.api.v1.restaurant_registration import router as restaurant_registration_router
 from app.api.v1.team import router as team_router
+from app.api.v1.debug import router as debug_router
 
 router = APIRouter(prefix="/api/v1")
 
@@ -45,4 +46,5 @@ router.include_router(admin_audit_router, prefix="/admin", tags=["Administració
 router.include_router(admin_restaurants_router, prefix="/admin", tags=["Administración"])
 router.include_router(restaurant_registration_router, prefix="/restaurant-registration", tags=["Restaurantes"])
 router.include_router(team_router, prefix="/restaurants/{restaurant_id}/team", tags=["Restaurantes"])
+router.include_router(debug_router, prefix="/debug", tags=["Diagnóstico"])
 

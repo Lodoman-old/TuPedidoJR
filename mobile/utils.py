@@ -1,5 +1,7 @@
 import flet as ft
 
+APP_VERSION = "7"
+
 STATUS_LABELS = {
     "pending": "Pendiente",
     "confirmed": "Confirmado",
@@ -59,6 +61,27 @@ def open_dlg(page: ft.Page, dlg: ft.AlertDialog):
 def close_dlg(page: ft.Page, dlg: ft.AlertDialog):
     dlg.open = False
     page.update()
+
+
+async def report_error(page: ft.Page, message: str, detail: str) -> None:
+    """Envía un error de la app al servidor para diagnóstico."""
+    try:
+        import httpx
+
+        from mobile.api import api
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                f"{api.api_url}/api/v1/debug/client-log",
+                json={
+                    "message": message,
+                    "detail": detail,
+                    "version": APP_VERSION,
+                    "route": getattr(page, "route", ""),
+                },
+            )
+    except Exception:
+        pass
 
 
 def snack(page: ft.Page, text: str, bgcolor=ft.Colors.GREEN):

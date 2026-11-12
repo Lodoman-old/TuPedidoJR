@@ -1,7 +1,9 @@
+import traceback
+
 import flet as ft
 from mobile.api import api, ApiError
 from mobile.cart_sync import sync_cart
-from mobile.utils import close_dlg, open_dlg, snack, pick_image_file, dialog_width
+from mobile.utils import close_dlg, open_dlg, snack, pick_image_file, dialog_width, report_error
 
 
 cart: list[dict] = []
@@ -106,6 +108,11 @@ def restaurant_detail_view(page: ft.Page, rid: str):
         except Exception as ex:  # noqa: BLE001
             error_text.value = f"No se pudo cargar el restaurante: {ex}"
             print("Error cargando restaurante:", repr(ex), flush=True)
+            page.run_task(
+                report_error, page,
+                f"restaurant_detail: {type(ex).__name__}: {ex}",
+                traceback.format_exc(),
+            )
         finally:
             loading.visible = False
             page.update()

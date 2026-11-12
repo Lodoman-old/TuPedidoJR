@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import traceback
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -23,6 +24,7 @@ from mobile.screens.restaurant_orders import restaurant_orders_view
 from mobile.screens.restaurant_earnings import restaurant_earnings_view
 from mobile.screens.restaurant_team import restaurant_team_view
 from mobile.screens.restaurant_profile import restaurant_profile_view
+from mobile.utils import report_error
 
 
 MAIN_ROUTES = {"/restaurants", "/orders", "/profile", "/delivery"}
@@ -107,6 +109,7 @@ async def main(page: ft.Page):
             await _build_route(troute)
         except Exception as ex:  # noqa: BLE001
             print("Error abriendo", troute, repr(ex), flush=True)
+            page.run_task(report_error, page, f"{type(ex).__name__}: {ex}", traceback.format_exc())
             page.views.clear()
             page.views.append(ft.View(
                 route=troute,

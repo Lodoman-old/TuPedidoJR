@@ -4,7 +4,7 @@ from mobile import secure_auth, background_location
 
 
 def restaurants_view(page: ft.Page):
-    search = ft.TextField(hint_text="Buscar restaurante, giro o platillo...", prefix_icon=ft.Icons.SEARCH)
+    search = ft.TextField(hint_text="Buscar restaurante, giro o platillo...", prefix_icon=ft.Icons.SEARCH, expand=True)
     filter_open = ft.Switch(label="Abiertos", value=False)
     filter_sort = ft.Dropdown(
         options=[
@@ -88,7 +88,7 @@ def restaurants_view(page: ft.Page):
     page.run_task(load)
 
     content = ft.Column([
-        search,
+        ft.Row([search], spacing=0),
         ft.Row([
             filter_open,
             filter_sort,

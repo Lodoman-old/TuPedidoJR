@@ -1,10 +1,11 @@
-﻿import flet as ft
+import flet as ft
 from mobile.api import api, ApiError
 from mobile import secure_auth
 from mobile.cart_sync import hydrate_cart
 from mobile.push_utils import register_device_token
 from mobile.screens.restaurant_detail import cart
 from mobile.server_selector import open_server_dialog
+from mobile.utils import APP_VERSION
 
 
 def _build_logo(size: int = 80):
@@ -85,6 +86,7 @@ def login_view(page: ft.Page):
                     ft.TextButton("Olvidé mi contraseña", on_click=lambda _: page.launch_url(f"{api.api_url}/web/forgot-password")),
                     ft.Container(height=10),
                     server_card,
+                    ft.Text(f"Versión {APP_VERSION}", size=9, color=ft.Colors.GREY),
                 ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
             )
         ]

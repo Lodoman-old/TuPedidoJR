@@ -7,6 +7,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <h4 class="m-0"><i class="bi bi-bicycle"></i> Repartidores en vivo</h4>
   <div class="d-flex align-items-center gap-2">
+    <select id="coverageFilter" class="form-select form-select-sm" style="max-width:220px" onchange="onCoverageFilterChange(this.value)"></select>
     <span class="small text-muted" id="coverageNote">Cobertura de tarifa base: —</span>
     <span class="small text-muted" id="lastRefresh">—</span>
     <button class="btn btn-outline-secondary btn-sm" onclick="loadCouriers()">
@@ -46,33 +47,57 @@
   }
 
   let coverageCircles = [];
+  let coverageData = { radius_m: 6000, centers: [] };
+  let coverageFilter = 'all';
+
+  function populateCoverageFilter() {
+    const select = document.getElementById('coverageFilter');
+    if (!select) return;
+    const options = ['<option value="all">Todos los restaurantes</option>']
+      .concat(coverageData.centers.map(c => `<option value="${c.id}">${esc(c.name)}</option>`));
+    select.innerHTML = options.join('');
+    select.value = coverageData.centers.some(c => c.id === coverageFilter) ? coverageFilter : 'all';
+  }
+
+  function onCoverageFilterChange(value) {
+    coverageFilter = value;
+    renderCoverage();
+  }
+
+  function renderCoverage() {
+    if (!map) return;
+    coverageCircles.forEach(c => map.removeLayer(c));
+    coverageCircles = [];
+    const centers = coverageFilter === 'all'
+      ? coverageData.centers
+      : coverageData.centers.filter(c => c.id === coverageFilter);
+    const visible = centers.length ? centers : [{ name: 'Cobertura', lat: 20.644, lng: -100.993 }];
+    visible.forEach(center => {
+      const circle = L.circle([center.lat, center.lng], {
+        radius: coverageData.radius_m,
+        color: '#F58220',
+        weight: 3,
+        dashArray: '8 6',
+        fillColor: '#F58220',
+        fillOpacity: 0.10,
+      }).addTo(map);
+      circle.bindTooltip(`${center.name}: ${(coverageData.radius_m / 1000).toFixed(1)} km`);
+      coverageCircles.push(circle);
+    });
+    if (coverageCircles.length) {
+      const group = L.featureGroup(coverageCircles);
+      map.fitBounds(group.getBounds().pad(0.05));
+    }
+  }
 
   async function loadCoverage() {
     try {
       const info = await apiRequest('GET', '/admin/delivery-radius');
+      coverageData = info;
       const note = document.getElementById('coverageNote');
       if (note) note.textContent = `Cobertura de tarifa base: ${(info.radius_m / 1000).toFixed(1)} km`;
-      coverageCircles.forEach(c => map.removeLayer(c));
-      coverageCircles = [];
-      const centers = (info.centers && info.centers.length)
-        ? info.centers
-        : [{ name: 'Cobertura', lat: 20.644, lng: -100.993 }];
-      centers.forEach(center => {
-        const circle = L.circle([center.lat, center.lng], {
-          radius: info.radius_m,
-          color: '#F58220',
-          weight: 3,
-          dashArray: '8 6',
-          fillColor: '#F58220',
-          fillOpacity: 0.10,
-        }).addTo(map);
-        circle.bindTooltip(`${center.name}: ${(info.radius_m / 1000).toFixed(1)} km`);
-        coverageCircles.push(circle);
-      });
-      if (coverageCircles.length) {
-        const group = L.featureGroup(coverageCircles);
-        map.fitBounds(group.getBounds().pad(0.05));
-      }
+      populateCoverageFilter();
+      renderCoverage();
     } catch (e) { /* radio no disponible */ }
   }
 

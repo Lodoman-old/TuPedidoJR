@@ -49,13 +49,19 @@ async def delivery_radius(
 
     rows = await db.execute(
         text("""
-            SELECT name, ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng
+            SELECT id, name, ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng
             FROM restaurants
             WHERE status = 'active' AND location IS NOT NULL
+            ORDER BY name
         """)
     )
     centers = [
-        {"name": row["name"], "lat": float(row["lat"]), "lng": float(row["lng"])}
+        {
+            "id": str(row["id"]),
+            "name": row["name"],
+            "lat": float(row["lat"]),
+            "lng": float(row["lng"]),
+        }
         for row in rows.mappings().all()
     ]
     return {"radius_m": radius_m, "centers": centers}

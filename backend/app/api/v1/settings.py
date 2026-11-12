@@ -51,6 +51,11 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Cargo extra por cada kilómetro arriba del radio incluido.",
         "type": "money", "default": "5.0",
     },
+    "DELIVERY_MAX_KM": {
+        "group": "Envíos", "label": "Distancia máxima de entrega (km)",
+        "description": "Los pedidos más lejanos se rechazan al momento de pagar. Vacío o 0 desactiva el límite.",
+        "type": "float", "default": "12",
+    },
     "MANDADO_ACTIVE": {
         "group": "Mandados", "label": "Permitir mandados",
         "description": "Activa o desactiva el servicio de mandados.",

@@ -73,12 +73,7 @@ async def get_nearby_restaurants(
                ST_Distance(r.location::geography,
                            ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) AS distance_m
         FROM restaurants r
-        WHERE ST_DWithin(
-                r.location::geography,
-                ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
-                r.delivery_radius_m
-              )
-              AND r.status = 'active'
+        WHERE r.status = 'active'
               {where_clause}
         ORDER BY distance_m
         LIMIT :limit OFFSET :skip

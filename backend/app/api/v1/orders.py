@@ -100,6 +100,24 @@ async def estimate_time(
     return {"estimated_delivery_min": estimated_min}
 
 
+async def _check_max_distance(db: AsyncSession, distance_km, pickup: bool) -> None:
+    if pickup or distance_km is None:
+        return
+    raw = await get_setting_value(db, "DELIVERY_MAX_KM", "12")
+    try:
+        max_km = float(raw)
+    except (TypeError, ValueError):
+        max_km = 0.0
+    if max_km > 0 and float(distance_km) > max_km:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"La dirección está fuera de cobertura: {float(distance_km):.1f} km. "
+                f"El máximo es {max_km:.0f} km."
+            ),
+        )
+
+
 @router.post("/estimate-price")
 async def estimate_price(
     body: OrderCreate,
@@ -140,6 +158,7 @@ async def estimate_price(
         tip_amount=Decimal("0") if pickup else body.tip_amount,
         pickup=pickup,
     )
+    await _check_max_distance(db, distance_km, pickup)
     pre_subtotal = sum(
         (entry["unit_price"] * entry["item"].quantity for entry in items_data),
         Decimal("0"),
@@ -260,6 +279,8 @@ async def create_order(
         tip_amount=tip_amount,
         pickup=pickup,
     )
+
+    await _check_max_distance(db, distance_km, pickup)
 
     points_redeemed, loyalty_discount = await apply_redemption(
         db, current_user, body.points_to_redeem,

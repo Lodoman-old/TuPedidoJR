@@ -32,7 +32,7 @@ from app.services.cash_advance_service import create_advance_request
 from app.services.geo_service import find_nearby_delivery_persons
 from app.services.loyalty_service import award_on_delivery
 from app.services.order_service import get_setting_value
-from app.services.push_service import schedule_order_status
+from app.services.push_service import schedule_order_status, schedule_arrival
 from app.services.route_service import route_info
 from app.services.schedule_service import get_timezone
 from app.services.settlement_service import is_order_settleable
@@ -314,6 +314,28 @@ async def update_location(
         .values(current_location=wkt)
     )
     await db.commit()
+
+    # Aviso automático cuando el repartidor llega cerca del cliente.
+    active_orders = await db.execute(
+        select(Order).where(
+            Order.delivery_person_id == dp.id,
+            Order.status.in_(["in_delivery", "picked_up"]),
+            Order.arrival_notified.is_(False),
+        )
+    )
+    for order in active_orders.scalars().all():
+        distance = await db.scalar(
+            text(
+                "SELECT ST_Distance(o.delivery_location::geography, "
+                "ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) "
+                "FROM orders o WHERE o.id = :oid"
+            ),
+            {"lng": body.lng, "lat": body.lat, "oid": order.id},
+        )
+        if distance is not None and float(distance) <= 150:
+            order.arrival_notified = True
+            await db.commit()
+            schedule_arrival(str(order.id))
 
 
 async def _get_dp(current_user, db):

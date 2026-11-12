@@ -31,8 +31,7 @@ FCM_WEB_CONFIG_JSON = "FCM_WEB_CONFIG_JSON"
 FCM_VAPID_KEY = "FCM_VAPID_KEY"
 FCM_ANDROID_CONFIG_JSON = "FCM_ANDROID_CONFIG_JSON"
 
-STATUS_MESSAGES = {
-    "confirmed": ("Pedido confirmado", "El restaurante confirmó tu pedido."),
+STATUS_MESSAGES = {    "confirmed": ("Pedido confirmado", "El restaurante confirmó tu pedido."),
     "preparing": ("Preparando tu pedido", "El restaurante está preparando tu pedido."),
     "ready": ("Pedido listo", "Tu pedido está listo y espera al repartidor."),
     "in_delivery": ("Repartidor en camino", "Tu pedido ya va en camino."),
@@ -46,6 +45,22 @@ MANDADO_MESSAGES = {
     "purchased": ("Compra realizada", "El repartidor realizó la compra de tu mandado."),
     "completed": ("Mandado entregado", "Tu mandado fue entregado."),
     "cancelled": ("Mandado cancelado", "Tu mandado fue cancelado."),
+}
+
+# Estilo visual de la notificación: imagen grande y color de acento.
+STYLE_IMAGES = {
+    "green": ("/static/notif_green.png", "#2E7D32"),
+    "amber": ("/static/notif_amber.png", "#F9A825"),
+    "red": ("/static/notif_red.png", "#C62828"),
+}
+STATUS_STYLES = {
+    "confirmed": "amber",
+    "preparing": "amber",
+    "ready": "red",
+    "in_delivery": "amber",
+    "picked_up": "amber",
+    "delivered": "green",
+    "cancelled": "red",
 }
 
 # access_token cache: project_id -> (token, expires_at_epoch)
@@ -157,6 +172,7 @@ async def send_to_tokens(
     title: str,
     body: str,
     data: dict | None = None,
+    style: str | None = None,
 ) -> dict:
     """Send an FCM notification. Returns {sent, failed, deactivated}."""
     stats = {"sent": 0, "failed": 0, "deactivated": 0}
@@ -179,8 +195,11 @@ async def send_to_tokens(
     payload_data = {str(k): str(v) for k, v in (data or {}).items()}
 
     base_url = (settings.APP_URL or "").rstrip("/")
-    logo_url = f"{base_url}/static/logo_notification_circle.png" if base_url else "/static/logo_notification_circle.png"
-    android_notification: dict = {"icon": "ic_stat_tup", "color": "#1B2F6B"}
+    image_path, accent = STYLE_IMAGES.get(
+        style or "", ("/static/logo_notification_circle.png", "#1B2F6B")
+    )
+    logo_url = f"{base_url}{image_path}" if base_url else image_path
+    android_notification: dict = {"icon": "ic_stat_tup", "color": accent}
     if base_url:
         android_notification["image"] = logo_url
 
@@ -226,11 +245,11 @@ async def send_to_tokens(
     return stats
 
 
-async def send_to_user(db, user_id, title: str, body: str, data: dict | None = None) -> dict:
+async def send_to_user(db, user_id, title: str, body: str, data: dict | None = None, style: str | None = None) -> dict:
     result = await db.execute(
         select(PushToken).where(PushToken.user_id == user_id, PushToken.is_active.is_(True))
     )
-    return await send_to_tokens(db, list(result.scalars().all()), title, body, data)
+    return await send_to_tokens(db, list(result.scalars().all()), title, body, data, style)
 
 
 async def notify_order_status(order_id: str, status: str) -> None:
@@ -250,6 +269,7 @@ async def notify_order_status(order_id: str, status: str) -> None:
                 title,
                 body,
                 {"type": "order_status", "order_id": str(order.id), "status": status},
+                STATUS_STYLES.get(status),
             )
     except Exception:
         logger.exception("Push notification failed for order %s", order_id)
@@ -362,9 +382,36 @@ async def notify_new_restaurant_registration(restaurant_id: str) -> None:
         logger.exception("Push restaurant-registration notification failed for %s", restaurant_id)
 
 
+async def notify_arrival(order_id: str) -> None:
+    """El repartidor llegó a la ubicación del cliente."""
+    try:
+        async with async_session() as db:
+            result = await db.execute(select(Order).where(Order.id == order_id))
+            order = result.scalar_one_or_none()
+            if not order:
+                return
+            await send_to_user(
+                db,
+                order.user_id,
+                "Tu pedido llegó",
+                "El repartidor ya está en tu ubicación.",
+                {"type": "order_arrival", "order_id": str(order.id)},
+                "green",
+            )
+    except Exception:
+        logger.exception("Push arrival notification failed for %s", order_id)
+
+
 def schedule_order_status(order_id: str, status: str) -> None:
     try:
         asyncio.create_task(notify_order_status(order_id, status))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
+def schedule_arrival(order_id: str) -> None:
+    try:
+        asyncio.create_task(notify_arrival(order_id))
     except RuntimeError:
         logger.debug("No event loop for push notification")
 

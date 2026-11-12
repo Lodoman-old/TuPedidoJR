@@ -175,6 +175,7 @@ async def send_test_push(
             body.title,
             body.body,
             {"type": "test", "user_id": str(current_user.id)},
+            body.style,
         )
     else:
         result = await db.execute(select(PushToken).where(PushToken.is_active.is_(True)))
@@ -184,5 +185,6 @@ async def send_test_push(
             body.title,
             body.body,
             {"type": "test"},
+            body.style,
         )
     return stats

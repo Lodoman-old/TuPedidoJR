@@ -54,6 +54,7 @@ class Order(TimestampMixin, Base):
     fulfillment_type = Column(String(10), default="delivery", nullable=False)
     restaurant_owes_platform = Column(DECIMAL(10, 2), default=0, nullable=False)
     restaurant_charge_settled = Column(Boolean, default=False, nullable=False)
+    arrival_notified = Column(Boolean, default=False, nullable=False)
     points_redeemed = Column(Integer, default=0, nullable=False)
     loyalty_discount = Column(DECIMAL(10, 2), default=0, nullable=False)
     points_awarded = Column(Boolean, default=False, nullable=False)

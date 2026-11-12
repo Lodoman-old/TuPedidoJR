@@ -45,3 +45,4 @@ class PushTestRequest(BaseModel):
     title: str = "Prueba de notificación"
     body: str = "Si ves esto, las notificaciones push funcionan correctamente."
     only_self: bool = True
+    style: str | None = None

@@ -116,6 +116,21 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="courierDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-vcard"></i> Datos del repartidor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="courierDetailBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -123,6 +138,7 @@
   let markers = {};
   let firstCenter = true;
   let loadingCouriers = false;
+  let couriersCache = {};
 
   function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -203,15 +219,19 @@
     }
     box.innerHTML = couriers.map(c => {
       const info = statusInfo(c);
-      const seen = c.updated_at ? new Date(c.updated_at).toLocaleString() : 'Sin dato';
+      const vehicle = { bike: 'Bicicleta', motorcycle: 'Motocicleta', car: 'Automóvil' }[c.vehicle_type] || c.vehicle_type || '';
       return `<div class="border-bottom py-2">
-        <div class="d-flex justify-content-between">
+        <div class="d-flex justify-content-between gap-2">
           <strong>${esc(c.name)}</strong>
           <span class="badge" style="background:${info.color}">${info.label}</span>
         </div>
-        <div class="text-muted">${esc(c.phone || c.email || '')}</div>
-        <div class="text-muted">Última señal: ${esc(seen)}</div>
+        <div class="text-muted text-break"><i class="bi bi-envelope"></i> ${esc(c.email || 'Sin correo')}</div>
+        <div class="text-muted"><i class="bi bi-telephone"></i> ${esc(c.phone || 'Sin teléfono')}</div>
+        <div class="text-muted">${esc(vehicle)} · ${esc(c.payout_method === 'transfer' ? 'Pago por transferencia' : 'Pago en efectivo')}</div>
         ${c.current_order_id ? `<div class="text-muted">Pedido: ${esc(c.current_order_id.slice(0, 8))}</div>` : ''}
+        <button class="btn btn-sm btn-outline-primary mt-1" onclick="showCourierDetails('${c.id}')">
+          <i class="bi bi-person-vcard"></i> Ver datos y CLABE
+        </button>
       </div>`;
     }).join('');
   }
@@ -253,6 +273,8 @@
     error.classList.add('d-none');
     try {
       const couriers = await apiRequest('GET', `/admin/couriers/locations?t=${Date.now()}`);
+      couriersCache = {};
+      couriers.forEach(c => { couriersCache[c.id] = c; });
       renderList(couriers);
       renderMarkers(couriers);
       document.getElementById('lastRefresh').textContent =
@@ -330,6 +352,88 @@
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-check2"></i> Crear repartidor';
     }
+  }
+
+  function showCourierDetails(id) {
+    const c = couriersCache[id];
+    if (!c) return;
+    const vehicle = { bike: 'Bicicleta', motorcycle: 'Motocicleta', car: 'Automóvil' }[c.vehicle_type] || c.vehicle_type || '—';
+    const method = c.payout_method === 'transfer' ? 'Transferencia' : 'Efectivo';
+    const status = statusInfo(c).label;
+    const seen = c.updated_at ? new Date(c.updated_at).toLocaleString() : 'Sin dato';
+    const bank = c.payout_method === 'transfer'
+      ? `<div><span class="text-muted">Banco:</span> ${esc(c.bank_name || 'Sin capturar')}</div>
+         <div><span class="text-muted">Titular:</span> ${esc(c.bank_account_holder || 'Sin capturar')}</div>
+         <div><span class="text-muted">CLABE:</span> <strong>${esc(c.bank_clabe || 'Sin capturar')}</strong>
+           ${c.bank_clabe ? `<button class="btn btn-sm btn-link p-0 ms-1" onclick="copyCourierClabe('${esc(c.bank_clabe)}')">copiar</button>` : ''}
+         </div>`
+      : '<div class="text-muted">Pago en efectivo. No se usa CLABE para este repartidor.</div>';
+    document.getElementById('courierDetailBody').innerHTML = `
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <div class="small text-muted">Nombre</div>
+          <div class="fw-bold">${esc(c.name)}</div>
+        </div>
+        <div class="col-12 col-md-6">
+          <div class="small text-muted">Estado</div>
+          <div class="fw-bold">${esc(status)}</div>
+        </div>
+        <div class="col-12 col-md-6">
+          <div class="small text-muted">Correo</div>
+          <div class="text-break">${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : 'Sin correo'}</div>
+        </div>
+        <div class="col-12 col-md-6">
+          <div class="small text-muted">Teléfono</div>
+          <div>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : 'Sin teléfono'}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="small text-muted">Vehículo</div>
+          <div>${esc(vehicle)}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="small text-muted">Calificación</div>
+          <div>${esc(c.rating || '0.0')}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="small text-muted">Entregas</div>
+          <div>${esc(c.total_deliveries || 0)}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="small text-muted">Bono por envío</div>
+          <div>$${parseFloat(c.delivery_bonus_per_order || 0).toFixed(2)}</div>
+        </div>
+        <div class="col-12 col-md-6">
+          <div class="small text-muted">Acepta mandados</div>
+          <div>${c.is_mandadero ? 'Sí' : 'No'}</div>
+        </div>
+        <div class="col-12 col-md-6">
+          <div class="small text-muted">Deuda con la plataforma</div>
+          <div class="${parseFloat(c.pending_platform_debt || 0) > 0 ? 'text-danger fw-bold' : ''}">
+            $${parseFloat(c.pending_platform_debt || 0).toFixed(2)}
+          </div>
+        </div>
+        <div class="col-12"><hr class="my-1"></div>
+        <div class="col-12 col-md-4">
+          <div class="small text-muted">Forma de pago</div>
+          <div class="fw-bold">${esc(method)}</div>
+        </div>
+        <div class="col-12 col-md-8">
+          <div class="small text-muted">Cuenta para depósitos de la plataforma</div>
+          ${bank}
+        </div>
+        <div class="col-12">
+          <div class="small text-muted">Última señal de ubicación</div>
+          <div>${esc(seen)}</div>
+        </div>
+      </div>`;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('courierDetailModal')).show();
+  }
+
+  function copyCourierClabe(clabe) {
+    navigator.clipboard?.writeText(clabe).then(
+      () => showToast('CLABE copiada'),
+      () => showToast('No se pudo copiar', 'warning'),
+    );
   }
 
   document.addEventListener('DOMContentLoaded', () => {

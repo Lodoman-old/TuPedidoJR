@@ -91,17 +91,22 @@
         </tr></thead>
         <tbody>${couriers.map(c => `
           <tr>
-            <td>${esc(c.name)}</td>
+            <td>${esc(c.name)}<br><small class="text-muted text-break">${esc(c.email || '')}</small></td>
             <td class="text-end fw-bold">${money(c.pending_amount)}</td>
             <td style="min-width:120px">
               <input type="number" class="form-control form-control-sm" id="c_bonus_${c.id}"
                      min="0" step="0.5" value="${c.delivery_bonus_per_order}">
             </td>
-            <td style="min-width:120px">
+            <td style="min-width:160px">
               <select class="form-select form-select-sm" id="c_method_${c.id}">
                 <option value="cash" ${c.payout_method === 'cash' ? 'selected' : ''}>Efectivo</option>
                 <option value="transfer" ${c.payout_method === 'transfer' ? 'selected' : ''}>Transferencia</option>
               </select>
+              <small class="text-muted d-block mt-1">
+                ${c.payout_method === 'transfer'
+                  ? `${esc(c.bank_name || 'Sin banco')} · ${esc(c.bank_account_holder || 'Sin titular')}<br>CLABE: ${esc(c.bank_clabe || 'Sin capturar')}`
+                  : 'Sin datos bancarios'}
+              </small>
             </td>
             <td style="min-width:120px">
               <select class="form-select form-select-sm" id="c_freq_${c.id}">

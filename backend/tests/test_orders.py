@@ -131,13 +131,14 @@ class TestCreateOrder:
         assert resp.status_code == 201
         data = resp.json()
         assert data["status"] == "pending"
-        assert float(data["subtotal"]) == 115.0
-        assert float(data["platform_commission"]) == 15.0
+        # Cuota fija: el precio del cliente no lleva markup.
+        assert float(data["subtotal"]) == 100.0
+        assert float(data["platform_commission"]) == 5.0
         # Delivery is at the restaurant, so the 6 km free radius applies and
         # the configured base fee (default 25.0) is charged.
         assert float(data["delivery_fee"]) == 25.0
         assert float(data["flat_usage_fee"]) == 5.0
-        assert float(data["total"]) == 145.0
+        assert float(data["total"]) == 130.0
         assert len(data["items"]) == 1
 
     async def test_create_with_fixed_fee(self, client: AsyncClient, user_token, seeded_restaurant, db_session):

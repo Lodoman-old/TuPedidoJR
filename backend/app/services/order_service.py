@@ -89,15 +89,8 @@ async def resolve_item_options(db: AsyncSession, menu_item, option_ids: list[str
 
 
 async def get_commission_rate(db: AsyncSession, restaurant: Restaurant) -> Decimal:
-    if (getattr(restaurant, "commission_mode", None) or "percentage") == "fixed":
-        return Decimal("0")
-    if restaurant.commission_percentage is not None:
-        return Decimal(str(restaurant.commission_percentage))
-    raw = await get_setting_value(db, "APP_COMMISSION_PERCENTAGE", "15.0")
-    try:
-        return Decimal(str(raw))
-    except Exception:
-        return Decimal("15.0")
+    """El porcentaje por platillo ya no se usa: el cobro es una cuota fija."""
+    return Decimal("0")
 
 
 def apply_commission(price: Decimal, rate: Decimal) -> Decimal:
@@ -121,17 +114,12 @@ async def calculate_order_totals(
     loyalty_discount: Decimal = Decimal("0"),
     pickup: bool = False,
 ) -> tuple:
-    rate = await get_commission_rate(db, restaurant)
-    fixed_mode = (getattr(restaurant, "commission_mode", None) or "percentage") == "fixed"
+    rate = Decimal("0")
     base_subtotal = Decimal("0.00")
     subtotal = Decimal("0.00")
     for entry in items_data:
         base_price = Decimal(entry["unit_price"] or 0)
-        marked_price = (
-            base_price.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            if fixed_mode
-            else apply_commission(base_price, rate)
-        )
+        marked_price = base_price.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         entry["base_unit_price"] = base_price
         entry["unit_price"] = marked_price
         base_subtotal += base_price * entry["item"].quantity
@@ -180,24 +168,17 @@ async def calculate_order_totals(
                 extra_km = Decimal(str(distance_km - free_radius))
                 delivery_fee = base_fee + (extra_km * extra_per_km)
 
-    if fixed_mode:
-        fee_raw = restaurant.fixed_fee
-        if fee_raw is None:
-            fee_raw = await get_setting_value(db, "APP_FIXED_RESTAURANT_FEE", "5.0")
-        try:
-            platform_commission = Decimal(str(fee_raw or 0))
-        except Exception:
-            platform_commission = Decimal("0.00")
-        platform_commission = max(
-            Decimal("0.00"),
-            min(platform_commission, subtotal),
-        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    else:
-        platform_commission = (subtotal - base_subtotal).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP,
-        )
-        if platform_commission < 0:
-            platform_commission = Decimal("0.00")
+    fee_raw = restaurant.fixed_fee
+    if fee_raw is None:
+        fee_raw = await get_setting_value(db, "APP_FIXED_RESTAURANT_FEE", "5.0")
+    try:
+        platform_commission = Decimal(str(fee_raw or 0))
+    except Exception:
+        platform_commission = Decimal("0.00")
+    platform_commission = max(
+        Decimal("0.00"),
+        min(platform_commission, subtotal),
+    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     flat_fee_str = await get_setting_value(db, "APP_FLAT_USAGE_FEE", "5.0")
     flat_usage_fee = Decimal(flat_fee_str)

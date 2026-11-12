@@ -124,7 +124,7 @@
       <div class="card p-3 mb-3">
         <div class="d-flex justify-content-between small"><span>Subtotal</span><span>$${parseFloat(o.subtotal).toFixed(2)}</span></div>
         <div class="d-flex justify-content-between small"><span>Envío</span><span>$${parseFloat(o.delivery_fee).toFixed(2)}</span></div>
-        <div class="d-flex justify-content-between small"><span>Comisión por uso de la plataforma</span><span>$${parseFloat(o.flat_usage_fee || 0).toFixed(2)}</span></div>` +
+        <div class="d-flex justify-content-between small"><span>Cuota de servicio</span><span>$${parseFloat(o.flat_usage_fee || 0).toFixed(2)}</span></div>` +
         (o.discount_amount > 0 ? `<div class="d-flex justify-content-between small text-success"><span>Descuento</span><span>−$${parseFloat(o.discount_amount).toFixed(2)}</span></div>` : '') +
         (parseFloat(o.loyalty_discount || 0) > 0 ? `<div class="d-flex justify-content-between small text-primary"><span>Puntos canjeados (${o.points_redeemed || 0})</span><span>−$${parseFloat(o.loyalty_discount).toFixed(2)}</span></div>` : '') +
         (parseFloat(o.tip_amount || 0) > 0 ? `<div class="d-flex justify-content-between small text-success"><span>Propina</span><span>$${parseFloat(o.tip_amount).toFixed(2)}</span></div>` : '') +

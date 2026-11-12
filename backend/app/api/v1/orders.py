@@ -169,6 +169,19 @@ async def estimate_price(
     )
     if loyalty_discount:
         total = max(total - loyalty_discount, Decimal("0"))
+
+    warn_raw = await get_setting_value(db, "DELIVERY_WARN_KM", "8")
+    try:
+        warn_km = float(warn_raw)
+    except (TypeError, ValueError):
+        warn_km = 8.0
+    distance_warning = None
+    if not pickup and distance_km is not None and warn_km > 0 and float(distance_km) > warn_km:
+        distance_warning = (
+            f"Tu pedido está a {float(distance_km):.1f} km del restaurante. "
+            "Podría no ser aceptado por ningún repartidor por la distancia."
+        )
+
     return {
         "subtotal": f"{subtotal:.2f}",
         "delivery_fee": f"{delivery_fee:.2f}",
@@ -180,6 +193,7 @@ async def estimate_price(
         "loyalty_discount": f"{loyalty_discount:.2f}",
         "total": f"{total:.2f}",
         "distance_km": distance_km,
+        "distance_warning": distance_warning,
         "delivery_mode": "pickup" if pickup else restaurant.delivery_mode,
         "fulfillment_type": body.fulfillment_type,
     }
@@ -491,7 +505,7 @@ async def update_order_status(
     await ws_manager.notify_order_status(str(order.id), body.status)
     schedule_order_status(str(order.id), body.status)
     if (
-        body.status in ("preparing", "ready")
+        body.status in ("confirmed", "ready")
         and order.delivery_mode == "platform"
         and not order.delivery_person_id
     ):

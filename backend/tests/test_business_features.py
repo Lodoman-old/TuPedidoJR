@@ -522,8 +522,8 @@ class TestAdminPayouts:
 
         order = await _create_order(client, customer_token, resto, item)
         assert order.status_code == 201
-        # Item price is 30.00 and the individual commission is 10%.
-        assert float(order.json()["platform_commission"]) == 3.0
+        # Ahora el cobro es una cuota fija, no un porcentaje.
+        assert float(order.json()["platform_commission"]) == 5.0
 
     async def test_commission_can_be_overridden_and_cleared(
         self, client, restaurant, superuser_token, db_session,
@@ -921,7 +921,7 @@ class TestOwnDelivery:
         )
         data = earnings.json()
         assert float(data["available_for_payout"]) == 0.0
-        assert float(data["restaurant_debt"]) == 9.5
+        assert float(data["restaurant_debt"]) == 10.0
 
         from app.models.setting import Setting
         db_session.add(Setting(key="TRANSFER_ENABLED", value="true"))
@@ -947,10 +947,10 @@ class TestOwnDelivery:
             headers=_headers(owner_token),
         )
         data = earnings.json()
-        # Transfer: 34.5 marked subtotal - 4.5 commission + 20 own delivery = 50
-        # minus 9.5 cash debt = 40.5 payable.
-        assert float(data["available_for_payout"]) == 40.5
-        assert float(data["restaurant_debt"]) == 9.5
+        # Transfer: 30.00 subtotal - 5.00 cuota fija + 20 own delivery = 45
+        # minus 10.00 cash debt = 35.00 payable.
+        assert float(data["available_for_payout"]) == 35.0
+        assert float(data["restaurant_debt"]) == 10.0
 
 
 class TestMenuModifiers:
@@ -1002,8 +1002,8 @@ class TestMenuModifiers:
         )
         assert order.status_code == 201
         data = order.json()
-        assert float(data["items"][0]["unit_price"]) == 51.75
-        assert float(data["subtotal"]) == 51.75
+        assert float(data["items"][0]["unit_price"]) == 45.0
+        assert float(data["subtotal"]) == 45.0
         assert len(data["items"][0]["options"]) == 2
 
         missing = await _create_order(
@@ -1043,7 +1043,7 @@ class TestMenuModifiers:
         )
         assert order.status_code == 201
         data = order.json()
-        assert float(data["items"][0]["unit_price"]) == 115.0
+        assert float(data["items"][0]["unit_price"]) == 100.0
         portions = sorted(float(o["portion"]) for o in data["items"][0]["options"])
         assert portions == [0.5, 0.5]
 
@@ -1052,7 +1052,7 @@ class TestMenuModifiers:
             option_ids=[by_name["Pepperoni"]],
         )
         assert single.status_code == 201
-        assert float(single.json()["items"][0]["unit_price"]) == 92.0
+        assert float(single.json()["items"][0]["unit_price"]) == 80.0
 
     async def test_option_from_other_item_is_rejected(
         self, client, restaurant, owner_token, customer_token, db_session,
@@ -1256,7 +1256,7 @@ class TestLoyalty:
         assert delivered.status_code == 200
 
         invited_me = await client.get("/api/v1/profile/me", headers=_headers(invited_token))
-        assert invited_me.json()["loyalty_points"] == 84  # 34 earned + 50 bonus
+        assert invited_me.json()["loyalty_points"] == 80  # 30 earned + 50 bonus
         referrer_me = await client.get("/api/v1/profile/me", headers=_headers(referrer_token))
         assert referrer_me.json()["loyalty_points"] == 50
 
@@ -1267,7 +1267,7 @@ class TestLoyalty:
             headers=_headers(superuser_token),
         )
         invited_me = await client.get("/api/v1/profile/me", headers=_headers(invited_token))
-        assert invited_me.json()["loyalty_points"] == 84
+        assert invited_me.json()["loyalty_points"] == 80
 
 
 class TestPickupOrders:
@@ -1657,8 +1657,8 @@ class TestReports:
         assert resp.status_code == 200
         data = resp.json()
         assert data["totals"]["orders_total"] == 1
-        assert data["totals"]["gross_subtotal"] == "34.50"
-        assert data["totals"]["commissions"] == "4.50"
+        assert data["totals"]["gross_subtotal"] == "30.00"
+        assert data["totals"]["commissions"] == "5.00"
         assert len(data["daily"]) >= 1
 
     async def test_owner_is_scoped(self, client, restaurant, customer_token, owner_token):
@@ -1750,3 +1750,4 @@ class TestRestaurantTeamOrderStatus:
             )
             assert advanced.status_code == 200, (role, advanced.text)
             assert advanced.json()["status"] == "confirmed"
+

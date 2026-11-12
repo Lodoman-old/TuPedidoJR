@@ -229,7 +229,7 @@
       <div class="row g-2 mb-3">
         ${summaryCard('Pedidos entregados', t.orders || 0)}
         ${summaryCard('Ventas', money(t.total))}
-        ${summaryCard('Comisión plataforma', money(t.commission), 'border-success')}
+        ${summaryCard('Cuota por pedido', money(t.commission), 'border-success')}
         ${summaryCard('Cuota fija', money(t.flat_fee), 'border-success')}
         ${summaryCard('Puntos canjeados (los absorbe la plataforma)', money(t.loyalty_discount), parseFloat(t.loyalty_discount || 0) ? 'border-primary' : '')}
         ${summaryCard('Ingreso neto plataforma', money(netPlatform), netPlatform < 0 ? 'border-danger' : '')}

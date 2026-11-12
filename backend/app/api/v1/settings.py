@@ -56,6 +56,11 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Los pedidos más lejanos se rechazan al momento de pagar. Vacío o 0 desactiva el límite.",
         "type": "float", "default": "12",
     },
+    "DELIVERY_WARN_KM": {
+        "group": "Envíos", "label": "Aviso por distancia (km)",
+        "description": "Si el pedido supera esta distancia se avisa al cliente que podría no tener repartidor.",
+        "type": "float", "default": "8",
+    },
     "MANDADO_ACTIVE": {
         "group": "Mandados", "label": "Permitir mandados",
         "description": "Activa o desactiva el servicio de mandados.",

@@ -64,6 +64,31 @@
     html.capacitor-app .modal-dialog { margin-top: 42px; margin-bottom: 42px; }
     html.capacitor-app .toast-container { bottom: 44px !important; }
     html.capacitor-app #downloadAppNav { display: none !important; }
+    @media (max-width: 991.98px) {
+      /* Submenús legibles dentro de la barra colapsada en móvil. */
+      .navbar-nav .dropdown-menu {
+        position: static;
+        float: none;
+        width: auto;
+        margin: .25rem 0 .35rem 1rem;
+        padding: .25rem 0;
+        background: rgba(255, 255, 255, .07);
+        border: 0;
+        border-radius: .5rem;
+      }
+      .navbar-nav .dropdown-item {
+        color: rgba(255, 255, 255, .88);
+        padding: .5rem .8rem;
+      }
+      .navbar-nav .dropdown-item:hover,
+      .navbar-nav .dropdown-item:focus {
+        color: #fff;
+        background: rgba(255, 255, 255, .14);
+      }
+      .navbar-nav .dropdown-divider {
+        border-color: rgba(255, 255, 255, .15);
+      }
+    }
   </style>
   {% block head_extra %}{% endblock %}
 </head>
@@ -80,12 +105,24 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
-          <li class="nav-item nav-delivery-hide" id="publicRestaurantsNav"><a class="nav-link" href="/web/restaurants"><i class="bi bi-shop"></i> Restaurantes</a></li>
-          <li class="nav-item d-none" id="myRestaurantNav"><a class="nav-link" href="#"><i class="bi bi-shop-window"></i> Mi restaurante</a></li>
-          <li class="nav-item d-none" id="businessProfileNav"><a class="nav-link" href="#"><i class="bi bi-person-gear"></i> Perfil del negocio</a></li>
-          <li class="nav-item nav-delivery-hide"><a class="nav-link" href="/web/mandados"><i class="bi bi-box"></i> Mandados</a></li>
-          <li class="nav-item nav-delivery-hide"><a class="nav-link" href="/web/cart"><i class="bi bi-cart"></i> Carrito <span id="cartBadge" class="badge rounded-pill bg-warning text-dark d-none">0</span></a></li>
-          <li class="nav-item nav-delivery-hide"><a class="nav-link" href="/web/orders"><i class="bi bi-list-check"></i> Pedidos</a></li>
+          <li class="nav-item nav-delivery-hide nav-customer-hide" id="publicRestaurantsNav"><a class="nav-link" href="/web/restaurants"><i class="bi bi-shop"></i> Restaurantes</a></li>
+          <li class="nav-item dropdown d-none" id="myRestaurantNav">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-shop-window"></i> Mi restaurante
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" data-rnav="panel" href="#"><i class="bi bi-speedometer2"></i> Panel</a></li>
+              <li><a class="dropdown-item" data-rnav="orders" href="#"><i class="bi bi-receipt"></i> Pedidos</a></li>
+              <li class="rnav-manager"><a class="dropdown-item" data-rnav="earnings" href="#"><i class="bi bi-cash-stack"></i> Ganancias</a></li>
+              <li class="rnav-manager"><a class="dropdown-item" data-rnav="team" href="#"><i class="bi bi-people"></i> Equipo</a></li>
+              <li class="rnav-manager"><hr class="dropdown-divider"></li>
+              <li class="rnav-manager"><a class="dropdown-item" data-rnav="profile" href="#"><i class="bi bi-person-gear"></i> Perfil del negocio</a></li>
+              <li class="rnav-manager"><a class="dropdown-item" data-rnav="location" href="#"><i class="bi bi-geo-alt"></i> Dirección y ubicación</a></li>
+            </ul>
+          </li>
+          <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/mandados"><i class="bi bi-box"></i> Mandados</a></li>
+          <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/cart"><i class="bi bi-cart"></i> Carrito <span id="cartBadge" class="badge rounded-pill bg-warning text-dark d-none">0</span></a></li>
+          <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/orders"><i class="bi bi-list-check"></i> Pedidos</a></li>
           <li class="nav-item d-none" id="deliveryNav"><a class="nav-link" href="/web/delivery"><i class="bi bi-bicycle"></i> Repartidor</a></li>
           <li class="nav-item" id="downloadAppNav"><a class="nav-link" href="/web/app"><i class="bi bi-phone"></i> Descargar app</a></li>
           <li class="nav-item dropdown d-none" id="adminOpsNav">
@@ -590,28 +627,37 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
     }
 
     function applyRestaurantNav(isStaff, restaurantId, canManage = false) {
-      const myLink = document.getElementById('myRestaurantNav');
+      const menu = document.getElementById('myRestaurantNav');
       const publicLink = document.getElementById('publicRestaurantsNav');
-      const profileNav = document.getElementById('businessProfileNav');
-      myLink?.classList.toggle('d-none', !isStaff);
-      if (myLink && restaurantId) {
-        myLink.querySelector('a').href = `/web/restaurants/${restaurantId}`;
+      menu?.classList.toggle('d-none', !isStaff);
+      if (menu && restaurantId) {
+        const routes = {
+          panel: '', orders: '/orders', earnings: '/earnings',
+          team: '/team', profile: '/profile', location: '/location',
+        };
+        menu.querySelectorAll('[data-rnav]').forEach(link => {
+          const suffix = routes[link.dataset.rnav] || '';
+          link.href = `/web/restaurants/${restaurantId}${suffix}`;
+        });
+        menu.querySelectorAll('.rnav-manager').forEach(el => {
+          el.classList.toggle('d-none', !canManage);
+        });
       }
       publicLink?.classList.toggle('d-none', Boolean(isStaff));
-      const showProfile = Boolean(isStaff && restaurantId && canManage);
-      profileNav?.classList.toggle('d-none', !showProfile);
-      if (profileNav && showProfile) {
-        profileNav.querySelector('a').href = `/web/restaurants/${restaurantId}/profile`;
-      }
+      // El menú del cliente (mandados, carrito y pedidos) no aplica al personal
+      // del restaurante; en móvil saturaba la navegación.
+      document.querySelectorAll('.nav-customer-hide').forEach(el => {
+        el.classList.toggle('d-none', Boolean(isStaff));
+      });
       const top = document.getElementById('userNameTop');
       const nav = document.getElementById('userNameNav');
-      const profileUrl = showProfile
+      const profileUrl = canManage && restaurantId
         ? `/web/restaurants/${restaurantId}/profile`
         : '/web/profile';
       if (top) top.href = profileUrl;
       if (nav) {
         nav.href = profileUrl;
-        nav.title = showProfile ? 'Perfil del negocio' : 'Mi perfil';
+        nav.title = canManage && restaurantId ? 'Perfil del negocio' : 'Mi perfil';
       }
     }
 

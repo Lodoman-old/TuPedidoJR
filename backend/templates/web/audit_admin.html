@@ -1,21 +1,203 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h4 class="m-0"><i class="bi bi-journal-text"></i> Auditoría</h4>
+<div class="d-flex justify-content-between align-items-start mb-2 gap-2 flex-wrap">
+  <div>
+    <h4 class="m-0"><i class="bi bi-journal-text"></i> Auditoría</h4>
+    <p class="small text-muted mb-0 mt-1">
+      Historial de acciones importantes: aprobaciones, pagos, reembolsos, cambios de configuración y de personal.
+      Es solo de lectura y sirve para saber <strong>quién hizo qué y cuándo</strong>.
+    </p>
+  </div>
   <button class="btn btn-outline-secondary btn-sm" onclick="loadAudit()">
     <i class="bi bi-arrow-clockwise"></i> Actualizar
   </button>
 </div>
 <div id="auditError" class="alert alert-danger d-none"></div>
 <div id="auditLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="auditSummary" class="row g-2 mb-3 d-none"></div>
+<div id="auditFilters" class="card p-2 mb-3 d-none">
+  <div class="row g-2 align-items-center">
+    <div class="col-12 col-md-7">
+      <input type="search" class="form-control form-control-sm" id="auditSearch"
+             placeholder="Buscar por usuario, acción o detalle...">
+    </div>
+    <div class="col-7 col-md-3">
+      <select class="form-select form-select-sm" id="auditCategory">
+        <option value="">Todos los movimientos</option>
+        <option value="restaurant">Restaurantes</option>
+        <option value="money">Pagos y reembolsos</option>
+        <option value="config">Configuración</option>
+        <option value="team">Equipo</option>
+      </select>
+    </div>
+    <div class="col-5 col-md-2 text-md-end">
+      <small class="text-muted" id="auditCount"></small>
+    </div>
+  </div>
+</div>
 <div id="auditContent" class="d-none"></div>
 {% endblock %}
 {% block scripts %}
 <script>
+  const ACTION_INFO = {
+    'restaurant.approve': ['Aprobó un restaurante', 'success', 'restaurant', 'bi-check-circle'],
+    'restaurant.reject': ['Rechazó un restaurante', 'danger', 'restaurant', 'bi-x-circle'],
+    'affiliation.update': ['Actualizó la afiliación', 'primary', 'restaurant', 'bi-patch-check'],
+    'restaurant.commission': ['Cambió la comisión', 'warning', 'config', 'bi-percent'],
+    'refund.marked': ['Marcó un reembolso como hecho', 'success', 'money', 'bi-arrow-counterclockwise'],
+    'transfer.confirm': ['Confirmó una transferencia', 'success', 'money', 'bi-bank'],
+    'payout.restaurant.generate': ['Generó pago a restaurante', 'primary', 'money', 'bi-wallet2'],
+    'payout.courier.generate': ['Generó pago a repartidor', 'primary', 'money', 'bi-wallet2'],
+    'payout.restaurant.paid': ['Pagó a un restaurante', 'success', 'money', 'bi-cash-coin'],
+    'payout.courier.paid': ['Pagó a un repartidor', 'success', 'money', 'bi-cash-coin'],
+    'advance.approve': ['Aprobó un avance de efectivo', 'success', 'money', 'bi-cash-stack'],
+    'advance.reject': ['Rechazó un avance de efectivo', 'danger', 'money', 'bi-cash-stack'],
+    'advance.settle': ['Liquidó un avance de efectivo', 'success', 'money', 'bi-cash-stack'],
+    'settings.update': ['Cambió la configuración', 'warning', 'config', 'bi-sliders'],
+    'team.add': ['Agregó a un miembro del equipo', 'primary', 'team', 'bi-person-plus'],
+    'team.update': ['Actualizó a un miembro del equipo', 'primary', 'team', 'bi-person-gear'],
+    'team.remove': ['Quitó a un miembro del equipo', 'danger', 'team', 'bi-person-dash'],
+  };
+  const ENTITY_LABELS = {
+    order: 'Pedido', restaurant: 'Restaurante',
+    restaurant_payout: 'Pago a restaurante', delivery_payout: 'Pago a repartidor',
+    cash_advance: 'Avance de efectivo', settings: 'Configuración',
+  };
+  const DETAIL_LABELS = {
+    name: 'Nombre', owner: 'Dueño', reason: 'Motivo', expires_at: 'Vence',
+    amount: 'Monto', total: 'Total', commission_percentage: 'Comisión',
+    payout_frequency_days: 'Días entre pagos', values: 'Valores cambiados',
+    email: 'Correo', role: 'Rol', active: 'Activo',
+    pays_restaurant: 'Paga al restaurante',
+  };
+  const MONEY_KEYS = new Set(['amount', 'total']);
+  const SETTING_LABELS = {
+    APP_COMMISSION_PERCENTAGE: 'Comisión (%)',
+    APP_FIXED_RESTAURANT_FEE: 'Cuota fija por pedido',
+    DELIVERY_BASE_FEE: 'Envío base',
+    DELIVERY_FREE_RADIUS_KM: 'Radio sin cargo (km)',
+    DELIVERY_EXTRA_FEE_PER_KM: 'Cargo por km extra',
+    DELIVERY_MAX_KM: 'Distancia máxima (km)',
+    DELIVERY_WARN_KM: 'Aviso por distancia (km)',
+    DELIVERY_APPROVAL_KM: 'Aprobación de repartidor (km)',
+    DELIVERY_APPROVAL_TIMEOUT_MIN: 'Cancelación sin repartidor (min)',
+    TRANSFER_ENABLED: 'Transferencia activa',
+    MP_ENABLED: 'Mercado Pago activo',
+    PUSH_ENABLED: 'Notificaciones push activas',
+    CANCELLATION_WINDOW_MIN: 'Minutos para cancelar',
+    CANCELLATION_REFUND_ENABLED: 'Reembolso al cancelar',
+    LOYALTY_ENABLED: 'Lealtad activa',
+    LOYALTY_POINTS_PER_100: 'Puntos por cada $100',
+    REFERRAL_BONUS_POINTS: 'Puntos por referido',
+    SUPPORT_PHONE: 'Teléfono de soporte',
+    SUPPORT_WHATSAPP: 'WhatsApp de soporte',
+  };
+
+  let allRows = [];
+
   function esc(value) {
     return String(value ?? '').replace(/[&<>"']/g, (c) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
+  }
+
+  function actionInfo(action) {
+    return ACTION_INFO[action] || [humanizeAction(action), 'secondary', 'other', 'bi-activity'];
+  }
+
+  function humanizeAction(action) {
+    const text = String(action || '').replace(/[._]/g, ' ').trim();
+    return text ? text.charAt(0).toUpperCase() + text.slice(1) : 'Movimiento';
+  }
+
+  function formatValue(key, value) {
+    if (value === null || value === undefined || value === '') return '—';
+    if (key === 'active') return value ? 'Sí' : 'No';
+    if (MONEY_KEYS.has(key)) {
+      const number = Number(value);
+      return Number.isFinite(number) ? '$' + number.toFixed(2) : String(value);
+    }
+    if (key === 'expires_at') {
+      const date = new Date(value + 'T12:00:00');
+      if (!Number.isNaN(date.getTime())) {
+        return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+      }
+    }
+    if (typeof value === 'object') {
+      return Object.entries(value).map(([k, v]) =>
+        `${SETTING_LABELS[k] || k.replace(/_/g, ' ')} = ${v}`
+      ).join(', ');
+    }
+    return String(value);
+  }
+
+  function detailLines(detail) {
+    if (!detail || typeof detail !== 'object') return [];
+    return Object.entries(detail).map(([key, value]) => {
+      const label = DETAIL_LABELS[key] || key.replace(/_/g, ' ');
+      return `<div class="small"><span class="text-muted">${esc(label)}:</span> ${esc(formatValue(key, value))}</div>`;
+    });
+  }
+
+  function rowMatches(row, search, category) {
+    const info = actionInfo(row.action);
+    if (category && info[2] !== category) return false;
+    if (!search) return true;
+    const haystack = [
+      row.user_name, row.action, info[0], row.entity,
+      ENTITY_LABELS[row.entity] || '', JSON.stringify(row.detail || {}),
+    ].join(' ').toLowerCase();
+    return haystack.includes(search.toLowerCase());
+  }
+
+  function renderRows() {
+    const content = document.getElementById('auditContent');
+    const search = document.getElementById('auditSearch').value.trim();
+    const category = document.getElementById('auditCategory').value;
+    const rows = allRows.filter(row => rowMatches(row, search, category));
+    document.getElementById('auditCount').textContent =
+      `${rows.length} de ${allRows.length} movimiento(s)`;
+
+    if (!rows.length) {
+      content.innerHTML = '<div class="card p-4 text-center text-muted">No hay movimientos con ese filtro.</div>';
+      return;
+    }
+
+    content.innerHTML = rows.map(row => {
+      const [label, color, , icon] = actionInfo(row.action);
+      const when = row.created_at ? new Date(row.created_at) : null;
+      const entity = ENTITY_LABELS[row.entity] || row.entity || '';
+      const details = detailLines(row.detail);
+      return `<div class="card p-3 mb-2">
+        <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+          <span class="badge bg-${color} text-${color === 'warning' ? 'dark' : 'white'}">
+            <i class="bi ${icon}"></i> ${esc(label)}
+          </span>
+          <small class="text-muted">${when ? when.toLocaleString('es-MX') : ''}</small>
+        </div>
+        <div class="mt-2 small">
+          <i class="bi bi-person-circle"></i> <strong>${esc(row.user_name || 'Sistema')}</strong>
+          ${entity ? `<span class="text-muted"> · ${esc(entity)}</span>` : ''}
+        </div>
+        ${details.length ? `<div class="mt-2 ps-1 border-start border-2 ps-2">${details.join('')}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  function renderSummary() {
+    const today = new Date().toDateString();
+    const todays = allRows.filter(row => row.created_at && new Date(row.created_at).toDateString() === today);
+    const users = new Set(allRows.map(row => row.user_name || 'Sistema'));
+    const last = allRows[0]?.created_at ? new Date(allRows[0].created_at).toLocaleString('es-MX') : '—';
+    const card = (label, value) => `<div class="col-6 col-md-3"><div class="card p-3 text-center">
+      <small class="text-muted">${label}</small><strong class="fs-6">${value}</strong>
+    </div></div>`;
+    document.getElementById('auditSummary').innerHTML =
+      card('Movimientos (últimos 200)', allRows.length) +
+      card('Hoy', todays.length) +
+      card('Usuarios distintos', users.size) +
+      card('Último movimiento', last);
+    document.getElementById('auditSummary').classList.remove('d-none');
   }
 
   async function loadAudit() {
@@ -24,23 +206,17 @@
     const error = document.getElementById('auditError');
     error.classList.add('d-none');
     loading.classList.remove('d-none');
+    content.classList.add('d-none');
     try {
-      const rows = await apiRequest('GET', '/admin/audit?limit=200');
-      if (!rows.length) {
-        content.innerHTML = '<div class="card p-3"><p class="text-muted mb-0">Sin movimientos registrados.</p></div>';
+      allRows = await apiRequest('GET', '/admin/audit?limit=200');
+      if (!allRows.length) {
+        content.innerHTML = '<div class="card p-4 text-center text-muted">Todavía no hay movimientos registrados.</div>';
+        document.getElementById('auditSummary').classList.add('d-none');
+        document.getElementById('auditFilters').classList.add('d-none');
       } else {
-        content.innerHTML = `<div class="card p-3"><div class="table-responsive">
-          <table class="table table-sm align-middle mb-0">
-            <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>Detalle</th></tr></thead>
-            <tbody>${rows.map(row => `<tr>
-              <td class="small">${row.created_at ? new Date(row.created_at).toLocaleString() : ''}</td>
-              <td>${esc(row.user_name || 'Sistema')}</td>
-              <td><code>${esc(row.action)}</code></td>
-              <td class="small">${esc(row.entity || '')}${row.entity_id ? '<br>' + esc(row.entity_id.slice(0, 12)) : ''}</td>
-              <td class="small">${esc(row.detail ? JSON.stringify(row.detail) : '')}</td>
-            </tr>`).join('')}</tbody>
-          </table>
-        </div></div>`;
+        renderSummary();
+        document.getElementById('auditFilters').classList.remove('d-none');
+        renderRows();
       }
       content.classList.remove('d-none');
     } catch (ex) {
@@ -52,6 +228,8 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('auditSearch')?.addEventListener('input', renderRows);
+    document.getElementById('auditCategory')?.addEventListener('change', renderRows);
     if (sessionStorage.getItem('is_superuser') === 'true') loadAudit();
   });
 </script>

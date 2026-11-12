@@ -605,6 +605,9 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
             target = '/web/orders';
           } else if (data.order_id) {
             target = '/web/orders/' + data.order_id;
+            if (data.type === 'order_status' && data.status === 'delivered') {
+              target += '#reviewSection';
+            }
           }
           window.location.href = target;
         });

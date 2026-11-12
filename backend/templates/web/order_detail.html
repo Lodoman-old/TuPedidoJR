@@ -298,6 +298,9 @@
     if (hasCourier) addBlock('courier', 'Repartidor', ratedCourier);
 
     document.getElementById('orderContent').prepend(div);
+    if (window.location.hash === '#reviewSection') {
+      setTimeout(() => div.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+    }
   }
 
   async function payOrder() {

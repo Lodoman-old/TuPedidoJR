@@ -737,7 +737,9 @@ async function refreshEstimate() {
       updateApprovalUi();
       const distanceWarn = document.getElementById('distanceWarning');
       if (distanceWarn) {
-        if (res.distance_warning) {
+        // En pedidos con aprobación del repartidor el aviso ya se muestra
+        // completo en la tarjeta de aprobación; evitamos duplicarlo.
+        if (res.distance_warning && !res.requires_courier_approval) {
           distanceWarn.textContent = res.distance_warning;
           distanceWarn.classList.remove('d-none');
         } else {

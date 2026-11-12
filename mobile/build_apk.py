@@ -61,7 +61,20 @@ def build() -> Path:
     flet = shutil.which("flet")
     if not flet:
         raise SystemExit("No se encontró el comando 'flet'. Instala flet 0.85.2.")
-    subprocess.run([flet, "build", "apk", "--verbose"], cwd=STAGE, check=True)
+    subprocess.run(
+        [
+            flet,
+            "build",
+            "apk",
+            "--verbose",
+            "--splash-color",
+            "#FFFFFF",
+            "--splash-dark-color",
+            "#0B1A45",
+        ],
+        cwd=STAGE,
+        check=True,
+    )
     apk = STAGE / "build" / "apk" / "TuPedidoJR.apk"
     if not apk.is_file():
         raise SystemExit(f"No se generó la APK en {apk}")

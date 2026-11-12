@@ -1,5 +1,5 @@
 [project]
-name = "mobile"
+name = "tupedidojr"
 version = "1.0.20"
 description = "TuPedidoJR mobile app (Flet)"
 requires-python = ">=3.11"

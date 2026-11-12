@@ -79,8 +79,15 @@ def build() -> Path:
         check=True,
     )
     output_dir = STAGE / "build" / "apk"
-    candidates = [output_dir / "TuPedidoJR.apk", output_dir / "mobile.apk"]
+    candidates = [
+        output_dir / "TuPedidoJR.apk",
+        output_dir / "tupedidojr.apk",
+        output_dir / "mobile.apk",
+    ]
     apk = next((path for path in candidates if path.is_file()), None)
+    if apk is None:
+        found = sorted(output_dir.glob("*.apk")) if output_dir.exists() else []
+        apk = found[0] if found else None
     if apk is None:
         raise SystemExit(f"No se generó la APK en {output_dir}")
     return apk

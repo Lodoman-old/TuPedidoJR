@@ -1,6 +1,6 @@
 [project]
 name = "mobile"
-version = "1.0.0"
+version = "1.0.20"
 description = "TuPedidoJR mobile app (Flet)"
 requires-python = ">=3.11"
 dependencies = [
@@ -14,7 +14,8 @@ dependencies = [
 product = "TuPedidoJR"
 org = "com.tupedidojr"
 company = "TuPedidoJR"
-build_version = "1.0.0"
+build_version = "1.0.20"
+build_number = 20
 permissions = ["biometric"]
 
 [tool.flet.app]

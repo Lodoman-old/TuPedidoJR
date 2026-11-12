@@ -79,7 +79,16 @@ def login_view(page: ft.Page):
         controls=[
             ft.SafeArea(
                 ft.Column([
-                    ft.Container(height=40),
+                    ft.Container(
+                        content=ft.Text(
+                            f"Versión {APP_VERSION}", size=11,
+                            color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD,
+                        ),
+                        bgcolor=ft.Colors.PRIMARY,
+                        border_radius=20,
+                        padding=ft.Padding(12, 4, 12, 4),
+                    ),
+                    ft.Container(height=24),
                     logo,
                     ft.Container(height=10),
                     ft.Text("Inicia sesión", size=16, color=ft.Colors.GREY),

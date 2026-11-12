@@ -4,8 +4,9 @@ from mobile import secure_auth, background_location
 
 
 def restaurants_view(page: ft.Page):
-    search = ft.TextField(hint_text="Buscar restaurante, giro o platillo...", prefix_icon=ft.Icons.SEARCH)
-    filter_open = ft.Switch(label="Abiertos", value=False)
+    usable = max(280, int((page.width or 360) - 20))
+    search = ft.TextField(hint_text="Buscar restaurante, giro o platillo...", prefix_icon=ft.Icons.SEARCH, width=usable)
+    filter_open = ft.Switch(label="Abiertos", value=False, width=120)
     filter_sort = ft.Dropdown(
         options=[
             ft.dropdown.Option(key="", text="Más cercanos"),
@@ -13,7 +14,7 @@ def restaurants_view(page: ft.Page):
             ft.dropdown.Option(key="fee", text="Menor envío"),
         ],
         value="",
-        width=200,
+        width=max(160, usable - 130),
         dense=True,
         text_size=12,
     )
@@ -92,9 +93,9 @@ def restaurants_view(page: ft.Page):
         ft.Row([
             filter_sort,
             filter_open,
-        ], spacing=10, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+        ], spacing=10, width=usable, vertical_alignment=ft.CrossAxisAlignment.CENTER),
         error_text, loading, list_view,
-    ], expand=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
+    ], expand=True)
 
     return ft.View(
         route="/restaurants",

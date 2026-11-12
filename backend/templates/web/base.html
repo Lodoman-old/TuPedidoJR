@@ -486,12 +486,25 @@ function addToCart(item) {
   item.option_ids = item.option_ids || [];
   item.option_names = item.option_names || [];
   item.line_key = cartLineKey(item);
-  const cart = getCart();
+  let cart = getCart();
+  const currentRid = sessionStorage.getItem('cartRestaurantId')
+    || (cart.find(i => i.restaurant_id) || {}).restaurant_id;
+  if (cart.length && item.restaurant_id && currentRid && currentRid !== item.restaurant_id) {
+    const ok = window.confirm(
+      'Tu carrito tiene productos de otro restaurante. ' +
+      'Cada pedido va a un solo restaurante.\\n\\n' +
+      '¿Quieres vaciar el carrito y empezar uno nuevo con este restaurante?'
+    );
+    if (!ok) return false;
+    cart = [];
+    sessionStorage.removeItem('cartRestaurantId');
+  }
   const existing = cart.find(i => (i.line_key || cartLineKey(i)) === item.line_key);
   if (existing) existing.quantity += item.quantity;
   else cart.push(item);
   saveCart(cart);
   if (item.restaurant_id) sessionStorage.setItem('cartRestaurantId', item.restaurant_id);
+  return true;
 }
 function removeFromCart(key) {
   let cart = getCart().filter(i => (i.line_key || cartLineKey(i)) !== key && i.menu_item_id !== key);
@@ -508,7 +521,23 @@ function setCartQuantity(menuItemId, qty, meta) {
   let cart = getCart();
   const quantity = Math.max(0, Math.min(99, parseInt(qty, 10) || 0));
   const key = meta ? cartLineKey({ menu_item_id: menuItemId, option_ids: meta.option_ids || [] }) : menuItemId;
-  const existing = findCartLine(cart, key);
+  let existing = findCartLine(cart, key);
+  const currentRid = sessionStorage.getItem('cartRestaurantId')
+    || (cart.find(i => i.restaurant_id) || {}).restaurant_id;
+  if (
+    quantity > 0 && !existing && meta && meta.restaurant_id
+    && currentRid && currentRid !== meta.restaurant_id
+  ) {
+    const ok = window.confirm(
+      'Tu carrito tiene productos de otro restaurante. ' +
+      'Cada pedido va a un solo restaurante.\\n\\n' +
+      '¿Quieres vaciar el carrito y empezar uno nuevo con este restaurante?'
+    );
+    if (!ok) return 0;
+    cart = [];
+    existing = null;
+    sessionStorage.removeItem('cartRestaurantId');
+  }
   if (quantity === 0) {
     cart = cart.filter(i => (i.line_key || cartLineKey(i)) !== key && i.menu_item_id !== menuItemId);
   } else if (existing) {

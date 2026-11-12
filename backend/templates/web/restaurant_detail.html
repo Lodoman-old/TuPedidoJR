@@ -268,8 +268,8 @@
 
   function applyQty(input, qty) {
     const value = Math.max(0, Math.min(99, parseInt(qty, 10) || 0));
-    input.value = value;
-    setCartQuantity(input.dataset.mid, value, itemMeta(input));
+    const applied = setCartQuantity(input.dataset.mid, value, itemMeta(input));
+    input.value = applied;
     updateCartBadge();
   }
 
@@ -277,7 +277,8 @@
     container.querySelectorAll('.qty-input').forEach(input => {
       input.addEventListener('input', () => {
         const value = Math.max(0, Math.min(99, parseInt(input.value, 10) || 0));
-        setCartQuantity(input.dataset.mid, value, itemMeta(input));
+        const applied = setCartQuantity(input.dataset.mid, value, itemMeta(input));
+        if (String(applied) !== input.value) input.value = applied;
         updateCartBadge();
       });
       input.addEventListener('blur', () => applyQty(input, input.value));
@@ -411,7 +412,7 @@
           }
         }
         const result = readSelection(modalEl);
-        addToCart({
+        const added = addToCart({
           menu_item_id: item.id,
           name: item.name,
           price: result.unit,
@@ -421,6 +422,7 @@
           quantity,
           restaurant_id: RID,
         });
+        if (!added) return false;
         showToast(`${item.name} agregado al carrito`);
       },
     });

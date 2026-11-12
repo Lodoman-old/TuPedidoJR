@@ -84,8 +84,19 @@ async def estimate_time(
     for item in body.items:
         menu_result = await db.execute(select(MenuItem).where(MenuItem.id == item.menu_item_id))
         menu_item = menu_result.scalar_one_or_none()
-        if not menu_item or menu_item.restaurant_id != restaurant.id:
-            raise HTTPException(status_code=400, detail=f"Item {item.menu_item_id} no válido")
+        if not menu_item:
+            raise HTTPException(
+                status_code=400,
+                detail="Uno de los productos ya no está disponible",
+            )
+        if menu_item.restaurant_id != restaurant.id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Todos los productos deben ser del mismo restaurante. "
+                    "Un pedido solo puede incluir productos de un negocio."
+                ),
+            )
         try:
             unit_price, selected = await resolve_item_options(db, menu_item, item.option_ids)
         except ValueError as exc:
@@ -173,8 +184,19 @@ async def estimate_price(
     for item in body.items:
         menu_result = await db.execute(select(MenuItem).where(MenuItem.id == item.menu_item_id))
         menu_item = menu_result.scalar_one_or_none()
-        if not menu_item or menu_item.restaurant_id != restaurant.id:
-            raise HTTPException(status_code=400, detail=f"Item {item.menu_item_id} no válido")
+        if not menu_item:
+            raise HTTPException(
+                status_code=400,
+                detail="Uno de los productos ya no está disponible",
+            )
+        if menu_item.restaurant_id != restaurant.id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Todos los productos deben ser del mismo restaurante. "
+                    "Un pedido solo puede incluir productos de un negocio."
+                ),
+            )
         try:
             unit_price, selected = await resolve_item_options(db, menu_item, item.option_ids)
         except ValueError as exc:
@@ -334,8 +356,19 @@ async def create_order(
     for item in body.items:
         menu_result = await db.execute(select(MenuItem).where(MenuItem.id == item.menu_item_id))
         menu_item = menu_result.scalar_one_or_none()
-        if not menu_item or menu_item.restaurant_id != restaurant.id:
-            raise HTTPException(status_code=400, detail=f"Item {item.menu_item_id} no válido")
+        if not menu_item:
+            raise HTTPException(
+                status_code=400,
+                detail="Uno de los productos ya no está disponible",
+            )
+        if menu_item.restaurant_id != restaurant.id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Todos los productos deben ser del mismo restaurante. "
+                    "Un pedido solo puede incluir productos de un negocio."
+                ),
+            )
         try:
             unit_price, selected = await resolve_item_options(db, menu_item, item.option_ids)
         except ValueError as exc:

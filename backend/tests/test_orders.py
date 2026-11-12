@@ -336,3 +336,37 @@ class TestCancelOrder:
             headers={"Authorization": f"Bearer {user_token}"},
         )
         assert resp.status_code == 404
+
+async def test_mixed_restaurant_cart_is_rejected(
+    client: AsyncClient, db_session, user_token, seeded_restaurant
+):
+    resto, item = seeded_restaurant
+    other = Restaurant(
+        id=uuid.uuid4(), name="Otro Resto", owner_id=resto.owner_id,
+        location="SRID=4326;POINT(-99.13 19.43)", address="Otra calle",
+        is_open=True, rating=4.0, delivery_radius_m=5000, delivery_fee=15.00,
+        affiliation_expires_at=date.today() + timedelta(days=365),
+    )
+    other_item = MenuItem(
+        id=uuid.uuid4(), restaurant_id=other.id, name="Otra Burger",
+        price=40.00, preparation_time_min=5, is_available=True,
+    )
+    db_session.add(other)
+    db_session.add(other_item)
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/v1/orders",
+        json={
+            "restaurant_id": str(resto.id),
+            "items": [
+                {"menu_item_id": str(item.id), "quantity": 1},
+                {"menu_item_id": str(other_item.id), "quantity": 1},
+            ],
+            "delivery_address": "Calle Principal 123",
+            "delivery_location": {"lat": 19.44, "lng": -99.14},
+        },
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert resp.status_code == 400
+    assert "mismo restaurante" in resp.json()["detail"]

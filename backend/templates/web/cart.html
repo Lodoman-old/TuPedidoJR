@@ -76,6 +76,11 @@ let scheduleState = { enabled: false, value: '' };
 
   const money = n => '$' + parseFloat(n || 0).toFixed(2);
 
+  async function clearMixedCart() {
+    await clearCartNow();
+    renderCart();
+  }
+
   function renderCart() {
     const cart = getCart();
     if (cart.length && !sessionStorage.getItem('cartRestaurantId')) {
@@ -90,6 +95,16 @@ let scheduleState = { enabled: false, value: '' };
       return;
     }
     empty.classList.add('d-none');
+    const restaurantIds = [...new Set(cart.map(i => i.restaurant_id).filter(Boolean))];
+    if (restaurantIds.length > 1) {
+      container.innerHTML = `<div class="card p-4 text-center">
+        <i class="bi bi-shop" style="font-size:2.5rem;color:#F58220"></i>
+        <h5 class="mt-2">Tu carrito tiene productos de varios restaurantes</h5>
+        <p class="text-muted mb-3">Cada pedido se envía a un solo restaurante y el envío se calcula desde ese negocio. Vuelve a armar el carrito con productos de un solo restaurante.</p>
+        <button class="btn btn-primary" onclick="clearMixedCart()">Vaciar carrito y empezar de nuevo</button>
+      </div>`;
+      return;
+    }
     let subtotal = 0;
     let html = '<div class="card p-3 mb-3">';
     cart.forEach((item, idx) => {

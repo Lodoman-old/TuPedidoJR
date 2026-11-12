@@ -9,6 +9,7 @@ from jose import jwt
 from sqlalchemy import select
 
 from app.db.session import async_session
+from app.core.config import settings
 from app.models.delivery_person import DeliveryPerson
 from app.models.mandado import Mandado
 from app.models.order import Order
@@ -177,6 +178,12 @@ async def send_to_tokens(
     url = FCM_ENDPOINT.format(project_id=project_id)
     payload_data = {str(k): str(v) for k, v in (data or {}).items()}
 
+    base_url = (settings.APP_URL or "").rstrip("/")
+    logo_url = f"{base_url}/static/logo_notification.png" if base_url else "/static/logo_notification.png"
+    android_notification: dict = {"icon": "ic_stat_tup", "color": "#1B2F6B"}
+    if base_url:
+        android_notification["image"] = logo_url
+
     async with httpx.AsyncClient(timeout=15) as client:
         for push_token in tokens:
             payload = {
@@ -184,10 +191,13 @@ async def send_to_tokens(
                     "token": push_token.token,
                     "notification": {"title": title, "body": body},
                     "data": payload_data,
-                    "android": {"priority": "high"},
+                    "android": {
+                        "priority": "high",
+                        "notification": android_notification,
+                    },
                     "webpush": {
                         "headers": {"Urgency": "high"},
-                        "notification": {"icon": "/static/logo.png"},
+                        "notification": {"icon": logo_url},
                     },
                 }
             }

@@ -12,12 +12,12 @@ cart: list[dict] = []
 def restaurant_detail_view(page: ft.Page, rid: str):
     loading = ft.ProgressBar(visible=False)
     error_text = ft.Text("", color=ft.Colors.RED)
-    menu_area = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, expand=True)
+    menu_area = ft.Column(spacing=8)
     resto_name = ft.Text(size=22, weight=ft.FontWeight.BOLD)
     resto_cuisine = ft.Text(size=13, color=ft.Colors.BLUE)
     resto_status = ft.Text(size=13, color=ft.Colors.GREEN)
     commission_note = ft.Text("", size=11, color=ft.Colors.BLUE, visible=False)
-    resto_logo = ft.Image(src="", width=100, height=100, border_radius=12, fit=ft.BoxFit.COVER)
+    resto_logo = ft.Image(src=f"{api.api_url}/static/logo.png", width=100, height=100, border_radius=12, fit=ft.BoxFit.COVER, visible=False)
     upload_status = ft.Text("", size=12, color=ft.Colors.GREEN)
 
     async def _upload_logo(e):
@@ -235,12 +235,23 @@ def restaurant_detail_view(page: ft.Page, rid: str):
         route=f"/restaurant/{rid}",
         controls=[
             appbar,
-            ft.Column([
-                resto_logo, resto_name, resto_cuisine, resto_status, error_text, upload_status, loading,
-                commission_note,
-                owner_panel,
-                menu_area,
-            ], expand=True),
+            ft.ListView(
+                controls=[
+                    resto_logo,
+                    resto_name,
+                    resto_cuisine,
+                    resto_status,
+                    error_text,
+                    upload_status,
+                    loading,
+                    commission_note,
+                    owner_panel,
+                    menu_area,
+                ],
+                spacing=8,
+                padding=10,
+                expand=True,
+            ),
         ]
     )
 

@@ -53,7 +53,7 @@ def restaurant_profile_view(page: ft.Page, rid: str):
     business_msg = ft.Text("", size=11)
 
     # ===== Logo =====
-    logo_img = ft.Image(src="", width=84, height=84, border_radius=12, fit=ft.BoxFit.COVER, visible=False)
+    logo_img = ft.Image(src=f"{api.api_url}/static/logo.png", width=84, height=84, border_radius=12, fit=ft.BoxFit.COVER, visible=False)
     logo_icon = ft.Icon(ft.Icons.STORE, size=42, color=ft.Colors.GREY)
     logo_box = ft.Container(
         content=ft.Stack([logo_icon, logo_img]),

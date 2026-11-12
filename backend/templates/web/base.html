@@ -599,8 +599,50 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
     }
     window.refreshPendingRegistrations = refreshPendingRegistrations;
 
-    document.addEventListener('DOMContentLoaded', () => {
+    async function capRestoreSession() {
+      const saved = localStorage.getItem('tupedidojr_token');
+      if (!saved) return;
+      let ok = true;
+      const bio = window.Capacitor.Plugins && window.Capacitor.Plugins.NativeBiometric;
+      if (bio) {
+        try {
+          const avail = await bio.isAvailable({ useFallback: true });
+          if (avail && avail.isAvailable) {
+            await bio.verifyIdentity({
+              reason: 'Entra a TuPedidoJR',
+              title: 'TuPedidoJR',
+              subtitle: 'Confirma tu identidad',
+              description: 'Usa tu huella o rostro para entrar',
+            });
+          }
+        } catch (e) {
+          ok = false;
+        }
+      }
+      if (ok) sessionStorage.setItem('token', saved);
+    }
+
+    async function capInit() {
+      const plugins = window.Capacitor.Plugins || {};
+      try { await plugins.StatusBar?.setBackgroundColor({ color: '#1B2F6B' }); } catch (e) {}
+      try { await plugins.StatusBar?.setStyle({ style: 'LIGHT' }); } catch (e) {}
+      try {
+        plugins.App?.addListener('backButton', ({ canGoBack }) => {
+          if (canGoBack || window.history.length > 1) window.history.back();
+          else plugins.App.exitApp();
+        });
+      } catch (e) {}
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const CAP = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+      window.__CAP = CAP;
+      if (CAP) {
+        await capInit();
+        if (localStorage.getItem('tupedidojr_token')) await capRestoreSession();
+      }
       const token = sessionStorage.getItem('token');
+      if (CAP && token) localStorage.setItem('tupedidojr_token', token);
       const publicPaths = [
         '/web/login',
         '/web/register',
@@ -638,6 +680,7 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
         sessionStorage.removeItem('is_restaurant_staff');
         sessionStorage.removeItem('is_restaurant_manager');
         sessionStorage.removeItem('my_restaurant_id');
+        localStorage.removeItem('tupedidojr_token');
         window.location.href = '/web/login';
       });
 

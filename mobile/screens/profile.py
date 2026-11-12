@@ -1,5 +1,6 @@
 import math
 import re
+import time
 
 import flet as ft
 from mobile.api import api, ApiError
@@ -193,11 +194,43 @@ async def _delete_addr(addr_id: str, reload_cb):
         pass
 
 
+def _split_saved_address(raw: str) -> tuple[str, str, str]:
+    """Separa calle, C.P. y colonia de una dirección guardada."""
+    text = (raw or "").strip()
+    if not text:
+        return "", "", ""
+    cp_match = re.search(r"(?:C\.?P\.?|CP)\s*(\d{5})", text, re.IGNORECASE)
+    cp = cp_match.group(1) if cp_match else ""
+    if not cp:
+        match = re.search(r"\b(\d{5})\b", text)
+        if match:
+            cp = match.group(1)
+    parts = [part.strip() for part in text.split(",") if part.strip()]
+    street = parts[0] if parts else ""
+    colonia = ""
+    for part in parts[1:]:
+        if re.search(r"(?:C\.?P\.?|CP)\s*\d{5}", part, re.IGNORECASE) or re.fullmatch(r"\d{5}", part):
+            continue
+        colonia = part
+        break
+    return street, cp, colonia
+
+
 def _open_form(page: ft.Page, existing: dict | None, reload_cb):
+    existing_street, existing_cp, existing_colonia = _split_saved_address(
+        (existing or {}).get("address", "")
+    )
     name = ft.TextField(label="Nombre (ej: Casa, Trabajo)", value=existing["name"] if existing else "")
-    address = ft.TextField(label="Calle y número", multiline=False, value=existing["address"] if existing else "")
-    cp = ft.TextField(label="C.P.", width=118, max_length=5, keyboard_type=ft.KeyboardType.NUMBER)
-    colonia = ft.Dropdown(label="Colonia", expand=True, options=[], text_size=13)
+    address = ft.TextField(label="Calle y número", multiline=False, value=existing_street if existing else "")
+    cp = ft.TextField(
+        label="C.P.", width=118, max_length=5,
+        keyboard_type=ft.KeyboardType.NUMBER,
+        value=existing_cp if existing else "",
+    )
+    colonia = ft.Dropdown(
+        label="Colonia", expand=True, options=[], text_size=13,
+        value=(existing_colonia or None) if existing else None,
+    )
     notes = ft.TextField(label="Notas (opcional)", value=existing.get("notes", "") if existing else "")
     is_default = ft.Checkbox(label="Dirección predeterminada", value=existing.get("is_default", False) if existing else False)
     error_t = ft.Text("", color=ft.Colors.RED)
@@ -207,12 +240,15 @@ def _open_form(page: ft.Page, existing: dict | None, reload_cb):
         "lat": (existing or {}).get("location", {}).get("lat", 20.644),
         "lng": (existing or {}).get("location", {}).get("lng", -100.993),
     }
-    geo_state = {"address": (existing or {}).get("address", "")}
+    existing_full = (
+        compose_address(existing_street, existing_colonia, existing_cp) if existing else ""
+    )
+    geo_state = {"address": existing_full}
 
     map_size = 280
     map_zoom = 16
     map_container, map_img, _ = map_image(coords["lat"], coords["lng"], zoom=map_zoom, size=map_size)
-    map_hint = ft.Text("Toca el mapa para mover el pin.", size=11, color=ft.Colors.GREY)
+    map_hint = ft.Text("Toca o arrastra el mapa para mover el pin.", size=11, color=ft.Colors.GREY)
 
     def _refresh_map():
         update_map(map_img, None, coords["lat"], coords["lng"], zoom=map_zoom, size=map_size)
@@ -351,6 +387,38 @@ def _open_form(page: ft.Page, existing: dict | None, reload_cb):
         on_click=use_device_location,
     )
     map_gesture = ft.GestureDetector(content=map_container, on_tap_down=on_map_tap)
+    _last_refresh = {"t": 0.0}
+
+    def on_map_pan(e):
+        delta = getattr(e, "local_delta", None)
+        if delta is None:
+            return
+        lat, lng = coords["lat"], coords["lng"]
+        meters_per_pixel = 156543.03392 * math.cos(math.radians(lat)) / (2 ** map_zoom)
+        coords["lat"] = lat - (delta.y * meters_per_pixel) / 111320.0
+        coords["lng"] = lng + (delta.x * meters_per_pixel) / (
+            111320.0 * max(math.cos(math.radians(lat)), 0.1)
+        )
+        now = time.monotonic()
+        if now - _last_refresh["t"] >= 0.35:
+            _last_refresh["t"] = now
+            _refresh_map()
+            page.update()
+
+    def on_map_pan_end(e):
+        geo_state["address"] = _full_address()
+        _refresh_map()
+        geo_msg.value = "Pin ajustado. Revisa la calle o usa el GPS si hace falta."
+        geo_msg.color = ft.Colors.GREEN
+        page.update()
+
+    map_gesture = ft.GestureDetector(
+        content=map_container,
+        on_tap_down=on_map_tap,
+        on_pan_update=on_map_pan,
+        on_pan_end=on_map_pan_end,
+        drag_interval=120,
+    )
 
     async def save(e):
         full = _full_address()
@@ -391,5 +459,7 @@ def _open_form(page: ft.Page, existing: dict | None, reload_cb):
         actions=[ft.TextButton("Cancelar", on_click=lambda _: close_dlg(page, dlg)), ft.FilledButton("Guardar", on_click=save)],
     )
     open_dlg(page, dlg)
-    if not existing and not (address.value or "").strip():
+    if existing_cp:
+        page.run_task(_load_cp_colonias, existing_cp, existing_colonia)
+    elif not existing and not (address.value or "").strip():
         page.run_task(_apply_device, True)

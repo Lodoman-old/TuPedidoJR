@@ -32,7 +32,13 @@ def login_view(page: ft.Page):
             await secure_auth.save_session(resp["access_token"], email.value, "")
             await hydrate_cart(cart)
             page.run_task(register_device_token, True)
-            await page.push_route("/restaurants")
+            is_courier = False
+            try:
+                await api.get_delivery_profile()
+                is_courier = True
+            except Exception:
+                pass
+            await page.push_route("/delivery" if is_courier else "/restaurants")
         except ApiError as ex:
             error_text.value = ex.detail
         except Exception:

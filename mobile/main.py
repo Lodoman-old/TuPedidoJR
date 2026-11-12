@@ -67,15 +67,14 @@ def _nav_bar(page: ft.Page):
             on_change=lambda e: page.run_task(page.push_route, routes[e.control.selected_index]),
         )
     else:
-        idx_map = {"/restaurants": 0, "/orders": 1, "/profile": 2, "/delivery": 3}
-        routes = ["/restaurants", "/orders", "/profile", "/delivery"]
+        idx_map = {"/restaurants": 0, "/orders": 1, "/profile": 2}
+        routes = ["/restaurants", "/orders", "/profile"]
         nb = ft.NavigationBar(
             selected_index=idx_map.get(page.route, 0),
             destinations=[
                 ft.NavigationBarDestination(icon=ft.Icons.STORE, label="Restaurantes"),
                 ft.NavigationBarDestination(icon=ft.Icons.RECEIPT, label="Pedidos"),
                 ft.NavigationBarDestination(icon=ft.Icons.PERSON, label="Perfil"),
-                ft.NavigationBarDestination(icon=ft.Icons.PEDAL_BIKE, label="Repartidor"),
             ],
             on_change=lambda e: page.run_task(page.push_route, routes[e.control.selected_index]),
         )

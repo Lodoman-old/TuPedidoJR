@@ -44,6 +44,30 @@
     setTimeout(() => map.invalidateSize(), 200);
   }
 
+  let coverageCircles = [];
+
+  async function loadCoverage() {
+    try {
+      const info = await apiRequest('GET', '/admin/delivery-radius');
+      coverageCircles.forEach(c => map.removeLayer(c));
+      coverageCircles = [];
+      const centers = (info.centers && info.centers.length)
+        ? info.centers
+        : [{ name: 'Cobertura', lat: 20.644, lng: -100.993 }];
+      centers.forEach(center => {
+        const circle = L.circle([center.lat, center.lng], {
+          radius: info.radius_m,
+          color: '#1B2F6B',
+          weight: 2,
+          fillColor: '#1B2F6B',
+          fillOpacity: 0.07,
+        }).addTo(map);
+        circle.bindTooltip(`${center.name}: ${(info.radius_m / 1000).toFixed(1)} km`);
+        coverageCircles.push(circle);
+      });
+    } catch (e) { /* radio no disponible */ }
+  }
+
   function statusInfo(c) {
     if (c.current_order_id) return { color: '#fd7e14', label: 'En reparto' };
     if (!c.is_available) return { color: '#6c757d', label: 'No disponible' };
@@ -131,6 +155,7 @@
       return;
     }
     initMap();
+    loadCoverage();
     loadCouriers();
     setInterval(loadCouriers, 5000);
   });

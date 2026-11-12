@@ -84,6 +84,7 @@ let myDeliveryOrdersCache = [];
 
 document.addEventListener('DOMContentLoaded', () => {
   loadDeliveryData();
+  if (gpsWatchId == null) startGps();
   document.getElementById('availSwitch')?.addEventListener('change', toggleAvailability);
   startAvailablePolling();
   document.addEventListener('click', () => {
@@ -302,6 +303,7 @@ async function acceptOrder(oid) {
   try {
     await acceptDeliveryOrder(oid);
     showToast('Pedido aceptado — ve a Mis repartos');
+    if (gpsWatchId == null) startGps();
     loadAvailable();
     loadMyOrders();
     switchTab('myorders');

@@ -34,6 +34,33 @@ def _money(value) -> str:
     return f"{float(value or 0):.2f}"
 
 
+@router.get("/delivery-radius")
+async def delivery_radius(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    from app.services.order_service import get_setting_value
+
+    raw = await get_setting_value(db, "DELIVERY_FREE_RADIUS_KM", "6")
+    try:
+        radius_m = int(float(raw) * 1000)
+    except (TypeError, ValueError):
+        radius_m = 6000
+
+    rows = await db.execute(
+        text("""
+            SELECT name, ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng
+            FROM restaurants
+            WHERE status = 'active' AND location IS NOT NULL
+        """)
+    )
+    centers = [
+        {"name": row["name"], "lat": float(row["lat"]), "lng": float(row["lng"])}
+        for row in rows.mappings().all()
+    ]
+    return {"radius_m": radius_m, "centers": centers}
+
+
 @router.get("/couriers/locations")
 async def courier_locations(
     db: AsyncSession = Depends(get_db),

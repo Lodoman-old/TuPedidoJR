@@ -253,20 +253,34 @@ async def send_to_user(db, user_id, title: str, body: str, data: dict | None = N
 
 
 async def _eta_minutes(db, order) -> int | None:
-    """Tiempo estimado en minutos desde la ubicación del repartidor al cliente."""
+    """Tiempo estimado en minutos usando la ruta real hasta el cliente."""
     try:
-        distance = await db.scalar(
-            text(
-                "SELECT ST_Distance(dp.current_location::geography, o.delivery_location::geography) "
-                "FROM delivery_persons dp, orders o "
-                "WHERE dp.id = :dp AND o.id = :oid"
-            ),
-            {"dp": order.delivery_person_id, "oid": order.id},
-        )
-        if distance is None:
+        row = (
+            await db.execute(
+                text(
+                    "SELECT "
+                    "ST_Y(dp.current_location::geometry) AS dlat, "
+                    "ST_X(dp.current_location::geometry) AS dlng, "
+                    "ST_Y(o.delivery_location::geometry) AS olat, "
+                    "ST_X(o.delivery_location::geometry) AS olng "
+                    "FROM delivery_persons dp, orders o "
+                    "WHERE dp.id = :dp AND o.id = :oid"
+                ),
+                {"dp": order.delivery_person_id, "oid": order.id},
+            )
+        ).mappings().first()
+        if not row or row["dlat"] is None or row["dlng"] is None:
             return None
-        km = float(distance) / 1000.0
-        return max(2, round(km / 25.0 * 60.0))
+        from app.services.route_service import route_info
+
+        _distance, duration_min, _source = await route_info(
+            db,
+            float(row["dlat"]),
+            float(row["dlng"]),
+            float(row["olat"]),
+            float(row["olng"]),
+        )
+        return max(2, round(duration_min))
     except Exception:
         return None
 

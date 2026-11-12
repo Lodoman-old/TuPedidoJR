@@ -199,7 +199,7 @@ async def send_to_tokens(
         style or "", ("/static/logo_notification_circle.png", "#1B2F6B")
     )
     logo_url = f"{base_url}{image_path}" if base_url else image_path
-    android_notification: dict = {"icon": "ic_stat_tup", "color": accent}
+    android_notification: dict = {"icon": "ic_stat_tup", "color": accent, "channel_id": "orders_high"}
     if base_url:
         android_notification["image"] = logo_url
 
@@ -405,9 +405,54 @@ async def notify_arrival(order_id: str) -> None:
         logger.exception("Push arrival notification failed for %s", order_id)
 
 
+async def notify_available_order(order_id: str, ready: bool = False) -> None:
+    """Avisa a los repartidores disponibles que hay un pedido por tomar."""
+    try:
+        async with async_session() as db:
+            result = await db.execute(select(Order).where(Order.id == order_id))
+            order = result.scalar_one_or_none()
+            if not order:
+                return
+            resto = await db.execute(
+                select(Restaurant).where(Restaurant.id == order.restaurant_id)
+            )
+            restaurant = resto.scalar_one_or_none()
+
+            couriers = await db.execute(
+                select(DeliveryPerson).where(DeliveryPerson.is_available.is_(True))
+            )
+            people = list(couriers.scalars().all())
+            if not people:
+                couriers = await db.execute(select(DeliveryPerson))
+                people = list(couriers.scalars().all())
+
+            title = "Pedido listo para recoger" if ready else "Pedido disponible"
+            name = restaurant.name if restaurant else "Restaurante"
+            earnings = float(order.delivery_earnings or 0)
+            body = f"{name} · ${earnings:.2f} por el reparto"
+            for dp in people:
+                await send_to_user(
+                    db,
+                    dp.user_id,
+                    title,
+                    body,
+                    {"type": "available_order", "order_id": str(order.id)},
+                    "red" if ready else "amber",
+                )
+    except Exception:
+        logger.exception("Push available-order notification failed for %s", order_id)
+
+
 def schedule_order_status(order_id: str, status: str) -> None:
     try:
         asyncio.create_task(notify_order_status(order_id, status))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
+def schedule_available_order(order_id: str, ready: bool = False) -> None:
+    try:
+        asyncio.create_task(notify_available_order(order_id, ready))
     except RuntimeError:
         logger.debug("No event loop for push notification")
 

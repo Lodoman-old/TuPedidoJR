@@ -29,7 +29,7 @@ from app.services.restaurant_access import ORDER_ROLES, have_role
 from app.services.estimation_service import calculate_estimated_time
 from app.services.order_service import calculate_order_totals, get_setting_value, resolve_item_options
 from app.services.loyalty_service import apply_redemption, preview_redemption, award_on_delivery
-from app.services.push_service import schedule_new_order, schedule_order_status
+from app.services.push_service import schedule_new_order, schedule_order_status, schedule_available_order
 from app.services.schedule_service import restaurant_open_state
 from app.services.tracking_service import build_tracking
 from app.ws.manager import ConnectionManager
@@ -469,6 +469,12 @@ async def update_order_status(
     ws_manager = _get_ws_manager()
     await ws_manager.notify_order_status(str(order.id), body.status)
     schedule_order_status(str(order.id), body.status)
+    if (
+        body.status in ("preparing", "ready")
+        and order.delivery_mode == "platform"
+        and not order.delivery_person_id
+    ):
+        schedule_available_order(str(order.id), body.status == "ready")
     return order
 
 

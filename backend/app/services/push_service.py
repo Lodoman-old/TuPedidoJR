@@ -342,6 +342,10 @@ async def notify_new_order(order_id: str) -> None:
             order = result.scalar_one_or_none()
             if not order:
                 return
+            # Los pedidos lejanos no se muestran al restaurante hasta que un
+            # repartidor los acepte.
+            if order.requires_courier_approval and not order.delivery_person_id:
+                return
             resto_result = await db.execute(
                 select(Restaurant).where(Restaurant.id == order.restaurant_id)
             )
@@ -546,9 +550,9 @@ async def notify_courier_assigned(order_id: str) -> None:
                 await send_to_user(
                     db,
                     user_id,
-                    "Repartidor reservado" if reserved else "Repartidor asignado",
+                    "Nuevo pedido con repartidor" if reserved else "Repartidor asignado",
                     (
-                        f"{name}: un repartidor ya aceptó este pedido lejano. "
+                        f"{name}: un repartidor aceptó este pedido lejano. "
                         "Confírmalo para comenzar a prepararlo."
                         if reserved
                         else f"{name}: un repartidor aceptó el pedido. Ya puedes prepararlo."

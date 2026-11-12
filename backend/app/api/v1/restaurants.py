@@ -595,7 +595,13 @@ async def list_restaurant_orders(
         raise HTTPException(status_code=403, detail="No eres dueño de este restaurante")
     stmt = (
         select(Order)
-        .where(Order.restaurant_id == restaurant_id)
+        .where(
+            Order.restaurant_id == restaurant_id,
+            or_(
+                Order.requires_courier_approval.is_(False),
+                Order.delivery_person_id.is_not(None),
+            ),
+        )
         .options(selectinload(Order.items))
         .order_by(Order.created_at.desc())
     )
@@ -629,6 +635,15 @@ async def update_restaurant_order_status(
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if (
+        not current_user.is_superuser
+        and order.requires_courier_approval
+        and not order.delivery_person_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Este pedido se mostrará al restaurante cuando un repartidor lo acepte",
+        )
     if (
         order.status == "awaiting_courier"
         and body.status == "preparing"
@@ -722,6 +737,16 @@ async def cancel_restaurant_order(
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
+
+    if (
+        not current_user.is_superuser
+        and order.requires_courier_approval
+        and not order.delivery_person_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Este pedido se mostrará al restaurante cuando un repartidor lo acepte",
+        )
 
     role = "admin" if current_user.is_superuser else "restaurant"
     try:

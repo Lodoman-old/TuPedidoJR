@@ -145,26 +145,18 @@ async def test_far_order_needs_courier_before_preparing(
     assert order["requires_courier_approval"] is True
     assert order["courier_approval_deadline"] is not None
 
-    # Se ofrece a los repartidores desde que se paga, antes de que el
-    # restaurante confirme.
-    available_before = await client.get(
-        "/api/v1/delivery/available-orders", headers=_headers(courier_token)
-    )
-    assert available_before.status_code == 200
-    assert any(row["id"] == order["id"] for row in available_before.json())
-
-    confirmed = await _confirm(client, owner_token, restaurant, order["id"])
-    assert confirmed.status_code == 200
-    assert confirmed.json()["status"] == "awaiting_courier"
-
-    # El restaurante no puede preparar hasta que un repartidor acepte.
-    early = await client.patch(
-        f"/api/v1/restaurants/{restaurant.id}/orders/{order['id']}/status",
-        json={"status": "preparing"},
+    # Mientras no haya repartidor, el restaurante no ve el pedido.
+    hidden = await client.get(
+        f"/api/v1/restaurants/{restaurant.id}/orders",
         headers=_headers(owner_token),
     )
-    assert early.status_code == 400
+    assert hidden.status_code == 200
+    assert all(row["id"] != order["id"] for row in hidden.json())
 
+    blocked = await _confirm(client, owner_token, restaurant, order["id"])
+    assert blocked.status_code == 400
+
+    # Se ofrece a los repartidores desde que se paga.
     available = await client.get(
         "/api/v1/delivery/available-orders", headers=_headers(courier_token)
     )
@@ -176,8 +168,20 @@ async def test_far_order_needs_courier_before_preparing(
     )
     assert accepted.status_code == 200
     accepted_order = accepted.json()
-    assert accepted_order["status"] == "preparing"
+    assert accepted_order["status"] == "pending"
     assert accepted_order["delivery_person_id"] is not None
+
+    # Al aceptarlo el repartidor, ya aparece en el panel del restaurante.
+    visible = await client.get(
+        f"/api/v1/restaurants/{restaurant.id}/orders",
+        headers=_headers(owner_token),
+    )
+    assert visible.status_code == 200
+    assert any(row["id"] == order["id"] for row in visible.json())
+
+    confirmed = await _confirm(client, owner_token, restaurant, order["id"])
+    assert confirmed.status_code == 200
+    assert confirmed.json()["status"] == "preparing"
 
     ready = await client.patch(
         f"/api/v1/restaurants/{restaurant.id}/orders/{order['id']}/status",
@@ -186,35 +190,6 @@ async def test_far_order_needs_courier_before_preparing(
     )
     assert ready.status_code == 200
     assert ready.json()["status"] == "in_delivery"
-
-
-async def test_courier_can_accept_before_restaurant_confirmation(
-    client: AsyncClient,
-    db_session,
-    owner_token,
-    customer_token,
-    courier_token,
-    courier,
-    seeded_restaurant,
-):
-    restaurant, item = seeded_restaurant
-    db_session.add(Setting(key="DELIVERY_MAX_KM", value="50"))
-    await db_session.commit()
-
-    created = await _create_far_order(client, customer_token, restaurant, item)
-    assert created.status_code == 201
-    order = created.json()
-
-    accepted = await client.post(
-        f"/api/v1/delivery/accept/{order['id']}", headers=_headers(courier_token)
-    )
-    assert accepted.status_code == 200
-    assert accepted.json()["status"] == "pending"
-    assert accepted.json()["delivery_person_id"] is not None
-
-    confirmed = await _confirm(client, owner_token, restaurant, order["id"])
-    assert confirmed.status_code == 200
-    assert confirmed.json()["status"] == "preparing"
 
 
 async def test_near_order_keeps_normal_flow(
@@ -337,8 +312,6 @@ async def test_cancelled_far_transfer_creates_pending_refund(
     )
     assert created.status_code == 201
     order = created.json()
-    confirmed = await _confirm(client, owner_token, restaurant, order["id"])
-    assert confirmed.json()["status"] == "awaiting_courier"
 
     from app.models.order import Order
     db_order = await db_session.get(Order, uuid.UUID(order["id"]))

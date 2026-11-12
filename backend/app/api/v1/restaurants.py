@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 import re
 import unicodedata
@@ -40,7 +40,7 @@ from app.services.schedule_service import (
     restaurant_open_state,
 )
 from app.services.settlement_service import is_order_settleable
-from app.services.order_service import get_commission_rate
+from app.services.order_service import get_approval_timeout_min, get_commission_rate
 from app.services.order_serialization import order_out
 from app.services.restaurant_access import (
     FINANCE_ROLES, MANAGE_ROLES, ORDER_ROLES, OWNER_ROLES,
@@ -652,6 +652,10 @@ async def update_restaurant_order_status(
     now = datetime.now(timezone.utc)
     if requested == "awaiting_courier":
         order.awaiting_courier_at = now
+        timeout_min = await get_approval_timeout_min(db)
+        order.courier_approval_deadline = (
+            now + timedelta(minutes=timeout_min) if timeout_min > 0 else None
+        )
         if order.confirmed_at is None:
             order.confirmed_at = now
     elif requested == "confirmed" and order.confirmed_at is None:

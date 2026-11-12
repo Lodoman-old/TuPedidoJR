@@ -86,6 +86,7 @@ class OrderOut(BaseModel):
     loyalty_discount: Decimal = Decimal("0")
     requires_courier_approval: bool = False
     awaiting_courier_at: datetime | None = None
+    courier_approval_deadline: datetime | None = None
     refund_account_holder: str | None = None
     refund_bank: str | None = None
     refund_clabe: str | None = None

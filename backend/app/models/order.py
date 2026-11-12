@@ -60,6 +60,7 @@ class Order(TimestampMixin, Base):
     points_awarded = Column(Boolean, default=False, nullable=False)
     requires_courier_approval = Column(Boolean, default=False, nullable=False)
     awaiting_courier_at = Column(DateTime(timezone=True), nullable=True)
+    courier_approval_deadline = Column(DateTime(timezone=True), nullable=True)
     refund_account_holder = Column(String(150), nullable=True)
     refund_bank = Column(String(100), nullable=True)
     refund_clabe = Column(String(18), nullable=True)

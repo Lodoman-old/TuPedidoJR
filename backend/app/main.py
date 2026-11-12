@@ -24,6 +24,7 @@ from app.db.base import Base
 from app.db.session import async_session, engine
 from app.services.file_service import ensure_upload_dir
 from app.services.affiliation_service import affiliation_reminder_loop
+from app.services.courier_timeout_service import courier_timeout_loop
 from app.services.push_service import bootstrap_push_settings
 from app.ws.delivery_ws import router as delivery_ws_router
 from app.ws.manager import ConnectionManager
@@ -42,9 +43,11 @@ async def lifespan(app: FastAPI):
     await bootstrap_push_settings()
     task = asyncio.create_task(ws_manager.start_persist_background_task())
     affiliation_task = asyncio.create_task(affiliation_reminder_loop())
+    courier_timeout_task = asyncio.create_task(courier_timeout_loop())
     yield
     task.cancel()
     affiliation_task.cancel()
+    courier_timeout_task.cancel()
     await ws_manager.stop()
     logger.info("Servidor detenido")
 

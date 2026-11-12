@@ -113,7 +113,9 @@
         <i class="bi bi-hourglass-split"></i> <strong>Esperando repartidor.</strong>
         Tu pedido está lejos del restaurante. Primero debe aceptarlo un repartidor y hasta entonces
         el restaurante lo prepara, para no gastar ingredientes si nadie puede llevarlo.
-        Si nadie lo acepta, el pedido se cancela y se te devuelve el dinero.
+        ${o.courier_approval_deadline
+          ? `Si no hay repartidor antes de las <strong>${new Date(o.courier_approval_deadline).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</strong>, el pedido se cancelará automáticamente y se te devolverá el dinero.`
+          : 'Si nadie lo acepta, el pedido se cancela y se te devuelve el dinero.'}
       </div>` : ''}
       <div id="mapContainer" class="mb-3 ${o.fulfillment_type === 'pickup' ? 'd-none' : ''}">
         <div id="map"></div>

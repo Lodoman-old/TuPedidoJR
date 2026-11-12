@@ -29,7 +29,7 @@ from app.schemas.order import (
 from app.services.cancellation_service import apply_cancellation, can_cancel, get_policy
 from app.services.restaurant_access import ORDER_ROLES, have_role
 from app.services.estimation_service import calculate_estimated_time
-from app.services.order_service import calculate_order_totals, get_setting_value, resolve_item_options
+from app.services.order_service import calculate_order_totals, get_approval_timeout_min, get_setting_value, resolve_item_options
 from app.services.order_serialization import order_out
 from app.services.loyalty_service import apply_redemption, preview_redemption, award_on_delivery
 from app.services.push_service import schedule_available_order, schedule_courier_ready, schedule_new_order, schedule_order_status
@@ -212,12 +212,19 @@ async def estimate_price(
     requires_approval, approval_km = await _requires_courier_approval(
         db, restaurant, pickup, distance_km
     )
+    approval_timeout_min = await get_approval_timeout_min(db)
     distance_warning = None
     if requires_approval:
+        timeout_text = (
+            f" Si ningún repartidor lo acepta en {approval_timeout_min} minutos, "
+            "el pedido se cancela automáticamente y se te devuelve el dinero."
+            if approval_timeout_min > 0
+            else ""
+        )
         distance_warning = (
             f"Tu pedido está a {float(distance_km):.1f} km del restaurante. "
             "Primero un repartidor debe aceptarlo y, hasta entonces, el restaurante "
-            "no lo prepara. Si nadie lo acepta, se cancela y se te devuelve el dinero."
+            "no lo prepara." + timeout_text
         )
     elif (
         not pickup
@@ -244,6 +251,7 @@ async def estimate_price(
         "distance_warning": distance_warning,
         "requires_courier_approval": requires_approval,
         "approval_km": approval_km,
+        "approval_timeout_min": approval_timeout_min,
         "delivery_mode": "pickup" if pickup else restaurant.delivery_mode,
         "fulfillment_type": body.fulfillment_type,
     }
@@ -616,6 +624,10 @@ async def update_order_status(
     now = datetime.now(timezone.utc)
     if requested == "awaiting_courier":
         order.awaiting_courier_at = now
+        timeout_min = await get_approval_timeout_min(db)
+        order.courier_approval_deadline = (
+            now + timedelta(minutes=timeout_min) if timeout_min > 0 else None
+        )
         if order.confirmed_at is None:
             order.confirmed_at = now
     elif requested == "confirmed" and order.confirmed_at is None:

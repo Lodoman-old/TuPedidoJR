@@ -66,6 +66,11 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Los pedidos que superen esta distancia no se preparan hasta que un repartidor los acepte. Vacío o 0 desactiva la retención.",
         "type": "float", "default": "8",
     },
+    "DELIVERY_APPROVAL_TIMEOUT_MIN": {
+        "group": "Envíos", "label": "Cancelación automática sin repartidor (min)",
+        "description": "Si un pedido retenido no recibe repartidor en este tiempo, se cancela solo y se devuelve el dinero cuando aplica. Vacío o 0 desactiva la cancelación automática.",
+        "type": "int", "default": "30",
+    },
     "MANDADO_ACTIVE": {
         "group": "Mandados", "label": "Permitir mandados",
         "description": "Activa o desactiva el servicio de mandados.",

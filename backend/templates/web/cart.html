@@ -50,7 +50,7 @@
   let paymentConfig = { cash_enabled: true, mp_enabled: false, transfer_enabled: false };
   let appliedCoupon = null;
   let bankDetails = null;
-  let estimateState = { requires_courier_approval: false, approval_km: 8, distance_km: null };
+  let estimateState = { requires_courier_approval: false, approval_km: 8, approval_timeout_min: 30, distance_km: null };
   let colonias = [];
   let cpCenter = null;
   let addressState = { street: '', cp: '', colonia: '', lat: null, lng: null, source: '', full: '' };
@@ -680,10 +680,14 @@ function updateApprovalUi() {
   if (required) {
     const notice = document.getElementById('approvalNotice');
     const km = estimateState.distance_km != null ? `${Number(estimateState.distance_km).toFixed(1)} km` : '';
+    const mins = Number(estimateState.approval_timeout_min || 0);
+    const timeoutText = mins > 0
+      ? ` Si ningún repartidor lo acepta en <strong>${mins} minutos</strong>, el pedido se cancelará automáticamente y se te devolverá el dinero${selectedPaymentMethod() === 'transfer' ? ' a la cuenta que captures abajo' : ''}.`
+      : '';
     if (notice) {
       notice.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Tu pedido está a ${km} del restaurante. ` +
         `<strong>Primero un repartidor debe aceptarlo antes de que el restaurante lo prepare.</strong> ` +
-        `Así evitamos que se gasten ingredientes si nadie puede llevarlo. Si nadie lo acepta, el pedido se cancela y se te devuelve el dinero.`;
+        `Así evitamos que se gasten ingredientes si nadie puede llevarlo.${timeoutText}`;
     }
   }
   const refund = document.getElementById('refundAccountBlock');
@@ -727,6 +731,7 @@ async function refreshEstimate() {
       estimateState = {
         requires_courier_approval: Boolean(res.requires_courier_approval),
         approval_km: Number(res.approval_km || 0),
+        approval_timeout_min: Number(res.approval_timeout_min || 0),
         distance_km: res.distance_km != null ? Number(res.distance_km) : null,
       };
       updateApprovalUi();

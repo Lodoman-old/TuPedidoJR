@@ -130,7 +130,7 @@
             : 'Efectivo'}</small>
           ${o.delivery_mode === 'own' ? '<small class="text-info d-block">Entrega propia del restaurante</small>' : ''}
           ${o.fulfillment_type === 'pickup' ? '<small class="text-primary d-block">Recoger en restaurante</small>' : ''}
-          ${status === 'awaiting_courier' ? '<div class="alert alert-warning py-2 mt-2 mb-0 small"><i class="bi bi-hourglass-split"></i> <strong>No prepares este pedido todavía.</strong> Está lejos y espera a que un repartidor lo acepte. Cuando alguien lo tome, el pedido pasará solo a preparación y te avisaremos.</div>' : ''}
+          ${status === 'awaiting_courier' ? `<div class="alert alert-warning py-2 mt-2 mb-0 small"><i class="bi bi-hourglass-split"></i> <strong>No prepares este pedido todavía.</strong> Está lejos y espera a que un repartidor lo acepte. Cuando alguien lo tome, el pedido pasará solo a preparación y te avisaremos.${o.courier_approval_deadline ? ` Si no hay repartidor antes de las ${new Date(o.courier_approval_deadline).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}, se cancelará automáticamente.` : ''}</div>` : ''}
           ${schedLine}
           <div class="mt-2 d-flex gap-2 flex-wrap">`;
         if (canAdvance) {

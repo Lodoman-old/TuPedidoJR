@@ -204,7 +204,15 @@ async def send_to_tokens(
         style or "", ("/static/logo_notification_circle.png", "#1B2F6B")
     )
     logo_url = f"{base_url}{image_path}" if base_url else image_path
-    android_notification: dict = {"icon": "ic_stat_tup", "color": accent, "channel_id": "orders_high"}
+    event_type = str((data or {}).get("type") or "")
+    priority_alert = event_type in ("new_order", "available_order")
+    android_notification: dict = {
+        "icon": "ic_stat_tup",
+        "color": accent,
+        "channel_id": "orders_high_v2" if priority_alert else "orders_high",
+    }
+    if priority_alert:
+        android_notification["sound"] = "order_alert"
     if base_url:
         android_notification["image"] = logo_url
 
@@ -305,15 +313,15 @@ async def notify_order_status(order_id: str, status: str) -> None:
                 minutes = await _eta_minutes(db, order)
                 if minutes:
                     body = f"{body} Llega en aproximadamente {minutes} min."
-            if (
-                status == "cancelled"
-                and order.refund_status == "pending"
-                and order.payment_method == "transfer"
-            ):
-                body = (
-                    "Tu pedido fue cancelado. Para devolverte el dinero, captura "
-                    "tu cuenta bancaria en el detalle del pedido."
-                )
+            if status == "cancelled":
+                reason = (order.cancellation_reason or "").strip()
+                if reason:
+                    body = f"Tu pedido fue cancelado: {reason}."
+                if order.refund_status == "pending" and order.payment_method == "transfer":
+                    body += (
+                        " Para devolverte el dinero, captura tu cuenta bancaria "
+                        "en el detalle del pedido."
+                    )
             await send_to_user(
                 db,
                 order.user_id,

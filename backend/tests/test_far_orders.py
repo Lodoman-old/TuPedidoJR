@@ -232,6 +232,51 @@ async def test_far_transfer_requires_refund_account(
     assert data["refund_clabe"] == "012345678901234567"
 
 
+async def test_expired_far_order_is_cancelled_and_refunded(
+    client: AsyncClient,
+    db_session,
+    owner_token,
+    customer_token,
+    seeded_restaurant,
+):
+    from datetime import datetime, timedelta as td, timezone
+
+    from app.models.order import Order
+    from app.services.courier_timeout_service import cancel_expired_awaiting_orders
+
+    restaurant, item = seeded_restaurant
+    db_session.add(Setting(key="TRANSFER_ENABLED", value="true"))
+    db_session.add(Setting(key="DELIVERY_MAX_KM", value="50"))
+    await db_session.commit()
+
+    created = await _create_far_order(
+        client, customer_token, restaurant, item,
+        payment_method="transfer",
+        refund_account={
+            "refund_account_holder": "Ana Pérez",
+            "refund_bank": "BBVA",
+            "refund_clabe": "012345678901234567",
+        },
+    )
+    assert created.status_code == 201
+    order = created.json()
+    confirmed = await _confirm(client, owner_token, restaurant, order["id"])
+    assert confirmed.json()["status"] == "awaiting_courier"
+    assert confirmed.json()["courier_approval_deadline"] is not None
+
+    db_order = await db_session.get(Order, uuid.UUID(order["id"]))
+    db_order.payment_status = "approved"
+    db_order.courier_approval_deadline = datetime.now(timezone.utc) - td(minutes=1)
+    await db_session.commit()
+
+    cancelled = await cancel_expired_awaiting_orders(db_session)
+    assert cancelled == 1
+    await db_session.refresh(db_order)
+    assert db_order.status == "cancelled"
+    assert db_order.refund_status == "pending"
+    assert "repartidor" in (db_order.cancellation_reason or "").lower()
+
+
 async def test_cancelled_far_transfer_creates_pending_refund(
     client: AsyncClient,
     db_session,

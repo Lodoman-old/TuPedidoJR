@@ -356,6 +356,12 @@ async def create_order(
     requires_approval, _approval_km = await _requires_courier_approval(
         db, restaurant, pickup, distance_km
     )
+    approval_timeout_min = await get_approval_timeout_min(db)
+    courier_deadline = None
+    if requires_approval and approval_timeout_min > 0:
+        courier_deadline = datetime.now(timezone.utc) + timedelta(
+            minutes=approval_timeout_min
+        )
     refund_holder = (body.refund_account_holder or "").strip()
     refund_bank = (body.refund_bank or "").strip()
     refund_clabe = _clean_clabe(body.refund_clabe)
@@ -414,6 +420,7 @@ async def create_order(
         points_redeemed=points_redeemed,
         loyalty_discount=loyalty_discount,
         requires_courier_approval=requires_approval,
+        courier_approval_deadline=courier_deadline,
         refund_account_holder=refund_holder or None,
         refund_bank=refund_bank or None,
         refund_clabe=refund_clabe or None,
@@ -453,6 +460,9 @@ async def create_order(
         select(Order).where(Order.id == order.id).options(selectinload(Order.items))
     )
     schedule_new_order(str(order.id))
+    if requires_approval:
+        # El repartidor se busca desde que se paga, no cuando el restaurante confirma.
+        schedule_available_order(str(order.id), False)
     return result.scalar_one()
 
 
@@ -616,21 +626,27 @@ async def update_order_status(
         requested == "confirmed"
         and order.requires_courier_approval
         and order.delivery_mode == "platform"
-        and not order.delivery_person_id
     ):
-        requested = "awaiting_courier"
+        requested = "preparing" if order.delivery_person_id else "awaiting_courier"
 
     order.status = requested
     now = datetime.now(timezone.utc)
     if requested == "awaiting_courier":
         order.awaiting_courier_at = now
-        timeout_min = await get_approval_timeout_min(db)
-        order.courier_approval_deadline = (
-            now + timedelta(minutes=timeout_min) if timeout_min > 0 else None
-        )
+        if order.courier_approval_deadline is None:
+            timeout_min = await get_approval_timeout_min(db)
+            order.courier_approval_deadline = (
+                now + timedelta(minutes=timeout_min) if timeout_min > 0 else None
+            )
         if order.confirmed_at is None:
             order.confirmed_at = now
     elif requested == "confirmed" and order.confirmed_at is None:
+        order.confirmed_at = now
+    elif (
+        requested == "preparing"
+        and order.requires_courier_approval
+        and order.confirmed_at is None
+    ):
         order.confirmed_at = now
     elif requested == "picked_up" and order.picked_up_at is None:
         order.picked_up_at = now

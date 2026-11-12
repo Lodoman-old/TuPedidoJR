@@ -290,7 +290,7 @@ async function loadAvailable(silent = false) {
         <small class="text-muted">${o.restaurant_name || 'Restaurante'}</small><br>
         <small><i class="bi bi-geo-alt"></i> ${distance} al restaurante · <i class="bi bi-clock"></i> ${eta}</small><br>
         <small>Artículos: ${(o.items || []).length}</small>
-        ${o.status === 'awaiting_courier' ? '<div class="small text-warning fw-bold mt-1">Pedido lejano: si lo aceptas, el restaurante empezará a prepararlo y tú te comprometes a entregarlo.</div>' : ''}
+        ${o.requires_courier_approval && ['pending', 'awaiting_courier'].includes(o.status) ? `<div class="small text-warning fw-bold mt-1">${o.status === 'pending' ? 'Pedido lejano: acéptalo para reservarlo. El restaurante todavía debe confirmarlo.' : 'Pedido lejano: si lo aceptas, el restaurante empezará a prepararlo y tú te comprometes a entregarlo.'}</div>` : ''}
         <button class="btn btn-sm btn-success mt-2" onclick="acceptOrder('${o.id}')">Aceptar pedido</button>
       </div>`;
     }

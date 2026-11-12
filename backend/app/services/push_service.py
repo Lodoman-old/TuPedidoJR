@@ -516,12 +516,19 @@ async def notify_courier_assigned(order_id: str) -> None:
             restaurant = resto.scalar_one_or_none()
             name = restaurant.name if restaurant else "Restaurante"
             dp = await db.get(DeliveryPerson, order.delivery_person_id)
+            reserved = order.status in ("pending", "confirmed")
             if dp:
                 await send_to_user(
                     db,
                     dp.user_id,
-                    "Pedido asignado",
-                    f"{name}: espera a que el restaurante termine de prepararlo. Te avisaremos cuando esté listo.",
+                    "Pedido reservado" if reserved else "Pedido asignado",
+                    (
+                        f"{name}: apartaste este pedido lejano. El restaurante todavía "
+                        "debe confirmarlo; te avisaremos cuando puedas recogerlo."
+                        if reserved
+                        else f"{name}: espera a que el restaurante termine de prepararlo. "
+                        "Te avisaremos cuando esté listo."
+                    ),
                     {"type": "assigned_order", "order_id": str(order.id)},
                     "green",
                 )
@@ -539,8 +546,13 @@ async def notify_courier_assigned(order_id: str) -> None:
                 await send_to_user(
                     db,
                     user_id,
-                    "Repartidor asignado",
-                    f"{name}: un repartidor aceptó el pedido. Ya puedes prepararlo.",
+                    "Repartidor reservado" if reserved else "Repartidor asignado",
+                    (
+                        f"{name}: un repartidor ya aceptó este pedido lejano. "
+                        "Confírmalo para comenzar a prepararlo."
+                        if reserved
+                        else f"{name}: un repartidor aceptó el pedido. Ya puedes prepararlo."
+                    ),
                     {"type": "new_order", "order_id": str(order.id)},
                     "green",
                 )

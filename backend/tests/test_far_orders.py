@@ -143,6 +143,15 @@ async def test_far_order_needs_courier_before_preparing(
     assert created.status_code == 201
     order = created.json()
     assert order["requires_courier_approval"] is True
+    assert order["courier_approval_deadline"] is not None
+
+    # Se ofrece a los repartidores desde que se paga, antes de que el
+    # restaurante confirme.
+    available_before = await client.get(
+        "/api/v1/delivery/available-orders", headers=_headers(courier_token)
+    )
+    assert available_before.status_code == 200
+    assert any(row["id"] == order["id"] for row in available_before.json())
 
     confirmed = await _confirm(client, owner_token, restaurant, order["id"])
     assert confirmed.status_code == 200
@@ -177,6 +186,35 @@ async def test_far_order_needs_courier_before_preparing(
     )
     assert ready.status_code == 200
     assert ready.json()["status"] == "in_delivery"
+
+
+async def test_courier_can_accept_before_restaurant_confirmation(
+    client: AsyncClient,
+    db_session,
+    owner_token,
+    customer_token,
+    courier_token,
+    courier,
+    seeded_restaurant,
+):
+    restaurant, item = seeded_restaurant
+    db_session.add(Setting(key="DELIVERY_MAX_KM", value="50"))
+    await db_session.commit()
+
+    created = await _create_far_order(client, customer_token, restaurant, item)
+    assert created.status_code == 201
+    order = created.json()
+
+    accepted = await client.post(
+        f"/api/v1/delivery/accept/{order['id']}", headers=_headers(courier_token)
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["status"] == "pending"
+    assert accepted.json()["delivery_person_id"] is not None
+
+    confirmed = await _confirm(client, owner_token, restaurant, order["id"])
+    assert confirmed.status_code == 200
+    assert confirmed.json()["status"] == "preparing"
 
 
 async def test_near_order_keeps_normal_flow(
@@ -260,9 +298,7 @@ async def test_expired_far_order_is_cancelled_and_refunded(
     )
     assert created.status_code == 201
     order = created.json()
-    confirmed = await _confirm(client, owner_token, restaurant, order["id"])
-    assert confirmed.json()["status"] == "awaiting_courier"
-    assert confirmed.json()["courier_approval_deadline"] is not None
+    assert order["courier_approval_deadline"] is not None
 
     db_order = await db_session.get(Order, uuid.UUID(order["id"]))
     db_order.payment_status = "approved"

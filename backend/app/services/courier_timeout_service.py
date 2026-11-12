@@ -21,7 +21,8 @@ async def _cancel_expired(db: AsyncSession) -> int:
     result = await db.execute(
         select(Order)
         .where(
-            Order.status == "awaiting_courier",
+            Order.requires_courier_approval.is_(True),
+            Order.status.in_(["pending", "confirmed", "awaiting_courier"]),
             Order.delivery_person_id.is_(None),
             Order.courier_approval_deadline.is_not(None),
             Order.courier_approval_deadline <= now,
@@ -31,7 +32,9 @@ async def _cancel_expired(db: AsyncSession) -> int:
     orders = list(result.scalars().all())
     cancelled = 0
     for order in orders:
-        if order.status != "awaiting_courier" or order.delivery_person_id:
+        if order.status not in ("pending", "confirmed", "awaiting_courier"):
+            continue
+        if order.delivery_person_id:
             continue
         try:
             await apply_cancellation(

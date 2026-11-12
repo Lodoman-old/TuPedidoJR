@@ -109,13 +109,15 @@
       ${o.fulfillment_type === 'pickup'
         ? `<div class="alert alert-info py-2 small"><i class="bi bi-shop"></i> Pedido para recoger en el restaurante</div>`
         : (o.delivery_mode === 'own' ? '<div class="alert alert-info py-2 small"><i class="bi bi-shop"></i> Entrega propia del restaurante</div>' : '')}
-      ${o.status === 'awaiting_courier' ? `<div class="alert alert-warning py-2 small">
-        <i class="bi bi-hourglass-split"></i> <strong>Esperando repartidor.</strong>
-        Tu pedido está lejos del restaurante. Primero debe aceptarlo un repartidor y hasta entonces
-        el restaurante lo prepara, para no gastar ingredientes si nadie puede llevarlo.
+      ${o.requires_courier_approval && ['pending', 'confirmed', 'awaiting_courier'].includes(o.status) ? `<div class="alert alert-warning py-2 small">
+        <i class="bi bi-hourglass-split"></i>
+        ${o.delivery_person_id
+          ? `<strong>Repartidor reservado.</strong> Un repartidor ya aceptó tu pedido; el restaurante debe confirmarlo para comenzar a prepararlo.`
+          : `<strong>Buscando repartidor.</strong> Tu pedido está lejos del restaurante. Primero debe aceptarlo un repartidor y hasta entonces
+             el restaurante no lo prepara, para no gastar ingredientes si nadie puede llevarlo.`}
         ${o.courier_approval_deadline
-          ? `Si no hay repartidor antes de las <strong>${new Date(o.courier_approval_deadline).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</strong>, el pedido se cancelará automáticamente y se te devolverá el dinero.`
-          : 'Si nadie lo acepta, el pedido se cancela y se te devuelve el dinero.'}
+          ? ` Si no hay repartidor antes de las <strong>${new Date(o.courier_approval_deadline).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</strong>, el pedido se cancelará automáticamente y se te devolverá el dinero.`
+          : ''}
       </div>` : ''}
       <div id="mapContainer" class="mb-3 ${o.fulfillment_type === 'pickup' ? 'd-none' : ''}">
         <div id="map"></div>

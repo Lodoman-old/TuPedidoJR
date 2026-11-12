@@ -644,21 +644,27 @@ async def update_restaurant_order_status(
         requested == "confirmed"
         and order.requires_courier_approval
         and order.delivery_mode == "platform"
-        and not order.delivery_person_id
     ):
-        requested = "awaiting_courier"
+        requested = "preparing" if order.delivery_person_id else "awaiting_courier"
 
     order.status = requested
     now = datetime.now(timezone.utc)
     if requested == "awaiting_courier":
         order.awaiting_courier_at = now
-        timeout_min = await get_approval_timeout_min(db)
-        order.courier_approval_deadline = (
-            now + timedelta(minutes=timeout_min) if timeout_min > 0 else None
-        )
+        if order.courier_approval_deadline is None:
+            timeout_min = await get_approval_timeout_min(db)
+            order.courier_approval_deadline = (
+                now + timedelta(minutes=timeout_min) if timeout_min > 0 else None
+            )
         if order.confirmed_at is None:
             order.confirmed_at = now
     elif requested == "confirmed" and order.confirmed_at is None:
+        order.confirmed_at = now
+    elif (
+        requested == "preparing"
+        and order.requires_courier_approval
+        and order.confirmed_at is None
+    ):
         order.confirmed_at = now
     elif requested == "picked_up" and order.picked_up_at is None:
         order.picked_up_at = now

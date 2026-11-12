@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, text, update
+from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -99,7 +99,13 @@ async def available_orders(
     result = await db.execute(
         select(Order)
         .where(
-            Order.status.in_(["awaiting_courier", "ready", "preparing"]),
+            or_(
+                Order.status.in_(["awaiting_courier", "ready", "preparing"]),
+                and_(
+                    Order.requires_courier_approval.is_(True),
+                    Order.status.in_(["pending", "confirmed"]),
+                ),
+            ),
             Order.delivery_person_id.is_(None),
             Order.delivery_mode == "platform",
         )
@@ -180,7 +186,10 @@ async def accept_order(
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
     if order.delivery_person_id:
         raise HTTPException(status_code=400, detail="Este pedido ya tiene repartidor")
-    if order.status not in ("awaiting_courier", "ready", "preparing"):
+    allowed_statuses = {"awaiting_courier", "ready", "preparing"}
+    if order.requires_courier_approval:
+        allowed_statuses.update({"pending", "confirmed"})
+    if order.status not in allowed_statuses:
         raise HTTPException(status_code=400, detail="El pedido no está listo para reparto")
     if order.delivery_mode in ("own", "pickup"):
         detail = (
@@ -189,10 +198,26 @@ async def accept_order(
             else "Este pedido lo entrega el propio restaurante"
         )
         raise HTTPException(status_code=400, detail=detail)
+    if order.requires_courier_approval and order.courier_approval_deadline:
+        deadline = order.courier_approval_deadline
+        if deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > deadline:
+            raise HTTPException(
+                status_code=400,
+                detail="El tiempo para aceptar este pedido ya venció",
+            )
 
     approval_flow = order.status == "awaiting_courier"
+    reserved_flow = order.requires_courier_approval and order.status in (
+        "pending",
+        "confirmed",
+    )
     order.delivery_person_id = dp.id
-    order.status = "preparing" if approval_flow else "in_delivery"
+    if approval_flow:
+        order.status = "preparing"
+    elif not reserved_flow:
+        order.status = "in_delivery"
     # Apply the courier's individual per-delivery bonus, if configured.
     bonus = dp.delivery_bonus_per_order or Decimal("0")
     if bonus:
@@ -221,6 +246,8 @@ async def accept_order(
     if approval_flow:
         await _get_ws_manager().notify_order_status(str(order.id), "preparing")
         schedule_order_status(str(order.id), "preparing")
+        schedule_courier_assigned(str(order.id))
+    elif reserved_flow:
         schedule_courier_assigned(str(order.id))
     else:
         await _get_ws_manager().notify_order_status(str(order.id), "in_delivery")

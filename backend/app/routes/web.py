@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -144,6 +144,20 @@ async def web_mandado_detail(request: Request, mandado_id: str):
 @router.get("/app")
 async def web_app_download(request: Request):
     return templates.TemplateResponse(request, "app_download.html")
+
+
+@router.get("/app/apk")
+async def web_app_apk():
+    apk = Path(__file__).parent.parent.parent / "static" / "downloads" / "TuPedidoJR.apk"
+    if not apk.is_file():
+        raise HTTPException(status_code=404, detail="La APK todavía no está disponible")
+    version = int(apk.stat().st_mtime)
+    return FileResponse(
+        apk,
+        media_type="application/vnd.android.package-archive",
+        filename=f"TuPedidoJR-v{version}.apk",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 @router.get("/admin/push")

@@ -49,7 +49,10 @@
       font-weight: 700;
     }
     body { padding-top: env(safe-area-inset-top, 0px); }
-    html.capacitor-app body { padding-top: 30px; }
+    html.capacitor-app body { padding-top: 30px; padding-bottom: 34px; }
+    html.capacitor-app .floating-cart { bottom: 46px; }
+    html.capacitor-app .modal-dialog { margin-top: 42px; margin-bottom: 42px; }
+    html.capacitor-app .toast-container { bottom: 44px !important; }
   </style>
   {% block head_extra %}{% endblock %}
 </head>

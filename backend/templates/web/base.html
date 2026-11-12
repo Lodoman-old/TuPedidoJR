@@ -601,6 +601,8 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
           let target = '/web/orders';
           if (data.type === 'available_order') {
             target = '/web/delivery';
+          } else if (data.type === 'new_order') {
+            target = '/web/orders';
           } else if (data.order_id) {
             target = '/web/orders/' + data.order_id;
           }

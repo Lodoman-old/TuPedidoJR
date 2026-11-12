@@ -538,6 +538,32 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
       }
     }
 
+    async function initCapacitorPush() {
+      if (!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) return;
+      const Push = window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications;
+      if (!Push) return;
+      try {
+        let perm = await Push.checkPermissions();
+        if (perm.receive !== 'granted') perm = await Push.requestPermissions();
+        if (perm.receive !== 'granted') return;
+        Push.addListener('registration', async (t) => {
+          const token = sessionStorage.getItem('token');
+          if (!token) return;
+          try {
+            await fetch('/api/v1/push/tokens', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+              body: JSON.stringify({ token: t.value, platform: 'android', device_label: 'App Android' })
+            });
+          } catch (e) { /* reintento en la próxima apertura */ }
+        });
+        Push.addListener('registrationError', (e) => console.warn('Push registration error', e));
+        await Push.register();
+      } catch (e) {
+        console.warn('Capacitor push no disponible', e);
+      }
+    }
+
     function applyAdminNav(isSuperuser) {
       ['adminPushNav', 'adminSettingsNav', 'adminReportsNav', 'adminPayoutsNav', 'adminDashboardNav', 'adminAuditNav', 'adminRestaurantsNav', 'adminCouriersNav'].forEach(id => {
         document.getElementById(id)?.classList.toggle('d-none', !isSuperuser);
@@ -600,6 +626,7 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
         if (nav) nav.textContent = cachedName;
       }
       if (token) refreshSession();
+      if (token) initCapacitorPush();
       if (token) hydrateCartFromServer();
       updateCartBadge();
       document.getElementById('logoutBtn')?.addEventListener('click', (e) => {

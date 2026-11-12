@@ -596,6 +596,16 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
           }
         });
         Push.addListener('registrationError', (e) => capLog('push: error registro', JSON.stringify(e)));
+        Push.addListener('pushNotificationActionPerformed', (action) => {
+          const data = (action.notification && action.notification.data) || {};
+          let target = '/web/orders';
+          if (data.type === 'available_order') {
+            target = '/web/delivery';
+          } else if (data.order_id) {
+            target = '/web/orders/' + data.order_id;
+          }
+          window.location.href = target;
+        });
         await Push.register();
         await capLog('push: register llamado', JSON.stringify(info));
       } catch (e) {

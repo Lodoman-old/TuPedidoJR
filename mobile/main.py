@@ -103,7 +103,24 @@ async def main(page: ft.Page):
     async def route_change(e):
         troute = page.route
         page.views.clear()
+        try:
+            await _build_route(troute)
+        except Exception as ex:  # noqa: BLE001
+            print("Error abriendo", troute, repr(ex), flush=True)
+            page.views.clear()
+            page.views.append(ft.View(
+                route=troute,
+                controls=[
+                    ft.AppBar(title=ft.Text("TuPedidoJR")),
+                    ft.SafeArea(ft.Column([
+                        ft.Text("No se pudo abrir esta pantalla", size=16, weight=ft.FontWeight.BOLD),
+                        ft.Text(str(ex), size=12, color=ft.Colors.RED, selectable=True),
+                    ], spacing=8, padding=16, scroll=ft.ScrollMode.AUTO)),
+                ],
+            ))
+        page.update()
 
+    async def _build_route(troute):
         if troute == "/login":
             page.views.append(login_view(page))
         elif troute == "/register":
@@ -168,8 +185,6 @@ async def main(page: ft.Page):
             page.views.append(delivery_track_view(page, oid))
         else:
             page.views.append(login_view(page))
-
-        page.update()
 
     async def view_pop(e):
         page.views.pop()

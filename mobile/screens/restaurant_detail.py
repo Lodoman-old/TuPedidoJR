@@ -15,7 +15,7 @@ def restaurant_detail_view(page: ft.Page, rid: str):
     resto_cuisine = ft.Text(size=13, color=ft.Colors.BLUE)
     resto_status = ft.Text(size=13, color=ft.Colors.GREEN)
     commission_note = ft.Text("", size=11, color=ft.Colors.BLUE, visible=False)
-    resto_logo = ft.Image(width=100, height=100, border_radius=12, fit=ft.ImageFit.COVER)
+    resto_logo = ft.Image(src="", width=100, height=100, border_radius=12, fit=ft.BoxFit.COVER)
     upload_status = ft.Text("", size=12, color=ft.Colors.GREEN)
 
     async def _upload_logo(e):
@@ -514,7 +514,7 @@ def _menu_item_card(page: ft.Page, item: dict, rid: str | None = None, is_owner:
     qty.value = str(_cart_quantity())
 
     img_url = item.get("image_url")
-    item_img = ft.Image(src=f"{api.api_url}{img_url}", width=50, height=50, border_radius=6, fit=ft.ImageFit.COVER) if img_url else None
+    item_img = ft.Image(src=f"{api.api_url}{img_url}", width=50, height=50, border_radius=6, fit=ft.BoxFit.COVER) if img_url else None
 
     def _open_image(e):
         if not img_url:
@@ -523,7 +523,7 @@ def _menu_item_card(page: ft.Page, item: dict, rid: str | None = None, is_owner:
             title=ft.Text(item["name"], size=16),
             content=ft.Image(
                 src=f"{api.api_url}{img_url}",
-                width=dialog_width(page, max_width=320), height=dialog_width(page, max_width=320), fit=ft.ImageFit.CONTAIN,
+                width=dialog_width(page, max_width=320), height=dialog_width(page, max_width=320), fit=ft.BoxFit.CONTAIN,
             ),
             actions=[ft.TextButton("Cerrar", on_click=lambda _: close_dlg(page, dlg))],
         )

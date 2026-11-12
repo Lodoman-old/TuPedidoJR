@@ -97,7 +97,7 @@ def restaurant_orders_view(page: ft.Page, rid: str):
                     orders_list.controls.append(
                         ft.Container(
                             ft.Text("No hay pedidos", color=ft.Colors.GREY, text_align=ft.TextAlign.CENTER),
-                            padding=40, alignment=ft.alignment.center,
+                            padding=40, alignment=ft.Alignment.CENTER,
                         )
                     )
                 for o in orders:

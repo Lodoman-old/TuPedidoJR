@@ -26,6 +26,12 @@ def restaurant_profile_view(page: ft.Page, rid: str):
         color=ft.Colors.ORANGE,
         visible=False,
     )
+    content = ft.Column(
+        scroll=ft.ScrollMode.AUTO,
+        expand=True,
+        spacing=8,
+        visible=False,
+    )
 
     # ===== Datos del negocio =====
     name = ft.TextField(label="Nombre del negocio")
@@ -47,13 +53,13 @@ def restaurant_profile_view(page: ft.Page, rid: str):
     business_msg = ft.Text("", size=11)
 
     # ===== Logo =====
-    logo_img = ft.Image(width=84, height=84, border_radius=12, fit=ft.ImageFit.COVER, visible=False)
+    logo_img = ft.Image(src="", width=84, height=84, border_radius=12, fit=ft.BoxFit.COVER, visible=False)
     logo_icon = ft.Icon(ft.Icons.STORE, size=42, color=ft.Colors.GREY)
     logo_box = ft.Container(
         content=ft.Stack([logo_icon, logo_img]),
         width=84, height=84, border_radius=12,
         bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH,
-        alignment=ft.alignment.center,
+        alignment=ft.Alignment.CENTER,
     )
     logo_msg = ft.Text("", size=11)
 
@@ -500,7 +506,7 @@ def restaurant_profile_view(page: ft.Page, rid: str):
         ft.Text("Los días sin turnos se consideran cerrados.", size=11, color=ft.Colors.GREY),
         schedule_col,
         schedule_msg,
-        ft.FilledButton("Guardar horario", icon=ft.Icons.CLOCK, on_click=save_schedule),
+        ft.FilledButton("Guardar horario", icon=ft.Icons.SCHEDULE, on_click=save_schedule),
         ft.Divider(height=1),
         ft.Text("Dirección y ubicación", size=16, weight=ft.FontWeight.BOLD),
         ft.Text(

@@ -75,6 +75,9 @@
             </div>
             <div class="form-text d-none" id="bizPublicLink"></div>
           </div>
+          <div class="col-12">
+            <div class="small" id="affiliationInfo"></div>
+          </div>
         </div>
         <div class="mt-3 d-flex gap-2 flex-wrap">
           <button class="btn btn-primary" id="saveBusinessBtn"><i class="bi bi-check2"></i> Guardar datos</button>
@@ -168,6 +171,25 @@
     el('bizIsOpen').checked = Boolean(r.is_open);
     el('bizPublicPage').checked = Boolean(r.public_page_enabled);
     el('profileRole').textContent = ROLE_LABELS[r.viewer_role] || r.viewer_role || '';
+    const aff = el('affiliationInfo');
+    if (aff) {
+      if (r.affiliation_expires_at) {
+        const until = new Date(r.affiliation_expires_at + 'T12:00:00')
+          .toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+        if (r.affiliated) {
+          const warn = r.affiliation_days_left <= 10 ? ' text-warning fw-bold' : ' text-muted';
+          aff.className = 'small' + warn;
+          aff.innerHTML = `<i class="bi bi-patch-check"></i> Afiliación vigente hasta ${until}` +
+            (r.affiliation_days_left <= 10 ? ` (vence en ${r.affiliation_days_left} día(s))` : '');
+        } else {
+          aff.className = 'small text-danger fw-bold';
+          aff.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Afiliación vencida el ${until}. El negocio no aparece en los listados.`;
+        }
+      } else {
+        aff.className = 'small text-danger fw-bold';
+        aff.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Afiliación sin pago. El negocio no aparece en los listados hasta que se registre el pago.';
+      }
+    }
     if (r.slug) {
       const link = el('bizPublicLink');
       link.classList.remove('d-none');

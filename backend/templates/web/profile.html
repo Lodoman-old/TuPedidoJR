@@ -204,6 +204,7 @@
 
     const msg = document.getElementById('geocodeAddrMsg');
     let coordsSource = isEdit ? 'saved' : 'none';
+    let pinMoved = false;
 
     function composeAddress() {
       const street = document.getElementById('addrStreet').value.trim();
@@ -238,12 +239,14 @@
         const p = addrMarker.getLatLng();
         addrCoords = { lat: p.lat, lng: p.lng };
         coordsSource = 'map';
+        pinMoved = true;
         setMsg('Punto ajustado en el mapa', 'success');
       });
       addrMap.on('click', (e) => {
         addrMarker.setLatLng(e.latlng);
         addrCoords = { lat: e.latlng.lat, lng: e.latlng.lng };
         coordsSource = 'map';
+        pinMoved = true;
         setMsg('Punto ajustado en el mapa', 'success');
       });
       setTimeout(() => addrMap.invalidateSize(), 200);
@@ -367,7 +370,7 @@
       if (!name || !address) { showToast('Completa nombre y calle', 'warning'); return; }
 
       let finalCoords = { ...addrCoords };
-      if (coordsSource === 'text') {
+      if (!pinMoved && coordsSource === 'text') {
         try {
           let results = [];
           if (/^\d{5}$/.test(cp) && colonia && street) {

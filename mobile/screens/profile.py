@@ -244,6 +244,7 @@ def _open_form(page: ft.Page, existing: dict | None, reload_cb):
         compose_address(existing_street, existing_colonia, existing_cp) if existing else ""
     )
     geo_state = {"address": existing_full}
+    pin_moved = {"value": False}
 
     map_size = 280
     map_zoom = 16
@@ -254,6 +255,7 @@ def _open_form(page: ft.Page, existing: dict | None, reload_cb):
         update_map(map_img, None, coords["lat"], coords["lng"], zoom=map_zoom, size=map_size)
 
     def _mark_manual_location(message: str):
+        pin_moved["value"] = True
         geo_state["address"] = _full_address()
         _refresh_map()
         geo_msg.value = message
@@ -316,6 +318,7 @@ def _open_form(page: ft.Page, existing: dict | None, reload_cb):
         _mark_manual_location("Punto ajustado en el mapa")
 
     async def _apply_device(auto: bool = False):
+        pin_moved["value"] = False
         geo_msg.value = "Obteniendo ubicación del dispositivo..."
         geo_msg.color = ft.Colors.GREY
         page.update()
@@ -368,6 +371,7 @@ def _open_form(page: ft.Page, existing: dict | None, reload_cb):
                 raise ValueError("No se encontró la dirección")
             coords["lat"] = float(results[0]["lat"])
             coords["lng"] = float(results[0]["lng"])
+            pin_moved["value"] = False
             geo_state["address"] = full
             _refresh_map()
             geo_msg.value = results[0].get("display_name", "Ubicación encontrada")
@@ -426,7 +430,7 @@ def _open_form(page: ft.Page, existing: dict | None, reload_cb):
             error_t.value = "Nombre y calle requeridos"
             page.update()
             return
-        if geo_state["address"] != full:
+        if not pin_moved["value"] and geo_state["address"] != full:
             ok = await _geocode()
             if not ok:
                 return

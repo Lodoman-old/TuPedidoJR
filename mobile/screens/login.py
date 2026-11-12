@@ -93,7 +93,8 @@ def login_view(page: ft.Page):
                     ft.Container(height=10),
                     server_card,
                     ft.Text(f"Versión {APP_VERSION}", size=9, color=ft.Colors.GREY),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO, expand=True),
+                expand=True,
             )
         ]
     )
@@ -144,7 +145,8 @@ def register_view(page: ft.Page):
                     error_text, loading,
                     ft.FilledButton("Registrarse", on_click=do_register, width=280),
                     ft.TextButton("¿Ya tienes cuenta? Inicia sesión", on_click=lambda _: page.run_task(page.push_route, "/login")),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO)
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO, expand=True),
+                expand=True,
             )
         ]
     )

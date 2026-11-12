@@ -1,6 +1,6 @@
 import flet as ft
 
-APP_VERSION = "8"
+APP_VERSION = "9"
 
 STATUS_LABELS = {
     "pending": "Pendiente",

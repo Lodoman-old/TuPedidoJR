@@ -79,6 +79,6 @@ def payment_view(page: ft.Page, order_id: str):
                 pay_btn,
                 ft.Container(height=10),
                 back_btn,
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO))
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO, expand=True), expand=True)
         ]
     )

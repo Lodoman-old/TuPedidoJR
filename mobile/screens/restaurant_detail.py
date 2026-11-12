@@ -13,6 +13,35 @@ def restaurant_detail_view(page: ft.Page, rid: str):
     loading = ft.ProgressBar(visible=False)
     error_text = ft.Text("", color=ft.Colors.RED)
     menu_area = ft.Column(spacing=8)
+    cart_count_text = ft.Text("0", color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD, size=14)
+    cart_fab = ft.FloatingActionButton(
+        content=ft.Row([
+            ft.Icon(ft.Icons.SHOPPING_CART, color=ft.Colors.WHITE),
+            cart_count_text,
+        ], spacing=6, tight=True, alignment=ft.MainAxisAlignment.CENTER),
+        bgcolor=ft.Colors.PRIMARY,
+        visible=False,
+        tooltip="Ver carrito",
+        on_click=lambda e: page.run_task(page.push_route, f"/cart/{rid}"),
+    )
+
+    def refresh_cart_fab():
+        count = sum(
+            int(entry.get("quantity") or 0)
+            for entry in cart
+            if str(entry.get("restaurant_id")) == str(rid)
+        )
+        cart_count_text.value = str(count)
+        cart_fab.visible = count > 0
+        page.update()
+
+    _initial_count = sum(
+        int(entry.get("quantity") or 0)
+        for entry in cart
+        if str(entry.get("restaurant_id")) == str(rid)
+    )
+    cart_count_text.value = str(_initial_count)
+    cart_fab.visible = _initial_count > 0
     resto_name = ft.Text(size=22, weight=ft.FontWeight.BOLD)
     resto_cuisine = ft.Text(size=13, color=ft.Colors.BLUE)
     resto_status = ft.Text(size=13, color=ft.Colors.GREEN)
@@ -97,12 +126,12 @@ def restaurant_detail_view(page: ft.Page, rid: str):
                 menu_area.controls.append(ft.Text(cat["name"], size=16, weight=ft.FontWeight.BOLD))
                 items = [i for i in r.get("menu", []) if i.get("category_id") == cat["id"]]
                 for item in items:
-                    menu_area.controls.append(_menu_item_card(page, item, rid, can_manage, commission_rate, is_staff))
+                    menu_area.controls.append(_menu_item_card(page, item, rid, can_manage, commission_rate, is_staff, refresh_cart_fab))
             uncategorized = [i for i in r.get("menu", []) if not i.get("category_id")]
             if uncategorized:
                 menu_area.controls.append(ft.Text("Otros", size=16, weight=ft.FontWeight.BOLD))
                 for item in uncategorized:
-                    menu_area.controls.append(_menu_item_card(page, item, rid, can_manage, commission_rate, is_staff))
+                    menu_area.controls.append(_menu_item_card(page, item, rid, can_manage, commission_rate, is_staff, refresh_cart_fab))
         except ApiError as ex:
             error_text.value = ex.detail
         except Exception as ex:  # noqa: BLE001
@@ -233,6 +262,7 @@ def restaurant_detail_view(page: ft.Page, rid: str):
 
     return ft.View(
         route=f"/restaurant/{rid}",
+        floating_action_button=cart_fab,
         controls=[
             appbar,
             ft.ListView(
@@ -260,7 +290,7 @@ def _cart_line_key(item_id: str, option_ids=None) -> str:
     return f"{item_id}|{','.join(sorted(str(x) for x in (option_ids or [])))}"
 
 
-def _open_item_customizer(page: ft.Page, item: dict, rid: str | None = None, commission_rate: float = 0):
+def _open_item_customizer(page: ft.Page, item: dict, rid: str | None = None, commission_rate: float = 0, on_cart_change=None):
     groups = item.get("option_groups") or []
     base_price = float(item["price"])
     choices: dict = {}
@@ -433,6 +463,8 @@ def _open_item_customizer(page: ft.Page, item: dict, rid: str | None = None, com
         snack(page, f"{item['name']} agregado al carrito")
         close_dlg(page, dlg)
         update_price()
+        if on_cart_change:
+            on_cart_change()
 
     dlg = ft.AlertDialog(
         title=ft.Text(item["name"], size=16),
@@ -455,7 +487,7 @@ def _customer_price(value, rate: float) -> float:
         return 0.0
 
 
-def _menu_item_card(page: ft.Page, item: dict, rid: str | None = None, is_owner: bool = False, commission_rate: float = 0, is_staff: bool = False):
+def _menu_item_card(page: ft.Page, item: dict, rid: str | None = None, is_owner: bool = False, commission_rate: float = 0, is_staff: bool = False, on_cart_change=None):
     item_id = str(item["id"])
     option_groups = item.get("option_groups") or []
     qty = ft.TextField(
@@ -500,6 +532,8 @@ def _menu_item_card(page: ft.Page, item: dict, rid: str | None = None, is_owner:
         if update_field:
             qty.value = str(value)
         page.run_task(sync_cart, list(cart))
+        if on_cart_change:
+            on_cart_change()
 
     def update_qty_display():
         qty.value = str(_cart_quantity())
@@ -577,7 +611,7 @@ def _menu_item_card(page: ft.Page, item: dict, rid: str | None = None, is_owner:
             ft.Row([]) if is_staff and not is_owner else (ft.Row([
                 ft.FilledTonalButton(
                     "Personalizar", icon=ft.Icons.TUNE,
-                    on_click=lambda e: _open_item_customizer(page, item, rid, commission_rate),
+                    on_click=lambda e: _open_item_customizer(page, item, rid, commission_rate, on_cart_change),
                 )
             ]) if option_groups else ft.Row([
                 ft.IconButton(ft.Icons.REMOVE_CIRCLE_OUTLINE, on_click=remove),

@@ -1,18 +1,22 @@
 """Live operations dashboard for the superuser."""
+import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_superuser
+from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.cash_advance import CashAdvance
 from app.models.delivery_person import DeliveryPerson
 from app.models.order import Order
 from app.models.restaurant import Restaurant
 from app.models.user import User
+from app.services.audit_service import log_action
 from app.services.schedule_service import get_timezone, open_state_map
 
 router = APIRouter()
@@ -244,4 +248,78 @@ async def admin_dashboard(
             "late_preparing": [_alert(o) for o in late_preparing_result.scalars().all()],
         },
         "recent_orders": recent_orders,
+    }
+
+class CourierCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    email: EmailStr
+    phone: str | None = Field(default=None, max_length=20)
+    password: str = Field(..., min_length=6, max_length=128)
+    vehicle_type: str = Field(default="motorcycle", pattern="^(bike|motorcycle|car)$")
+    payout_method: str = Field(default="cash", pattern="^(cash|transfer)$")
+    bank_name: str | None = Field(default=None, max_length=100)
+    bank_account_holder: str | None = Field(default=None, max_length=150)
+    bank_clabe: str | None = Field(default=None, max_length=30)
+    is_mandadero: bool = False
+    delivery_bonus_per_order: Decimal = Decimal("0")
+
+
+@router.post("/couriers", status_code=201)
+async def create_courier(
+    body: CourierCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    existing = await db.scalar(
+        select(User).where(func.lower(User.email) == body.email.strip().lower())
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="Ya existe una cuenta con ese correo")
+
+    clabe = "".join(ch for ch in (body.bank_clabe or "") if ch.isdigit())
+    if body.payout_method == "transfer":
+        if not (body.bank_name or "").strip() or not (body.bank_account_holder or "").strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Para pago por transferencia indica banco y titular",
+            )
+        if len(clabe) != 18:
+            raise HTTPException(status_code=400, detail="La CLABE debe tener 18 dígitos")
+
+    user = User(
+        name=body.name.strip(),
+        email=body.email.strip().lower(),
+        phone=(body.phone or "").strip() or None,
+        password_hash=hash_password(body.password),
+        referral_code=uuid.uuid4().hex[:8].upper(),
+    )
+    db.add(user)
+    await db.flush()
+
+    courier = DeliveryPerson(
+        user_id=user.id,
+        vehicle_type=body.vehicle_type,
+        is_available=True,
+        payout_method=body.payout_method,
+        bank_name=(body.bank_name or "").strip() or None,
+        bank_account_holder=(body.bank_account_holder or "").strip() or None,
+        bank_clabe=clabe or None,
+        is_mandadero=body.is_mandadero,
+        delivery_bonus_per_order=body.delivery_bonus_per_order or Decimal("0"),
+    )
+    db.add(courier)
+    await db.flush()
+    await log_action(
+        db, current_user.id, "courier.create", "delivery_person", courier.id,
+        {"name": user.name, "email": user.email},
+    )
+    await db.commit()
+    await db.refresh(courier)
+    return {
+        "id": str(courier.id),
+        "user_id": str(user.id),
+        "name": user.name,
+        "email": user.email,
+        "phone": user.phone,
+        "vehicle_type": courier.vehicle_type,
     }

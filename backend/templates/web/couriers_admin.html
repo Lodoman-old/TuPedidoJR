@@ -10,6 +10,9 @@
     <select id="coverageFilter" class="form-select form-select-sm" style="max-width:220px" onchange="onCoverageFilterChange(this.value)"></select>
     <span class="small text-muted" id="coverageNote">Cobertura de tarifa base: —</span>
     <span class="small text-muted" id="lastRefresh">—</span>
+    <button class="btn btn-success btn-sm" onclick="openCourierModal()">
+      <i class="bi bi-person-plus"></i> Alta de repartidor
+    </button>
     <button class="btn btn-outline-secondary btn-sm" onclick="loadCouriers()">
       <i class="bi bi-arrow-clockwise"></i> Actualizar
     </button>
@@ -26,6 +29,90 @@
     <div class="card p-3">
       <h6>Estado</h6>
       <div id="couriersList" class="small"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="courierModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-plus"></i> Alta de repartidor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div id="courierFormError" class="alert alert-danger d-none"></div>
+        <div class="row g-2">
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="courierName">Nombre completo</label>
+            <input class="form-control" id="courierName" maxlength="100" placeholder="Ej. Juan Pérez">
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="courierPhone">Teléfono</label>
+            <input class="form-control" id="courierPhone" maxlength="20" placeholder="Ej. 412 123 4567">
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="courierEmail">Correo de acceso</label>
+            <input type="email" class="form-control" id="courierEmail" maxlength="255" placeholder="correo@ejemplo.com">
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="courierPassword">Contraseña inicial</label>
+            <input type="text" class="form-control" id="courierPassword" minlength="6" maxlength="128" placeholder="Mínimo 6 caracteres">
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="courierVehicle">Vehículo</label>
+            <select class="form-select" id="courierVehicle">
+              <option value="motorcycle">Motocicleta</option>
+              <option value="bike">Bicicleta</option>
+              <option value="car">Automóvil</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="courierPayout">Forma de pago</label>
+            <select class="form-select" id="courierPayout" onchange="toggleCourierBank()">
+              <option value="cash">Efectivo</option>
+              <option value="transfer">Transferencia</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="courierBonus">Bono por envío</label>
+            <input type="number" min="0" step="0.01" class="form-control" id="courierBonus" value="0">
+            <div class="form-text">Opcional. Se suma a su ganancia por cada reparto.</div>
+          </div>
+          <div class="col-12 col-md-6 d-flex align-items-end">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" id="courierMandadero">
+              <label class="form-check-label" for="courierMandadero">También acepta mandados</label>
+            </div>
+          </div>
+          <div class="col-12 d-none" id="courierBankBlock">
+            <hr class="my-1">
+            <div class="row g-2">
+              <div class="col-12 col-md-4">
+                <label class="form-label small mb-1" for="courierBank">Banco</label>
+                <input class="form-control" id="courierBank" maxlength="100">
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label small mb-1" for="courierHolder">Titular</label>
+                <input class="form-control" id="courierHolder" maxlength="150">
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label small mb-1" for="courierClabe">CLABE</label>
+                <input class="form-control" id="courierClabe" maxlength="18" inputmode="numeric">
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="small text-muted mb-0 mt-3">
+          Con estos datos el repartidor ya puede iniciar sesión en la app y abrir <strong>Repartidor</strong>.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success" id="courierSaveBtn" onclick="saveCourier()">
+          <i class="bi bi-check2"></i> Crear repartidor
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -177,6 +264,71 @@
       error.classList.remove('d-none');
     } finally {
       loadingCouriers = false;
+    }
+  }
+
+  function openCourierModal() {
+    ['courierName','courierPhone','courierEmail','courierPassword','courierBank','courierHolder','courierClabe'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    document.getElementById('courierVehicle').value = 'motorcycle';
+    document.getElementById('courierPayout').value = 'cash';
+    document.getElementById('courierBonus').value = '0';
+    document.getElementById('courierMandadero').checked = false;
+    document.getElementById('courierFormError').classList.add('d-none');
+    document.getElementById('courierSaveBtn').disabled = false;
+    toggleCourierBank();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('courierModal')).show();
+  }
+
+  function toggleCourierBank() {
+    document.getElementById('courierBankBlock')?.classList.toggle(
+      'd-none', document.getElementById('courierPayout').value !== 'transfer'
+    );
+  }
+
+  async function saveCourier() {
+    const error = document.getElementById('courierFormError');
+    const btn = document.getElementById('courierSaveBtn');
+    error.classList.add('d-none');
+    const name = document.getElementById('courierName').value.trim();
+    const email = document.getElementById('courierEmail').value.trim();
+    const password = document.getElementById('courierPassword').value;
+    const payout = document.getElementById('courierPayout').value;
+    const clabe = document.getElementById('courierClabe').value.replace(/\D/g, '');
+    if (name.length < 2) { error.textContent = 'Escribe el nombre completo'; error.classList.remove('d-none'); return; }
+    if (!email || !email.includes('@')) { error.textContent = 'Escribe un correo válido'; error.classList.remove('d-none'); return; }
+    if (password.length < 6) { error.textContent = 'La contraseña debe tener al menos 6 caracteres'; error.classList.remove('d-none'); return; }
+    if (payout === 'transfer' && (!document.getElementById('courierBank').value.trim()
+        || !document.getElementById('courierHolder').value.trim() || clabe.length !== 18)) {
+      error.textContent = 'Para transferencia completa banco, titular y CLABE de 18 dígitos';
+      error.classList.remove('d-none'); return;
+    }
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Creando...';
+    try {
+      const created = await apiRequest('POST', '/admin/couriers', {
+        name,
+        email,
+        phone: document.getElementById('courierPhone').value.trim() || null,
+        password,
+        vehicle_type: document.getElementById('courierVehicle').value,
+        payout_method: payout,
+        bank_name: document.getElementById('courierBank').value.trim() || null,
+        bank_account_holder: document.getElementById('courierHolder').value.trim() || null,
+        bank_clabe: clabe || null,
+        is_mandadero: document.getElementById('courierMandadero').checked,
+        delivery_bonus_per_order: Number(document.getElementById('courierBonus').value || 0),
+      });
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('courierModal')).hide();
+      showToast(`Repartidor creado: ${created.name}. Ya puede iniciar sesión.`);
+      loadCouriers();
+    } catch (e) {
+      error.textContent = e.message;
+      error.classList.remove('d-none');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check2"></i> Crear repartidor';
     }
   }
 

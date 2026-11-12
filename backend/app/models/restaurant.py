@@ -32,6 +32,8 @@ class Restaurant(TimestampMixin, Base):
     preparation_base_time_min = Column(Integer, default=10, nullable=False)
 
     commission_percentage = Column(DECIMAL(4, 1), nullable=True)
+    commission_mode = Column(String(20), default="percentage", nullable=False)
+    fixed_fee = Column(DECIMAL(10, 2), nullable=True)
     payout_frequency_days = Column(Integer, default=7, nullable=False)
     bank_name = Column(String(100), nullable=True)
     bank_account_holder = Column(String(150), nullable=True)

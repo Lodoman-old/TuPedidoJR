@@ -103,6 +103,9 @@ def restaurant_detail_view(page: ft.Page, rid: str):
                     menu_area.controls.append(_menu_item_card(page, item, rid, can_manage, commission_rate, is_staff))
         except ApiError as ex:
             error_text.value = ex.detail
+        except Exception as ex:  # noqa: BLE001
+            error_text.value = f"No se pudo cargar el restaurante: {ex}"
+            print("Error cargando restaurante:", repr(ex), flush=True)
         finally:
             loading.visible = False
             page.update()
@@ -230,7 +233,7 @@ def restaurant_detail_view(page: ft.Page, rid: str):
                 commission_note,
                 owner_panel,
                 menu_area,
-            ], expand=True, scroll=ft.ScrollMode.AUTO),
+            ], expand=True),
         ]
     )
 

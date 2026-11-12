@@ -31,10 +31,15 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Cuota fija que paga el cliente por usar la plataforma.",
         "type": "money", "default": "5.0",
     },
+    "APP_FIXED_RESTAURANT_FEE": {
+        "group": "Comisiones", "label": "Cuota fija del restaurante",
+        "description": "Monto fijo por pedido que se descuenta al restaurante cuando trabaja con cuota fija.",
+        "type": "money", "default": "5.0",
+    },
     "DELIVERY_BASE_FEE": {
         "group": "Envíos", "label": "Tarifa base de envío",
         "description": "Costo de envío para distancias dentro del radio incluido.",
-        "type": "money", "default": "20.0",
+        "type": "money", "default": "25.0",
     },
     "DELIVERY_FREE_RADIUS_KM": {
         "group": "Envíos", "label": "Radio incluido (km)",

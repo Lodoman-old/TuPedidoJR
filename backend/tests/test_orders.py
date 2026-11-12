@@ -133,12 +133,38 @@ class TestCreateOrder:
         assert data["status"] == "pending"
         assert float(data["subtotal"]) == 115.0
         assert float(data["platform_commission"]) == 15.0
-        # Delivery is at the restaurant, so the 2 km free radius applies and
-        # the configured base fee (default 20.0) is charged.
-        assert float(data["delivery_fee"]) == 20.0
+        # Delivery is at the restaurant, so the 6 km free radius applies and
+        # the configured base fee (default 25.0) is charged.
+        assert float(data["delivery_fee"]) == 25.0
         assert float(data["flat_usage_fee"]) == 5.0
-        assert float(data["total"]) == 140.0
+        assert float(data["total"]) == 145.0
         assert len(data["items"]) == 1
+
+    async def test_create_with_fixed_fee(self, client: AsyncClient, user_token, seeded_restaurant, db_session):
+        resto, item = seeded_restaurant
+        resto.commission_mode = "fixed"
+        resto.fixed_fee = 5
+        await db_session.commit()
+
+        resp = await client.post(
+            "/api/v1/orders",
+            json={
+                "restaurant_id": str(resto.id),
+                "items": [{"menu_item_id": str(item.id), "quantity": 2}],
+                "delivery_address": "Calle Principal 123",
+                "delivery_location": {"lat": 19.43, "lng": -99.13},
+            },
+            headers={"Authorization": f"Bearer {user_token}"},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        # Cuota fija: los precios del cliente no llevan markup y al restaurante
+        # se le descuenta la cuota fija.
+        assert float(data["subtotal"]) == 100.0
+        assert float(data["platform_commission"]) == 5.0
+        assert float(data["delivery_fee"]) == 25.0
+        assert float(data["flat_usage_fee"]) == 5.0
+        assert float(data["total"]) == 130.0
 
     async def test_create_with_mp_is_disabled(self, client: AsyncClient, user_token, seeded_restaurant):
         resto, item = seeded_restaurant

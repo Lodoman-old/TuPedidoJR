@@ -179,7 +179,7 @@ async def send_to_tokens(
     payload_data = {str(k): str(v) for k, v in (data or {}).items()}
 
     base_url = (settings.APP_URL or "").rstrip("/")
-    logo_url = f"{base_url}/static/logo_notification_wide.png" if base_url else "/static/logo_notification_wide.png"
+    logo_url = f"{base_url}/static/logo_notification_circle.png" if base_url else "/static/logo_notification_circle.png"
     android_notification: dict = {"icon": "ic_stat_tup", "color": "#1B2F6B"}
     if base_url:
         android_notification["image"] = logo_url

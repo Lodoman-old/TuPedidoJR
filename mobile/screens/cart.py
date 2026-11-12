@@ -34,7 +34,7 @@ def cart_view(page: ft.Page, rid: str):
     notes = ft.TextField(label="Notas (opcional)", multiline=True, min_lines=1)
     error_text = ft.Text("", color=ft.Colors.RED)
     loading = ft.ProgressBar(visible=False)
-    coupon_input = ft.TextField(label="Cupón de descuento", hint_text="EJ: BIENVENIDO10")
+    coupon_input = ft.TextField(label="Cupón de descuento", hint_text="EJ: BIENVENIDO10", expand=True)
     coupon_status = ft.Text("", size=12)
     _applied_coupon = [None]
     _detecting = ft.Text("", size=12, color=ft.Colors.GREY)
@@ -176,22 +176,57 @@ def cart_view(page: ft.Page, rid: str):
 
     page.run_task(_init_location)
 
+    def _change_item_qty(ci, delta):
+        ci["quantity"] = max(0, int(ci["quantity"]) + delta)
+        if ci["quantity"] <= 0:
+            cart.remove(ci)
+        rebuild_items()
+        page.run_task(sync_cart, list(cart))
+        page.run_task(load_price_estimate)
+        page.update()
+
     def rebuild_items():
         items_list.controls.clear()
         subtotal = 0.0
         for ci in cart:
-            subtotal += ci['price'] * ci['quantity']
-            items_list.controls.append(ft.Container(
-                content=ft.Row([
-                    ft.Column([
-                        ft.Text(ci.get("name", ci["menu_item_id"][:8]), expand=True, size=15),
-                        *([ft.Text(" · ".join(ci.get("option_names") or []), size=11, color=ft.Colors.GREY)] if ci.get("option_names") else []),
-                    ], expand=True, spacing=0),
-                    ft.Text(f"x{ci['quantity']}", size=14),
-                    ft.Text(f"${ci['price'] * ci['quantity']:.2f}", size=14),
-                ]),
-                padding=6,
-            ))
+            subtotal += ci["price"] * ci["quantity"]
+            option_names = ci.get("option_names") or []
+            details = ft.Column([
+                ft.Row([
+                    ft.Text(
+                        ci.get("name", ci["menu_item_id"][:8]),
+                        size=15, expand=True, max_lines=2,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                    ),
+                    ft.Text(
+                        f"${ci['price'] * ci['quantity']:.2f}",
+                        size=14, weight=ft.FontWeight.BOLD,
+                    ),
+                ], spacing=6, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                *([ft.Text(
+                    " · ".join(option_names), size=11, color=ft.Colors.GREY,
+                    max_lines=2, overflow=ft.TextOverflow.ELLIPSIS,
+                )] if option_names else []),
+                ft.Row([
+                    ft.IconButton(
+                        ft.Icons.REMOVE_CIRCLE_OUTLINE, icon_size=20,
+                        on_click=lambda e, item=ci: _change_item_qty(item, -1),
+                    ),
+                    ft.Text(str(ci["quantity"]), size=14, width=26, text_align=ft.TextAlign.CENTER),
+                    ft.IconButton(
+                        ft.Icons.ADD_CIRCLE, icon_size=20,
+                        on_click=lambda e, item=ci: _change_item_qty(item, 1),
+                    ),
+                    ft.Container(expand=True),
+                    ft.IconButton(
+                        ft.Icons.DELETE_OUTLINE, icon_size=20, tooltip="Quitar",
+                        on_click=lambda e, item=ci: _change_item_qty(item, -int(item["quantity"])),
+                    ),
+                ], spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ], spacing=2)
+            items_list.controls.append(ft.Container(content=details, padding=8))
+        if not cart:
+            items_list.controls.append(ft.Text("Tu carrito está vacío", color=ft.Colors.GREY))
         total.value = f"${subtotal:.2f}"
 
     rebuild_items()

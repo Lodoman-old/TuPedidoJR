@@ -453,7 +453,7 @@ async def load_payouts(page: ft.Page, content_area: ft.Column):
         if available > 0:
             cards.append(
                 ft.Container(
-                    content=ft.ElevatedButton(
+                    content=ft.Button(
                         f"Solicitar liquidación — ${available:.2f}",
                         color=ft.Colors.WHITE,
                         bgcolor=ft.Colors.GREEN,
@@ -514,10 +514,10 @@ async def load_payouts(page: ft.Page, content_area: ft.Column):
 async def request_payout_action(page: ft.Page, content_area: ft.Column):
     try:
         payout = await api.request_payout()
-        page.open(ft.SnackBar(ft.Text(f"Liquidación generada: ${float(payout['total_earnings']):.2f}"), bgcolor=ft.Colors.GREEN))
+        page.show_dialog(ft.SnackBar(ft.Text(f"Liquidación generada: ${float(payout['total_earnings']):.2f}"), bgcolor=ft.Colors.GREEN))
         await load_payouts(page, content_area)
     except ApiError as ex:
-        page.open(ft.SnackBar(ft.Text(f"Error: {ex.detail}"), bgcolor=ft.Colors.RED))
+        page.show_dialog(ft.SnackBar(ft.Text(f"Error: {ex.detail}"), bgcolor=ft.Colors.RED))
 
 
 def _payout_card(p: dict):
@@ -655,8 +655,8 @@ async def load_settings(page: ft.Page, content_area: ft.Column):
                 ft.Divider(height=1),
                 ft.Text("Configuración de pago", size=14, weight=ft.FontWeight.BOLD),
                 ft.Row([
-                    ft.ElevatedButton("Efectivo", style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN if v == "cash" else ft.Colors.SURFACE_CONTAINER_HIGH, color=ft.Colors.WHITE if v == "cash" else ft.Colors.ON_SURFACE, padding=ft.Padding(12, 6, 12, 6)), on_click=lambda e: rebuild_settings("cash")),
-                    ft.ElevatedButton("Transferencia", style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN if v == "transfer" else ft.Colors.SURFACE_CONTAINER_HIGH, color=ft.Colors.WHITE if v == "transfer" else ft.Colors.ON_SURFACE, padding=ft.Padding(12, 6, 12, 6)), on_click=lambda e: rebuild_settings("transfer")),
+                    ft.Button("Efectivo", style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN if v == "cash" else ft.Colors.SURFACE_CONTAINER_HIGH, color=ft.Colors.WHITE if v == "cash" else ft.Colors.ON_SURFACE, padding=ft.Padding(12, 6, 12, 6)), on_click=lambda e: rebuild_settings("cash")),
+                    ft.Button("Transferencia", style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN if v == "transfer" else ft.Colors.SURFACE_CONTAINER_HIGH, color=ft.Colors.WHITE if v == "transfer" else ft.Colors.ON_SURFACE, padding=ft.Padding(12, 6, 12, 6)), on_click=lambda e: rebuild_settings("transfer")),
                 ], spacing=8),
                 ft.Dropdown(
                     label="Frecuencia de pago",

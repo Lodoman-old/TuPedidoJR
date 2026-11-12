@@ -1,7 +1,7 @@
 import asyncio
 import flet as ft
 from mobile.api import api, ApiError
-from mobile.utils import PAYMENT_STATUS_LABELS
+from mobile.utils import PAYMENT_STATUS_LABELS, launch_url
 
 
 PAYMENT_COLORS = {
@@ -52,7 +52,7 @@ def payment_view(page: ft.Page, order_id: str):
         try:
             pref = await api.create_preference(order_id)
             url = pref.get("checkout_url") or pref["sandbox_init_point"]
-            page.launch_url(url)
+            await launch_url(page, url)
             nonlocal polling
             polling = True
             asyncio.create_task(check_status())

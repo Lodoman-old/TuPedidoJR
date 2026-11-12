@@ -11,6 +11,7 @@ Uso:
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -52,16 +53,11 @@ def stage() -> None:
     )
 
     pyproject = (MOBILE / "pyproject.toml").read_text(encoding="utf-8")
-    if "flet-local-auth" in pyproject:
-        pyproject = "\n".join(
-            line for line in pyproject.splitlines() if "flet-local-auth" not in line
-        )
-        pyproject += "\n"
     (STAGE / "pyproject.toml").write_text(pyproject, encoding="utf-8")
 
 
 def build() -> Path:
-    flet = shutil.which("flet")
+    flet = os.getenv("FLET_BIN") or shutil.which("flet")
     if not flet:
         raise SystemExit("No se encontró el comando 'flet'. Instala flet 0.85.2.")
     subprocess.run(

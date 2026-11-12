@@ -1,6 +1,7 @@
 import flet as ft
 from mobile.api import api, ApiError
 from mobile import secure_auth, background_location
+from mobile.screens.restaurant_detail import cart
 
 
 def restaurants_view(page: ft.Page):
@@ -88,6 +89,28 @@ def restaurants_view(page: ft.Page):
 
     page.run_task(load)
 
+    cart_count = sum(int(entry.get("quantity") or 0) for entry in cart)
+    cart_count_text = ft.Text(str(cart_count), color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD, size=14)
+    cart_restaurant = next(
+        (entry.get("restaurant_id") for entry in cart if entry.get("restaurant_id")),
+        None,
+    )
+
+    def open_cart(e):
+        if cart_restaurant:
+            page.run_task(page.push_route, f"/cart/{cart_restaurant}")
+
+    cart_fab = ft.FloatingActionButton(
+        content=ft.Row([
+            ft.Icon(ft.Icons.SHOPPING_CART, color=ft.Colors.WHITE),
+            cart_count_text,
+        ], spacing=6, tight=True, alignment=ft.MainAxisAlignment.CENTER),
+        bgcolor="#F58220",
+        visible=cart_count > 0,
+        tooltip="Ver carrito",
+        on_click=open_cart,
+    )
+
     content = ft.Column([
         search,
         ft.Row([
@@ -99,6 +122,7 @@ def restaurants_view(page: ft.Page):
 
     return ft.View(
         route="/restaurants",
+        floating_action_button=cart_fab,
         controls=[appbar, ft.SafeArea(content)],
     )
 

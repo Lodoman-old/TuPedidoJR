@@ -1,6 +1,6 @@
 import flet as ft
 
-APP_VERSION = "20"
+APP_VERSION = "21"
 
 STATUS_LABELS = {
     "pending": "Pendiente",
@@ -61,6 +61,23 @@ def open_dlg(page: ft.Page, dlg: ft.AlertDialog):
 def close_dlg(page: ft.Page, dlg: ft.AlertDialog):
     dlg.open = False
     page.update()
+
+
+async def launch_url(page: ft.Page, url: str) -> None:
+    """Abre una URL con el lanzador del sistema (Flet 1.x)."""
+    try:
+        service = None
+        for item in list(getattr(page, "services", []) or []):
+            if isinstance(item, ft.UrlLauncher):
+                service = item
+                break
+        if service is None:
+            service = ft.UrlLauncher()
+            page.services.append(service)
+            page.update()
+        await service.launch_url(url)
+    except Exception:
+        pass
 
 
 async def report_error(page: ft.Page, message: str, detail: str) -> None:

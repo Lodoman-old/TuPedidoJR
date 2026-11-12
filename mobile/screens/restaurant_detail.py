@@ -19,7 +19,7 @@ def restaurant_detail_view(page: ft.Page, rid: str):
             ft.Icon(ft.Icons.SHOPPING_CART, color=ft.Colors.WHITE),
             cart_count_text,
         ], spacing=6, tight=True, alignment=ft.MainAxisAlignment.CENTER),
-        bgcolor=ft.Colors.PRIMARY,
+        bgcolor="#F58220",
         visible=False,
         tooltip="Ver carrito",
         on_click=lambda e: page.run_task(page.push_route, f"/cart/{rid}"),

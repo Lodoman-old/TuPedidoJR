@@ -60,19 +60,27 @@ def build() -> Path:
     flet = os.getenv("FLET_BIN") or shutil.which("flet")
     if not flet:
         raise SystemExit("No se encontró el comando 'flet'. Instala flet 0.85.2.")
+
+    args = [
+        flet,
+        "build",
+        "apk",
+        "--verbose",
+        "--splash-color",
+        "#FFFFFF",
+        "--splash-dark-color",
+        "#0B1A45",
+    ]
+    template = MOBILE / "template" / "build"
+    if (template / "cookiecutter.json").is_file():
+        args.extend(["--template", str(template)])
+
     subprocess.run(
-        [
-            flet,
-            "build",
-            "apk",
-            "--verbose",
-            "--splash-color",
-            "#FFFFFF",
-            "--splash-dark-color",
-            "#0B1A45",
-        ],
+        args,
         cwd=STAGE,
         check=True,
+        input="y\n" * 20,
+        text=True,
     )
     output_dir = STAGE / "build" / "apk"
     candidates = [

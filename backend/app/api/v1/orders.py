@@ -145,7 +145,7 @@ async def _requires_courier_approval(
         or threshold <= 0
     ):
         return False, threshold
-    return float(distance_km) > threshold, threshold
+    return float(distance_km) >= threshold, threshold
 
 
 def _clean_clabe(value: str | None) -> str:

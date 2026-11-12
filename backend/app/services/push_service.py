@@ -297,13 +297,16 @@ async def notify_new_order(order_id: str) -> None:
                 )
             )
             user_ids = {restaurant.owner_id, *members_result.scalars().all()}
+            items_count = sum(int(item.quantity or 0) for item in order.items) or 1
+            total = float(order.total or 0)
             for user_id in user_ids:
                 await send_to_user(
                     db,
                     user_id,
                     "Nuevo pedido",
-                    f"Tienes un nuevo pedido en {restaurant.name}.",
+                    f"{restaurant.name}: {items_count} artículo(s) · ${total:.2f}",
                     {"type": "new_order", "order_id": str(order.id)},
+                    "green",
                 )
     except Exception:
         logger.exception("Push new-order notification failed for %s", order_id)

@@ -659,6 +659,7 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
     let restaurantAlertTimer = null;
     let restaurantAlertRestaurantId = null;
     let restaurantAudioCtx = null;
+    let restaurantAlertSoundWanted = false;
     const alertedPendingOrders = new Set();
 
     function playRestaurantAlertSound() {
@@ -715,6 +716,7 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
             banner.classList.remove('d-none');
           }
           if (fresh.length) {
+            restaurantAlertSoundWanted = true;
             showToast(`🔔 ${fresh.length} pedido(s) nuevo(s) por confirmar`, 'danger');
             playRestaurantAlertSound();
           }
@@ -723,6 +725,14 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
 
       check();
       restaurantAlertTimer = setInterval(check, 15000);
+      const unlockSound = () => {
+        if (restaurantAlertSoundWanted) {
+          restaurantAlertSoundWanted = false;
+          playRestaurantAlertSound();
+        }
+      };
+      document.addEventListener('click', unlockSound, { once: true });
+      document.addEventListener('touchstart', unlockSound, { once: true });
       document.addEventListener('visibilitychange', () => {
         if (!document.hidden) check();
       });

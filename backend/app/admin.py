@@ -5,6 +5,7 @@ from sqladmin.authentication import AuthenticationBackend
 from sqlalchemy import select
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
+from wtforms import SelectField
 
 from app.core.security import hash_password, verify_password, decode_access_token, create_access_token
 from app.db.session import async_session
@@ -168,7 +169,21 @@ class RestaurantAdmin(ModelView, model=Restaurant):
         Restaurant.updated_at: "Actualizado",
     }
     column_searchable_list = [Restaurant.name]
+    column_formatters = {
+        Restaurant.commission_mode: lambda m, a: (
+            "Cuota fija" if (m.commission_mode or "percentage") == "fixed" else "Porcentaje"
+        ),
+    }
     form_excluded_columns = [Restaurant.created_at, Restaurant.updated_at]
+    form_overrides = {"commission_mode": SelectField}
+    form_args = {
+        "commission_mode": {
+            "choices": [
+                ("percentage", "Porcentaje por producto"),
+                ("fixed", "Cuota fija por pedido"),
+            ]
+        }
+    }
     create_template = "sqladmin/restaurant/create.html"
     edit_template = "sqladmin/restaurant/edit.html"
 

@@ -112,7 +112,7 @@
             </a>
             <ul class="dropdown-menu dropdown-menu-end">
               <li><a class="dropdown-item" data-rnav="panel" href="#"><i class="bi bi-speedometer2"></i> Panel</a></li>
-              <li><a class="dropdown-item" data-rnav="orders" href="#"><i class="bi bi-receipt"></i> Pedidos</a></li>
+              <li><a class="dropdown-item" data-rnav="orders" href="#"><i class="bi bi-receipt"></i> Pedidos <span id="restaurantPendingBadge" class="badge rounded-pill bg-danger d-none">0</span></a></li>
               <li class="rnav-manager"><a class="dropdown-item" data-rnav="earnings" href="#"><i class="bi bi-cash-stack"></i> Ganancias</a></li>
               <li class="rnav-manager"><a class="dropdown-item" data-rnav="team" href="#"><i class="bi bi-people"></i> Equipo</a></li>
               <li class="rnav-manager"><hr class="dropdown-divider"></li>
@@ -169,6 +169,7 @@
 
   <main class="container py-3">
     <div id="affiliationBanner" class="alert alert-warning d-none" role="alert"></div>
+    <div id="restaurantOrderAlert" class="alert alert-danger d-none" role="alert"></div>
     {% block content %}{% endblock %}
   </main>
 
@@ -655,6 +656,78 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
       box.classList.remove('d-none');
     }
 
+    let restaurantAlertTimer = null;
+    let restaurantAlertRestaurantId = null;
+    let restaurantAudioCtx = null;
+    const alertedPendingOrders = new Set();
+
+    function playRestaurantAlertSound() {
+      try {
+        restaurantAudioCtx = restaurantAudioCtx
+          || new (window.AudioContext || window.webkitAudioContext)();
+        if (restaurantAudioCtx.state === 'suspended') restaurantAudioCtx.resume();
+        const now = restaurantAudioCtx.currentTime;
+        [0, 0.2, 0.4].forEach((offset, index) => {
+          const osc = restaurantAudioCtx.createOscillator();
+          const gain = restaurantAudioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = index === 2 ? 988 : 784;
+          gain.gain.setValueAtTime(0.0001, now + offset);
+          gain.gain.exponentialRampToValueAtTime(0.16, now + offset + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.15);
+          osc.connect(gain);
+          gain.connect(restaurantAudioCtx.destination);
+          osc.start(now + offset);
+          osc.stop(now + offset + 0.17);
+        });
+      } catch (e) { /* el navegador puede bloquear audio sin interacción */ }
+      try { navigator.vibrate?.([250, 120, 250]); } catch (e) { /* sin vibración */ }
+    }
+
+    function startRestaurantOrderAlerts(restaurantId) {
+      if (!restaurantId) return;
+      if (restaurantAlertRestaurantId === restaurantId && restaurantAlertTimer) return;
+      if (restaurantAlertRestaurantId !== restaurantId) alertedPendingOrders.clear();
+      restaurantAlertRestaurantId = restaurantId;
+      if (restaurantAlertTimer) clearInterval(restaurantAlertTimer);
+
+      const check = async () => {
+        try {
+          const orders = await apiRequest('GET', `/restaurants/${restaurantId}/orders`);
+          const pending = (orders || []).filter(o => o.status === 'pending');
+          const banner = document.getElementById('restaurantOrderAlert');
+          const badge = document.getElementById('restaurantPendingBadge');
+          if (badge) {
+            badge.textContent = pending.length;
+            badge.classList.toggle('d-none', pending.length === 0);
+          }
+          if (!pending.length) {
+            banner?.classList.add('d-none');
+            return;
+          }
+          const fresh = pending.filter(o => !alertedPendingOrders.has(o.id));
+          pending.forEach(o => alertedPendingOrders.add(o.id));
+          if (banner) {
+            banner.innerHTML = `<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+              <span><i class="bi bi-bell-fill"></i> <strong>Tienes ${pending.length} pedido(s) nuevo(s) sin confirmar.</strong></span>
+              <a class="btn btn-sm btn-dark" href="/web/restaurants/${restaurantId}/orders">Ver pedidos</a>
+            </div>`;
+            banner.classList.remove('d-none');
+          }
+          if (fresh.length) {
+            showToast(`🔔 ${fresh.length} pedido(s) nuevo(s) por confirmar`, 'danger');
+            playRestaurantAlertSound();
+          }
+        } catch (e) { /* sin permiso o sesión expirada */ }
+      };
+
+      check();
+      restaurantAlertTimer = setInterval(check, 15000);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) check();
+      });
+    }
+
     function applyRestaurantNav(isStaff, restaurantId, canManage = false) {
       const menu = document.getElementById('myRestaurantNav');
       const publicLink = document.getElementById('publicRestaurantsNav');
@@ -688,6 +761,7 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
         nav.href = profileUrl;
         nav.title = canManage && restaurantId ? 'Perfil del negocio' : 'Mi perfil';
       }
+      if (isStaff && restaurantId) startRestaurantOrderAlerts(restaurantId);
     }
 
     async function capLog(message, detail) {

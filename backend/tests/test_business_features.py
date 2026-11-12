@@ -1,7 +1,7 @@
 """Tests for opening hours, cancellations, settings and reports."""
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -56,6 +56,7 @@ async def restaurant(db_session, owner_token):
         location="SRID=4326;POINT(-100.99 20.64)",
         address="Calle 5 de Mayo 209", is_open=True, rating=4.5,
         delivery_radius_m=5000, delivery_fee=20.00,
+        affiliation_expires_at=date.today() + timedelta(days=365),
     )
     db_session.add(resto)
     item = MenuItem(
@@ -226,6 +227,7 @@ class TestSearchAndCuisine:
             location="SRID=4326;POINT(-100.99 20.64)",
             address="Otra calle", is_open=True, rating=4.8,
             delivery_radius_m=5000, delivery_fee=15.00,
+            affiliation_expires_at=date.today() + timedelta(days=365),
         ))
         await db_session.commit()
 

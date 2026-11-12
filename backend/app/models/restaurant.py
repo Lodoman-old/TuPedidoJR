@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DECIMAL, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, Date, DECIMAL, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from geoalchemy2 import Geography
@@ -34,6 +34,8 @@ class Restaurant(TimestampMixin, Base):
     commission_percentage = Column(DECIMAL(4, 1), nullable=True)
     commission_mode = Column(String(20), default="percentage", nullable=False)
     fixed_fee = Column(DECIMAL(10, 2), nullable=True)
+    affiliation_expires_at = Column(Date, nullable=True)
+    affiliation_reminder_on = Column(Date, nullable=True)
     payout_frequency_days = Column(Integer, default=7, nullable=False)
     bank_name = Column(String(100), nullable=True)
     bank_account_holder = Column(String(150), nullable=True)

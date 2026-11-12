@@ -142,7 +142,7 @@ class RestaurantAdmin(ModelView, model=Restaurant):
     name = "Negocio"
     name_plural = "Negocios"
     icon = "fa-solid fa-store"
-    column_list = [Restaurant.id, Restaurant.name, Restaurant.cuisine, Restaurant.is_open, Restaurant.rating, Restaurant.delivery_fee, Restaurant.fixed_fee]
+    column_list = [Restaurant.id, Restaurant.name, Restaurant.cuisine, Restaurant.is_open, Restaurant.rating, Restaurant.delivery_fee, Restaurant.fixed_fee, Restaurant.affiliation_expires_at]
     column_labels = {
         Restaurant.name: "Nombre",
         Restaurant.description: "Descripción",
@@ -160,6 +160,7 @@ class RestaurantAdmin(ModelView, model=Restaurant):
         Restaurant.commission_percentage: "Comisión %",
         Restaurant.commission_mode: "Modo de cobro (percentage/fixed)",
         Restaurant.fixed_fee: "Cuota fija por pedido",
+        Restaurant.affiliation_expires_at: "Afiliación pagada hasta",
         Restaurant.payout_frequency_days: "Días entre liquidaciones",
         Restaurant.bank_name: "Banco",
         Restaurant.bank_account_holder: "Titular de cuenta",

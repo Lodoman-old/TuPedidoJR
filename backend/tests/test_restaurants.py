@@ -1,6 +1,7 @@
 """Tests for restaurants endpoints: list, detail, create menu item."""
 
 import uuid
+from datetime import date, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -48,6 +49,7 @@ async def seeded_restaurant(db_session, owner_token) -> Restaurant:
         address="Calle Test 123", phone="555-0000",
         is_open=True, rating=4.0,
         delivery_radius_m=5000, delivery_fee=10.00,
+        affiliation_expires_at=date.today() + timedelta(days=365),
     )
     db_session.add(r)
     cid = uuid.uuid4()
@@ -75,6 +77,7 @@ class TestListRestaurants:
             location="SRID=4326;POINT(-99.13 19.43)",
             address="Address", is_open=True, rating=3.5,
             delivery_radius_m=3000, delivery_fee=5.00,
+            affiliation_expires_at=date.today() + timedelta(days=365),
         )
         db_session.add(r)
         await db_session.commit()
@@ -94,6 +97,7 @@ class TestListRestaurants:
             location="SRID=4326;POINT(-99.13 19.43)",
             address="Address", is_open=True, rating=4.0,
             delivery_radius_m=5000, delivery_fee=10.00,
+            affiliation_expires_at=date.today() + timedelta(days=365),
         )
         db_session.add(r)
         await db_session.commit()
@@ -110,11 +114,13 @@ class TestListRestaurants:
         r1 = Restaurant(name="Tacos El Norte", owner_id=payload["sub"],
                         location="SRID=4326;POINT(-99.13 19.43)",
                         address="A", is_open=True, rating=4.0,
-                        delivery_radius_m=5000, delivery_fee=10.00)
+                        delivery_radius_m=5000, delivery_fee=10.00,
+                        affiliation_expires_at=date.today() + timedelta(days=365))
         r2 = Restaurant(name="Pizza Mia", owner_id=payload["sub"],
                         location="SRID=4326;POINT(-99.13 19.43)",
                         address="B", is_open=True, rating=4.0,
-                        delivery_radius_m=5000, delivery_fee=10.00)
+                        delivery_radius_m=5000, delivery_fee=10.00,
+                        affiliation_expires_at=date.today() + timedelta(days=365))
         db_session.add_all([r1, r2])
         await db_session.commit()
 

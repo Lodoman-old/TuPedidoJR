@@ -107,6 +107,9 @@ class RestaurantOut(BaseModel):
     delivery_mode: str = "platform"
     pickup_enabled: bool = False
     effective_commission_percentage: Decimal = Decimal("0")
+    affiliated: bool = False
+    affiliation_expires_at: date | None = None
+    affiliation_days_left: int | None = None
     status: str = "active"
     viewer_role: str | None = None
     address: str

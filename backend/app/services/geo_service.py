@@ -74,6 +74,8 @@ async def get_nearby_restaurants(
                            ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) AS distance_m
         FROM restaurants r
         WHERE r.status = 'active'
+              AND r.affiliation_expires_at IS NOT NULL
+              AND r.affiliation_expires_at >= CURRENT_DATE
               {where_clause}
         ORDER BY distance_m
         LIMIT :limit OFFSET :skip

@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -76,6 +77,74 @@ async def pending_restaurant_registrations(
         select(func.count()).select_from(Restaurant).where(Restaurant.status == "pending")
     )
     return {"pending": int(total or 0)}
+
+
+class AffiliationUpdate(BaseModel):
+    paid: bool | None = None
+    expires_at: date | None = None
+
+
+def _affiliation_row(restaurant: Restaurant) -> dict:
+    today = date.today()
+    expires = restaurant.affiliation_expires_at
+    days_left = (expires - today).days if expires else None
+    return {
+        "id": str(restaurant.id),
+        "name": restaurant.name,
+        "cuisine": restaurant.cuisine,
+        "status": restaurant.status,
+        "affiliation_expires_at": expires.isoformat() if expires else None,
+        "days_left": days_left,
+        "affiliated": bool(expires and expires >= today),
+    }
+
+
+@router.get("/affiliations")
+async def list_affiliations(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    result = await db.execute(
+        select(Restaurant)
+        .where(Restaurant.status == "active")
+        .order_by(Restaurant.name)
+    )
+    return [_affiliation_row(row) for row in result.scalars().all()]
+
+
+@router.patch("/affiliations/{restaurant_id}")
+async def update_affiliation(
+    restaurant_id: str,
+    body: AffiliationUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
+    restaurant = result.scalar_one_or_none()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurante no encontrado")
+
+    if body.paid is True:
+        base = date.today()
+        current = restaurant.affiliation_expires_at
+        if current and current >= base:
+            base = current
+        restaurant.affiliation_expires_at = base + timedelta(days=365)
+    elif body.paid is False:
+        restaurant.affiliation_expires_at = None
+    elif body.expires_at is not None:
+        restaurant.affiliation_expires_at = body.expires_at
+    else:
+        raise HTTPException(status_code=400, detail="Indica si pagó o la fecha de vencimiento")
+
+    restaurant.affiliation_reminder_on = None
+    await log_action(
+        db, current_user.id, "affiliation.update", "restaurant", restaurant.id,
+        {"expires_at": restaurant.affiliation_expires_at.isoformat() if restaurant.affiliation_expires_at else None},
+    )
+    await db.commit()
+    await db.refresh(restaurant)
+    return _affiliation_row(restaurant)
 
 
 @router.post("/restaurant-registrations/{restaurant_id}/approve")

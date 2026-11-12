@@ -8,6 +8,20 @@
 <div id="regAdminLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
 <div id="regAdminContent" class="d-none"></div>
 
+<div class="card p-3 mt-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h6 class="m-0"><i class="bi bi-patch-check"></i> Afiliaciones anuales</h6>
+    <button class="btn btn-sm btn-outline-secondary" onclick="loadAffiliations()"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+  </div>
+  <p class="small text-muted mb-2 mt-1">
+    Solo los restaurantes con la afiliación vigente aparecen en los listados y en su página pública.
+    El recordatorio se envía automáticamente 10 días antes del vencimiento.
+  </p>
+  <div id="affiliationsBody" class="table-responsive">
+    <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>
+  </div>
+</div>
+
 <div class="modal fade" id="approveModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -224,6 +238,61 @@
     }
   }
 
+  async function loadAffiliations() {
+    const body = document.getElementById('affiliationsBody');
+    if (!body) return;
+    try {
+      const rows = await apiRequest('GET', '/admin/affiliations');
+      body.innerHTML = `<table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Restaurante</th><th>Estado</th><th>Pagado hasta</th><th>Días</th><th class="text-end">Acciones</th></tr></thead>
+        <tbody>${rows.map(r => {
+          const active = Boolean(r.affiliated);
+          const badge = active
+            ? '<span class="badge bg-success">Vigente</span>'
+            : '<span class="badge bg-danger">Sin pago</span>';
+          let until = '—';
+          if (r.affiliation_expires_at) {
+            const d = new Date(r.affiliation_expires_at + 'T12:00:00');
+            until = d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+          }
+          let days = '—';
+          if (r.days_left !== null && r.days_left !== undefined) {
+            const cls = r.days_left < 0 ? 'text-danger fw-bold' : (r.days_left <= 10 ? 'text-warning fw-bold' : 'text-muted');
+            days = `<span class="${cls}">${r.days_left} día(s)</span>`;
+          }
+          return `<tr>
+            <td><strong>${esc(r.name)}</strong><br><small class="text-muted">${esc(r.cuisine || '')}</small></td>
+            <td>${badge}</td>
+            <td>${until}</td>
+            <td>${days}</td>
+            <td class="text-end text-nowrap">
+              <button class="btn btn-sm btn-success" onclick="markAffiliation('${r.id}', true, this)">Marcar pagado (1 año)</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="markAffiliation('${r.id}', false, this)">Quitar</button>
+            </td>
+          </tr>`;
+        }).join('') || '<tr><td colspan="5" class="text-center text-muted">Sin restaurantes activos.</td></tr>'}</tbody>
+      </table>`;
+    } catch (e) {
+      body.innerHTML = `<div class="alert alert-danger mb-0">${esc(e.message)}</div>`;
+    }
+  }
+
+  async function markAffiliation(id, paid, btn) {
+    const label = paid ? 'Marcar pagado (1 año)' : 'Quitar afiliación';
+    if (!paid && !confirm('¿Quitar la afiliación? El restaurante dejará de aparecer en los listados.')) return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    try {
+      await apiRequest('PATCH', `/admin/affiliations/${id}`, { paid });
+      showToast(paid ? 'Afiliación renovada por un año' : 'Afiliación retirada');
+      await loadAffiliations();
+    } catch (e) {
+      showToast(e.message, 'danger');
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
   function showResult(type, title, html) {
     const icons = { success: 'check-circle-fill text-success', warning: 'exclamation-triangle-fill text-warning', danger: 'x-circle-fill text-danger', info: 'info-circle-fill text-primary' };
     document.getElementById('resultTitle').innerHTML = `<i class="bi bi-${icons[type] || icons.info}"></i> ${esc(title)}`;
@@ -233,7 +302,10 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    if (sessionStorage.getItem('is_superuser') === 'true') loadRegistrations();
+    if (sessionStorage.getItem('is_superuser') === 'true') {
+      loadRegistrations();
+      loadAffiliations();
+    }
   });
 </script>
 {% endblock %}

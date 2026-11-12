@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 from decimal import Decimal, InvalidOperation
 
@@ -79,6 +80,8 @@ async def public_restaurant(
             Restaurant.slug == slug,
             Restaurant.public_page_enabled.is_(True),
             Restaurant.status == "active",
+            Restaurant.affiliation_expires_at.is_not(None),
+            Restaurant.affiliation_expires_at >= date.today(),
         )
         .options(selectinload(Restaurant.categories), selectinload(Restaurant.menu))
     )

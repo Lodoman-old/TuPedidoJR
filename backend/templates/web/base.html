@@ -109,6 +109,7 @@
   {% endblock %}
 
   <main class="container py-3">
+    <div id="affiliationBanner" class="alert alert-warning d-none" role="alert"></div>
     {% block content %}{% endblock %}
   </main>
 
@@ -508,6 +509,7 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
           try {
             const detail = await apiRequest('GET', `/restaurants/${myRestaurantId}`);
             isRestaurantManager = ['owner', 'manager', 'admin'].includes(detail.viewer_role);
+            renderAffiliationBanner(detail);
           } catch (e) { /* sin permiso para editar */ }
         }
         sessionStorage.setItem('is_restaurant_manager', isRestaurantManager ? 'true' : 'false');
@@ -526,6 +528,33 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
 
     function applyDeliveryNav(isDelivery) {
       document.getElementById('deliveryNav')?.classList.toggle('d-none', !isDelivery);
+    }
+
+    function renderAffiliationBanner(detail) {
+      const box = document.getElementById('affiliationBanner');
+      if (!box || !detail) return;
+      const daysLeft = detail.affiliation_days_left;
+      if (daysLeft === null || daysLeft === undefined || daysLeft > 10) {
+        box.classList.add('d-none');
+        return;
+      }
+      const safeName = String(detail.name || '').replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+      let text;
+      let link = '';
+      if (daysLeft < 0) {
+        text = `La afiliación de ${safeName} venció hace ${Math.abs(daysLeft)} día(s). El negocio no aparece en los listados ni en su página pública.`;
+      } else if (daysLeft === 0) {
+        text = `La afiliación de ${safeName} vence hoy. Renueva el pago para seguir apareciendo en los listados.`;
+      } else {
+        text = `La afiliación de ${safeName} vence en ${daysLeft} día(s). Renueva el pago para seguir apareciendo en los listados.`;
+      }
+      if (['owner', 'manager', 'admin'].includes(detail.viewer_role)) {
+        link = ` <a class="alert-link" href="/web/restaurants/${detail.id}/earnings">Ver mis ganancias</a>`;
+      }
+      box.innerHTML = `<i class="bi bi-exclamation-triangle"></i> ${text}${link}`;
+      box.classList.remove('d-none');
     }
 
     function applyRestaurantNav(isStaff, restaurantId, canManage = false) {
@@ -603,6 +632,8 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
             target = '/web/delivery';
           } else if (data.type === 'new_order') {
             target = '/web/orders';
+          } else if (data.type === 'affiliation' && data.restaurant_id) {
+            target = '/web/restaurants/' + data.restaurant_id + '/profile';
           } else if (data.order_id) {
             target = '/web/orders/' + data.order_id;
             if (data.type === 'order_status' && data.status === 'delivered') {

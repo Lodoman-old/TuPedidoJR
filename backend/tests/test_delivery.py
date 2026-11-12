@@ -1,6 +1,7 @@
 """Tests for delivery endpoints: available, accept, location."""
 
 import uuid
+from datetime import date, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -57,6 +58,7 @@ async def seeded_restaurant(db_session, user_token) -> Restaurant:
         location="SRID=4326;POINT(-99.13 19.43)",
         address="Address 123", is_open=True, rating=4.0,
         delivery_radius_m=5000, delivery_fee=10.00,
+        affiliation_expires_at=date.today() + timedelta(days=365),
     )
     db_session.add(r)
     item = MenuItem(id=uuid.uuid4(), restaurant_id=rid, name="Item", price=30.00,

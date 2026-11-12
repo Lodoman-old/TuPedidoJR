@@ -1,6 +1,7 @@
 """Tests for orders endpoints: create, list, detail, status, cancel."""
 
 import uuid
+from datetime import date, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -37,6 +38,7 @@ async def seeded_restaurant(db_session, user_token) -> tuple[Restaurant, MenuIte
         location="SRID=4326;POINT(-99.13 19.43)",
         address="Addr", is_open=True, rating=4.0,
         delivery_radius_m=5000, delivery_fee=15.00,
+        affiliation_expires_at=date.today() + timedelta(days=365),
     )
     db_session.add(r)
 

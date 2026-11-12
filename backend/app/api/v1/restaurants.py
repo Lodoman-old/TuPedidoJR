@@ -104,7 +104,11 @@ async def list_restaurants(
                 item.open_message = "Abierto" if item.is_open else "Cerrado"
         return _filter_restaurants(items, open_now, max_fee, min_rating, free_delivery, sort)
 
-    stmt = select(Restaurant).where(Restaurant.status == "active")
+    stmt = select(Restaurant).where(
+        Restaurant.status == "active",
+        Restaurant.affiliation_expires_at.is_not(None),
+        Restaurant.affiliation_expires_at >= date.today(),
+    )
     if q:
         like = f"%{q.strip()}%"
         stmt = stmt.where(
@@ -218,6 +222,8 @@ async def get_public_restaurant(slug: str, db: AsyncSession = Depends(get_db)):
             Restaurant.slug == slug,
             Restaurant.public_page_enabled.is_(True),
             Restaurant.status == "active",
+            Restaurant.affiliation_expires_at.is_not(None),
+            Restaurant.affiliation_expires_at >= date.today(),
         )
         .options(selectinload(Restaurant.categories), selectinload(Restaurant.menu))
     )
@@ -249,11 +255,23 @@ async def get_restaurant(
     role = await restaurant_role(db, restaurant.id, current_user) if current_user else None
     if restaurant.status != "active" and role is None:
         raise HTTPException(status_code=404, detail="Restaurante no encontrado")
+    is_admin = bool(current_user and current_user.is_superuser)
+    expired = (
+        restaurant.affiliation_expires_at is None
+        or restaurant.affiliation_expires_at < date.today()
+    )
+    if expired and role is None and not is_admin:
+        raise HTTPException(status_code=404, detail="Restaurante no disponible")
     state = await restaurant_open_state(db, restaurant)
     restaurant.is_open_now = state["is_open_now"]
     restaurant.open_message = state["message"]
     restaurant.today_hours = state["today_hours"]
     restaurant.viewer_role = role
+    restaurant.affiliated = not expired
+    if restaurant.affiliation_expires_at is not None:
+        restaurant.affiliation_days_left = (
+            restaurant.affiliation_expires_at - date.today()
+        ).days
     return await _set_effective_commission(db, restaurant)
 
 

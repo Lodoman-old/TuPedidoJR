@@ -6,7 +6,7 @@ import time
 
 import httpx
 from jose import jwt
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.db.session import async_session
 from app.core.config import settings
@@ -252,6 +252,25 @@ async def send_to_user(db, user_id, title: str, body: str, data: dict | None = N
     return await send_to_tokens(db, list(result.scalars().all()), title, body, data, style)
 
 
+async def _eta_minutes(db, order) -> int | None:
+    """Tiempo estimado en minutos desde la ubicación del repartidor al cliente."""
+    try:
+        distance = await db.scalar(
+            text(
+                "SELECT ST_Distance(dp.current_location::geography, o.delivery_location::geography) "
+                "FROM delivery_persons dp, orders o "
+                "WHERE dp.id = :dp AND o.id = :oid"
+            ),
+            {"dp": order.delivery_person_id, "oid": order.id},
+        )
+        if distance is None:
+            return None
+        km = float(distance) / 1000.0
+        return max(2, round(km / 25.0 * 60.0))
+    except Exception:
+        return None
+
+
 async def notify_order_status(order_id: str, status: str) -> None:
     """Fire-and-forget notification to the customer when an order changes status."""
     if status not in STATUS_MESSAGES:
@@ -263,6 +282,10 @@ async def notify_order_status(order_id: str, status: str) -> None:
             order = result.scalar_one_or_none()
             if not order:
                 return
+            if status in ("in_delivery", "picked_up") and order.delivery_person_id:
+                minutes = await _eta_minutes(db, order)
+                if minutes:
+                    body = f"{body} Llega en aproximadamente {minutes} min."
             await send_to_user(
                 db,
                 order.user_id,
@@ -396,8 +419,8 @@ async def notify_arrival(order_id: str) -> None:
             await send_to_user(
                 db,
                 order.user_id,
-                "Tu pedido llegó",
-                "El repartidor ya está en tu ubicación.",
+                "Tu pedido está cerca",
+                "El repartidor está a pocos metros de tu ubicación.",
                 {"type": "order_arrival", "order_id": str(order.id)},
                 "green",
             )

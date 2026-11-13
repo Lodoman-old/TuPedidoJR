@@ -55,7 +55,7 @@
         deliveryText = estimated > 0 ? `Envío $${estimated.toFixed(2)}` : 'Envío gratis';
       }
     } else if (estimated != null) {
-      deliveryText = r.distance_m ? `Envío $${estimated.toFixed(2)}` : `Envío desde $${estimated.toFixed(2)}`;
+      deliveryText = r.distance_m ? `Envío aprox. $${estimated.toFixed(2)}` : `Envío desde $${estimated.toFixed(2)}`;
     } else {
       deliveryText = 'Envío según distancia';
     }

@@ -47,7 +47,19 @@
     const deliveryBadge = r.delivery_mode === 'own'
       ? '<span class="badge bg-info text-dark ms-1">Entrega propia</span>'
       : '';
-    const distance = r.distance_m ? `<small class="text-muted ms-1">· ${Math.round(r.distance_m)} m</small>` : '';
+    const distance = r.distance_m ? `${Math.round(r.distance_m)} m` : '';
+    const estimated = r.estimated_delivery_fee != null ? Number(r.estimated_delivery_fee) : null;
+    let deliveryText = '';
+    if (r.delivery_mode === 'own') {
+      if (estimated != null) {
+        deliveryText = estimated > 0 ? `Envío $${estimated.toFixed(2)}` : 'Envío gratis';
+      }
+    } else if (estimated != null) {
+      deliveryText = r.distance_m ? `Envío $${estimated.toFixed(2)}` : `Envío desde $${estimated.toFixed(2)}`;
+    } else {
+      deliveryText = 'Envío según distancia';
+    }
+    const meta = [deliveryText, distance].filter(Boolean).join(' · ');
     return `
       <div class="col-6 col-md-4 col-lg-3">
         <div class="card h-100" role="button" onclick="window.location='/web/restaurants/${r.id}'">
@@ -60,7 +72,7 @@
               ${openBadge}
               ${deliveryBadge}
             </div>
-            <small class="text-muted">Envío $${parseFloat(r.delivery_fee).toFixed(2)}${distance}</small>
+            <small class="text-muted">${meta}</small>
           </div>
         </div>
       </div>`;

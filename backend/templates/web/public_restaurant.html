@@ -55,7 +55,17 @@
         </div>
         <div class="small opacity-75">{{ restaurant.address }}</div>
         {% if open_state.message %}<div class="small opacity-75">{{ open_state.message }}</div>{% endif %}
-        <div class="small opacity-75">Envío desde ${{ '%.2f'|format(restaurant.delivery_fee|float) }}</div>
+        {% if restaurant.delivery_mode == 'own' %}
+          <div class="small opacity-75">
+            {% if restaurant.delivery_fee and restaurant.delivery_fee|float > 0 %}
+              Envío ${{ '%.2f'|format(restaurant.delivery_fee|float) }}
+            {% else %}
+              Envío gratis
+            {% endif %}
+          </div>
+        {% else %}
+          <div class="small opacity-75">Envío calculado por distancia</div>
+        {% endif %}
       </div>
     </div>
   </section>

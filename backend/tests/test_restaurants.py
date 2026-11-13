@@ -259,3 +259,27 @@ class TestRestaurantPayouts:
             headers={"Authorization": f"Bearer {other_token}"},
         )
         assert forbidden.status_code == 403
+
+async def test_platform_delivery_fee_is_estimated_not_zero(
+    client: AsyncClient, db_session, owner_token
+):
+    from app.core.security import decode_access_token
+
+    payload = decode_access_token(owner_token)
+    rid = uuid.uuid4()
+    db_session.add(Restaurant(
+        id=rid, name="Envío Plataforma", owner_id=payload["sub"],
+        location="SRID=4326;POINT(-99.13 19.43)",
+        address="Calle 1", is_open=True, rating=4.0,
+        delivery_mode="platform", delivery_fee=0,
+        delivery_radius_m=5000,
+        affiliation_expires_at=date.today() + timedelta(days=365),
+    ))
+    await db_session.commit()
+
+    resp = await client.get(
+        "/api/v1/restaurants", params={"lat": 19.43, "lng": -99.13}
+    )
+    assert resp.status_code == 200
+    row = next(r for r in resp.json() if r["id"] == str(rid))
+    assert float(row["estimated_delivery_fee"]) == 25.0

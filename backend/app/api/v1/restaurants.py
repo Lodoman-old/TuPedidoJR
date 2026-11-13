@@ -40,7 +40,7 @@ from app.services.schedule_service import (
     restaurant_open_state,
 )
 from app.services.settlement_service import is_order_settleable
-from app.services.order_service import get_approval_timeout_min, get_commission_rate
+from app.services.order_service import get_approval_timeout_min, get_commission_rate, get_setting_value
 from app.services.order_serialization import order_out
 from app.services.restaurant_access import (
     FINANCE_ROLES, MANAGE_ROLES, ORDER_ROLES, OWNER_ROLES,
@@ -79,6 +79,30 @@ async def _unique_slug(db: AsyncSession, base: str, restaurant_id=None) -> str:
         counter += 1
 
 
+async def _delivery_pricing(db: AsyncSession):
+    base = Decimal(str(await get_setting_value(db, "DELIVERY_BASE_FEE", "25.0")))
+    try:
+        free = float(await get_setting_value(db, "DELIVERY_FREE_RADIUS_KM", "1"))
+    except (TypeError, ValueError):
+        free = 1.0
+    try:
+        extra = Decimal(str(await get_setting_value(db, "DELIVERY_EXTRA_FEE_PER_KM", "5.0")))
+    except (TypeError, ValueError):
+        extra = Decimal("5.0")
+    return base, free, extra
+
+
+def _estimate_delivery_fee(item: RestaurantListItem, base: Decimal, free: float, extra: Decimal) -> Decimal:
+    """El campo delivery_fee del restaurante solo aplica a entrega propia."""
+    if item.delivery_mode == "own":
+        return Decimal(str(item.delivery_fee or 0))
+    if item.distance_m is None:
+        return base
+    km = Decimal(str(item.distance_m)) / Decimal("1000")
+    extra_km = max(Decimal("0"), km - Decimal(str(free)))
+    return (base + extra_km * extra).quantize(Decimal("0.01"))
+
+
 @router.get("", response_model=list[RestaurantListItem])
 async def list_restaurants(
     lat: float | None = None,
@@ -103,6 +127,9 @@ async def list_restaurants(
             else:
                 item.is_open_now = item.is_open
                 item.open_message = "Abierto" if item.is_open else "Cerrado"
+        base, free, extra = await _delivery_pricing(db)
+        for item in items:
+            item.estimated_delivery_fee = _estimate_delivery_fee(item, base, free, extra)
         return _filter_restaurants(items, open_now, max_fee, min_rating, free_delivery, sort)
 
     stmt = select(Restaurant).where(
@@ -138,6 +165,9 @@ async def list_restaurants(
             restaurant.is_open_now = restaurant.is_open
             restaurant.open_message = "Abierto" if restaurant.is_open else "Cerrado"
     items = [RestaurantListItem.model_validate(r) for r in restaurants]
+    base, free, extra = await _delivery_pricing(db)
+    for item in items:
+        item.estimated_delivery_fee = _estimate_delivery_fee(item, base, free, extra)
     return _filter_restaurants(items, open_now, max_fee, min_rating, free_delivery, sort)
 
 
@@ -150,19 +180,25 @@ def _filter_restaurants(
     sort: str | None,
 ) -> list[RestaurantListItem]:
     result = list(items)
+    def fee(item) -> float:
+        value = item.estimated_delivery_fee
+        if value is None:
+            value = item.delivery_fee
+        return float(value or 0)
+
     if open_now is not None:
         result = [r for r in result if bool(r.is_open_now) == open_now]
     if max_fee is not None:
-        result = [r for r in result if float(r.delivery_fee or 0) <= max_fee]
+        result = [r for r in result if fee(r) <= max_fee]
     if min_rating is not None:
         result = [r for r in result if float(r.rating or 0) >= min_rating]
     if free_delivery:
-        result = [r for r in result if float(r.delivery_fee or 0) == 0]
+        result = [r for r in result if fee(r) == 0]
 
     if sort == "rating":
         result.sort(key=lambda r: float(r.rating or 0), reverse=True)
     elif sort == "fee":
-        result.sort(key=lambda r: float(r.delivery_fee or 0))
+        result.sort(key=lambda r: fee(r))
     elif sort == "distance":
         result.sort(key=lambda r: r.distance_m if r.distance_m is not None else 10**9)
     return result

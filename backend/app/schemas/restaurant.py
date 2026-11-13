@@ -144,6 +144,7 @@ class RestaurantListItem(BaseModel):
     distance_m: float | None = None
     is_open_now: bool | None = None
     open_message: str | None = None
+    estimated_delivery_fee: Decimal | None = None
 
     class Config:
         from_attributes = True

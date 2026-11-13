@@ -150,6 +150,13 @@
       const pickupBadge = r.pickup_enabled
         ? '<span class="badge bg-primary">Recoger en restaurante</span>'
         : '';
+      const deliveryLabel = r.pickup_enabled
+        ? 'Envío o recoger en restaurante'
+        : (r.delivery_mode === 'own'
+          ? (Number(r.delivery_fee || 0) > 0
+            ? `Envío $${Number(r.delivery_fee).toFixed(2)}`
+            : 'Envío gratis')
+          : 'Envío calculado por distancia');
 
       header.innerHTML = `
         <div class="card p-3">
@@ -165,7 +172,7 @@
                 ${openBadge}
                 ${deliveryBadge}
                 ${pickupBadge}
-                <small class="text-muted ms-2">${r.pickup_enabled ? 'Envío o recoger en restaurante' : `Envío $${parseFloat(r.delivery_fee).toFixed(2)}`}</small>
+                <small class="text-muted ms-2">${deliveryLabel}</small>
               </div>
               <p class="text-muted mb-1">${esc(r.description || '')}</p>
               <small class="text-muted">${esc(r.open_message || '')}</small>

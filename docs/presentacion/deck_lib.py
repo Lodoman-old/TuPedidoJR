@@ -108,8 +108,11 @@ def add_line(slide, x1, y1, x2, y2, color=LIGHT2, width=1.0, dash=None):
 
 
 def add_logo(slide, x, y, w, on_dark=False):
+    # Mantén el logo dentro del recuadro blanco: el PNG tiene proporción 5.61:1.
+    logo_h = w / 5.61
     if on_dark:
-        add_rect(slide, x - 0.18, y - 0.12, w + 0.36, 0.85, WHITE, rounded=True, radius=0.12)
+        add_rect(slide, x - 0.18, y - 0.12, w + 0.36, logo_h + 0.24,
+                 WHITE, rounded=True, radius=0.12)
     slide.shapes.add_picture(str(LOGO), Inches(x), Inches(y), width=Inches(w))
 
 

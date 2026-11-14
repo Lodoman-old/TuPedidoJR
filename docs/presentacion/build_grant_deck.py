@@ -46,7 +46,7 @@ slide = add_slide_base(
     subtitle="TuPedidoJR digitaliza restaurantes y tiendas, coordina reparto local y genera ingresos para repartidores. Solicitamos apoyo para acelerar la adopción, no para construir el software desde cero."
 )
 kpis = [
-    ("100", "restaurantes meta", "Afiliados y con menú digital al mes 12."),
+    ("100", "negocios meta", "Afiliados y con menú o catálogo digital al mes 12."),
     ("30", "repartidores activos", "Con capacitación e incentivos de arranque."),
     ("1,000", "pedidos mensuales", "Meta al mes 12 en la zona."),
     ("60", "personas capacitadas", "Restaurantes, cocina y reparto."),
@@ -62,7 +62,7 @@ add_text(slide, 0.9, 4.92, 11.5, 0.8,
          size=11.5, color=GRAY, spacing=1.1)
 add_card(slide, 0.62, 6.2, 12.1, 0.55, fill=RGBColor(0xFF, 0xF2, 0xE8))
 add_text(slide, 0.9, 6.32, 11.5, 0.3,
-         "Solicitud: $150,000 MXN · 12 meses · 100 restaurantes · 30 repartidores",
+         "Solicitud: $150,000 MXN · 12 meses · 100 negocios · 30 repartidores",
          size=10.5, color=ORANGE_DARK, bold=True)
 
 # ---------------------------------------------------------------- 3 Problema
@@ -172,7 +172,7 @@ for i, (title, desc) in enumerate(beneficiaries):
     add_text(slide, cx + 0.28, cy + 0.62, 5.35, 0.8, desc, size=10.5, color=GRAY, spacing=1.08)
 add_card(slide, 0.62, 5.85, 12.1, 0.7, fill=RGBColor(0xFF, 0xF2, 0xE8))
 add_text(slide, 0.9, 6.0, 11.5, 0.4,
-         "Meta: 100 restaurantes, 30 repartidores activos y 60 personas capacitadas.",
+         "Meta: 100 negocios, 30 repartidores activos y 60 personas capacitadas.",
          size=11.5, color=ORANGE_DARK, bold=True)
 
 # ---------------------------------------------------------------- 7 Indicadores
@@ -183,8 +183,8 @@ slide = add_slide_base(
 )
 headers = ["Indicador", "Meta a 12 meses", "Cómo se mide"]
 rows = [
-    ["Restaurantes afiliados", "100", "Altas y afiliaciones vigentes en la plataforma"],
-    ["Menús digitales y QR entregados", "100", "Registro de entrega y materiales"],
+    ["Negocios afiliados", "100", "Altas y afiliaciones vigentes en la plataforma"],
+    ["Menús/catálogos y QR entregados", "100", "Registro de entrega y materiales"],
     ["Repartidores activos", "30", "Repartidores con al menos un reparto al mes"],
     ["Pedidos mensuales", "1,000", "Reporte de la plataforma"],
     ["Personas capacitadas", "60", "Listas de asistencia y capacitación"],
@@ -207,10 +207,10 @@ slide = add_slide_base(
 headers = ["Concepto", "Monto", "%"]
 rows = [
     ["Operación tecnológica anual (VPS, desarrollo, administración)", "$30,000", "20%"],
-    ["Fotografía, menús y materiales para 100 restaurantes", "$50,000", "33%"],
+    ["Fotografía, catálogos y materiales para 100 negocios", "$50,000", "33%"],
     ["Lanzamiento y promoción local", "$30,000", "20%"],
     ["Red de repartidores (capacitación, kits e incentivos)", "$20,000", "13%"],
-    ["Capacitación y acompañamiento a restaurantes", "$10,000", "7%"],
+    ["Capacitación y acompañamiento a restaurantes y tiendas", "$10,000", "7%"],
     ["Contingencia y administración", "$10,000", "7%"],
     ["Total", "$150,000", "100%"],
 ]
@@ -219,9 +219,12 @@ add_table(slide, 0.62, 1.95, 8.5, 4.6, headers, rows,
           center_columns=True)
 add_card(slide, 9.35, 1.95, 3.35, 4.6, fill=LIGHT2)
 add_text(slide, 9.6, 2.12, 2.9, 0.3, "Contraparte del proyecto", size=11.5, color=NAVY, bold=True)
-add_text(slide, 9.6, 2.55, 2.85, 3.6,
+add_text(slide, 9.6, 2.55, 2.85, 3.0,
          "La plataforma ya está desarrollada y operando.\n\nEl apoyo no financia construir el software desde cero: acelera la adopción, la producción de materiales y la red de repartidores.\n\nMontos propuestos, ajustables a las bases de la convocatoria.",
          size=9.3, color=GRAY, spacing=1.1)
+add_text(slide, 9.6, 5.55, 2.85, 0.7,
+         "Total solicitado: $150,000 MXN.\nEl renglón de $50,000 es una partida de fotografía y materiales, no el total.",
+         size=8.3, color=ORANGE_DARK, bold=True, spacing=1.0)
 add_text(slide, 0.62, 6.75, 12.0, 0.25,
          "Se entregarán comprobantes y reportes de cada partida.",
          size=8.5, color=GRAY_LIGHT, italic=True)
@@ -242,7 +245,7 @@ add_bullets(slide, 0.9, 2.6, 5.2, 2.8, [
 ], size=11, spacing=8)
 add_card(slide, 6.7, 1.95, 6.0, 3.7)
 add_text(slide, 6.95, 2.12, 5.4, 0.3, "Punto de equilibrio", size=13, color=NAVY, bold=True)
-add_text(slide, 6.95, 2.6, 5.4, 0.45, "60 restaurantes", size=24, color=ORANGE, bold=True)
+add_text(slide, 6.95, 2.6, 5.4, 0.45, "60 negocios", size=24, color=ORANGE, bold=True)
 add_text(slide, 6.95, 3.1, 5.4, 0.3, "cubren $30,000 al año con la afiliación", size=10, color=GRAY)
 add_text(slide, 6.95, 3.55, 5.4, 0.45, "250 pedidos/mes", size=24, color=ORANGE, bold=True)
 add_text(slide, 6.95, 4.05, 5.4, 0.3, "cubren $30,000 al año con la cuota por pedido", size=10, color=GRAY)
@@ -250,7 +253,7 @@ add_text(slide, 6.95, 4.5, 5.4, 0.8,
          "El modelo no depende permanentemente del subsidio.", size=11, color=GREEN, bold=True)
 add_card(slide, 0.62, 5.9, 12.1, 0.8, fill=RGBColor(0xFF, 0xF2, 0xE8))
 add_text(slide, 0.9, 6.05, 11.5, 0.45,
-         "Proyección: 100 restaurantes y 1,000 pedidos/mes al mes 12; expansión a nuevos municipios después.",
+         "Proyección: 100 negocios y 1,000 pedidos/mes al mes 12; expansión a nuevos municipios después.",
          size=10.5, color=ORANGE_DARK, bold=True)
 
 # ---------------------------------------------------------------- 10 Timeline
@@ -261,9 +264,9 @@ slide = add_slide_base(
 )
 phases = [
     ("TRIMESTRE 1", "30 restaurantes", "Alta, fotografía de menús, materiales y capacitación inicial."),
-    ("TRIMESTRE 2", "60 restaurantes", "Red de repartidores, promoción local y primeras métricas."),
+    ("TRIMESTRE 2", "60 negocios", "Red de repartidores, promoción local y primeras métricas."),
     ("TRIMESTRE 3", "80 restaurantes", "Optimización de operación y acompañamiento a restaurantes."),
-    ("TRIMESTRE 4", "100 restaurantes", "1,000 pedidos/mes y reporte final de impacto."),
+    ("TRIMESTRE 4", "100 negocios", "1,000 pedidos/mes y reporte final de impacto."),
 ]
 for i, (phase, target, desc) in enumerate(phases):
     cx = 0.62 + i * 3.06
@@ -276,7 +279,7 @@ for i, (phase, target, desc) in enumerate(phases):
              bold=True, align=PP_ALIGN.CENTER)
 add_card(slide, 0.62, 5.65, 12.1, 1.0, fill=NAVY)
 add_text(slide, 0.9, 5.8, 11.5, 0.3,
-         "Meta: 100 restaurantes, 30 repartidores y 60 personas capacitadas.", size=15, color=WHITE, bold=True)
+         "Meta: 100 negocios, 30 repartidores y 60 personas capacitadas.", size=15, color=WHITE, bold=True)
 add_text(slide, 0.9, 6.2, 11.5, 0.3,
          "Cada trimestre se entrega reporte de avance, evidencia y comprobantes.",
          size=10, color=RGBColor(0xC9, 0xD2, 0xE3))
@@ -320,7 +323,7 @@ rows = [
     ["Oferta insuficiente de repartidores", "100% del envío + propina, incentivos de arranque y horarios flexibles."],
     ["Competencia de Uber Eats y DIDI", "Costo fijo, trato local, menú propio y respaldo de entrega."],
     ["Ejecución del presupuesto", "Reportes mensuales, comprobantes y partidas definidas."],
-    ["Sostenibilidad después del apoyo", "Ingresos por afiliación y pedido; equilibrio a los 60 restaurantes."],
+    ["Sostenibilidad después del apoyo", "Ingresos por afiliación y pedido; equilibrio a los 60 negocios."],
 ]
 add_table(slide, 0.62, 1.95, 12.1, 4.0, headers, rows,
           col_widths=[4.2, 7.9], font_size=10, row_height=0.65,

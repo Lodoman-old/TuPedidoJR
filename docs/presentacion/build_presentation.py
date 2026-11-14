@@ -131,8 +131,11 @@ def add_line(slide, x1, y1, x2, y2, color=LIGHT2, width=1.0, dash=None):
 
 
 def add_logo(slide, x, y, w, on_dark=False):
+    # Mantén el logo dentro del recuadro blanco: el PNG tiene proporción 5.61:1.
+    logo_h = w / 5.61
     if on_dark:
-        add_rect(slide, x - 0.18, y - 0.12, w + 0.36, 0.85, WHITE, rounded=True, radius=0.12)
+        add_rect(slide, x - 0.18, y - 0.12, w + 0.36, logo_h + 0.24,
+                 WHITE, rounded=True, radius=0.12)
     slide.shapes.add_picture(str(LOGO), Inches(x), Inches(y), width=Inches(w))
 
 
@@ -299,7 +302,7 @@ slide, y = add_slide_base(
     subtitle="TuPedidoJR digitaliza restaurantes y tiendas locales con catálogo propio, QR, pedidos, reparto respaldado y mandados asistidos. El negocio conserva su margen; el cliente sabe exactamente qué paga."
 )
 kpis = [
-    ("$500 / año", "Afiliación por restaurante", "Incluye menú, materiales y soporte."),
+    ("$500 / año", "Afiliación por negocio", "Incluye menú o catálogo, materiales y soporte."),
     ("$5 / pedido", "Cuota fija al restaurante", "Sin porcentaje sobre alimentos."),
     ("0%", "Comisión sobre platillos", "El precio del menú es del restaurante."),
     ("100%", "Del envío + propina", "Para el repartidor."),
@@ -435,7 +438,7 @@ rows = [
     ("Cliente paga", "$230", "Platillo $200 + envío $25 + servicio $5"),
     ("Restaurante recibe", "$195", "Subtotal $200 − cuota fija $5"),
     ("Repartidor recibe", "$25 + propina", "100% del envío"),
-    ("Plataforma recibe", "$10", "$5 restaurante + $5 servicio"),
+    ("Plataforma recibe", "$10", "$5 negocio + $5 servicio"),
 ]
 ry = 2.58
 for label, value, note in rows:
@@ -619,8 +622,8 @@ slide, y = add_slide_base(
     subtitle="Un modelo simple de explicar y de auditar: afiliación anual y cuota fija por pedido."
 )
 revenue = [
-    ("Afiliación anual", "$500", "Por restaurante. Cubre operación y materiales."),
-    ("Cuota fija restaurante", "$5", "Por pedido. Sin porcentaje sobre alimentos."),
+    ("Afiliación anual", "$500", "Por negocio. Cubre operación y materiales."),
+    ("Cuota fija del negocio", "$5", "Por pedido. Sin porcentaje sobre alimentos."),
     ("Cuota de servicio cliente", "$5", "Por pedido. Visible en el desglose."),
     ("Envío", "Pass-through", "Va al repartidor; no es margen de la plataforma."),
 ]
@@ -635,7 +638,7 @@ for i, (label, value, note) in enumerate(revenue):
     add_text(slide, cx + 2.95, cy + 0.55, 2.75, 0.75, note, size=9, color=GRAY, spacing=1.05)
 add_card(slide, 0.62, 5.55, 12.1, 1.2, fill=NAVY)
 add_text(slide, 0.95, 5.72, 11.4, 0.3,
-         "$10 de ingreso por pedido = $5 restaurante + $5 cliente", size=18, color=WHITE, bold=True)
+         "$10 de ingreso por pedido = $5 negocio + $5 cliente", size=18, color=WHITE, bold=True)
 add_text(slide, 0.95, 6.12, 11.4, 0.3,
          "A 500 pedidos/mes: $5,000/mes de ingreso transaccional, además de las afiliaciones anuales.",
          size=10.5, color=RGBColor(0xC9,0xD2,0xE3))
@@ -650,7 +653,7 @@ slide, y = add_slide_base(
     subtitle="VPS, desarrollo, administración, monitoreo y soporte. Una estructura de costos baja y predecible."
 )
 break_even = [
-    ("60 restaurantes", "$500 × 60 = $30,000/año", "La afiliación sola cubre la operación anual."),
+    ("60 negocios", "$500 × 60 = $30,000/año", "La afiliación sola cubre la operación anual."),
     ("250 pedidos/mes", "$10 × 250 = $2,500/mes", "Equivale a $30,000 al año."),
     ("30 restaurantes + 250 pedidos/mes", "$15,000 + $30,000 = $45,000/año", "Cubre la operación y genera excedente."),
 ]
@@ -663,7 +666,7 @@ for i, (title, value, note) in enumerate(break_even):
 add_card(slide, 0.62, 4.55, 7.4, 1.9, fill=LIGHT2)
 add_text(slide, 0.9, 4.72, 6.8, 0.3, "Uso de fondos", size=13, color=NAVY, bold=True)
 add_bullets(slide, 0.9, 5.12, 6.7, 1.2, [
-    "Adquisición de restaurantes y materiales impresos",
+    "Adquisición de negocios y materiales impresos",
     "Fotografía y producción de menús",
     "Soporte, monitoreo y mejora de la plataforma",
 ], size=10, spacing=5)
@@ -680,7 +683,7 @@ add_text(slide, 0.62, 6.65, 12.0, 0.3,
 slide, y = add_slide_base(
     "Un modelo replicable, pueblo por pueblo",
     kicker="Escalabilidad", number=14,
-    subtitle="La misma plataforma, el mismo playbook y un costo marginal bajo por nuevo restaurante."
+    subtitle="La misma plataforma, el mismo playbook y un costo marginal bajo por nuevo negocio."
 )
 add_text(slide, 0.62, 1.95, 5.6, 0.3, "Qué se replica", size=14, color=NAVY, bold=True)
 add_bullets(slide, 0.62, 2.45, 5.6, 3.6, [
@@ -757,7 +760,7 @@ for i, (phase, target, desc) in enumerate(phases):
              bold=True, align=PP_ALIGN.CENTER)
 add_card(slide, 0.62, 5.5, 12.1, 1.15, fill=NAVY)
 add_text(slide, 0.9, 5.65, 11.5, 0.3,
-         "Meta: 60 restaurantes cubren la operación anual de $30,000.", size=16, color=WHITE, bold=True)
+         "Meta: 60 negocios cubren la operación anual de $30,000.", size=16, color=WHITE, bold=True)
 add_text(slide, 0.9, 6.05, 11.5, 0.3,
          "Cada restaurante adicional y cada pedido adicional son margen para reinvertir en crecimiento.",
          size=10.5, color=RGBColor(0xC9,0xD2,0xE3))
@@ -818,7 +821,7 @@ add_text(slide, 1.1, 4.75, 5.2, 0.8,
 add_card(slide, 6.8, 4.2, 5.7, 1.55, fill=RGBColor(0x22,0x35,0x6E))
 add_text(slide, 7.05, 4.38, 5.2, 0.3, "Para inversionistas", size=12, color=ORANGE, bold=True)
 add_text(slide, 7.05, 4.75, 5.2, 0.8,
-         "Capital y alianzas para adquisición de restaurantes,\nmateriales y expansión regional.",
+         "Capital y alianzas para adquisición de negocios,\nmateriales y expansión regional.",
          size=11, color=WHITE, spacing=1.1)
 add_text(slide, 0.85, 6.2, 11.0, 0.3,
          "WhatsApp 412 134 0765  ·  old.lodoman@gmail.com  ·  Juventino Rosas, Guanajuato",

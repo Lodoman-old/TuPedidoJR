@@ -42,6 +42,10 @@ capacitor/android/local.properties
 *.apk
 *.aab
 
+# Respaldos locales de presentaciones
+docs/presentacion/backup_*/
+docs/presentacion/__pycache__/
+
 # Logs y temporales
 *.log
 logs/

@@ -14,6 +14,7 @@ from app.models.delivery_person import DeliveryPerson
 from app.models.mandado import Mandado
 from app.models.order import Order
 from app.models.push_token import PushToken
+from app.models.reservation import Reservation
 from app.models.restaurant import Restaurant
 from app.models.restaurant_user import RestaurantUser
 from app.models.setting import Setting
@@ -65,6 +66,47 @@ STATUS_STYLES = {
     "in_delivery": "amber",
     "picked_up": "amber",
     "delivered": "green",
+    "cancelled": "red",
+}
+
+RESERVATION_MESSAGES = {
+    "requested": (
+        "Reservación recibida",
+        "Tu solicitud fue enviada al restaurante. Te avisaremos cuando la confirme.",
+    ),
+    "confirmed": (
+        "Reservación confirmada",
+        "El restaurante confirmó tu reservación. ¡Te esperamos!",
+    ),
+    "rejected": (
+        "Reservación no disponible",
+        "El restaurante no pudo aceptar la reservación en ese horario.",
+    ),
+    "seated": (
+        "Mesa lista",
+        "El restaurante te está esperando.",
+    ),
+    "completed": (
+        "Reservación completada",
+        "Gracias por visitar el restaurante.",
+    ),
+    "no_show": (
+        "Reservación no-show",
+        "El restaurante marcó la reservación como no-show.",
+    ),
+    "cancelled": (
+        "Reservación cancelada",
+        "La reservación fue cancelada.",
+    ),
+}
+
+RESERVATION_STYLES = {
+    "requested": "amber",
+    "confirmed": "green",
+    "rejected": "red",
+    "seated": "green",
+    "completed": "green",
+    "no_show": "red",
     "cancelled": "red",
 }
 
@@ -373,6 +415,95 @@ async def notify_new_order(order_id: str) -> None:
                 )
     except Exception:
         logger.exception("Push new-order notification failed for %s", order_id)
+
+
+async def notify_new_reservation(reservation_id: str, deposit_pending: bool = False) -> None:
+    """Avisa al restaurante que hay una nueva reservación."""
+    try:
+        async with async_session() as db:
+            result = await db.execute(
+                select(Reservation).where(Reservation.id == reservation_id)
+            )
+            reservation = result.scalar_one_or_none()
+            if not reservation:
+                return
+            resto_result = await db.execute(
+                select(Restaurant).where(Restaurant.id == reservation.restaurant_id)
+            )
+            restaurant = resto_result.scalar_one_or_none()
+            if not restaurant:
+                return
+            user = await db.get(User, reservation.user_id)
+            members_result = await db.execute(
+                select(RestaurantUser.user_id).where(
+                    RestaurantUser.restaurant_id == restaurant.id,
+                    RestaurantUser.is_active.is_(True),
+                    RestaurantUser.role.in_(ORDER_ROLES),
+                )
+            )
+            user_ids = {restaurant.owner_id, *members_result.scalars().all()}
+            when = reservation.reservation_at.strftime("%d/%m/%Y %H:%M")
+            name = user.name if user else "Cliente"
+            title = "Reservación con depósito pendiente" if deposit_pending else "Nueva reservación"
+            body = f"{name}: {when} · {reservation.party_size} persona(s)"
+            for user_id in user_ids:
+                await send_to_user(
+                    db,
+                    user_id,
+                    title,
+                    body,
+                    {
+                        "type": "restaurant_reservation",
+                        "reservation_id": str(reservation.id),
+                        "restaurant_id": str(restaurant.id),
+                    },
+                    "amber" if deposit_pending else "green",
+                )
+    except Exception:
+        logger.exception("Push new-reservation notification failed for %s", reservation_id)
+
+
+async def notify_reservation_status(reservation_id: str) -> None:
+    """Avisa al cliente cuando cambia el estado de su reservación."""
+    try:
+        async with async_session() as db:
+            result = await db.execute(
+                select(Reservation).where(Reservation.id == reservation_id)
+            )
+            reservation = result.scalar_one_or_none()
+            if not reservation:
+                return
+            title, body = RESERVATION_MESSAGES.get(
+                reservation.status, ("Reservación actualizada", "Tu reservación cambió de estado.")
+            )
+            await send_to_user(
+                db,
+                reservation.user_id,
+                title,
+                body,
+                {
+                    "type": "reservation",
+                    "reservation_id": str(reservation.id),
+                    "status": reservation.status,
+                },
+                RESERVATION_STYLES.get(reservation.status),
+            )
+    except Exception:
+        logger.exception("Push reservation status notification failed for %s", reservation_id)
+
+
+def schedule_new_reservation(reservation_id: str, deposit_pending: bool = False) -> None:
+    try:
+        asyncio.create_task(notify_new_reservation(reservation_id, deposit_pending))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
+def schedule_reservation_status(reservation_id: str) -> None:
+    try:
+        asyncio.create_task(notify_reservation_status(reservation_id))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
 
 
 async def notify_new_mandado(mandado_id: str) -> None:

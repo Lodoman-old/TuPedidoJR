@@ -176,6 +176,9 @@
               </div>
               <p class="text-muted mb-1">${esc(r.description || '')}</p>
               <small class="text-muted">${esc(r.open_message || '')}</small>
+              ${r.reservations_enabled && !r.viewer_role
+                ? `<div class="mt-2"><a class="btn btn-sm btn-outline-success" href="/web/restaurants/${RID}/reserve"><i class="bi bi-calendar-check"></i> Reservar mesa</a></div>`
+                : ''}
             </div>
           </div>
         </div>`;
@@ -201,6 +204,7 @@
             buttons.push(`<a href="/web/restaurants/${RID}/profile" class="btn btn-sm btn-outline-dark"><i class="bi bi-shop-window"></i> Perfil del negocio</a>`);
           }
           buttons.push(`<a href="/web/restaurants/${RID}/orders" class="btn btn-sm btn-outline-info">Pedidos</a>`);
+          buttons.push(`<a href="/web/restaurants/${RID}/reservations" class="btn btn-sm btn-outline-info"><i class="bi bi-calendar-check"></i> Reservaciones</a>`);
           if (canFinance) {
             buttons.push(`<a href="/web/restaurants/${RID}/earnings" class="btn btn-sm btn-outline-warning">Ganancias</a>`);
           }

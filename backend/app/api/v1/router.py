@@ -2,6 +2,7 @@
 
 from app.api.v1.auth import router as auth_router
 from app.api.v1.restaurants import router as restaurants_router
+from app.api.v1.reservations import router as reservations_router, restaurant_router as restaurant_reservations_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.delivery import router as delivery_router
 from app.api.v1.reviews import router as reviews_router
@@ -27,6 +28,8 @@ router = APIRouter(prefix="/api/v1")
 
 router.include_router(auth_router, prefix="/auth", tags=["Autenticación"])
 router.include_router(restaurants_router, prefix="/restaurants", tags=["Restaurantes"])
+router.include_router(reservations_router, prefix="/reservations", tags=["Reservaciones"])
+router.include_router(restaurant_reservations_router, prefix="/restaurants", tags=["Reservaciones"])
 router.include_router(orders_router, prefix="/orders", tags=["Pedidos"])
 router.include_router(delivery_router, prefix="/delivery", tags=["Repartidores"])
 router.include_router(reviews_router, prefix="/reviews", tags=["Reseñas"])

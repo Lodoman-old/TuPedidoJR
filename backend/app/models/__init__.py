@@ -23,6 +23,7 @@ from app.models.menu_option import MenuOption, MenuOptionGroup
 from app.models.order_item_option import OrderItemOption
 from app.models.user_cart import UserCart
 from app.models.audit_log import AuditLog
+from app.models.reservation import Reservation
 
 __all__ = [
     "User",
@@ -52,4 +53,5 @@ __all__ = [
     "OrderItemOption",
     "UserCart",
     "AuditLog",
+    "Reservation",
 ]

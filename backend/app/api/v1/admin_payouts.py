@@ -13,6 +13,7 @@ from app.models.cash_advance import CashAdvance
 from app.models.delivery_payout import DeliveryPayout
 from app.models.delivery_person import DeliveryPerson
 from app.models.order import Order
+from app.models.reservation import Reservation
 from app.models.restaurant import Restaurant
 from app.models.restaurant_payout import RestaurantPayout
 from app.models.user import User
@@ -23,6 +24,7 @@ from app.services.cash_advance_service import (
     settle_advance,
 )
 from app.services.order_service import get_setting_value
+from app.services.push_service import schedule_new_reservation
 from app.services.payout_service import (
     courier_balance,
     create_courier_payout,
@@ -107,6 +109,147 @@ async def mark_refunded(
     )
     await db.commit()
     return {"ok": True, "refund_status": order.refund_status}
+
+
+def _reservation_deposit_row(reservation: Reservation, restaurant, user) -> dict:
+    deposit = Decimal(reservation.deposit_amount or 0)
+    commission = Decimal(reservation.commission_amount or 0)
+    service_fee = Decimal(reservation.service_fee or 0)
+    net_deposit = max(deposit - commission, Decimal("0")) if deposit > 0 else Decimal("0")
+    restaurant_owes = commission + service_fee if reservation.service_fee_cash else Decimal("0")
+    return {
+        "id": str(reservation.id),
+        "restaurant_id": str(reservation.restaurant_id),
+        "restaurant_name": restaurant.name if restaurant else "",
+        "customer_name": user.name if user else "",
+        "customer_email": user.email if user else "",
+        "reservation_at": reservation.reservation_at.isoformat() if reservation.reservation_at else None,
+        "party_size": reservation.party_size,
+        "status": reservation.status,
+        "preorder_subtotal": _money(reservation.preorder_subtotal),
+        "service_fee": _money(service_fee),
+        "service_fee_cash": bool(reservation.service_fee_cash),
+        "service_fee_status": reservation.service_fee_status,
+        "deposit_amount": _money(deposit),
+        "deposit_status": reservation.deposit_status,
+        "deposit_method": reservation.deposit_method,
+        "deposit_proof_url": reservation.deposit_proof_url,
+        "commission_amount": _money(commission),
+        "commission_status": reservation.commission_status,
+        "remaining_to_charge": _money(reservation.remaining_to_charge),
+        "deposit_settlement_status": reservation.deposit_settlement_status,
+        "net_deposit_to_restaurant": _money(net_deposit),
+        "restaurant_owes": _money(restaurant_owes),
+    }
+
+
+@router.get("/reservation-deposits")
+async def list_reservation_deposits(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    result = await db.execute(
+        select(Reservation, Restaurant, User)
+        .outerjoin(Restaurant, Restaurant.id == Reservation.restaurant_id)
+        .outerjoin(User, User.id == Reservation.user_id)
+        .where(
+            (Reservation.deposit_amount > 0)
+            | (Reservation.service_fee_cash.is_(True))
+            | (Reservation.commission_status == "pending")
+        )
+        .order_by(Reservation.created_at.desc())
+        .limit(200)
+    )
+    return [_reservation_deposit_row(r, resto, user) for r, resto, user in result.all()]
+
+
+@router.post("/reservation-deposits/{reservation_id}/confirm")
+async def confirm_reservation_deposit(
+    reservation_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    reservation = await db.get(Reservation, _uuid(reservation_id))
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservación no encontrada")
+    if reservation.deposit_status != "pending":
+        raise HTTPException(status_code=400, detail="El depósito no está pendiente")
+    reservation.deposit_status = "paid"
+    reservation.deposit_settlement_status = "pending"
+    if reservation.status == "pending_deposit":
+        reservation.status = "requested"
+    await log_action(
+        db, current_user.id, "reservation.deposit.confirm", "reservation", reservation.id,
+        {"amount": _money(reservation.deposit_amount)},
+    )
+    await db.commit()
+    schedule_new_reservation(str(reservation.id), deposit_pending=False)
+    return _reservation_deposit_row(reservation, None, None)
+
+
+@router.post("/reservation-deposits/{reservation_id}/transfer")
+async def transfer_reservation_deposit(
+    reservation_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    reservation = await db.get(Reservation, _uuid(reservation_id))
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservación no encontrada")
+    if reservation.deposit_status not in ("paid", "retained") or reservation.deposit_amount <= 0:
+        raise HTTPException(status_code=400, detail="No hay depósito por transferir")
+    reservation.deposit_settlement_status = "transferred"
+    reservation.commission_status = "settled"
+    await log_action(
+        db, current_user.id, "reservation.deposit.transfer", "reservation", reservation.id,
+        {"net": _money(max(reservation.deposit_amount - reservation.commission_amount, 0))},
+    )
+    await db.commit()
+    return _reservation_deposit_row(reservation, None, None)
+
+
+@router.post("/reservation-deposits/{reservation_id}/refund")
+async def refund_reservation_deposit(
+    reservation_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    reservation = await db.get(Reservation, _uuid(reservation_id))
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservación no encontrada")
+    if reservation.deposit_amount <= 0:
+        raise HTTPException(status_code=400, detail="No hay depósito por reembolsar")
+    reservation.deposit_status = "refunded"
+    reservation.deposit_settlement_status = "refunded"
+    reservation.commission_status = "settled"
+    if reservation.status not in ("completed", "no_show", "cancelled", "rejected"):
+        reservation.status = "cancelled"
+    await log_action(
+        db, current_user.id, "reservation.deposit.refund", "reservation", reservation.id,
+        {"amount": _money(reservation.deposit_amount)},
+    )
+    await db.commit()
+    return _reservation_deposit_row(reservation, None, None)
+
+
+@router.post("/reservation-fees/{reservation_id}/settle")
+async def settle_reservation_fee(
+    reservation_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    reservation = await db.get(Reservation, _uuid(reservation_id))
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservación no encontrada")
+    reservation.commission_status = "settled"
+    if reservation.service_fee_cash:
+        reservation.service_fee_status = "settled"
+    await log_action(
+        db, current_user.id, "reservation.fee.settle", "reservation", reservation.id,
+        {"amount": _money(reservation.commission_amount)},
+    )
+    await db.commit()
+    return _reservation_deposit_row(reservation, None, None)
 
 
 @router.get("/payouts")
@@ -566,3 +709,4 @@ async def payout_history(
         })
     history.sort(key=lambda row: row["created_at"], reverse=True)
     return history[:limit]
+

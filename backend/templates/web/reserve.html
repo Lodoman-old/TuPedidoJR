@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h5 class="mb-0"><i class="bi bi-calendar-check"></i> Reservar mesa</h5>
+    <small class="text-muted" id="reserveRestaurantName">Cargando restaurante...</small>
+  </div>
+  <a class="btn btn-sm btn-outline-secondary" href="/web/restaurants/{{ restaurant_id }}">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+</div>
+<div id="reserveError" class="alert alert-danger d-none"></div>
+<div id="reserveLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+<div id="reserveContent" class="d-none">
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="card p-3 mb-3">
+        <h6 class="mb-2">Datos de la reservación</h6>
+        <div class="row g-2">
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="resDate">Fecha y hora</label>
+            <input type="datetime-local" class="form-control" id="resDate">
+            <div class="form-text" id="resAdvanceHint"></div>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="resParty">Personas</label>
+            <input type="number" class="form-control" id="resParty" min="1" max="20" value="2">
+          </div>
+          <div class="col-12">
+            <label class="form-label small mb-1" for="resNotes">Notas</label>
+            <textarea class="form-control" id="resNotes" rows="2" maxlength="500"
+                      placeholder="Cumpleaños, silla para bebé, alergias..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Pre-pedido <span class="text-muted fw-normal">(opcional)</span></h6>
+          <small class="text-muted">Los platillos se preparan para tu llegada.</small>
+        </div>
+        <div id="reserveMenu"></div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card p-3 mb-3">
+        <h6>Resumen</h6>
+        <div class="d-flex justify-content-between small"><span>Pre-pedido</span><span id="resSubtotal">$0.00</span></div>
+        <div class="d-flex justify-content-between small"><span>Cuota de servicio</span><span id="resServiceFee">$5.00</span></div>
+        <div class="d-flex justify-content-between small"><span>Depósito <span id="resDepositPct">20</span>%</span><span id="resDeposit">$0.00</span></div>
+        <div class="d-flex justify-content-between small"><span>Cobrar en mesa</span><span id="resRemaining">$0.00</span></div>
+        <hr>
+        <div class="d-flex justify-content-between fw-bold"><span>Pago en línea ahora</span><span id="resOnlineTotal">$5.00</span></div>
+        <div class="small text-muted mt-1" id="resNoPreorderNote">
+          Sin pre-pedido no hay depósito. La cuota de servicio se cobra en el restaurante.
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3 d-none" id="resDepositBox">
+        <h6>Depósito por transferencia</h6>
+        <p class="small text-muted mb-2" id="resDepositHelp"></p>
+        <div class="small mb-2" id="resBankInfo"></div>
+        <label class="form-label small mb-1" for="resProof">Comprobante de transferencia</label>
+        <input type="file" class="form-control form-control-sm" id="resProof"
+               accept="image/jpeg,image/png,image/webp,application/pdf">
+        <div class="form-text">El restaurante podrá ver la reservación cuando el depósito sea validado.</div>
+      </div>
+
+      <div class="card p-3">
+        <button class="btn btn-success w-100" id="reserveBtn" onclick="submitReservation()">
+          <i class="bi bi-calendar-check"></i> Solicitar reservación
+        </button>
+        <div class="form-text text-center mt-2">
+          La reservación queda sujeta a confirmación del restaurante.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  let restaurant = null;
+  let menuItems = [];
+  let bank = null;
+
+  const money = n => '$' + Number(n || 0).toFixed(2);
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function selectedItems() {
+    return menuItems
+      .map(item => ({ item, qty: Number(document.getElementById(`qty_${item.id}`)?.value || 0) }))
+      .filter(row => row.qty > 0)
+      .map(row => ({ menu_item_id: row.item.id, quantity: row.qty, option_ids: [] }));
+  }
+
+  function updateTotals() {
+    const items = selectedItems();
+    const subtotal = items.reduce((sum, row) => {
+      const item = menuItems.find(m => m.id === row.menu_item_id);
+      return sum + Number(item?.price || 0) * row.quantity;
+    }, 0);
+    const percent = Number(restaurant?.reservation_deposit_percent || 20);
+    const deposit = subtotal > 0 ? subtotal * percent / 100 : 0;
+    const remaining = Math.max(subtotal - deposit, 0);
+    const serviceFee = 5;
+    document.getElementById('resSubtotal').textContent = money(subtotal);
+    document.getElementById('resServiceFee').textContent = money(serviceFee);
+    document.getElementById('resDepositPct').textContent = percent;
+    document.getElementById('resDeposit').textContent = money(deposit);
+    document.getElementById('resRemaining').textContent = money(remaining);
+    document.getElementById('resOnlineTotal').textContent = money(deposit + serviceFee);
+    document.getElementById('resDepositBox').classList.toggle('d-none', subtotal <= 0);
+    document.getElementById('resNoPreorderNote').classList.toggle('d-none', subtotal > 0);
+    const help = document.getElementById('resDepositHelp');
+    if (help) {
+      help.textContent = `Depósito del ${percent}% del pre-pedido. Se abona al consumo; el restaurante cobrará ${money(remaining)} en mesa.`;
+    }
+    const bankBox = document.getElementById('resBankInfo');
+    if (bankBox && subtotal > 0) {
+      bankBox.innerHTML = bank
+        ? `<strong>Transferencia a TuPedidoJR</strong><br>Banco: ${esc(bank.bank_name || '—')}<br>Titular: ${esc(bank.account_holder || '—')}<br>CLABE: ${esc(bank.clabe || '—')}`
+        : '<span class="text-danger">La cuenta bancaria aún no está configurada.</span>';
+    }
+  }
+
+  function renderMenu() {
+    const box = document.getElementById('reserveMenu');
+    const categories = {};
+    (restaurant.categories || []).forEach(c => { categories[c.id] = c.name; });
+    const groups = {};
+    menuItems.forEach(item => {
+      const key = item.category_id || 'otros';
+      (groups[key] = groups[key] || []).push(item);
+    });
+    box.innerHTML = Object.entries(groups).map(([key, items]) => `
+      <div class="mb-3">
+        <div class="small fw-bold text-muted mb-1">${esc(categories[key] || 'Otros')}</div>
+        ${items.map(item => `
+          <div class="d-flex justify-content-between align-items-center gap-2 py-1 border-bottom">
+            <div class="min-w-0">
+              <div class="small fw-bold">${esc(item.name)}</div>
+              <div class="text-muted small">${money(item.price)}</div>
+            </div>
+            <input type="number" min="0" max="20" step="1" value="0" class="form-control form-control-sm"
+                   id="qty_${item.id}" style="width:72px" oninput="updateTotals()">
+          </div>`).join('')}
+      </div>`).join('') || '<p class="text-muted mb-0">Este restaurante no tiene platillos disponibles.</p>';
+  }
+
+  function setupDate() {
+    const minMinutes = Number(restaurant?.reservation_min_advance_min || 120);
+    const date = new Date(Date.now() + minMinutes * 60000);
+    date.setMinutes(Math.ceil(date.getMinutes() / 15) * 15, 0, 0);
+    const iso = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const input = document.getElementById('resDate');
+    input.value = iso;
+    input.min = iso;
+    const hours = minMinutes >= 60 ? `${(minMinutes / 60).toFixed(minMinutes % 60 ? 1 : 0)} hora(s)` : `${minMinutes} minutos`;
+    document.getElementById('resAdvanceHint').textContent = `Mínimo ${hours} de anticipación.`;
+  }
+
+  async function submitReservation() {
+    const error = document.getElementById('reserveError');
+    error.classList.add('d-none');
+    const when = document.getElementById('resDate').value;
+    if (!when) { showToast('Elige la fecha y hora', 'warning'); return; }
+    const items = selectedItems();
+    let proofUrl = null;
+    if (items.length) {
+      const file = document.getElementById('resProof')?.files?.[0];
+      if (!file) { showToast('Sube el comprobante de transferencia del depósito', 'warning'); return; }
+      const btn = document.getElementById('reserveBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Subiendo comprobante...';
+      try {
+        const uploaded = await uploadFile(file);
+        proofUrl = uploaded.url || uploaded.file_url || uploaded.path;
+      } catch (e) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-calendar-check"></i> Solicitar reservación';
+        error.textContent = e.message; error.classList.remove('d-none'); return;
+      }
+    }
+    const body = {
+      reservation_at: new Date(when).toISOString(),
+      party_size: Number(document.getElementById('resParty').value || 2),
+      notes: document.getElementById('resNotes').value.trim() || null,
+      items,
+      deposit_method: items.length ? 'transfer' : null,
+      deposit_proof_url: proofUrl,
+    };
+    const btn = document.getElementById('reserveBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+    try {
+      const res = await apiRequest('POST', `/restaurants/${RID}/reservations`, body);
+      window.location.href = `/web/reservations/${res.id}`;
+    } catch (e) {
+      error.textContent = e.message; error.classList.remove('d-none');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-calendar-check"></i> Solicitar reservación';
+    }
+  }
+
+  async function loadPage() {
+    try {
+      restaurant = await getRestaurant(RID);
+      if (!restaurant.reservations_enabled) {
+        document.getElementById('reserveContent').classList.add('d-none');
+        throw new Error('Este restaurante no acepta reservaciones por ahora.');
+      }
+      document.getElementById('reserveRestaurantName').textContent = restaurant.name;
+      menuItems = (restaurant.menu || []).filter(item => item.is_available);
+      try { bank = await getBankDetails(); } catch (e) { bank = null; }
+      renderMenu();
+      setupDate();
+      updateTotals();
+      document.getElementById('reserveLoading').classList.add('d-none');
+      document.getElementById('reserveContent').classList.remove('d-none');
+    } catch (e) {
+      document.getElementById('reserveLoading').classList.add('d-none');
+      const box = document.getElementById('reserveError');
+      box.textContent = e.message; box.classList.remove('d-none');
+    }
+  }
+
+  loadPage();
+</script>
+{% endblock %}

@@ -85,6 +85,39 @@
       </div>
 
       <div class="card p-3 mb-3">
+        <h6 class="mb-1">Reservaciones</h6>
+        <p class="small text-muted mb-2">
+          Los clientes pueden reservar mesa y, si quieren, dejar un pre-pedido. El depósito solo aplica al pre-pedido.
+        </p>
+        <div class="row g-2">
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="bizReservationsEnabled">
+              <label class="form-check-label" for="bizReservationsEnabled">Aceptar reservaciones</label>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small mb-1" for="bizReservationDeposit">Depósito del pre-pedido (%)</label>
+            <input type="number" class="form-control" id="bizReservationDeposit" min="0" max="100" step="1" value="20">
+            <div class="form-text">Se abona al consumo; el resto se cobra en mesa.</div>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small mb-1" for="bizReservationAdvance">Anticipación mínima (horas)</label>
+            <input type="number" class="form-control" id="bizReservationAdvance" min="0.25" max="168" step="0.25" value="2">
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small mb-1" for="bizReservationTolerance">Tolerancia de llegada (min)</label>
+            <input type="number" class="form-control" id="bizReservationTolerance" min="0" max="240" step="5" value="60">
+            <div class="form-text">Después de este tiempo puede marcarse no-show.</div>
+          </div>
+        </div>
+        <div class="alert alert-light border small mt-3 mb-0">
+          <strong>Cuota de servicio:</strong> $5 al cliente. En reservación solo mesa se cobra en efectivo en el restaurante
+          y el restaurante paga $5 a TuPedidoJR. En pre-pedido, los $5 se pagan en línea y se descuentan del depósito.
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
         <h6 class="mb-2">Logo del negocio</h6>
         <div class="d-flex align-items-center gap-3 flex-wrap">
           <div class="logo-preview" id="logoPreviewWrap">
@@ -168,6 +201,10 @@
     el('bizPhone').value = r.phone || '';
     el('bizDeliveryMode').value = r.delivery_mode === 'own' ? 'own' : 'platform';
     el('bizPickup').checked = Boolean(r.pickup_enabled);
+    el('bizReservationsEnabled').checked = r.reservations_enabled !== false;
+    el('bizReservationDeposit').value = Number(r.reservation_deposit_percent ?? 20);
+    el('bizReservationAdvance').value = Number((r.reservation_min_advance_min ?? 120) / 60).toFixed(2).replace(/\.?0+$/, '');
+    el('bizReservationTolerance').value = Number(r.reservation_late_tolerance_min ?? 60);
     el('bizIsOpen').checked = Boolean(r.is_open);
     el('bizPublicPage').checked = Boolean(r.public_page_enabled);
     el('profileRole').textContent = ROLE_LABELS[r.viewer_role] || r.viewer_role || '';
@@ -235,6 +272,10 @@
       public_page_enabled: el('bizPublicPage').checked,
       delivery_mode: el('bizDeliveryMode').value,
       pickup_enabled: el('bizPickup').checked,
+      reservations_enabled: el('bizReservationsEnabled').checked,
+      reservation_deposit_percent: Number(el('bizReservationDeposit').value || 20),
+      reservation_min_advance_min: Math.round(Number(el('bizReservationAdvance').value || 2) * 60),
+      reservation_late_tolerance_min: Math.round(Number(el('bizReservationTolerance').value || 60)),
     };
     try {
       el('saveBusinessBtn').disabled = true;

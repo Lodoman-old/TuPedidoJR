@@ -110,6 +110,10 @@ class RestaurantOut(BaseModel):
     affiliated: bool = False
     affiliation_expires_at: date | None = None
     affiliation_days_left: int | None = None
+    reservations_enabled: bool = True
+    reservation_deposit_percent: Decimal = Decimal("20")
+    reservation_min_advance_min: int = 120
+    reservation_late_tolerance_min: int = 60
     status: str = "active"
     viewer_role: str | None = None
     address: str
@@ -213,6 +217,10 @@ class RestaurantProfileUpdate(BaseModel):
     public_page_enabled: bool | None = None
     delivery_mode: str | None = Field(default=None, pattern="^(platform|own)$")
     pickup_enabled: bool | None = None
+    reservations_enabled: bool | None = None
+    reservation_deposit_percent: Decimal | None = Field(default=None, ge=0, le=100)
+    reservation_min_advance_min: int | None = Field(default=None, ge=15, le=10080)
+    reservation_late_tolerance_min: int | None = Field(default=None, ge=0, le=240)
 
 
 class RestaurantCommissionUpdate(BaseModel):

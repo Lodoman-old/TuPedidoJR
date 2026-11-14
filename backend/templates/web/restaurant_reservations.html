@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h5 class="mb-0"><i class="bi bi-calendar-check"></i> Reservaciones</h5>
+    <small class="text-muted">Confirma, sienta o marca no-show. Aquí ves exactamente qué cobrar.</small>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-sm btn-outline-secondary" href="/web/restaurants/{{ restaurant_id }}">Volver al panel</a>
+    <button class="btn btn-sm btn-outline-primary" onclick="loadReservations()"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+  </div>
+</div>
+<div id="reservationsError" class="alert alert-danger d-none"></div>
+<div id="reservationsLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+<div id="reservationsList"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  const LABELS = {
+    pending_deposit: ['Esperando depósito', 'warning text-dark'],
+    requested: ['Solicitada', 'info text-dark'],
+    confirmed: ['Confirmada', 'success'],
+    seated: ['Sentada', 'primary'],
+    completed: ['Completada', 'secondary'],
+    rejected: ['Rechazada', 'danger'],
+    cancelled: ['Cancelada', 'danger'],
+    no_show: ['No-show', 'danger'],
+  };
+  const DEPOSIT_LABELS = {
+    not_required: 'No requiere', pending: 'Pendiente de validación', paid: 'Pagado',
+    refund_pending: 'Reembolso pendiente', refunded: 'Reembolsado',
+    retained: 'Retenido', cancelled: 'Cancelado',
+  };
+  const money = n => '$' + Number(n || 0).toFixed(2);
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function itemLines(items) {
+    if (!items || !items.length) return '<small class="text-muted">Solo reservación de mesa, sin pre-pedido.</small>';
+    return items.map(i => `<div class="small">${i.quantity}x ${esc(i.name)}</div>`).join('');
+  }
+
+  function actions(r) {
+    if (r.status === 'pending_deposit') {
+      return `<span class="small text-warning">Esperando validación del depósito</span>
+        <button class="btn btn-sm btn-outline-danger" onclick="setStatus('${r.id}','rejected')">Rechazar</button>`;
+    }
+    if (r.status === 'requested') {
+      return `<button class="btn btn-sm btn-success" onclick="setStatus('${r.id}','confirmed')">Confirmar</button>
+        <button class="btn btn-sm btn-outline-danger" onclick="setStatus('${r.id}','rejected')">Rechazar</button>`;
+    }
+    if (r.status === 'confirmed') {
+      return `<button class="btn btn-sm btn-primary" onclick="setStatus('${r.id}','seated')">Cliente llegó</button>
+        <button class="btn btn-sm btn-outline-danger" onclick="setStatus('${r.id}','no_show')">No-show</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="setStatus('${r.id}','cancelled')">Cancelar</button>`;
+    }
+    if (r.status === 'seated') {
+      return `<button class="btn btn-sm btn-secondary" onclick="setStatus('${r.id}','completed')">Completar</button>`;
+    }
+    return '';
+  }
+
+  function card(r) {
+    const [label, color] = LABELS[r.status] || [r.status, 'secondary'];
+    const when = new Date(r.reservation_at).toLocaleString('es-MX', {
+      weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+    const preorder = Number(r.preorder_subtotal || 0) > 0;
+    return `<div class="card p-3 mb-2">
+      <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+        <div>
+          <h6 class="mb-1">${esc(r.user_name || 'Cliente')} <span class="badge bg-${color}">${label}</span></h6>
+          <div class="small text-muted">${esc(when)} · ${r.party_size} persona(s)</div>
+          <div class="small text-muted"><i class="bi bi-telephone"></i> ${esc(r.user_phone || 'Sin teléfono')}</div>
+        </div>
+        <div class="text-end small">
+          ${preorder ? `<div>Pre-pedido: <strong>${money(r.preorder_subtotal)}</strong></div>` : '<div>Solo mesa</div>'}
+          ${Number(r.deposit_amount || 0) > 0 ? `<div>Depósito: ${money(r.deposit_amount)} · ${DEPOSIT_LABELS[r.deposit_status] || r.deposit_status}</div>` : ''}
+        </div>
+      </div>
+      <div class="mt-2">${itemLines(r.preorder_items)}</div>
+      ${r.notes ? `<div class="small text-muted mt-1">Nota: ${esc(r.notes)}</div>` : ''}
+      <div class="row g-2 mt-2 small">
+        ${preorder ? `
+          <div class="col-6 col-md-3"><span class="text-muted">Cobrar en mesa</span><br><strong class="text-success">${money(r.remaining_to_charge)}</strong></div>
+          <div class="col-6 col-md-3"><span class="text-muted">Cuota de servicio</span><br>Pagada en línea</div>
+          <div class="col-6 col-md-3"><span class="text-muted">Comisión</span><br>${money(r.commission_amount)} (del depósito)</div>
+        ` : `
+          <div class="col-6 col-md-3"><span class="text-muted">Cobrar en mesa</span><br><strong>Consumo + ${money(r.service_fee)}</strong></div>
+          <div class="col-6 col-md-3"><span class="text-muted">Cuota de servicio</span><br>${money(r.service_fee)} en efectivo</div>
+          <div class="col-6 col-md-3"><span class="text-muted">Cuota por reservación</span><br>${money(r.commission_amount)}</div>
+        `}
+      </div>
+      ${r.deposit_proof_url ? `<a class="small" href="${esc(r.deposit_proof_url)}" target="_blank">Ver comprobante de depósito</a>` : ''}
+      <div class="mt-2 d-flex gap-2 flex-wrap">${actions(r)}</div>
+    </div>`;
+  }
+
+  async function setStatus(id, status) {
+    const reason = ['rejected', 'cancelled', 'no_show'].includes(status)
+      ? prompt('Motivo (opcional):') : null;
+    if (['rejected', 'cancelled', 'no_show'].includes(status) && reason === null) return;
+    try {
+      await apiRequest('PATCH', `/restaurants/${RID}/reservations/${id}/status`, { status, reason: reason || null });
+      showToast('Reservación actualizada');
+      loadReservations();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
+  async function loadReservations() {
+    const loading = document.getElementById('reservationsLoading');
+    loading.classList.remove('d-none');
+    try {
+      const rows = await apiRequest('GET', `/restaurants/${RID}/reservations`);
+      document.getElementById('reservationsList').innerHTML = rows.length
+        ? rows.map(card).join('')
+        : '<div class="card p-4 text-center text-muted">Todavía no hay reservaciones.</div>';
+      document.getElementById('reservationsError').classList.add('d-none');
+    } catch (e) {
+      const box = document.getElementById('reservationsError');
+      box.textContent = e.message; box.classList.remove('d-none');
+    } finally { loading.classList.add('d-none'); }
+  }
+  loadReservations();
+  setInterval(loadReservations, 30000);
+</script>
+{% endblock %}

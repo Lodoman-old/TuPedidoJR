@@ -91,6 +91,30 @@ async def web_restaurant_profile(request: Request, restaurant_id: str):
     return templates.TemplateResponse(request, "restaurant_profile.html", {"restaurant_id": restaurant_id})
 
 
+@router.get("/restaurants/{restaurant_id}/reserve")
+async def web_reserve_restaurant(request: Request, restaurant_id: str):
+    return templates.TemplateResponse(request, "reserve.html", {"restaurant_id": restaurant_id})
+
+
+@router.get("/restaurants/{restaurant_id}/reservations")
+async def web_restaurant_reservations(request: Request, restaurant_id: str):
+    return templates.TemplateResponse(
+        request, "restaurant_reservations.html", {"restaurant_id": restaurant_id}
+    )
+
+
+@router.get("/reservations")
+async def web_my_reservations(request: Request):
+    return templates.TemplateResponse(request, "reservations.html")
+
+
+@router.get("/reservations/{reservation_id}")
+async def web_reservation_detail(request: Request, reservation_id: str):
+    return templates.TemplateResponse(
+        request, "reservation_detail.html", {"reservation_id": reservation_id}
+    )
+
+
 @router.get("/cart")
 async def web_cart(request: Request):
     return templates.TemplateResponse(request, "cart.html")

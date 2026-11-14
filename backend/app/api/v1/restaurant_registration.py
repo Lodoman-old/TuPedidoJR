@@ -98,8 +98,8 @@ async def register_restaurant(
         "email_detail": None if sent else detail,
         "message": (
             "Recibimos tu solicitud. Te enviamos un correo de bienvenida con los manuales. "
-            "Podrás iniciar sesión cuando el restaurante sea aprobado."
+            "Podrás iniciar sesión cuando el negocio sea aprobado."
             if sent else
-            "Recibimos tu solicitud. Podrás iniciar sesión cuando el restaurante sea aprobado."
+            "Recibimos tu solicitud. Podrás iniciar sesión cuando el negocio sea aprobado."
         ),
     }

@@ -1447,19 +1447,26 @@ class TestRestaurantRegistrationAndTeam:
     async def test_public_pages_and_password_reset_flow(self, client, superuser_token):
         manual = await client.get("/manuales/restaurante")
         assert manual.status_code == 200
-        assert "Manual general del restaurante" in manual.text
+        assert "Manual general del negocio" in manual.text
 
         await client.patch(
             "/api/v1/settings",
-            json={"values": {"APP_COMMISSION_PERCENTAGE": "12.5", "DELIVERY_BASE_FEE": "25"}},
+            json={"values": {
+                "APP_FIXED_RESTAURANT_FEE": "7",
+                "APP_FLAT_USAGE_FEE": "5",
+                "DELIVERY_BASE_FEE": "25",
+            }},
             headers=_headers(superuser_token),
         )
         menu_manual = await client.get("/manuales/menu")
         assert menu_manual.status_code == 200
-        assert "12.5 %" in menu_manual.text
+        assert "$7.00" in menu_manual.text
         orders_manual = await client.get("/manuales/pedidos")
         assert orders_manual.status_code == 200
         assert "$25.00" in orders_manual.text
+        shipments_manual = await client.get("/manuales/envios")
+        assert shipments_manual.status_code == 200
+        assert "Motomandado de negocio" in shipments_manual.text
 
         page = await client.get("/web/register-restaurant")
         assert page.status_code == 200

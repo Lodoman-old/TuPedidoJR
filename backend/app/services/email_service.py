@@ -16,9 +16,10 @@ from app.services.order_service import get_setting_value
 logger = logging.getLogger(__name__)
 
 MANUALS = [
-    ("Manual general del restaurante", "/manuales/restaurante"),
-    ("Manual de menú, precios y opciones", "/manuales/menu"),
-    ("Manual de pedidos, cobros y liquidaciones", "/manuales/pedidos"),
+    ("Manual general del negocio", "/manuales/restaurante"),
+    ("Manual de menú/catálogo y precios", "/manuales/menu"),
+    ("Manual de pedidos y cobros", "/manuales/pedidos"),
+    ("Manual de envíos de negocio", "/manuales/envios"),
 ]
 
 
@@ -141,16 +142,16 @@ async def send_restaurant_welcome(
         title = "Bienvenido a TuPedidoJR"
         intro = f"Hola {owner_name}, recibimos la solicitud para registrar <strong>{restaurant_name}</strong>."
         body = """
-          <p>Nuestro equipo revisará la información. Cuando el restaurante sea aprobado podrás
+          <p>Nuestro equipo revisará la información. Cuando el negocio sea aprobado podrás
           iniciar sesión y comenzar a recibir pedidos.</p>
         """
     else:
-        title = "Tu restaurante ya está activo"
+        title = "Tu negocio ya está activo"
         intro = f"Hola {owner_name}, <strong>{restaurant_name}</strong> ya fue aprobado en TuPedidoJR."
         body = f"""
-          <p>Ya puedes iniciar sesión en el panel del restaurante:</p>
+          <p>Ya puedes iniciar sesión en el panel del negocio:</p>
           <p><a href="{public_url}/web/login" style="color:#0d6efd">{public_url}/web/login</a></p>
-          <p>Configura tu menú, horarios y datos bancarios antes de abrir.</p>
+          <p>Configura tu menú o catálogo, horarios y datos bancarios antes de abrir.</p>
         """
     html = _email_shell(title, intro, body + manuals_html(public_url))
     return await send_email(db, to, f"{title} — TuPedidoJR", html)
@@ -171,7 +172,7 @@ async def send_restaurant_rejected(
         f"{f'<p><strong>Motivo:</strong> {reason}</p>' if reason else ''}"
         f"<p>Puedes responder a este correo para solicitar una revisión.</p>",
     )
-    return await send_email(db, to, "Solicitud de restaurante — TuPedidoJR", html)
+    return await send_email(db, to, "Solicitud de negocio — TuPedidoJR", html)
 
 
 async def send_password_reset(
@@ -204,7 +205,7 @@ async def send_team_welcome(
 ) -> tuple[bool, str]:
     config = await email_config(db)
     html = _email_shell(
-        "Acceso al equipo del restaurante",
+        "Acceso al equipo del negocio",
         f"Hola {name}, fuiste agregado al equipo de <strong>{restaurant_name}</strong> como {role_label}.",
         f"""
         <p>Ingresa con:</p>

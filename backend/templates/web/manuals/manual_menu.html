@@ -1,45 +1,45 @@
 {% extends "manuals/manual_base.html" %}
 {% set page = "menu" %}
-{% block title %}Manual de menú y precios{% endblock %}
-{% block heading %}Manual de menú y precios{% endblock %}
+{% block title %}Manual de menú/catálogo y precios{% endblock %}
+{% block heading %}Manual de menú/catálogo y precios{% endblock %}
 {% block content %}
-<h2>Configura tu menú</h2>
-<p>El menú es lo primero que ve el cliente. Mantén nombres claros, fotos cuadradas y precios actualizados.</p>
+<h2>Configura tu menú o catálogo</h2>
+<p>El menú o catálogo es lo primero que ve el cliente. Mantén nombres claros, fotos cuadradas y precios actualizados, ya sea que vendas comida, ropa, abarrotes o cualquier producto.</p>
 
 <h3>1. Categorías</h3>
 <ol>
-  <li>Entra al panel del restaurante.</li>
+  <li>Entra al panel del negocio.</li>
   <li>Pulsa <strong>+ Categoría</strong>.</li>
-  <li>Escribe el nombre: Entradas, Pizzas, Bebidas, Postres, etc.</li>
+  <li>Escribe el nombre: Entradas, Bebidas, Postres, Ropa, Abarrotes, Accesorios, etc.</li>
 </ol>
 
-<h3>2. Platillos</h3>
+<h3>2. Platillos y productos</h3>
 <ol>
-  <li>Pulsa <strong>+ Platillo</strong>.</li>
+  <li>Pulsa <strong>+ Platillo</strong> en restaurantes o <strong>+ Producto</strong> en tiendas.</li>
   <li>Captura nombre, precio, descripción y categoría.</li>
   <li>Sube una foto. El sistema la recorta a 800×800 y la convierte a WebP.</li>
-  <li>Activa o desactiva el platillo cuando se agote.</li>
+  <li>Activa o desactiva el platillo/producto cuando se agote.</li>
 </ol>
-<div class="note">El precio que configuras es tu precio base. Al cliente se le muestra el precio con la comisión de plataforma incluida.</div>
+<div class="note">El precio que configuras es tu precio base. No se le suma un porcentaje de comisión: el cliente paga ese precio más la cuota fija de servicio.</div>
 
-<h3>3. Comisión por platillo</h3>
-<p>La comisión general configurada actualmente es <strong>{{ '%.1f'|format(commission_rate|float) }} %</strong>.</p>
+<h3>3. Costos por pedido</h3>
+<p>El modelo es de cuota fija, no de porcentaje sobre el producto:</p>
 <table>
   <tr><th>Concepto</th><th>Monto actual</th></tr>
-  <tr><td>Precio base que configuras</td><td>${{ '%.2f'|format(example_base|float) }}</td></tr>
-  <tr><td>Precio que ve el cliente</td><td>${{ '%.2f'|format(example_customer|float) }}</td></tr>
-  <tr><td>Lo que recibe el restaurante</td><td>${{ '%.2f'|format(example_base|float) }}</td></tr>
-  <tr><td>Comisión por uso de la plataforma</td><td>${{ '%.2f'|format(flat_fee|float) }} por pedido</td></tr>
+  <tr><td>Cuota del negocio por pedido</td><td>${{ '%.2f'|format(business_fee|float) }}</td></tr>
+  <tr><td>Cuota de servicio del cliente</td><td>${{ '%.2f'|format(flat_fee|float) }}</td></tr>
+  <tr><td>Comisión porcentual sobre el producto</td><td>$0.00 (no aplica)</td></tr>
+  <tr><td>Envío</td><td>Lo paga el cliente y va completo al repartidor</td></tr>
 </table>
-<div class="note">Esta página se actualiza automáticamente cuando el administrador cambia la comisión o la cuota fija. Algunos restaurantes pueden tener una comisión diferente asignada por el administrador.</div>
+<div class="note">El precio del platillo/producto es el que recibe el negocio. Los $10 de ingreso de la plataforma por pedido son la suma de la cuota del negocio y la cuota de servicio del cliente. Esta página se actualiza cuando el administrador cambia las cuotas.</div>
 
 <h3>4. Opciones y modificadores</h3>
-<p>Puedes crear grupos para tamaño, extras, salsas o ingredientes.</p>
+<p>Puedes crear grupos para tamaño, extras, salsas, ingredientes, colores o presentaciones.</p>
 <table>
   <tr><th>Tipo</th><th>Uso</th></tr>
-  <tr><td>Una opción</td><td>Tamaño, término de la carne, tipo de bebida.</td></tr>
-  <tr><td>Varias opciones</td><td>Extras, salsas, ingredientes adicionales.</td></tr>
-  <tr><td>Ingredientes con precio máximo</td><td>Pizzas o platillos donde se elige hasta 4 ingredientes y se cobra el más caro.</td></tr>
+  <tr><td>Una opción</td><td>Tamaño, término de la carne, talla o color.</td></tr>
+  <tr><td>Varias opciones</td><td>Extras, salsas, ingredientes adicionales o accesorios.</td></tr>
+  <tr><td>Ingredientes con precio máximo</td><td>Pizzas o productos donde se elige hasta 4 ingredientes y se cobra el más caro.</td></tr>
 </table>
 <p>En ingredientes con precio máximo, el sistema divide automáticamente en porciones iguales: 1/2, 1/3 o 1/4.</p>
 
@@ -52,16 +52,16 @@
 
 <h3>6. Horarios</h3>
 <ol>
-  <li>Abre <strong>Horario</strong> en el panel.</li>
+  <li>Abre <strong>Perfil del negocio → Horario</strong> en el panel.</li>
   <li>Define los días y horas de atención.</li>
   <li>El sistema mostrará Abierto o Cerrado automáticamente.</li>
 </ol>
 
-<h3>7. Recoger en restaurante</h3>
+<h3>7. Recoger en el negocio</h3>
 <p>Si el cliente puede pasar por el pedido:</p>
 <ol>
-  <li>Entra a <strong>Editar negocio</strong>.</li>
-  <li>Activa <strong>Permitir que el cliente recoja en el restaurante</strong>.</li>
+  <li>Entra a <strong>Perfil del negocio</strong>.</li>
+  <li>Activa <strong>Permitir que el cliente recoja en el negocio</strong>.</li>
   <li>El cliente elegirá entre envío o recoger.</li>
 </ol>
 <p>Los pedidos para recoger no cobran envío ni propina. Se avisa al cliente cuando están listos.</p>
@@ -69,7 +69,7 @@
 <h3>8. Recomendaciones</h3>
 <ul>
   <li>Revisa precios y fotos cada semana.</li>
-  <li>No uses el mismo nombre para dos platillos distintos.</li>
-  <li>Describe claramente los ingredientes y alérgenos.</li>
+  <li>No uses el mismo nombre para dos productos distintos.</li>
+  <li>Describe claramente los ingredientes, materiales, tallas o alérgenos.</li>
 </ul>
 {% endblock %}

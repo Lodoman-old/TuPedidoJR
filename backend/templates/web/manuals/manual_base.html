@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Manual de restaurante{% endblock %} | TuPedidoJR</title>
+  <title>{% block title %}Manual del negocio{% endblock %} | TuPedidoJR</title>
   <style>
     :root { --ink:#17212b; --muted:#5d6b7a; --blue:#0d6efd; --line:#e3e9f0; }
     * { box-sizing: border-box; }
@@ -44,8 +44,8 @@
   <header>
     <div class="wrap">
       <div>
-        <h1>{% block heading %}Manual de restaurante{% endblock %}</h1>
-        <p>TuPedidoJR · Guía oficial para restaurantes</p>
+        <h1>{% block heading %}Manual del negocio{% endblock %}</h1>
+        <p>TuPedidoJR · Guía oficial para restaurantes, tiendas y negocios</p>
       </div>
       <button class="btn print noprint" onclick="window.print()">Imprimir / Guardar PDF</button>
     </div>
@@ -54,11 +54,12 @@
     <nav class="noprint">
       <div class="group">Manuales</div>
       <a href="/manuales/restaurante" class="{% if page == 'restaurante' %}active{% endif %}">Manual general</a>
-      <a href="/manuales/menu" class="{% if page == 'menu' %}active{% endif %}">Menú y precios</a>
+      <a href="/manuales/menu" class="{% if page == 'menu' %}active{% endif %}">Menú/catálogo y precios</a>
       <a href="/manuales/pedidos" class="{% if page == 'pedidos' %}active{% endif %}">Pedidos y cobros</a>
+      <a href="/manuales/envios" class="{% if page == 'envios' %}active{% endif %}">Envíos de negocio</a>
       <div class="group">Accesos</div>
       <a href="/web/login">Iniciar sesión</a>
-      <a href="/web/register-restaurant">Registrar restaurante</a>
+      <a href="/web/register-restaurant">Registrar negocio</a>
     </nav>
     <main>
       {% block content %}{% endblock %}

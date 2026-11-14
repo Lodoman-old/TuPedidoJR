@@ -87,7 +87,7 @@
           <div class="col-12">
             <div class="alert alert-light border mb-0" id="shQuoteBox">
               <div class="d-flex justify-content-between"><span>Envío</span><strong id="shQuoteDelivery">—</strong></div>
-              <div class="d-flex justify-content-between"><span>Comisión plataforma</span><strong id="shQuoteFee">—</strong></div>
+              <div class="d-flex justify-content-between"><span>Comisión por envío</span><strong id="shQuoteFee">—</strong></div>
               <div class="d-flex justify-content-between"><span>Total a cobrar al cliente</span><strong id="shQuoteCollect">—</strong></div>
               <div class="d-flex justify-content-between border-top mt-1 pt-1"><span>Cargo a tu negocio</span><strong id="shQuoteCharge">—</strong></div>
             </div>
@@ -179,7 +179,7 @@
       ['Activos', active, 'bi-truck', 'primary'],
       ['Entregados', delivered, 'bi-check2-circle', 'success'],
       ['Por cobrar', money(pendingCash), 'bi-cash-coin', 'warning'],
-      ['Comisión del mes', money(commission), 'bi-percent', 'secondary'],
+      ['Comisión por envíos', money(commission), 'bi-receipt', 'secondary'],
     ];
     box.innerHTML = cards.map(([label, value, icon, color]) => `
       <div class="col-6 col-md-3">
@@ -214,7 +214,7 @@
     }
     box.innerHTML = `<div class="table-responsive"><table class="table table-sm align-middle bg-white">
       <thead><tr>
-        <th>Folio</th><th>Cliente</th><th>Paquete</th><th>Envío</th><th>Comisión</th>
+        <th>Folio</th><th>Cliente</th><th>Paquete</th><th>Envío</th><th>Comisión por envío</th>
         <th>Cobrar</th><th>Estado</th><th></th>
       </tr></thead><tbody>${rows.map(s => `
         <tr>
@@ -384,7 +384,7 @@
       </div>
       <div class="row g-2 mb-3">
         <div class="col-6 col-md-3"><div class="border rounded p-2"><small class="text-muted d-block">Envío</small><strong>${money(s.delivery_fee)}</strong></div></div>
-        <div class="col-6 col-md-3"><div class="border rounded p-2"><small class="text-muted d-block">Comisión</small><strong>${money(s.platform_fee)}</strong></div></div>
+        <div class="col-6 col-md-3"><div class="border rounded p-2"><small class="text-muted d-block">Comisión por envío</small><strong>${money(s.platform_fee)}</strong></div></div>
         <div class="col-6 col-md-3"><div class="border rounded p-2"><small class="text-muted d-block">Cobrar</small><strong>${money(s.amount_to_collect)}</strong></div></div>
         <div class="col-6 col-md-3"><div class="border rounded p-2"><small class="text-muted d-block">Contra entrega</small><strong>${COD_LABELS[s.cod_status] || s.cod_status}</strong></div></div>
       </div>

@@ -1,0 +1,76 @@
+{% extends "manuals/manual_base.html" %}
+{% set page = "envios" %}
+{% block title %}Manual de envíos de negocio{% endblock %}
+{% block heading %}Manual de envíos de negocio{% endblock %}
+{% block content %}
+<h2>Motomandado de negocio</h2>
+<p>Este servicio sirve cuando el negocio ya cerró una venta por WhatsApp, Facebook o teléfono y solo necesita que un repartidor entregue el paquete. El cliente final no necesita cuenta ni app.</p>
+
+<h3>1. Cuándo usarlo</h3>
+<ul>
+  <li>Ropa, calzado o accesorios vendidos por redes sociales.</li>
+  <li>Taquerías, alitas o comidas vendidas fuera de la app.</li>
+  <li>Farmacias, abarrotes o ferreterías que ya tienen el pedido armado.</li>
+  <li>Cualquier venta en la que el negocio ya cobró o cobrará contra entrega.</li>
+</ul>
+<div class="note">No es un pedido de catálogo: la venta ya existe. TuPedidoJR solo pone al repartidor y el seguimiento.</div>
+
+<h3>2. Crear el envío</h3>
+<ol>
+  <li>Entra a <strong>Envíos → Nuevo envío</strong>.</li>
+  <li>Captura nombre y teléfono del cliente, dirección, referencias y el pin en el mapa.</li>
+  <li>Describe qué se envía y su valor declarado.</li>
+  <li>Escribe cuánto cobrar en efectivo. Usa 0 si el cliente ya pagó por transferencia.</li>
+  <li>Elige quién paga el envío: el negocio o se suma al contra entrega.</li>
+  <li>Publica el envío y comparte el link de seguimiento.</li>
+</ol>
+
+<h3>3. Costos</h3>
+<table>
+  <tr><th>Concepto</th><th>Valor actual</th></tr>
+  <tr><td>Comisión de la plataforma por envío</td><td>${{ '%.2f'|format(shipment_fee|float) }} (la paga el negocio)</td></tr>
+  <tr><td>Envío por kilómetro</td><td>Se calcula igual que un pedido normal y va 100% al repartidor</td></tr>
+  <tr><td>Máximo de cobro contra entrega</td><td>${{ '%.2f'|format(shipment_cod_max|float) }}</td></tr>
+  <tr><td>Retorno si el cliente no recibe</td><td>{{ '%.0f'|format(shipment_return_percent|float) }}% del envío</td></tr>
+</table>
+<div class="note">La comisión es fija por envío, no un porcentaje sobre el producto. No se cobra comisión sobre la venta que el negocio ya hizo.</div>
+
+<h3>4. Formas de pago</h3>
+<table>
+  <tr><th>Caso</th><th>Qué pasa</th></tr>
+  <tr><td>El cliente ya pagó por transferencia a la tienda</td><td>Solo se entrega. El negocio paga el envío y la comisión en su liquidación.</td></tr>
+  <tr><td>El cliente paga en efectivo al repartidor</td><td>El repartidor cobra producto + envío. La app descuenta el efectivo de su liquidación y lo abona al negocio.</td></tr>
+  <tr><td>El cliente paga solo el producto en efectivo</td><td>El negocio paga el envío y la comisión; el repartidor solo entrega el producto cobrado.</td></tr>
+</table>
+
+<h3>5. Seguimiento para el cliente</h3>
+<p>Al publicar el envío se genera un link. Compártelo por WhatsApp:</p>
+<ul>
+  <li>El cliente ve el estado y la llegada estimada.</li>
+  <li>Cuando el paquete va en camino, ve un <strong>código de entrega de 4 dígitos</strong>.</li>
+  <li>Le da ese código al repartidor al recibir. También puede confirmarse con foto.</li>
+</ul>
+
+<h3>6. Flujo del repartidor</h3>
+<ol>
+  <li>Ve el envío en su pestaña <strong>Envíos</strong>.</li>
+  <li>Acepta, recoge el paquete en el negocio y confirma con foto o código.</li>
+  <li>Entrega, confirma con el código o una foto y registra el efectivo si aplica.</li>
+  <li>Si no puede entregar, marca <strong>No entregado</strong> y escribe el motivo.</li>
+</ol>
+
+<h3>7. Cancelaciones y retornos</h3>
+<ul>
+  <li>El negocio puede cancelar antes de que el repartidor recoja el paquete.</li>
+  <li>Si el cliente no recibe, el paquete regresa al negocio.</li>
+  <li>Se cobra el porcentaje de retorno configurado sobre el envío.</li>
+</ul>
+
+<h3>8. Recomendaciones</h3>
+<ul>
+  <li>Confirma con el cliente la dirección y el monto antes de publicar.</li>
+  <li>Empaca el producto cerrado y con identificación.</li>
+  <li>No envíes artículos prohibidos ni de alto riesgo sin declararlos.</li>
+  <li>Comparte el link de seguimiento para reducir llamadas.</li>
+</ul>
+{% endblock %}

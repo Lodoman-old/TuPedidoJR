@@ -88,7 +88,7 @@
       : `<div class="menu-thumb menu-thumb-empty"><i class="bi bi-image"></i></div>`;
 
     const availabilityButton = isOwner
-      ? `<button type="button" class="btn btn-sm ${item.is_available ? 'btn-outline-warning' : 'btn-outline-success'} item-avail-btn"
+      ? `<button type="button" class="btn btn-sm ${item.is_available ? 'btn-outline-danger' : 'btn-outline-success'} item-avail-btn"
                  data-id="${item.id}" data-available="${item.is_available}">
            ${item.is_available ? 'Agotar' : 'Activar'}
          </button>`
@@ -210,27 +210,29 @@
         if (isStaff) {
           ownerPanel.classList.remove('d-none');
           const buttons = [];
-          if (canManage) {
-            buttons.push('<button class="btn btn-sm btn-outline-primary" onclick="showAddCategory()">+ Categoría</button>');
-            buttons.push(`<button class="btn btn-sm btn-outline-success" onclick="showAddItem()">+ ${isStore ? 'Producto' : 'Platillo'}</button>`);
-            buttons.push(`<a href="/web/restaurants/${RID}/profile" class="btn btn-sm btn-outline-dark"><i class="bi bi-shop-window"></i> Perfil del negocio</a>`);
-          }
-          buttons.push(`<a href="/web/restaurants/${RID}/orders" class="btn btn-sm btn-outline-info">Pedidos</a>`);
-          buttons.push(`<a href="/web/restaurants/${RID}/requests" class="btn btn-sm btn-outline-info"><i class="bi bi-chat-square-text"></i> Solicitudes</a>`);
-          buttons.push(`<a href="/web/restaurants/${RID}/shipments" class="btn btn-sm btn-outline-info"><i class="bi bi-box-seam"></i> Envíos</a>`);
+          buttons.push(`<a href="/web/restaurants/${RID}/orders" class="btn btn-sm btn-nav-orders"><i class="bi bi-receipt"></i> Pedidos</a>`);
           if (!isStore) {
-            buttons.push(`<a href="/web/restaurants/${RID}/reservations" class="btn btn-sm btn-outline-info"><i class="bi bi-calendar-check"></i> Reservaciones</a>`);
+            buttons.push(`<a href="/web/restaurants/${RID}/reservations" class="btn btn-sm btn-nav-reservations"><i class="bi bi-calendar-check"></i> Reservaciones</a>`);
           }
+          buttons.push(`<a href="/web/restaurants/${RID}/requests" class="btn btn-sm btn-nav-requests"><i class="bi bi-chat-square-text"></i> Solicitudes</a>`);
+          buttons.push(`<a href="/web/restaurants/${RID}/shipments" class="btn btn-sm btn-nav-shipments"><i class="bi bi-box-seam"></i> Envíos</a>`);
           if (canFinance) {
-            buttons.push(`<a href="/web/restaurants/${RID}/earnings" class="btn btn-sm btn-outline-warning">Ganancias</a>`);
+            buttons.push(`<a href="/web/restaurants/${RID}/earnings" class="btn btn-sm btn-nav-earnings"><i class="bi bi-cash-stack"></i> Ganancias</a>`);
           }
           if (owner) {
-            buttons.push(`<a href="/web/restaurants/${RID}/team" class="btn btn-sm btn-outline-dark">Equipo</a>`);
+            buttons.push(`<a href="/web/restaurants/${RID}/team" class="btn btn-sm btn-nav-team"><i class="bi bi-people"></i> Equipo</a>`);
           }
           if (r.slug) {
-            buttons.push(`<a href="/r/${r.slug}" target="_blank" class="btn btn-sm btn-outline-dark">Página pública</a>`);
+            buttons.push(`<a href="/r/${r.slug}" target="_blank" class="btn btn-sm btn-nav-public"><i class="bi bi-globe"></i> Página pública</a>`);
           }
-          buttons.push('<a href="/manuales/restaurante" target="_blank" class="btn btn-sm btn-outline-secondary">Manual</a>');
+          if (canManage) {
+            buttons.push(`<a href="/web/restaurants/${RID}/profile" class="btn btn-sm btn-nav-profile"><i class="bi bi-shop-window"></i> Perfil del negocio</a>`);
+          }
+          buttons.push('<a href="/manuales/restaurante" target="_blank" class="btn btn-sm btn-nav-manual"><i class="bi bi-book"></i> Manual</a>');
+          if (canManage) {
+            buttons.push(`<button class="btn btn-sm btn-outline-success" onclick="showAddItem()">+ ${isStore ? 'Producto' : 'Platillo'}</button>`);
+            buttons.push('<button class="btn btn-sm btn-outline-primary" onclick="showAddCategory()">+ Categoría</button>');
+          }
           ownerPanel.innerHTML = `
             <div class="card p-3">
               <h6>${isStore ? 'Panel de la tienda' : 'Panel del restaurante'}</h6>
@@ -362,7 +364,7 @@
         const isAvailable = btn.dataset.available === 'true';
         try {
           await updateMenuItemAvailability(RID, btn.dataset.id, !isAvailable);
-          showToast(isAvailable ? 'Platillo marcado como agotado' : 'Platillo disponible');
+          showToast(isAvailable ? (businessIsStore ? 'Producto marcado como agotado' : 'Platillo marcado como agotado') : (businessIsStore ? 'Producto disponible' : 'Platillo disponible'));
           loadMenu();
         } catch (ex) { showToast(ex.message, 'danger'); }
       });
@@ -527,7 +529,7 @@
     if (!file || !pendingItemId) return;
     try {
       await uploadMenuItemImage(RID, pendingItemId, file);
-      showToast('Foto del platillo actualizada');
+      showToast(businessIsStore ? 'Foto del producto actualizada' : 'Foto del platillo actualizada');
       loadMenu();
     } catch (ex) { showToast(ex.message, 'danger'); }
   }
@@ -653,7 +655,7 @@
       title: 'Nueva categoría',
       body: `
         <label class="form-label small mb-1">Nombre de la categoría</label>
-        <input type="text" id="catName" class="form-control" placeholder="Ej. Entradas, Bebidas, Postres">`,
+        <input type="text" id="catName" class="form-control" placeholder="${businessIsStore ? 'Ej. Ropa, Abarrotes, Accesorios' : 'Ej. Entradas, Bebidas, Postres'}">`,
       onSave: async (el) => {
         const name = el.querySelector('#catName').value.trim();
         if (!name) { showToast('Ingresa un nombre', 'warning'); return false; }
@@ -669,11 +671,11 @@
     const options = '<option value="">Sin categoría</option>' +
       categories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
     openFormModal({
-      title: 'Nuevo platillo',
+      title: businessIsStore ? 'Nuevo producto' : 'Nuevo platillo',
       body: `
         <div class="mb-2">
-          <label class="form-label small mb-1">Nombre</label>
-          <input type="text" id="itemName" class="form-control" placeholder="Ej. Taco de bistec">
+          <label class="form-label small mb-1">Nombre del ${businessIsStore ? 'producto' : 'platillo'}</label>
+          <input type="text" id="itemName" class="form-control" placeholder="${businessIsStore ? 'Ej. Playera, paquete de arroz' : 'Ej. Taco de bistec'}">
         </div>
         <div class="mb-2">
           <label class="form-label small mb-1">Descripción</label>
@@ -699,7 +701,7 @@
           return false;
         }
         await createMenuItem(RID, name, price, description, categoryId);
-        showToast('Platillo creado');
+        showToast(businessIsStore ? 'Producto creado' : 'Platillo creado');
         loadMenu();
       },
     });

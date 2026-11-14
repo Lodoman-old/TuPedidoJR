@@ -236,7 +236,7 @@ async def create_restaurant_reservation(
                     "group_name": opt.get("group_name"),
                     "name": opt.get("name"),
                     "price_delta": f"{Decimal(str(opt.get('price_delta') or 0)):.2f}",
-                    "portion": opt.get("portion", 1),
+                    "portion": float(opt.get("portion") or 1),
                 }
                 for opt in selected
             ],

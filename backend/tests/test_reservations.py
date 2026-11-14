@@ -8,6 +8,7 @@ from httpx import AsyncClient
 
 from app.core.security import decode_access_token
 from app.models.menu_item import MenuItem
+from app.models.menu_option import MenuOption, MenuOptionGroup
 from app.models.reservation import Reservation
 from app.models.restaurant import Restaurant
 from app.models.user import User
@@ -137,6 +138,49 @@ class TestReservationCreation:
         )
         assert resp.status_code == 400
         assert "anticipación" in resp.json()["detail"]
+
+    async def test_preorder_with_options_is_saved_as_json(
+        self, client, restaurant, customer_token, db_session,
+    ):
+        resto, item = restaurant
+        group = MenuOptionGroup(
+            menu_item_id=item.id,
+            name="Tamaño",
+            selection_type="single",
+            is_required=True,
+            min_selections=1,
+            max_selections=1,
+        )
+        db_session.add(group)
+        await db_session.flush()
+        option = MenuOption(
+            group_id=group.id,
+            name="Mediana",
+            price_delta=20,
+            is_available=True,
+        )
+        db_session.add(option)
+        await db_session.commit()
+
+        resp = await client.post(
+            f"/api/v1/restaurants/{resto.id}/reservations",
+            json={
+                "reservation_at": _when(),
+                "party_size": 2,
+                "items": [{
+                    "menu_item_id": str(item.id),
+                    "quantity": 1,
+                    "option_ids": [str(option.id)],
+                }],
+                "deposit_method": "transfer",
+            },
+            headers=_headers(customer_token),
+        )
+        assert resp.status_code == 201, resp.text
+        data = resp.json()
+        assert float(data["preorder_subtotal"]) == 120
+        assert data["preorder_items"][0]["options"][0]["portion"] == 1.0
+        assert float(data["deposit_amount"]) == 24
 
 
 class TestReservationFlow:

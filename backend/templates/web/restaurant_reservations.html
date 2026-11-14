@@ -37,7 +37,9 @@
 
   function itemLines(items) {
     if (!items || !items.length) return '<small class="text-muted">Solo reservación de mesa, sin pre-pedido.</small>';
-    return items.map(i => `<div class="small">${i.quantity}x ${esc(i.name)}</div>`).join('');
+    return items.map(i => `<div class="small">${i.quantity}x ${esc(i.name)}
+      ${(i.options || []).length ? `<span class="text-muted">· ${i.options.map(o => esc(o.name)).join(', ')}</span>` : ''}
+    </div>`).join('');
   }
 
   function actions(r) {

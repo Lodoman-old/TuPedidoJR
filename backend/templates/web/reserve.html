@@ -1,4 +1,190 @@
 {% extends "base.html" %}
+{% block head_extra %}
+<style>
+  .reserve-cat-scroll {
+    display: flex;
+    gap: .45rem;
+    overflow-x: auto;
+    padding: .1rem 0 .55rem;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .reserve-cat-scroll::-webkit-scrollbar { display: none; }
+  .reserve-cat-chip {
+    flex: 0 0 auto;
+    border: 1px solid #dee2e6;
+    background: #fff;
+    color: #495057;
+    border-radius: 999px;
+    padding: .4rem .8rem;
+    font-size: .82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: all .15s ease;
+  }
+  .reserve-cat-chip:hover { border-color: #1B2F6B; color: #1B2F6B; }
+  .reserve-cat-chip.active {
+    background: #1B2F6B;
+    border-color: #1B2F6B;
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(27, 47, 107, .22);
+  }
+  .reserve-menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+    gap: .85rem;
+  }
+  .reserve-menu-card {
+    border: 1px solid #e9ecef;
+    border-radius: .85rem;
+    overflow: hidden;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    transition: box-shadow .15s ease, transform .15s ease;
+  }
+  .reserve-menu-card:hover {
+    box-shadow: 0 8px 22px rgba(15, 27, 61, .10);
+    transform: translateY(-1px);
+  }
+  .reserve-menu-media {
+    aspect-ratio: 4 / 3;
+    background: #f4f6f9;
+    position: relative;
+    overflow: hidden;
+  }
+  .reserve-menu-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .reserve-menu-ph {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #adb5bd;
+    font-size: 2rem;
+    background: linear-gradient(135deg, #f8f9fa, #eef1f5);
+  }
+  .reserve-menu-body {
+    padding: .65rem .7rem .7rem;
+    display: flex;
+    flex-direction: column;
+    gap: .28rem;
+    flex: 1;
+    min-width: 0;
+  }
+  .reserve-menu-name {
+    font-size: .9rem;
+    font-weight: 700;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 2.15em;
+  }
+  .reserve-menu-desc {
+    font-size: .74rem;
+    color: #6c757d;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .reserve-menu-price {
+    font-weight: 800;
+    color: #1B2F6B;
+    font-size: .92rem;
+  }
+  .reserve-menu-options {
+    font-size: .7rem;
+    color: #0d6efd;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .reserve-menu-actions { margin-top: auto; padding-top: .15rem; }
+  .reserve-qty-pill {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid #ced4da;
+    border-radius: 999px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .reserve-qty-pill button {
+    border: 0;
+    background: #f8f9fa;
+    color: #1B2F6B;
+    width: 34px;
+    height: 31px;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+  .reserve-qty-pill button:hover { background: #e9ecef; }
+  .reserve-qty-pill span {
+    min-width: 26px;
+    text-align: center;
+    font-weight: 700;
+    font-size: .88rem;
+  }
+  .reserve-menu-tools {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #fff;
+    padding-top: .1rem;
+    margin-top: -.1rem;
+  }
+  .reserve-modal-img {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: .75rem;
+    flex: 0 0 auto;
+  }
+  .reserve-mobile-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1045;
+    background: #fff;
+    border-top: 1px solid #e9ecef;
+    box-shadow: 0 -8px 24px rgba(15, 27, 61, .10);
+    padding: .65rem .85rem calc(.65rem + env(safe-area-inset-bottom, 0px));
+  }
+  @media (max-width: 575.98px) {
+    .reserve-modal-img { width: 84px; height: 84px; }
+  }
+  body.reserve-page #floatingCart { display: none !important; }
+  @media (max-width: 991.98px) {
+    body.has-reserve-bar main { padding-bottom: 96px; }
+    .reserve-menu-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .55rem;
+    }
+    .reserve-menu-media { aspect-ratio: 1 / 1; }
+    .reserve-menu-body { padding: .5rem .55rem .6rem; }
+    .reserve-menu-name { font-size: .8rem; min-height: 2.1em; }
+    .reserve-menu-desc { display: none; }
+    .reserve-menu-price { font-size: .85rem; }
+    .reserve-menu-tools { top: 0; }
+  }
+  @media (max-width: 380px) {
+    .reserve-menu-grid { grid-template-columns: 1fr; }
+    .reserve-menu-media { aspect-ratio: 16 / 9; }
+    .reserve-menu-desc { display: block; }
+  }
+</style>
+{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div>
@@ -35,25 +221,44 @@
       </div>
 
       <div class="card p-3 mb-3">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="mb-0">Pre-pedido <span class="text-muted fw-normal">(opcional)</span></h6>
-          <small class="text-muted">Los platillos se preparan para tu llegada.</small>
+        <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-1">
+          <div>
+            <h6 class="mb-0">Pre-pedido <span class="text-muted fw-normal">(opcional)</span></h6>
+            <small class="text-muted">Elige por categoría; los platillos se preparan para tu llegada.</small>
+          </div>
+          <span class="badge bg-light text-dark" id="resSelectedCount">0 seleccionados</span>
         </div>
-        <div id="reserveMenu"></div>
+        <div class="reserve-menu-tools">
+          <div class="input-group input-group-sm mt-2 mb-2">
+            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+            <input type="search" class="form-control" id="resMenuSearch"
+                   placeholder="Buscar platillo o bebida..." autocomplete="off">
+            <button class="btn btn-outline-secondary d-none" type="button" id="resMenuClear">Limpiar</button>
+          </div>
+          <div class="reserve-cat-scroll" id="reserveCategories"></div>
+        </div>
+        <div id="reserveMenu" class="reserve-menu-grid"></div>
+        <div id="reserveMenuEmpty" class="text-center text-muted py-4 d-none">
+          <i class="bi bi-search fs-4 d-block mb-1"></i>
+          No encontramos platillos con esa búsqueda.
+        </div>
       </div>
     </div>
 
     <div class="col-lg-5">
-      <div class="card p-3 mb-3">
+      <div class="card p-3 mb-3" id="reserveSummaryCard">
         <h6>Resumen</h6>
         <div class="d-flex justify-content-between small"><span>Pre-pedido</span><span id="resSubtotal">$0.00</span></div>
-        <div class="d-flex justify-content-between small"><span>Cuota de servicio</span><span id="resServiceFee">$5.00</span></div>
+        <div class="d-flex justify-content-between small">
+          <span>Cuota de servicio <small class="text-muted" id="resServiceFeeNote">en efectivo</small></span>
+          <span id="resServiceFee">$5.00</span>
+        </div>
         <div class="d-flex justify-content-between small"><span>Depósito <span id="resDepositPct">20</span>%</span><span id="resDeposit">$0.00</span></div>
         <div class="d-flex justify-content-between small"><span>Cobrar en mesa</span><span id="resRemaining">$0.00</span></div>
         <hr>
-        <div class="d-flex justify-content-between fw-bold"><span>Pago en línea ahora</span><span id="resOnlineTotal">$5.00</span></div>
+        <div class="d-flex justify-content-between fw-bold"><span>Pago en línea ahora</span><span id="resOnlineTotal">$0.00</span></div>
         <div class="small text-muted mt-1" id="resNoPreorderNote">
-          Sin pre-pedido no hay depósito. La cuota de servicio se cobra en el restaurante.
+          Sin pre-pedido no hay depósito. La cuota de servicio de $5 se cobra en efectivo en el restaurante.
         </div>
       </div>
 
@@ -78,76 +283,355 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="reserveItemModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="reserveItemTitle"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="reserveItemBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success" id="reserveItemSave">Agregar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="reserveMobileBar" class="reserve-mobile-bar d-lg-none d-none">
+  <div class="d-flex align-items-center justify-content-between gap-2">
+    <div class="min-w-0">
+      <div><span class="fw-bold" id="barOnlineTotal">$0.00</span> <small class="text-muted">en línea</small></div>
+      <div class="small text-muted text-truncate" id="barItems">0 artículos</div>
+    </div>
+    <button type="button" class="btn btn-success btn-sm flex-shrink-0"
+            onclick="document.getElementById('reserveSummaryCard').scrollIntoView({behavior:'smooth',block:'center'})">
+      Revisar y reservar
+    </button>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
   const RID = '{{ restaurant_id }}';
+  const SERVICE_FEE = 5;
   let restaurant = null;
   let menuItems = [];
   let bank = null;
+  let selectedCategory = 'all';
+  let searchTerm = '';
+  let quantities = {};
+  let customizations = {};
+  let activeCustomItem = null;
 
   const money = n => '$' + Number(n || 0).toFixed(2);
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  document.body.classList.add('reserve-page');
+  const byId = id => menuItems.find(item => String(item.id) === String(id));
+  const qtyOf = id => Number(quantities[id] || 0);
+  const hasOptions = item => (item.option_groups || []).length > 0;
+  const unitPrice = item => customizations[item.id]?.unit_price ?? Number(item.price || 0);
+
+  function categoryName(id) {
+    const category = (restaurant?.categories || []).find(c => String(c.id) === String(id));
+    return category?.name || 'Otros';
+  }
+
+  function categoriesWithItems() {
+    const counts = {};
+    menuItems.forEach(item => {
+      const key = item.category_id ? String(item.category_id) : 'other';
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    const list = (restaurant?.categories || [])
+      .filter(category => counts[String(category.id)])
+      .map(category => ({ id: String(category.id), name: category.name, count: counts[String(category.id)] }));
+    if (counts.other) list.push({ id: 'other', name: 'Otros', count: counts.other });
+    return list;
+  }
+
+  function renderCategories() {
+    const box = document.getElementById('reserveCategories');
+    if (!box) return;
+    const cats = categoriesWithItems();
+    const chips = [{ id: 'all', name: 'Todos', count: menuItems.length }, ...cats];
+    box.innerHTML = chips.map(category => `
+      <button type="button" class="reserve-cat-chip ${selectedCategory === category.id ? 'active' : ''}"
+              data-cat="${esc(category.id)}">
+        ${esc(category.name)} <span class="opacity-75">${category.count}</span>
+      </button>`).join('');
+  }
+
+  function filteredItems() {
+    const query = searchTerm.trim().toLowerCase();
+    if (query) {
+      return menuItems.filter(item =>
+        `${item.name || ''} ${item.description || ''}`.toLowerCase().includes(query)
+      );
+    }
+    if (selectedCategory === 'all') return menuItems;
+    return menuItems.filter(item => {
+      const key = item.category_id ? String(item.category_id) : 'other';
+      return key === selectedCategory;
+    });
+  }
+
+  function qtyControlHtml(item) {
+    if (!item.is_available) return '<span class="badge bg-secondary">Agotado</span>';
+    const qty = qtyOf(item.id);
+    if (hasOptions(item) && !customizations[item.id]) {
+      return `<button type="button" class="btn btn-sm btn-outline-dark w-100 menu-customize" data-id="${item.id}">
+        <i class="bi bi-sliders"></i> Personalizar
+      </button>`;
+    }
+    if (qty <= 0) {
+      return `<button type="button" class="btn btn-sm btn-success w-100 menu-add" data-id="${item.id}">
+        <i class="bi bi-plus-lg"></i> Agregar
+      </button>`;
+    }
+    return `<div class="reserve-qty-pill">
+      <button type="button" data-action="minus" data-id="${item.id}" aria-label="Quitar uno">−</button>
+      <span>${qty}</span>
+      <button type="button" data-action="plus" data-id="${item.id}" aria-label="Agregar uno">+</button>
+    </div>`;
+  }
+
+  function menuCardHtml(item) {
+    const customized = customizations[item.id];
+    const showCategory = Boolean(searchTerm.trim());
+    return `<article class="reserve-menu-card">
+      <div class="reserve-menu-media">
+        ${item.image_url ? `<img src="${esc(item.image_url)}" alt="${esc(item.name)}" loading="lazy"
+          onerror="this.style.display='none';this.parentElement.querySelector('.reserve-menu-ph')?.classList.remove('d-none')">` : ''}
+        <div class="reserve-menu-ph ${item.image_url ? 'd-none' : ''}"><i class="bi bi-egg-fried"></i></div>
+      </div>
+      <div class="reserve-menu-body">
+        ${showCategory ? `<div class="text-muted" style="font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;">${esc(categoryName(item.category_id))}</div>` : ''}
+        <div class="reserve-menu-name">${esc(item.name)}</div>
+        ${item.description ? `<div class="reserve-menu-desc">${esc(item.description)}</div>` : ''}
+        <div class="d-flex justify-content-between align-items-center gap-2">
+          <span class="reserve-menu-price">${money(unitPrice(item))}</span>
+          ${customized ? `<button type="button" class="btn btn-link btn-sm p-0 menu-customize" data-id="${item.id}" style="font-size:.7rem;">Editar</button>` : ''}
+        </div>
+        ${customized?.names?.length ? `<div class="reserve-menu-options" title="${esc(customized.names.join(', '))}">${esc(customized.names.join(', '))}</div>` : ''}
+        <div class="reserve-menu-actions" data-qty-wrap="${item.id}">${qtyControlHtml(item)}</div>
+      </div>
+    </article>`;
+  }
+
+  function renderMenu() {
+    const box = document.getElementById('reserveMenu');
+    const empty = document.getElementById('reserveMenuEmpty');
+    if (!box) return;
+    const items = filteredItems();
+    box.innerHTML = items.map(menuCardHtml).join('');
+    empty?.classList.toggle('d-none', items.length > 0);
+  }
+
+  function refreshQtyControl(itemId) {
+    const item = byId(itemId);
+    if (!item) return;
+    const wrap = document.querySelector(`[data-qty-wrap="${itemId}"]`);
+    if (wrap) wrap.innerHTML = qtyControlHtml(item);
+  }
+
+  function setQuantity(itemId, value) {
+    const qty = Math.max(0, Math.min(50, parseInt(value, 10) || 0));
+    if (qty > 0) quantities[itemId] = qty;
+    else delete quantities[itemId];
+    refreshQtyControl(itemId);
+    updateTotals();
+  }
 
   function selectedItems() {
     return menuItems
-      .map(item => ({ item, qty: Number(document.getElementById(`qty_${item.id}`)?.value || 0) }))
-      .filter(row => row.qty > 0)
-      .map(row => ({ menu_item_id: row.item.id, quantity: row.qty, option_ids: [] }));
+      .filter(item => qtyOf(item.id) > 0)
+      .map(item => ({
+        menu_item_id: item.id,
+        quantity: qtyOf(item.id),
+        option_ids: customizations[item.id]?.option_ids || [],
+      }));
   }
 
   function updateTotals() {
     const items = selectedItems();
     const subtotal = items.reduce((sum, row) => {
-      const item = menuItems.find(m => m.id === row.menu_item_id);
-      return sum + Number(item?.price || 0) * row.quantity;
+      const item = byId(row.menu_item_id);
+      return sum + (item ? unitPrice(item) * row.quantity : 0);
     }, 0);
     const percent = Number(restaurant?.reservation_deposit_percent || 20);
     const deposit = subtotal > 0 ? subtotal * percent / 100 : 0;
     const remaining = Math.max(subtotal - deposit, 0);
-    const serviceFee = 5;
+    const hasPreorder = subtotal > 0;
+    const online = hasPreorder ? deposit + SERVICE_FEE : 0;
+    const totalQty = items.reduce((sum, row) => sum + row.quantity, 0);
+
     document.getElementById('resSubtotal').textContent = money(subtotal);
-    document.getElementById('resServiceFee').textContent = money(serviceFee);
+    document.getElementById('resServiceFee').textContent = money(SERVICE_FEE);
+    document.getElementById('resServiceFeeNote').textContent = hasPreorder ? 'en línea' : 'en efectivo';
     document.getElementById('resDepositPct').textContent = percent;
     document.getElementById('resDeposit').textContent = money(deposit);
-    document.getElementById('resRemaining').textContent = money(remaining);
-    document.getElementById('resOnlineTotal').textContent = money(deposit + serviceFee);
-    document.getElementById('resDepositBox').classList.toggle('d-none', subtotal <= 0);
-    document.getElementById('resNoPreorderNote').classList.toggle('d-none', subtotal > 0);
+    document.getElementById('resRemaining').textContent = hasPreorder
+      ? money(remaining)
+      : `Consumo + ${money(SERVICE_FEE)}`;
+    document.getElementById('resOnlineTotal').textContent = money(online);
+    document.getElementById('resSelectedCount').textContent = `${totalQty} seleccionado${totalQty === 1 ? '' : 's'}`;
+    document.getElementById('resNoPreorderNote').classList.toggle('d-none', hasPreorder);
+    document.getElementById('resDepositBox').classList.toggle('d-none', !hasPreorder || deposit <= 0);
+
     const help = document.getElementById('resDepositHelp');
     if (help) {
-      help.textContent = `Depósito del ${percent}% del pre-pedido. Se abona al consumo; el restaurante cobrará ${money(remaining)} en mesa.`;
+      help.textContent = deposit > 0
+        ? `Depósito del ${percent}% del pre-pedido. Se abona al consumo; el restaurante cobrará ${money(remaining)} en mesa.`
+        : 'Tu restaurante no pide depósito para pre-pedidos. Solo se cobra la cuota de servicio en línea.';
     }
     const bankBox = document.getElementById('resBankInfo');
-    if (bankBox && subtotal > 0) {
+    if (bankBox && hasPreorder && deposit > 0) {
       bankBox.innerHTML = bank
         ? `<strong>Transferencia a TuPedidoJR</strong><br>Banco: ${esc(bank.bank_name || '—')}<br>Titular: ${esc(bank.account_holder || '—')}<br>CLABE: ${esc(bank.clabe || '—')}`
         : '<span class="text-danger">La cuenta bancaria aún no está configurada.</span>';
     }
+
+    const bar = document.getElementById('reserveMobileBar');
+    if (bar) {
+      bar.classList.toggle('d-none', !hasPreorder);
+      document.body.classList.toggle('has-reserve-bar', hasPreorder);
+      document.getElementById('barOnlineTotal').textContent = money(online);
+      document.getElementById('barItems').textContent = hasPreorder
+        ? `${totalQty} artículo${totalQty === 1 ? '' : 's'} · depósito ${money(deposit)}`
+        : 'Sin pre-pedido';
+    }
   }
 
-  function renderMenu() {
-    const box = document.getElementById('reserveMenu');
-    const categories = {};
-    (restaurant.categories || []).forEach(c => { categories[c.id] = c.name; });
-    const groups = {};
-    menuItems.forEach(item => {
-      const key = item.category_id || 'otros';
-      (groups[key] = groups[key] || []).push(item);
-    });
-    box.innerHTML = Object.entries(groups).map(([key, items]) => `
+  function readCustomSelection(modalEl) {
+    const item = activeCustomItem;
+    const selected = [...modalEl.querySelectorAll('.option-choice:checked')];
+    let unit = Number(item?.price || 0);
+    const names = [];
+    const ids = [];
+    for (const groupEl of modalEl.querySelectorAll('.option-group')) {
+      const chosen = selected.filter(input => input.name === `res_group_${groupEl.dataset.group}`);
+      if (!chosen.length) continue;
+      if (groupEl.dataset.pricing === 'max') {
+        unit = Math.max(unit, ...chosen.map(input => Number(input.dataset.price || 0)));
+        chosen.forEach(input => {
+          names.push(`${input.dataset.name} (1/${chosen.length})`);
+          ids.push(input.value);
+        });
+      } else {
+        unit += chosen.reduce((sum, input) => sum + Number(input.dataset.price || 0), 0);
+        chosen.forEach(input => {
+          names.push(input.dataset.name);
+          ids.push(input.value);
+        });
+      }
+    }
+    return { selected, unit: Math.round(unit * 100) / 100, names, ids };
+  }
+
+  function openCustomizer(itemId) {
+    const item = byId(itemId);
+    if (!item) return;
+    activeCustomItem = item;
+    const groups = item.option_groups || [];
+    const existing = customizations[item.id];
+    const existingIds = new Set((existing?.option_ids || []).map(String));
+
+    document.getElementById('reserveItemTitle').textContent = item.name;
+    document.getElementById('reserveItemBody').innerHTML = `
+      <div class="d-flex gap-3 mb-3">
+        ${item.image_url ? `<img src="${esc(item.image_url)}" alt="${esc(item.name)}" class="reserve-modal-img">` : ''}
+        <div>
+          ${item.description ? `<p class="small text-muted mb-1">${esc(item.description)}</p>` : ''}
+          <div class="fw-bold">${money(item.price)}</div>
+          <div class="small text-muted">Precio base</div>
+        </div>
+      </div>
       <div class="mb-3">
-        <div class="small fw-bold text-muted mb-1">${esc(categories[key] || 'Otros')}</div>
-        ${items.map(item => `
-          <div class="d-flex justify-content-between align-items-center gap-2 py-1 border-bottom">
-            <div class="min-w-0">
-              <div class="small fw-bold">${esc(item.name)}</div>
-              <div class="text-muted small">${money(item.price)}</div>
-            </div>
-            <input type="number" min="0" max="20" step="1" value="0" class="form-control form-control-sm"
-                   id="qty_${item.id}" style="width:72px" oninput="updateTotals()">
-          </div>`).join('')}
-      </div>`).join('') || '<p class="text-muted mb-0">Este restaurante no tiene platillos disponibles.</p>';
+        <label class="form-label small mb-1" for="reserveItemQty">Cantidad</label>
+        <input type="number" min="1" max="50" step="1" value="${qtyOf(item.id) || 1}"
+               id="reserveItemQty" class="form-control" style="max-width:110px">
+      </div>
+      ${groups.map(group => `
+        <div class="mb-3 option-group" data-group="${group.id}" data-pricing="${group.pricing_mode || 'delta'}"
+             data-type="${group.selection_type}" data-min="${group.min_selections}"
+             data-max="${group.max_selections}" data-required="${group.is_required}">
+          <strong>${esc(group.name)} ${group.is_required ? '<span class="text-danger">*</span>' : ''}</strong>
+          <div class="small text-muted mb-1">${group.pricing_mode === 'max'
+            ? `Elige hasta ${group.max_selections} ingredientes. El precio se divide en partes iguales.`
+            : (group.selection_type === 'single' ? 'Elige una opción' : `Puedes elegir hasta ${group.max_selections}`)}</div>
+          ${(group.options || []).map((option, optionIndex) => {
+            const checked = existingIds.has(String(option.id)) ||
+              (!existing && group.pricing_mode === 'max' && group.is_required && optionIndex === 0);
+            return `<div class="form-check">
+              <input class="form-check-input option-choice" type="${group.selection_type === 'single' ? 'radio' : 'checkbox'}"
+                     name="res_group_${group.id}" value="${option.id}"
+                     data-name="${esc(group.name + ': ' + option.name)}"
+                     data-group-name="${esc(group.name)}"
+                     data-price="${option.price_delta}"
+                     ${checked ? 'checked' : ''}
+                     ${option.is_available ? '' : 'disabled'}>
+              <label class="form-check-label ${option.is_available ? '' : 'text-muted'}">
+                ${esc(option.name)}
+                ${group.pricing_mode === 'max'
+                  ? ` ${money(option.price_delta)} completo`
+                  : (parseFloat(option.price_delta) > 0 ? ` +${money(option.price_delta)}` : '')}
+                ${option.is_available ? '' : ' (agotado)'}
+              </label>
+            </div>`;
+          }).join('')}
+        </div>`).join('')}
+      <div class="fw-bold fs-5">Precio unitario: <span id="reserveItemPrice">${money(item.price)}</span></div>`;
+
+    const modalEl = document.getElementById('reserveItemModal');
+    modalEl.querySelectorAll('.option-choice').forEach(input => {
+      input.addEventListener('change', () => {
+        const result = readCustomSelection(modalEl);
+        document.getElementById('reserveItemPrice').textContent = money(result.unit);
+        document.getElementById('reserveItemSave').textContent = `Agregar ${money(result.unit)}`;
+      });
+    });
+    document.getElementById('reserveItemSave').textContent = `Agregar ${money(existing?.unit_price ?? item.price)}`;
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  }
+
+  function saveCustomizer() {
+    const item = activeCustomItem;
+    const modalEl = document.getElementById('reserveItemModal');
+    if (!item || !modalEl) return;
+    const selected = [...modalEl.querySelectorAll('.option-choice:checked')];
+    for (const groupEl of modalEl.querySelectorAll('.option-group')) {
+      const chosen = selected.filter(input => input.name === `res_group_${groupEl.dataset.group}`);
+      const min = Number(groupEl.dataset.min || 0);
+      const max = Number(groupEl.dataset.max || 1);
+      const required = groupEl.dataset.required === 'true';
+      if (required && chosen.length < Math.max(min, 1)) {
+        showToast(`Elige una opción en ${groupEl.querySelector('strong').textContent.trim()}`, 'warning');
+        return;
+      }
+      if (chosen.length < min) {
+        showToast(`Elige al menos ${min} opción(es) en ${groupEl.querySelector('strong').textContent.trim()}`, 'warning');
+        return;
+      }
+      if (chosen.length > max) {
+        showToast(`Elige máximo ${max} opción(es) en ${groupEl.querySelector('strong').textContent.trim()}`, 'warning');
+        return;
+      }
+    }
+    const result = readCustomSelection(modalEl);
+    const quantity = Math.max(1, Math.min(50, parseInt(document.getElementById('reserveItemQty').value, 10) || 1));
+    customizations[item.id] = {
+      option_ids: result.ids,
+      unit_price: result.unit,
+      names: result.names,
+    };
+    quantities[item.id] = quantity;
+    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+    renderMenu();
+    updateTotals();
+    showToast(`${item.name} agregado al pre-pedido`);
   }
 
   function setupDate() {
@@ -168,8 +652,14 @@
     const when = document.getElementById('resDate').value;
     if (!when) { showToast('Elige la fecha y hora', 'warning'); return; }
     const items = selectedItems();
+    const subtotal = items.reduce((sum, row) => {
+      const item = byId(row.menu_item_id);
+      return sum + (item ? unitPrice(item) * row.quantity : 0);
+    }, 0);
+    const percent = Number(restaurant?.reservation_deposit_percent || 20);
+    const deposit = subtotal > 0 ? subtotal * percent / 100 : 0;
     let proofUrl = null;
-    if (items.length) {
+    if (deposit > 0) {
       const file = document.getElementById('resProof')?.files?.[0];
       if (!file) { showToast('Sube el comprobante de transferencia del depósito', 'warning'); return; }
       const btn = document.getElementById('reserveBtn');
@@ -215,9 +705,51 @@
       document.getElementById('reserveRestaurantName').textContent = restaurant.name;
       menuItems = (restaurant.menu || []).filter(item => item.is_available);
       try { bank = await getBankDetails(); } catch (e) { bank = null; }
+
+      const cats = categoriesWithItems();
+      if (menuItems.length > 10 && cats.length) selectedCategory = cats[0].id;
+      renderCategories();
       renderMenu();
       setupDate();
       updateTotals();
+
+      document.getElementById('resMenuSearch').addEventListener('input', (event) => {
+        searchTerm = event.target.value;
+        if (searchTerm) {
+          selectedCategory = 'all';
+          renderCategories();
+        }
+        document.getElementById('resMenuClear').classList.toggle('d-none', !searchTerm);
+        renderMenu();
+      });
+      document.getElementById('resMenuClear').addEventListener('click', () => {
+        searchTerm = '';
+        document.getElementById('resMenuSearch').value = '';
+        document.getElementById('resMenuClear').classList.add('d-none');
+        renderMenu();
+      });
+      document.getElementById('reserveCategories').addEventListener('click', (event) => {
+        const chip = event.target.closest('[data-cat]');
+        if (!chip) return;
+        selectedCategory = chip.dataset.cat;
+        searchTerm = '';
+        document.getElementById('resMenuSearch').value = '';
+        document.getElementById('resMenuClear').classList.add('d-none');
+        renderCategories();
+        renderMenu();
+      });
+      document.getElementById('reserveMenu').addEventListener('click', (event) => {
+        const add = event.target.closest('.menu-add');
+        if (add) { setQuantity(add.dataset.id, 1); return; }
+        const plus = event.target.closest('[data-action="plus"]');
+        if (plus) { setQuantity(plus.dataset.id, qtyOf(plus.dataset.id) + 1); return; }
+        const minus = event.target.closest('[data-action="minus"]');
+        if (minus) { setQuantity(minus.dataset.id, qtyOf(minus.dataset.id) - 1); return; }
+        const customize = event.target.closest('.menu-customize');
+        if (customize) { openCustomizer(customize.dataset.id); }
+      });
+      document.getElementById('reserveItemSave').addEventListener('click', saveCustomizer);
+
       document.getElementById('reserveLoading').classList.add('d-none');
       document.getElementById('reserveContent').classList.remove('d-none');
     } catch (e) {

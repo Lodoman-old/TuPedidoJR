@@ -34,9 +34,14 @@
 
   function itemsHtml(items) {
     if (!items || !items.length) return '<p class="small text-muted mb-0">Sin pre-pedido: solo reservación de mesa.</p>';
-    return items.map(item => `<div class="d-flex justify-content-between small py-1">
-      <span>${item.quantity}x ${esc(item.name)}</span>
-      <span>${money(Number(item.unit_price) * Number(item.quantity))}</span>
+    return items.map(item => `<div class="py-1">
+      <div class="d-flex justify-content-between small">
+        <span>${item.quantity}x ${esc(item.name)}</span>
+        <span>${money(Number(item.unit_price) * Number(item.quantity))}</span>
+      </div>
+      ${(item.options || []).length
+        ? `<div class="small text-muted ms-3">${item.options.map(option => esc(option.name)).join(' · ')}</div>`
+        : ''}
     </div>`).join('');
   }
 

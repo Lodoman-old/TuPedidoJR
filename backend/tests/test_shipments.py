@@ -99,14 +99,18 @@ async def _create(client, token, store, collect=250, paid_by="store", **extra):
     )
 
 
-async def _accept_pickup(client, token, shipment_id):
+PICKUP_PHOTO = "https://example.com/pickup.jpg"
+DELIVERY_PHOTO = "https://example.com/delivery.jpg"
+
+
+async def _accept_pickup(client, token, shipment_id, pickup_code, photo=PICKUP_PHOTO):
     accept = await client.patch(
         f"/api/v1/delivery/shipments/{shipment_id}/accept", headers=_headers(token)
     )
     assert accept.status_code == 200, accept.text
     pickup = await client.patch(
         f"/api/v1/delivery/shipments/{shipment_id}/pickup",
-        json={"pickup_photo_url": None},
+        json={"pickup_code": pickup_code, "pickup_photo_url": photo},
         headers=_headers(token),
     )
     assert pickup.status_code == 200, pickup.text
@@ -175,7 +179,7 @@ class TestShipmentCourier:
         assert available.status_code == 200
         assert any(x["id"] == created["id"] for x in available.json())
 
-        await _accept_pickup(client, token, created["id"])
+        await _accept_pickup(client, token, created["id"], created["pickup_code"])
 
         public = await client.get(f"/api/v1/shipments/public/{created['public_token']}")
         assert public.status_code == 200
@@ -183,15 +187,25 @@ class TestShipmentCourier:
 
         delivered = await client.patch(
             f"/api/v1/delivery/shipments/{created['id']}/deliver",
-            json={"delivery_code": created["delivery_code"], "cash_collected": 250},
+            json={
+                "delivery_code": created["delivery_code"],
+                "delivery_photo_url": DELIVERY_PHOTO,
+                "cash_collected": 250,
+            },
             headers=_headers(token),
         )
         assert delivered.status_code == 200, delivered.text
         s = delivered.json()
         assert s["status"] == "delivered"
         assert s["cod_status"] == "collected"
-        assert Decimal(s["store_credit"]) == Decimal("250.00")
         assert Decimal(s["courier_earnings"]) == Decimal(s["delivery_fee"])
+
+        store_view = await client.get(
+            f"/api/v1/restaurants/{store.id}/shipments/{created['id']}",
+            headers=_headers(owner_token),
+        )
+        assert store_view.status_code == 200
+        assert Decimal(store_view.json()["store_credit"]) == Decimal("250.00")
 
         await db_session.refresh(dp)
         expected_debt = Decimal("250.00") - Decimal(s["courier_earnings"])
@@ -208,41 +222,103 @@ class TestShipmentCourier:
         created = (await _create(
             client, owner_token, store, collect=100, paid_by="recipient"
         )).json()
-        await _accept_pickup(client, token, created["id"])
+        await _accept_pickup(client, token, created["id"], created["pickup_code"])
         delivered = await client.patch(
             f"/api/v1/delivery/shipments/{created['id']}/deliver",
             json={
                 "delivery_code": created["delivery_code"],
+                "delivery_photo_url": DELIVERY_PHOTO,
                 "cash_collected": created["amount_to_collect"],
             },
             headers=_headers(token),
         )
         assert delivered.status_code == 200, delivered.text
-        s = delivered.json()
+        store_view = await client.get(
+            f"/api/v1/restaurants/{store.id}/shipments/{created['id']}",
+            headers=_headers(owner_token),
+        )
+        assert store_view.status_code == 200
+        s = store_view.json()
         assert Decimal(s["store_credit"]) == Decimal("100.00")
         assert Decimal(s["store_charge"]) == Decimal("10.00")
         await db_session.refresh(dp)
         assert Decimal(dp.pending_platform_debt) == Decimal("100.00")
 
-    async def test_delivery_requires_code_or_photo(
+    async def test_pickup_requires_code_and_photo(
         self, client, owner_token, store, courier
     ):
         token, _dp = courier
         created = (await _create(client, owner_token, store)).json()
-        await _accept_pickup(client, token, created["id"])
-        resp = await client.patch(
-            f"/api/v1/delivery/shipments/{created['id']}/deliver",
-            json={},
+        accept = await client.patch(
+            f"/api/v1/delivery/shipments/{created['id']}/accept",
             headers=_headers(token),
         )
-        assert resp.status_code == 400
+        assert accept.status_code == 200
+
+        no_photo = await client.patch(
+            f"/api/v1/delivery/shipments/{created['id']}/pickup",
+            json={"pickup_code": created["pickup_code"]},
+            headers=_headers(token),
+        )
+        assert no_photo.status_code == 400
+
+        wrong_code = await client.patch(
+            f"/api/v1/delivery/shipments/{created['id']}/pickup",
+            json={"pickup_code": "000000", "pickup_photo_url": PICKUP_PHOTO},
+            headers=_headers(token),
+        )
+        assert wrong_code.status_code == 400
+
+        ok = await client.patch(
+            f"/api/v1/delivery/shipments/{created['id']}/pickup",
+            json={
+                "pickup_code": created["pickup_code"],
+                "pickup_photo_url": PICKUP_PHOTO,
+            },
+            headers=_headers(token),
+        )
+        assert ok.status_code == 200, ok.text
+        assert ok.json()["status"] == "picked_up"
+
+    async def test_delivery_requires_code_and_photo(
+        self, client, owner_token, store, courier
+    ):
+        token, _dp = courier
+        created = (await _create(client, owner_token, store)).json()
+        await _accept_pickup(client, token, created["id"], created["pickup_code"])
+
+        code_only = await client.patch(
+            f"/api/v1/delivery/shipments/{created['id']}/deliver",
+            json={"delivery_code": created["delivery_code"]},
+            headers=_headers(token),
+        )
+        assert code_only.status_code == 400
+
+        photo_only = await client.patch(
+            f"/api/v1/delivery/shipments/{created['id']}/deliver",
+            json={"delivery_photo_url": DELIVERY_PHOTO},
+            headers=_headers(token),
+        )
+        assert photo_only.status_code == 400
+
+        both = await client.patch(
+            f"/api/v1/delivery/shipments/{created['id']}/deliver",
+            json={
+                "delivery_code": created["delivery_code"],
+                "delivery_photo_url": DELIVERY_PHOTO,
+                "cash_collected": 250,
+            },
+            headers=_headers(token),
+        )
+        assert both.status_code == 200, both.text
+        assert both.json()["status"] == "delivered"
 
     async def test_failed_delivery_charges_half_shipping(
         self, client, owner_token, store, courier
     ):
         token, _dp = courier
         created = (await _create(client, owner_token, store)).json()
-        await _accept_pickup(client, token, created["id"])
+        await _accept_pickup(client, token, created["id"], created["pickup_code"])
         failed = await client.patch(
             f"/api/v1/delivery/shipments/{created['id']}/fail",
             json={"reason": "El cliente no estaba"},

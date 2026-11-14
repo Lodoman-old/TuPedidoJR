@@ -854,8 +854,12 @@ function showShipmentPickup(id) {
   const el = document.getElementById('tab-shipments');
   el.innerHTML = `<div class="dp-card">
     <strong>Recoger paquete</strong>
-    <div class="alert alert-info small py-2 mt-2">Confirma que ya tienes el paquete en el negocio.</div>
-    <label class="form-label">Foto del paquete (opcional)</label>
+    <div class="alert alert-info small py-2 mt-2">Pide el código de recolección al negocio y toma una foto del paquete.</div>
+    <div class="mb-2">
+      <label class="form-label">Código de recolección (lo da el negocio)</label>
+      <input id="shipPickupCode" class="form-control" maxlength="6" inputmode="numeric" placeholder="000000">
+    </div>
+    <label class="form-label">Foto del paquete (obligatoria)</label>
     <input id="shipPickupPhoto" class="form-control" type="file" accept="image/*" capture="environment">
     <button class="btn btn-primary mt-2" onclick="submitShipmentPickup('${id}')">Confirmar recolección</button>
     <button class="btn btn-outline-secondary mt-2" onclick="loadShipmentsWeb()">Cancelar</button>
@@ -864,16 +868,24 @@ function showShipmentPickup(id) {
 }
 
 async function submitShipmentPickup(id) {
+  const code = (document.getElementById('shipPickupCode').value || '').trim();
   const file = document.getElementById('shipPickupPhoto').files[0];
-  let photoUrl = null;
   const status = document.getElementById('shipPickupStatus');
+  if (!code) {
+    status.innerHTML = '<div class="alert alert-warning py-2">Pide el código de recolección al negocio.</div>';
+    return;
+  }
+  if (!file) {
+    status.innerHTML = '<div class="alert alert-warning py-2">Sube una foto del paquete.</div>';
+    return;
+  }
   try {
-    if (file) {
-      status.textContent = 'Subiendo foto...';
-      const uploaded = await uploadDocument(file);
-      photoUrl = uploaded.url;
-    }
-    await apiRequest('PATCH', `/delivery/shipments/${id}/pickup`, { pickup_photo_url: photoUrl });
+    status.textContent = 'Subiendo foto...';
+    const uploaded = await uploadDocument(file);
+    await apiRequest('PATCH', `/delivery/shipments/${id}/pickup`, {
+      pickup_code: code,
+      pickup_photo_url: uploaded.url,
+    });
     showToast('Paquete recogido');
     loadShipmentsWeb();
   } catch (e) {
@@ -886,12 +898,12 @@ function showShipmentDeliver(id, amount) {
   el.innerHTML = `<div class="dp-card">
     <strong>Entregar paquete</strong>
     <div class="mb-2">
-      <label class="form-label">Código de 4 dígitos del cliente</label>
+      <label class="form-label">Código de 4 dígitos del cliente (obligatorio)</label>
       <input id="shipDeliveryCode" class="form-control" maxlength="4" inputmode="numeric" placeholder="0000">
-      <div class="form-text">El cliente lo ve en su link de seguimiento. También puedes subir una foto.</div>
+      <div class="form-text">El cliente lo ve en su link de seguimiento.</div>
     </div>
     <div class="mb-2">
-      <label class="form-label">Foto de entrega</label>
+      <label class="form-label">Foto de entrega (obligatoria)</label>
       <input id="shipDeliveryPhoto" class="form-control" type="file" accept="image/*" capture="environment">
     </div>
     <div class="mb-2" id="shipCashBox" style="${Number(amount) > 0 ? '' : 'display:none'}">
@@ -910,20 +922,20 @@ async function submitShipmentDeliver(id, amount) {
   const cashInput = document.getElementById('shipCash');
   const cash = cashInput ? Number(cashInput.value || 0) : 0;
   const status = document.getElementById('shipDeliverStatus');
-  if (!code && !file) {
-    status.innerHTML = '<div class="alert alert-warning py-2">Pide el código o sube una foto de entrega.</div>';
+  if (!code) {
+    status.innerHTML = '<div class="alert alert-warning py-2">Pide el código de entrega al cliente.</div>';
+    return;
+  }
+  if (!file) {
+    status.innerHTML = '<div class="alert alert-warning py-2">Sube una foto de entrega.</div>';
     return;
   }
   try {
-    let photoUrl = null;
-    if (file) {
-      status.textContent = 'Subiendo foto...';
-      const uploaded = await uploadDocument(file);
-      photoUrl = uploaded.url;
-    }
+    status.textContent = 'Subiendo foto...';
+    const uploaded = await uploadDocument(file);
     await apiRequest('PATCH', `/delivery/shipments/${id}/deliver`, {
-      delivery_code: code || null,
-      delivery_photo_url: photoUrl,
+      delivery_code: code,
+      delivery_photo_url: uploaded.url,
       cash_collected: Number(amount) > 0 ? cash : 0,
     });
     showToast('Envío entregado');

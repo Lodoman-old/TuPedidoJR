@@ -14,6 +14,7 @@ from app.models.shipment import Shipment
 from app.models.user import User
 from app.schemas.shipment import (
     ShipmentCancel,
+    ShipmentCourierOut,
     ShipmentCreate,
     ShipmentDeliver,
     ShipmentFail,
@@ -265,7 +266,7 @@ async def cancel_store_shipment(
 # ---------------------------------------------------------------------------
 # Repartidor
 # ---------------------------------------------------------------------------
-@courier_router.get("/shipments", response_model=list[ShipmentOut])
+@courier_router.get("/shipments", response_model=list[ShipmentCourierOut])
 async def list_courier_shipments(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -286,7 +287,7 @@ async def list_courier_shipments(
     return list(result.scalars().all())
 
 
-@courier_router.get("/shipments/{shipment_id}", response_model=ShipmentOut)
+@courier_router.get("/shipments/{shipment_id}", response_model=ShipmentCourierOut)
 async def get_courier_shipment(
     shipment_id: str,
     db: AsyncSession = Depends(get_db),
@@ -299,7 +300,7 @@ async def get_courier_shipment(
     return shipment
 
 
-@courier_router.patch("/shipments/{shipment_id}/accept", response_model=ShipmentOut)
+@courier_router.patch("/shipments/{shipment_id}/accept", response_model=ShipmentCourierOut)
 async def accept_shipment(
     shipment_id: str,
     db: AsyncSession = Depends(get_db),
@@ -323,7 +324,7 @@ async def accept_shipment(
     return shipment
 
 
-@courier_router.patch("/shipments/{shipment_id}/pickup", response_model=ShipmentOut)
+@courier_router.patch("/shipments/{shipment_id}/pickup", response_model=ShipmentCourierOut)
 async def pickup_shipment(
     shipment_id: str,
     body: ShipmentPickup,
@@ -336,16 +337,27 @@ async def pickup_shipment(
         raise HTTPException(status_code=403, detail="No eres el repartidor asignado")
     if shipment.status != "accepted":
         raise HTTPException(status_code=400, detail="El envío no está listo para recoger")
+    photo = (body.pickup_photo_url or "").strip()
+    if not photo:
+        raise HTTPException(
+            status_code=400,
+            detail="Sube una foto del paquete al recogerlo.",
+        )
+    if shipment.pickup_code and (body.pickup_code or "").strip() != shipment.pickup_code:
+        raise HTTPException(
+            status_code=400,
+            detail="El código de recolección no coincide con el del negocio.",
+        )
     shipment.status = "picked_up"
     shipment.picked_up_at = datetime.now(timezone.utc)
-    shipment.pickup_photo_url = (body.pickup_photo_url or "").strip() or None
+    shipment.pickup_photo_url = photo
     await db.commit()
     await db.refresh(shipment)
     schedule_shipment_status(str(shipment.id), "picked_up")
     return shipment
 
 
-@courier_router.patch("/shipments/{shipment_id}/deliver", response_model=ShipmentOut)
+@courier_router.patch("/shipments/{shipment_id}/deliver", response_model=ShipmentCourierOut)
 async def deliver_shipment(
     shipment_id: str,
     body: ShipmentDeliver,
@@ -359,16 +371,21 @@ async def deliver_shipment(
     if shipment.status != "picked_up":
         raise HTTPException(status_code=400, detail="Primero marca que recogiste el paquete")
 
-    photo = (body.delivery_photo_url or "").strip() or None
+    photo = (body.delivery_photo_url or "").strip()
+    if not photo:
+        raise HTTPException(
+            status_code=400,
+            detail="Sube una foto de entrega.",
+        )
     code_ok = bool(
         shipment.delivery_code
         and body.delivery_code
         and body.delivery_code.strip() == shipment.delivery_code
     )
-    if not code_ok and not photo:
+    if not code_ok:
         raise HTTPException(
             status_code=400,
-            detail="Confirma la entrega con el código del cliente o con una foto.",
+            detail="El código de entrega no coincide con el del cliente.",
         )
 
     expected = money(shipment.amount_to_collect)
@@ -407,7 +424,7 @@ async def deliver_shipment(
     return shipment
 
 
-@courier_router.patch("/shipments/{shipment_id}/fail", response_model=ShipmentOut)
+@courier_router.patch("/shipments/{shipment_id}/fail", response_model=ShipmentCourierOut)
 async def fail_shipment(
     shipment_id: str,
     body: ShipmentFail,

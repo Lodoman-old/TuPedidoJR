@@ -80,7 +80,42 @@ class ShipmentOut(BaseModel):
         from_attributes = True
 
 
+class ShipmentCourierOut(BaseModel):
+    """Vista del envío para el repartidor: sin códigos ni token público."""
+
+    id: UUID
+    store_id: UUID
+    delivery_person_id: UUID | None
+    status: str
+    recipient_name: str
+    recipient_phone: str
+    delivery_address: str
+    delivery_references: str | None = None
+    package_description: str
+    delivery_fee: Decimal
+    platform_fee: Decimal
+    distance_km: Decimal | None = None
+    tip_amount: Decimal
+    collect_amount: Decimal
+    amount_to_collect: Decimal
+    shipping_paid_by: str
+    cod_status: str
+    courier_earnings: Decimal
+    return_fee: Decimal = Decimal("0")
+    failure_reason: str | None = None
+    pickup_photo_url: str | None = None
+    delivery_photo_url: str | None = None
+    accepted_at: datetime | None = None
+    picked_up_at: datetime | None = None
+    delivered_at: datetime | None = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class ShipmentPickup(BaseModel):
+    pickup_code: str = Field(..., min_length=4, max_length=6)
     pickup_photo_url: str | None = Field(default=None, max_length=1000)
 
 

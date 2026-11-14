@@ -391,6 +391,11 @@
       <p class="mb-1"><strong>Paquete:</strong> ${esc(s.package_description)}</p>
       ${s.delivery_references ? `<p class="mb-1"><strong>Referencias:</strong> ${esc(s.delivery_references)}</p>` : ''}
       <p class="mb-3"><strong>Cargo a tu negocio:</strong> ${money(s.store_charge)} · <strong>Crédito por cobro:</strong> ${money(s.store_credit)}</p>
+      <div class="alert alert-warning py-2">
+        <div class="small text-uppercase">Código de recolección</div>
+        <div class="fs-4 fw-bold">${esc(s.pickup_code || '—')}</div>
+        <div class="small">Dáselo al repartidor cuando recoja el paquete.</div>
+      </div>
       <h6>Avance</h6>
       <ul class="list-unstyled small mb-3">
         ${timeline.map(([label, done, at]) => `<li class="mb-1">${done ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<i class="bi bi-circle text-muted"></i>'} ${label}${at ? ` · <span class="text-muted">${new Date(at).toLocaleString()}</span>` : ''}</li>`).join('')}

@@ -62,6 +62,7 @@
   <li>Indica cuánto cobrar en efectivo. Usa 0 si el cliente ya pagó por transferencia.</li>
   <li>Elige quién paga el envío: el negocio o se suma al contra entrega.</li>
   <li>Publica el envío y comparte el link de seguimiento por WhatsApp.</li>
+  <li>Al recoger el paquete, da al repartidor el <strong>código de recolección</strong> que aparece en el detalle del envío.</li>
 </ol>
 <table>
   <tr><th>Concepto</th><th>Valor actual</th></tr>
@@ -70,7 +71,7 @@
   <tr><td>Máximo de cobro contra entrega</td><td>${{ '%.2f'|format(shipment_cod_max|float) }}</td></tr>
   <tr><td>Retorno si el cliente no recibe</td><td>{{ '%.0f'|format(shipment_return_percent|float) }}% del envío</td></tr>
 </table>
-<div class="note">El cliente final no necesita cuenta: recibe un link de seguimiento y un código de entrega por WhatsApp. El repartidor confirma con ese código o con una foto. La comisión es fija por envío, no un porcentaje sobre el producto.</div>
+<div class="note">El cliente final no necesita cuenta: recibe un link de seguimiento y un código de entrega por WhatsApp. El repartidor confirma la recolección con el <strong>código del negocio y una foto</strong>; la entrega con el <strong>código del cliente y una foto</strong>. La comisión es fija por envío, no un porcentaje sobre el producto.</div>
 
 <h3>7. Pedido para recoger</h3>
 <ol>

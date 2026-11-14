@@ -218,7 +218,9 @@
           if (!isStore) {
             buttons.push(`<a href="/web/restaurants/${RID}/reservations" class="btn btn-sm btn-nav-reservations"><i class="bi bi-calendar-check"></i> Reservaciones</a>`);
           }
-          buttons.push(`<a href="/web/restaurants/${RID}/requests" class="btn btn-sm btn-nav-requests"><i class="bi bi-chat-square-text"></i> Solicitudes</a>`);
+          if (isStore || r.accepts_custom_requests) {
+            buttons.push(`<a href="/web/restaurants/${RID}/requests" class="btn btn-sm btn-nav-requests"><i class="bi bi-chat-square-text"></i> ${isStore ? 'Solicitudes' : 'Pedidos especiales'}</a>`);
+          }
           buttons.push(`<a href="/web/restaurants/${RID}/shipments" class="btn btn-sm btn-nav-shipments"><i class="bi bi-box-seam"></i> Envíos</a>`);
           if (canFinance) {
             buttons.push(`<a href="/web/restaurants/${RID}/earnings" class="btn btn-sm btn-nav-earnings"><i class="bi bi-cash-stack"></i> Ganancias</a>`);

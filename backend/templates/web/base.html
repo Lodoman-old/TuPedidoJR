@@ -155,7 +155,7 @@
               <li><a class="dropdown-item" data-rnav="panel" href="#"><i class="bi bi-speedometer2"></i> Panel</a></li>
               <li><a class="dropdown-item" data-rnav="orders" href="#"><i class="bi bi-receipt"></i> Pedidos <span id="restaurantPendingBadge" class="badge rounded-pill bg-danger d-none">0</span></a></li>
               <li><a class="dropdown-item rnav-restaurant-only" data-rnav="reservations" href="#"><i class="bi bi-calendar-check"></i> Reservaciones</a></li>
-              <li><a class="dropdown-item" data-rnav="requests" href="#"><i class="bi bi-chat-square-text"></i> Solicitudes</a></li>
+              <li class="rnav-requests"><a class="dropdown-item" data-rnav="requests" href="#"><i class="bi bi-chat-square-text"></i> <span id="requestsNavLabel">Solicitudes</span></a></li>
               <li><a class="dropdown-item" data-rnav="shipments" href="#"><i class="bi bi-box-seam"></i> Envíos</a></li>
               <li class="rnav-manager"><a class="dropdown-item" data-rnav="earnings" href="#"><i class="bi bi-cash-stack"></i> Ganancias</a></li>
               <li class="rnav-manager"><a class="dropdown-item" data-rnav="team" href="#"><i class="bi bi-people"></i> Equipo</a></li>
@@ -677,16 +677,19 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         sessionStorage.setItem('is_restaurant_staff', isRestaurantStaff ? 'true' : 'false');
         let isRestaurantManager = false;
         let myBusinessType = 'restaurant';
+        let myAcceptsRequests = false;
         if (isRestaurantStaff && myRestaurantId) {
           try {
             const detail = await apiRequest('GET', `/restaurants/${myRestaurantId}`);
             isRestaurantManager = ['owner', 'manager', 'admin'].includes(detail.viewer_role);
             myBusinessType = detail.business_type || 'restaurant';
+            myAcceptsRequests = detail.accepts_custom_requests !== false;
             renderAffiliationBanner(detail);
           } catch (e) { /* sin permiso para editar */ }
         }
         sessionStorage.setItem('is_restaurant_manager', isRestaurantManager ? 'true' : 'false');
         sessionStorage.setItem('my_business_type', myBusinessType);
+        sessionStorage.setItem('my_accepts_requests', myAcceptsRequests ? 'true' : 'false');
         if (myRestaurantId) sessionStorage.setItem('my_restaurant_id', myRestaurantId);
         else sessionStorage.removeItem('my_restaurant_id');
         applyRestaurantNav(isRestaurantStaff, myRestaurantId, isRestaurantManager);
@@ -837,6 +840,14 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
       menu?.querySelectorAll('.rnav-restaurant-only').forEach(el => {
         el.classList.toggle('d-none', businessType !== 'restaurant');
       });
+      const acceptsRequests = sessionStorage.getItem('my_accepts_requests') === 'true';
+      menu?.querySelectorAll('.rnav-requests').forEach(el => {
+        el.classList.toggle('d-none', businessType === 'restaurant' && !acceptsRequests);
+      });
+      const requestsLabel = document.getElementById('requestsNavLabel');
+      if (requestsLabel) {
+        requestsLabel.textContent = businessType === 'restaurant' ? 'Pedidos especiales' : 'Solicitudes';
+      }
       if (menu && restaurantId) {
         const routes = {
           panel: '', orders: '/orders', reservations: '/reservations', requests: '/requests', shipments: '/shipments', earnings: '/earnings',

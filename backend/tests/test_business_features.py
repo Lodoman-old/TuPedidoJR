@@ -1407,6 +1407,7 @@ class TestRestaurantRegistrationAndTeam:
         )
         assert detail.status_code == 200
         assert detail.json()["viewer_role"] == "owner"
+        assert detail.json()["accepts_custom_requests"] is False
 
         member = await client.post(
             f"/api/v1/restaurants/{restaurant_id}/team",
@@ -1443,6 +1444,25 @@ class TestRestaurantRegistrationAndTeam:
             headers=_headers(staff_token),
         )
         assert denied.status_code == 403
+
+    async def test_store_registration_keeps_custom_requests(self, client, db_session):
+        registered = await client.post("/api/v1/restaurant-registration", json={
+            "owner_name": "Tienda Nueva",
+            "email": "tienda-nueva@test.com",
+            "phone": "4121234567",
+            "password": "pass123",
+            "restaurant_name": "Abarrotes Nueva",
+            "cuisine": "Abarrotes",
+            "business_type": "store",
+            "address": "Calle 2, Centro",
+            "lat": 20.6449,
+            "lng": -100.9945,
+        })
+        assert registered.status_code == 201
+        rid = registered.json()["restaurant_id"]
+        row = await db_session.get(Restaurant, uuid.UUID(rid))
+        await db_session.refresh(row)
+        assert row.accepts_custom_requests is True
 
     async def test_public_pages_and_password_reset_flow(self, client, superuser_token):
         manual = await client.get("/manuales/restaurante")

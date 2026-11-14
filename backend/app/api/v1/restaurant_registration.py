@@ -75,6 +75,7 @@ async def register_restaurant(
         public_page_enabled=False,
         delivery_mode="platform",
         business_type=body.business_type,
+        accepts_custom_requests=(body.business_type != "restaurant"),
     )
     db.add(restaurant)
     await db.flush()

@@ -2,8 +2,8 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div>
-    <h5 class="mb-0"><i class="bi bi-chat-square-text"></i> Solicitudes de producto</h5>
-    <small class="text-muted">Peticiones de clientes para productos que no están en el catálogo.</small>
+    <h5 class="mb-0" id="requestsTitle"><i class="bi bi-chat-square-text"></i> Solicitudes de producto</h5>
+    <small class="text-muted" id="requestsSubtitle">Peticiones de clientes para productos que no están en el catálogo.</small>
   </div>
   <div class="d-flex gap-2">
     <a class="btn btn-sm btn-outline-secondary" href="/web/restaurants/{{ restaurant_id }}">Volver al panel</a>
@@ -93,6 +93,24 @@
     } catch (e) { showToast(e.message, 'danger'); }
   }
 
+  let requestsAreStore = true;
+
+  async function loadRequestsHeader() {
+    try {
+      const r = await getRestaurant(RID);
+      requestsAreStore = Boolean(r.business_type && r.business_type !== 'restaurant');
+      const title = document.getElementById('requestsTitle');
+      const subtitle = document.getElementById('requestsSubtitle');
+      if (requestsAreStore) {
+        title.innerHTML = '<i class="bi bi-chat-square-text"></i> Solicitudes de producto';
+        subtitle.textContent = 'Peticiones de clientes para productos que no están en el catálogo.';
+      } else {
+        title.innerHTML = '<i class="bi bi-stars"></i> Pedidos especiales';
+        subtitle.textContent = 'Platillos o pedidos fuera del menú que el cliente solicita y el negocio cotiza.';
+      }
+    } catch (e) { /* se queda el texto por defecto */ }
+  }
+
   async function loadRequests() {
     const loading = document.getElementById('requestsLoading');
     loading.classList.remove('d-none');
@@ -100,7 +118,7 @@
       const rows = await apiRequest('GET', `/restaurants/${RID}/requests`);
       document.getElementById('requestsList').innerHTML = rows.length
         ? rows.map(card).join('')
-        : '<div class="card p-4 text-center text-muted">Todavía no hay solicitudes de producto.</div>';
+        : `<div class="card p-4 text-center text-muted">${requestsAreStore ? 'Todavía no hay solicitudes de producto.' : 'Todavía no hay pedidos especiales.'}</div>`;
       document.getElementById('requestsError').classList.add('d-none');
     } catch (e) {
       const box = document.getElementById('requestsError');
@@ -109,6 +127,7 @@
       loading.classList.add('d-none');
     }
   }
+  loadRequestsHeader();
   loadRequests();
   setInterval(loadRequests, 30000);
 </script>

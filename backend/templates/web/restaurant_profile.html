@@ -85,18 +85,19 @@
       </div>
 
       <div class="card p-3 mb-3">
-        <h6 class="mb-1">Catálogo y solicitudes</h6>
-        <p class="small text-muted mb-2">
+        <h6 class="mb-1" id="requestsSectionTitle">Catálogo y solicitudes</h6>
+        <p class="small text-muted mb-2" id="requestsHelp">
           Si eres tienda, puedes mostrar tu catálogo y recibir pedidos de productos que no estén publicados.
         </p>
-        <div class="form-check mb-1">
+        <div class="form-check mb-1" id="catalogEnabledRow">
           <input class="form-check-input" type="checkbox" id="bizCatalogEnabled">
           <label class="form-check-label" for="bizCatalogEnabled">Mostrar catálogo de productos</label>
         </div>
         <div class="form-check">
           <input class="form-check-input" type="checkbox" id="bizAcceptsRequests">
-          <label class="form-check-label" for="bizAcceptsRequests">Aceptar solicitudes de productos no publicados</label>
+          <label class="form-check-label" for="bizAcceptsRequests" id="acceptsRequestsLabel">Aceptar solicitudes de productos no publicados</label>
         </div>
+        <div class="form-text" id="acceptsRequestsNote"></div>
       </div>
 
       <div class="card p-3 mb-3">
@@ -222,6 +223,31 @@
     el('bizReservationTolerance').value = Number(r.reservation_late_tolerance_min ?? 60);
     el('bizCatalogEnabled').checked = r.catalog_enabled !== false;
     el('bizAcceptsRequests').checked = r.accepts_custom_requests !== false;
+    const isStoreProfile = Boolean(r.business_type && r.business_type !== 'restaurant');
+    const requestsSectionTitle = el('requestsSectionTitle');
+    const requestsHelp = el('requestsHelp');
+    const catalogEnabledRow = el('catalogEnabledRow');
+    const acceptsRequestsLabel = el('acceptsRequestsLabel');
+    const acceptsRequestsNote = el('acceptsRequestsNote');
+    if (requestsSectionTitle) {
+      requestsSectionTitle.textContent = isStoreProfile ? 'Catálogo y solicitudes' : 'Catálogo y pedidos especiales';
+    }
+    if (requestsHelp) {
+      requestsHelp.textContent = isStoreProfile
+        ? 'Si eres tienda, puedes mostrar tu catálogo y recibir pedidos de productos que no estén publicados.'
+        : 'Activa los pedidos especiales para que tus clientes puedan solicitar platillos fuera del menú.';
+    }
+    if (catalogEnabledRow) catalogEnabledRow.classList.toggle('d-none', !isStoreProfile);
+    if (acceptsRequestsLabel) {
+      acceptsRequestsLabel.textContent = isStoreProfile
+        ? 'Aceptar solicitudes de productos no publicados'
+        : 'Aceptar pedidos especiales fuera del menú';
+    }
+    if (acceptsRequestsNote) {
+      acceptsRequestsNote.textContent = isStoreProfile
+        ? 'La pestaña Solicitudes siempre está visible para tiendas.'
+        : 'Si lo desactivas, la pestaña Pedidos especiales no aparece en tu panel ni el formulario público.';
+    }
     el('bizIsOpen').checked = Boolean(r.is_open);
     el('bizPublicPage').checked = Boolean(r.public_page_enabled);
     el('profileRole').textContent = ROLE_LABELS[r.viewer_role] || r.viewer_role || '';

@@ -210,6 +210,10 @@
         if (isStaff) {
           ownerPanel.classList.remove('d-none');
           const buttons = [];
+          if (canManage) {
+            buttons.push('<button class="btn btn-sm btn-outline-primary" onclick="showAddCategory()">+ Categoría</button>');
+            buttons.push(`<button class="btn btn-sm btn-outline-success" onclick="showAddItem()">+ ${isStore ? 'Producto' : 'Platillo'}</button>`);
+          }
           buttons.push(`<a href="/web/restaurants/${RID}/orders" class="btn btn-sm btn-nav-orders"><i class="bi bi-receipt"></i> Pedidos</a>`);
           if (!isStore) {
             buttons.push(`<a href="/web/restaurants/${RID}/reservations" class="btn btn-sm btn-nav-reservations"><i class="bi bi-calendar-check"></i> Reservaciones</a>`);
@@ -229,10 +233,6 @@
             buttons.push(`<a href="/web/restaurants/${RID}/profile" class="btn btn-sm btn-nav-profile"><i class="bi bi-shop-window"></i> Perfil del negocio</a>`);
           }
           buttons.push('<a href="/manuales/restaurante" target="_blank" class="btn btn-sm btn-nav-manual"><i class="bi bi-book"></i> Manual</a>');
-          if (canManage) {
-            buttons.push(`<button class="btn btn-sm btn-outline-success" onclick="showAddItem()">+ ${isStore ? 'Producto' : 'Platillo'}</button>`);
-            buttons.push('<button class="btn btn-sm btn-outline-primary" onclick="showAddCategory()">+ Categoría</button>');
-          }
           ownerPanel.innerHTML = `
             <div class="card p-3">
               <h6>${isStore ? 'Panel de la tienda' : 'Panel del restaurante'}</h6>

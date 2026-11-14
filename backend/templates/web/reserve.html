@@ -29,6 +29,22 @@
     color: #fff;
     box-shadow: 0 3px 10px rgba(27, 47, 107, .22);
   }
+  .reserve-menu-scroll {
+    max-height: clamp(320px, 55vh, 600px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #ced4da transparent;
+    padding-right: .2rem;
+    border-top: 1px solid #f1f3f5;
+    padding-top: .35rem;
+  }
+  .reserve-menu-scroll::-webkit-scrollbar { width: 8px; }
+  .reserve-menu-scroll::-webkit-scrollbar-thumb {
+    background: #ced4da;
+    border-radius: 8px;
+  }
+  .reserve-menu-scroll::-webkit-scrollbar-track { background: transparent; }
   .reserve-menu-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
@@ -136,9 +152,6 @@
     font-size: .88rem;
   }
   .reserve-menu-tools {
-    position: sticky;
-    top: 0;
-    z-index: 3;
     background: #fff;
     padding-top: .1rem;
     margin-top: -.1rem;
@@ -167,6 +180,7 @@
   body.reserve-page #floatingCart { display: none !important; }
   @media (max-width: 991.98px) {
     body.has-reserve-bar main { padding-bottom: 96px; }
+    .reserve-menu-scroll { max-height: 52vh; }
     .reserve-menu-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: .55rem;
@@ -198,6 +212,15 @@
 <div id="reserveError" class="alert alert-danger d-none"></div>
 <div id="reserveLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
 <div id="reserveContent" class="d-none">
+  <div class="alert alert-warning d-flex align-items-start gap-2 mb-3" role="alert">
+    <i class="bi bi-clock-history fs-5"></i>
+    <div class="small">
+      <strong class="d-block mb-1">Reserva con anticipación</strong>
+      <ul class="mb-0 ps-3" id="reserveAdvanceNotice">
+        <li>Consulta la anticipación mínima de este restaurante.</li>
+      </ul>
+    </div>
+  </div>
   <div class="row g-3">
     <div class="col-lg-7">
       <div class="card p-3 mb-3">
@@ -237,10 +260,15 @@
           </div>
           <div class="reserve-cat-scroll" id="reserveCategories"></div>
         </div>
-        <div id="reserveMenu" class="reserve-menu-grid"></div>
-        <div id="reserveMenuEmpty" class="text-center text-muted py-4 d-none">
-          <i class="bi bi-search fs-4 d-block mb-1"></i>
-          No encontramos platillos con esa búsqueda.
+        <div class="reserve-menu-scroll" id="reserveMenuScroll">
+          <div id="reserveMenu" class="reserve-menu-grid"></div>
+          <div id="reserveMenuEmpty" class="text-center text-muted py-4 d-none">
+            <i class="bi bi-search fs-4 d-block mb-1"></i>
+            No encontramos platillos con esa búsqueda.
+          </div>
+        </div>
+        <div class="text-center text-muted small mt-1 d-none" id="resMenuScrollHint">
+          <i class="bi bi-chevron-double-down"></i> Desliza para ver más productos
         </div>
       </div>
     </div>
@@ -428,6 +456,21 @@
     const items = filteredItems();
     box.innerHTML = items.map(menuCardHtml).join('');
     empty?.classList.toggle('d-none', items.length > 0);
+    updateMenuScrollHint();
+  }
+
+  function resetMenuScroll() {
+    const box = document.getElementById('reserveMenuScroll');
+    if (box) box.scrollTop = 0;
+  }
+
+  function updateMenuScrollHint() {
+    const box = document.getElementById('reserveMenuScroll');
+    const hint = document.getElementById('resMenuScrollHint');
+    if (!box || !hint) return;
+    const scrollable = box.scrollHeight > box.clientHeight + 4;
+    const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
+    hint.classList.toggle('d-none', !scrollable || atBottom);
   }
 
   function refreshQtyControl(itemId) {
@@ -634,6 +677,16 @@
     showToast(`${item.name} agregado al pre-pedido`);
   }
 
+  function minutesLabel(minutes) {
+    const value = Math.max(0, Number(minutes) || 0);
+    if (value >= 60) {
+      const hours = value / 60;
+      const label = Number.isInteger(hours) ? hours : hours.toFixed(1);
+      return `${label} hora${Number(label) === 1 ? '' : 's'}`;
+    }
+    return `${value} minutos`;
+  }
+
   function setupDate() {
     const minMinutes = Number(restaurant?.reservation_min_advance_min || 120);
     const date = new Date(Date.now() + minMinutes * 60000);
@@ -642,9 +695,7 @@
     const input = document.getElementById('resDate');
     input.value = iso;
     input.min = iso;
-    const hours = minMinutes >= 60 ? `${(minMinutes / 60).toFixed(minMinutes % 60 ? 1 : 0)} hora(s)` : `${minMinutes} minutos`;
-    document.getElementById('resAdvanceHint').textContent = `Mínimo ${hours} de anticipación.`;
-  }
+    document.getElementById('resAdvanceHint').textContent = `Mínimo ${minutesLabel(minMinutes)} de anticipación.`;  }
 
   async function submitReservation() {
     const error = document.getElementById('reserveError');
@@ -706,6 +757,14 @@
       menuItems = (restaurant.menu || []).filter(item => item.is_available);
       try { bank = await getBankDetails(); } catch (e) { bank = null; }
 
+      const minAdvance = Number(restaurant.reservation_min_advance_min || 120);
+      const tolerance = Number(restaurant.reservation_late_tolerance_min ?? 60);
+      const depositPercent = Number(restaurant.reservation_deposit_percent || 20);
+      document.getElementById('reserveAdvanceNotice').innerHTML = `
+        <li><strong>Anticipación mínima:</strong> ${minutesLabel(minAdvance)}.</li>
+        <li><strong>Tolerancia de llegada:</strong> ${minutesLabel(tolerance)} después de la hora reservada.</li>
+        <li><strong>Depósito:</strong> solo aplica si haces pre-pedido; es del ${depositPercent}% y se reembolsa si cancelas con 2 horas o más de anticipación.</li>`;
+
       const cats = categoriesWithItems();
       if (menuItems.length > 10 && cats.length) selectedCategory = cats[0].id;
       renderCategories();
@@ -721,12 +780,14 @@
         }
         document.getElementById('resMenuClear').classList.toggle('d-none', !searchTerm);
         renderMenu();
+        resetMenuScroll();
       });
       document.getElementById('resMenuClear').addEventListener('click', () => {
         searchTerm = '';
         document.getElementById('resMenuSearch').value = '';
         document.getElementById('resMenuClear').classList.add('d-none');
         renderMenu();
+        resetMenuScroll();
       });
       document.getElementById('reserveCategories').addEventListener('click', (event) => {
         const chip = event.target.closest('[data-cat]');
@@ -737,6 +798,7 @@
         document.getElementById('resMenuClear').classList.add('d-none');
         renderCategories();
         renderMenu();
+        resetMenuScroll();
       });
       document.getElementById('reserveMenu').addEventListener('click', (event) => {
         const add = event.target.closest('.menu-add');
@@ -750,8 +812,12 @@
       });
       document.getElementById('reserveItemSave').addEventListener('click', saveCustomizer);
 
+      document.getElementById('reserveMenuScroll').addEventListener('scroll', updateMenuScrollHint);
+      window.addEventListener('resize', updateMenuScrollHint);
+
       document.getElementById('reserveLoading').classList.add('d-none');
       document.getElementById('reserveContent').classList.remove('d-none');
+      updateMenuScrollHint();
     } catch (e) {
       document.getElementById('reserveLoading').classList.add('d-none');
       const box = document.getElementById('reserveError');

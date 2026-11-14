@@ -1,0 +1,428 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h5 class="mb-0"><i class="bi bi-box-seam"></i> Envíos a clientes</h5>
+    <small class="text-muted">Motomandados para ventas cerradas por WhatsApp, Facebook o teléfono.</small>
+  </div>
+  <button class="btn btn-primary btn-sm" onclick="openNewShipment()">
+    <i class="bi bi-plus-lg"></i> Nuevo envío
+  </button>
+</div>
+
+<div class="row g-2 mb-3" id="shipmentSummary"></div>
+
+<div class="d-flex gap-2 mb-2 flex-wrap">
+  <button class="btn btn-sm btn-outline-secondary active" data-filter="all" onclick="setFilter('all')">Todos</button>
+  <button class="btn btn-sm btn-outline-secondary" data-filter="active" onclick="setFilter('active')">Activos</button>
+  <button class="btn btn-sm btn-outline-secondary" data-filter="delivered" onclick="setFilter('delivered')">Entregados</button>
+  <button class="btn btn-sm btn-outline-secondary" data-filter="cancelled" onclick="setFilter('cancelled')">Cancelados</button>
+</div>
+
+<div id="shipmentsContainer"></div>
+<div id="shipmentsLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+
+<!-- Nuevo envío -->
+<div class="modal fade" id="newShipmentModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-box-seam"></i> Nuevo envío</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Nombre del cliente</label>
+            <input class="form-control" id="shName" placeholder="Ana López">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Teléfono</label>
+            <input class="form-control" id="shPhone" placeholder="412 000 0000">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Dirección de entrega</label>
+            <div class="input-group">
+              <input class="form-control" id="shAddress" placeholder="Calle, número, colonia">
+              <button class="btn btn-outline-secondary" type="button" onclick="locateAddress()">
+                <i class="bi bi-geo-alt"></i> Ubicar
+              </button>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Referencias</label>
+            <input class="form-control" id="shReferences" placeholder="Portón negro, frente a la tienda">
+          </div>
+          <div class="col-12">
+            <div id="shipmentMap" style="height:220px;border-radius:.5rem;" class="border"></div>
+            <div class="form-text">Toca el mapa o arrastra el pin para ajustar el punto exacto.</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">¿Qué se envía?</label>
+            <input class="form-control" id="shPackage" placeholder="Paquete de ropa, pedido de alitas, etc.">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Valor declarado</label>
+            <input class="form-control" id="shDeclared" type="number" min="0" step="0.01" value="0">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Cobrar en efectivo</label>
+            <input class="form-control" id="shCollect" type="number" min="0" step="0.01" value="0">
+            <div class="form-text">0 si el cliente ya pagó por transferencia.</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Propina (opcional)</label>
+            <input class="form-control" id="shTip" type="number" min="0" step="0.01" value="0">
+          </div>
+          <div class="col-12">
+            <label class="form-label">¿Quién paga el envío?</label>
+            <select class="form-select" id="shPaidBy">
+              <option value="store">Lo paga el negocio (se cobra en tu liquidación)</option>
+              <option value="recipient">Se suma al cobro contra entrega</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <div class="alert alert-light border mb-0" id="shQuoteBox">
+              <div class="d-flex justify-content-between"><span>Envío</span><strong id="shQuoteDelivery">—</strong></div>
+              <div class="d-flex justify-content-between"><span>Comisión plataforma</span><strong id="shQuoteFee">—</strong></div>
+              <div class="d-flex justify-content-between"><span>Total a cobrar al cliente</span><strong id="shQuoteCollect">—</strong></div>
+              <div class="d-flex justify-content-between border-top mt-1 pt-1"><span>Cargo a tu negocio</span><strong id="shQuoteCharge">—</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" onclick="quoteShipment()">Cotizar</button>
+        <button class="btn btn-primary" id="shCreateBtn" onclick="createShipment()">Publicar envío</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detalle -->
+<div class="modal fade" id="shipmentDetailModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Detalle del envío</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="shipmentDetailBody"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  const STATUS_LABELS = {
+    pending: 'Buscando repartidor', accepted: 'Aceptado', picked_up: 'En camino',
+    delivered: 'Entregado', failed: 'No entregado', cancelled: 'Cancelado',
+  };
+  const STATUS_COLORS = {
+    pending: 'warning', accepted: 'primary', picked_up: 'info',
+    delivered: 'success', failed: 'danger', cancelled: 'secondary',
+  };
+  const COD_LABELS = { not_required: 'Sin cobro', pending: 'Por cobrar', collected: 'Cobrado' };
+  let shipments = [];
+  let filter = 'all';
+  let map = null;
+  let marker = null;
+  let picked = { lat: 20.644, lng: -100.993 };
+  let coordsReady = false;
+  let lastQuote = null;
+  let busy = false;
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, c => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+  function money(v) {
+    return '$' + Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function code(id) { return `ENV-${String(id || '').slice(0, 6).toUpperCase()}`; }
+
+  async function loadShipments(silent = false) {
+    if (busy) return;
+    busy = true;
+    const box = document.getElementById('shipmentsContainer');
+    const loading = document.getElementById('shipmentsLoading');
+    if (!silent) { loading.classList.remove('d-none'); box.innerHTML = ''; }
+    try {
+      shipments = await apiRequest('GET', `/restaurants/${RID}/shipments`);
+      loading.classList.add('d-none');
+      renderSummary();
+      renderList();
+    } catch (e) {
+      loading.classList.add('d-none');
+      box.innerHTML = `<div class="alert alert-danger">${esc(e.message || 'No se pudieron cargar los envíos')}</div>`;
+    } finally {
+      busy = false;
+    }
+  }
+
+  function renderSummary() {
+    const box = document.getElementById('shipmentSummary');
+    const active = shipments.filter(s => ['pending', 'accepted', 'picked_up'].includes(s.status)).length;
+    const delivered = shipments.filter(s => s.status === 'delivered').length;
+    const pendingCash = shipments.filter(s => s.status === 'delivered' && s.cod_status === 'pending')
+      .reduce((a, s) => a + Number(s.amount_to_collect || 0), 0);
+    const month = new Date().getMonth();
+    const commission = shipments.filter(s => s.status === 'delivered' && new Date(s.delivered_at || s.created_at).getMonth() === month)
+      .reduce((a, s) => a + Number(s.platform_fee || 0), 0);
+    const cards = [
+      ['Activos', active, 'bi-truck', 'primary'],
+      ['Entregados', delivered, 'bi-check2-circle', 'success'],
+      ['Por cobrar', money(pendingCash), 'bi-cash-coin', 'warning'],
+      ['Comisión del mes', money(commission), 'bi-percent', 'secondary'],
+    ];
+    box.innerHTML = cards.map(([label, value, icon, color]) => `
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body py-2">
+            <div class="small text-muted"><i class="bi ${icon} text-${color}"></i> ${label}</div>
+            <div class="fs-5 fw-bold">${value}</div>
+          </div>
+        </div>
+      </div>`).join('');
+  }
+
+  function setFilter(value) {
+    filter = value;
+    document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b.dataset.filter === value));
+    renderList();
+  }
+
+  function visibleShipments() {
+    if (filter === 'active') return shipments.filter(s => ['pending', 'accepted', 'picked_up'].includes(s.status));
+    if (filter === 'delivered') return shipments.filter(s => s.status === 'delivered');
+    if (filter === 'cancelled') return shipments.filter(s => ['cancelled', 'failed'].includes(s.status));
+    return shipments;
+  }
+
+  function renderList() {
+    const box = document.getElementById('shipmentsContainer');
+    const rows = visibleShipments();
+    if (!rows.length) {
+      box.innerHTML = '<p class="text-muted text-center py-4">No hay envíos en esta vista.</p>';
+      return;
+    }
+    box.innerHTML = `<div class="table-responsive"><table class="table table-sm align-middle bg-white">
+      <thead><tr>
+        <th>Folio</th><th>Cliente</th><th>Paquete</th><th>Envío</th><th>Comisión</th>
+        <th>Cobrar</th><th>Estado</th><th></th>
+      </tr></thead><tbody>${rows.map(s => `
+        <tr>
+          <td class="small text-muted">${code(s.id)}</td>
+          <td><div class="fw-semibold">${esc(s.recipient_name)}</div><small class="text-muted">${esc(s.recipient_phone)}</small></td>
+          <td class="small">${esc(s.package_description)}</td>
+          <td>${money(s.delivery_fee)}</td>
+          <td>${money(s.platform_fee)}</td>
+          <td>${Number(s.amount_to_collect) > 0 ? `<strong>${money(s.amount_to_collect)}</strong>` : '<span class="text-muted">—</span>'}</td>
+          <td><span class="badge bg-${STATUS_COLORS[s.status] || 'secondary'}">${STATUS_LABELS[s.status] || s.status}</span></td>
+          <td class="text-end"><button class="btn btn-sm btn-outline-primary" onclick="openDetail('${s.id}')"><i class="bi bi-eye"></i></button></td>
+        </tr>`).join('')}</tbody></table></div>`;
+  }
+
+  function initMap() {
+    if (map) return;
+    map = L.map('shipmentMap').setView([picked.lat, picked.lng], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© OpenStreetMap',
+    }).addTo(map);
+    marker = L.marker([picked.lat, picked.lng], { draggable: true }).addTo(map);
+    marker.on('dragend', () => {
+      const p = marker.getLatLng();
+      picked = { lat: p.lat, lng: p.lng };
+      coordsReady = true;
+    });
+    map.on('click', e => {
+      picked = { lat: e.latlng.lat, lng: e.latlng.lng };
+      marker.setLatLng([picked.lat, picked.lng]);
+      coordsReady = true;
+    });
+  }
+
+  function openNewShipment() {
+    document.getElementById('shName').value = '';
+    document.getElementById('shPhone').value = '';
+    document.getElementById('shAddress').value = '';
+    document.getElementById('shReferences').value = '';
+    document.getElementById('shPackage').value = '';
+    document.getElementById('shDeclared').value = '0';
+    document.getElementById('shCollect').value = '0';
+    document.getElementById('shTip').value = '0';
+    document.getElementById('shPaidBy').value = 'store';
+    lastQuote = null;
+    coordsReady = false;
+    picked = { lat: 20.644, lng: -100.993 };
+    resetQuoteBox();
+    const modal = new bootstrap.Modal(document.getElementById('newShipmentModal'));
+    modal.show();
+    setTimeout(() => {
+      initMap();
+      map.setView([picked.lat, picked.lng], 15);
+      marker.setLatLng([picked.lat, picked.lng]);
+      map.invalidateSize();
+    }, 250);
+  }
+
+  function resetQuoteBox() {
+    ['shQuoteDelivery', 'shQuoteFee', 'shQuoteCollect', 'shQuoteCharge'].forEach(id => {
+      document.getElementById(id).textContent = '—';
+    });
+  }
+
+  async function locateAddress() {
+    const address = document.getElementById('shAddress').value.trim();
+    if (!address) { showToast('Escribe la dirección', 'warning'); return; }
+    try {
+      const results = await apiRequest('POST', '/geocode', {
+        address: `${address}, Santa Cruz de Juventino Rosas, Guanajuato, México`,
+      });
+      if (Array.isArray(results) && results.length) {
+        picked = { lat: Number(results[0].lat), lng: Number(results[0].lng) };
+        coordsReady = true;
+        initMap();
+        marker.setLatLng([picked.lat, picked.lng]);
+        map.setView([picked.lat, picked.lng], 17);
+      } else {
+        showToast('No encontramos la dirección. Ajusta el pin en el mapa.', 'warning');
+      }
+    } catch (e) {
+      showToast('No se pudo ubicar la dirección. Ajusta el pin.', 'warning');
+    }
+  }
+
+  function buildQuoteBody() {
+    return {
+      delivery_location: picked,
+      collect_amount: Number(document.getElementById('shCollect').value || 0),
+      shipping_paid_by: document.getElementById('shPaidBy').value,
+    };
+  }
+
+  async function quoteShipment(silent = false) {
+    if (!coordsReady) { if (!silent) showToast('Ubica la dirección en el mapa', 'warning'); return null; }
+    try {
+      lastQuote = await apiRequest('POST', `/restaurants/${RID}/shipments/quote`, buildQuoteBody());
+      document.getElementById('shQuoteDelivery').textContent = money(lastQuote.delivery_fee);
+      document.getElementById('shQuoteFee').textContent = money(lastQuote.platform_fee);
+      document.getElementById('shQuoteCollect').textContent = money(lastQuote.amount_to_collect);
+      document.getElementById('shQuoteCharge').textContent = money(lastQuote.store_charge);
+      return lastQuote;
+    } catch (e) {
+      if (!silent) showToast(e.message || 'No se pudo cotizar', 'danger');
+      return null;
+    }
+  }
+
+  async function createShipment() {
+    const name = document.getElementById('shName').value.trim();
+    const phone = document.getElementById('shPhone').value.trim();
+    const address = document.getElementById('shAddress').value.trim();
+    const pkg = document.getElementById('shPackage').value.trim();
+    if (!name || !phone || !address || !pkg) {
+      showToast('Completa cliente, teléfono, dirección y paquete.', 'warning');
+      return;
+    }
+    if (!coordsReady) { showToast('Ubica la dirección en el mapa.', 'warning'); return; }
+    const quote = await quoteShipment(true);
+    if (!quote) return;
+    const btn = document.getElementById('shCreateBtn');
+    btn.disabled = true;
+    try {
+      const body = {
+        recipient_name: name,
+        recipient_phone: phone,
+        delivery_address: address,
+        delivery_references: document.getElementById('shReferences').value.trim() || null,
+        delivery_location: picked,
+        package_description: pkg,
+        declared_value: Number(document.getElementById('shDeclared').value || 0),
+        collect_amount: Number(document.getElementById('shCollect').value || 0),
+        shipping_paid_by: document.getElementById('shPaidBy').value,
+        tip_amount: Number(document.getElementById('shTip').value || 0),
+      };
+      const created = await apiRequest('POST', `/restaurants/${RID}/shipments`, body);
+      bootstrap.Modal.getInstance(document.getElementById('newShipmentModal'))?.hide();
+      showToast('Envío publicado. Comparte el link con tu cliente.', 'success');
+      await loadShipments(true);
+      openDetail(created.id);
+    } catch (e) {
+      showToast(e.message || 'No se pudo crear el envío', 'danger');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function trackingUrl(s) {
+    return `${location.origin}/web/shipments/${s.public_token}`;
+  }
+
+  function openDetail(id) {
+    const s = shipments.find(x => x.id === id);
+    if (!s) return;
+    const timeline = [
+      ['Creado', true, s.created_at],
+      ['Repartidor asignado', !!s.accepted_at, s.accepted_at],
+      ['Recogido', !!s.picked_up_at, s.picked_up_at],
+      [s.status === 'failed' ? 'No entregado' : 'Entregado', !!s.delivered_at || s.status === 'failed', s.delivered_at],
+    ];
+    document.getElementById('shipmentDetailBody').innerHTML = `
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+          <div class="h5 mb-1">${code(s.id)} · ${esc(s.recipient_name)}</div>
+          <div class="text-muted small">${esc(s.recipient_phone)} · ${esc(s.delivery_address)}</div>
+        </div>
+        <span class="badge bg-${STATUS_COLORS[s.status] || 'secondary'}">${STATUS_LABELS[s.status] || s.status}</span>
+      </div>
+      <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3"><div class="border rounded p-2"><small class="text-muted d-block">Envío</small><strong>${money(s.delivery_fee)}</strong></div></div>
+        <div class="col-6 col-md-3"><div class="border rounded p-2"><small class="text-muted d-block">Comisión</small><strong>${money(s.platform_fee)}</strong></div></div>
+        <div class="col-6 col-md-3"><div class="border rounded p-2"><small class="text-muted d-block">Cobrar</small><strong>${money(s.amount_to_collect)}</strong></div></div>
+        <div class="col-6 col-md-3"><div class="border rounded p-2"><small class="text-muted d-block">Contra entrega</small><strong>${COD_LABELS[s.cod_status] || s.cod_status}</strong></div></div>
+      </div>
+      <p class="mb-1"><strong>Paquete:</strong> ${esc(s.package_description)}</p>
+      ${s.delivery_references ? `<p class="mb-1"><strong>Referencias:</strong> ${esc(s.delivery_references)}</p>` : ''}
+      <p class="mb-3"><strong>Cargo a tu negocio:</strong> ${money(s.store_charge)} · <strong>Crédito por cobro:</strong> ${money(s.store_credit)}</p>
+      <h6>Avance</h6>
+      <ul class="list-unstyled small mb-3">
+        ${timeline.map(([label, done, at]) => `<li class="mb-1">${done ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<i class="bi bi-circle text-muted"></i>'} ${label}${at ? ` · <span class="text-muted">${new Date(at).toLocaleString()}</span>` : ''}</li>`).join('')}
+      </ul>
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-sm btn-outline-success" target="_blank" href="${trackingUrl(s)}"><i class="bi bi-geo-alt"></i> Ver seguimiento</a>
+        <button class="btn btn-sm btn-outline-primary" onclick="copyTracking('${s.public_token}')"><i class="bi bi-clipboard"></i> Copiar link</button>
+        <a class="btn btn-sm btn-outline-secondary" target="_blank" href="https://wa.me/?text=${encodeURIComponent('Sigue tu envío: ' + trackingUrl(s))}"><i class="bi bi-whatsapp"></i> WhatsApp</a>
+        ${s.status === 'pending' ? `<button class="btn btn-sm btn-outline-danger" onclick="cancelShipment('${s.id}')"><i class="bi bi-x-circle"></i> Cancelar</button>` : ''}
+      </div>`;
+    new bootstrap.Modal(document.getElementById('shipmentDetailModal')).show();
+  }
+
+  async function copyTracking(token) {
+    const url = `${location.origin}/web/shipments/${token}`;
+    try { await navigator.clipboard.writeText(url); showToast('Link copiado', 'success'); }
+    catch (e) { prompt('Copia el link:', url); }
+  }
+
+  async function cancelShipment(id) {
+    const reason = prompt('Motivo de cancelación (opcional):') || '';
+    try {
+      await apiRequest('POST', `/restaurants/${RID}/shipments/${id}/cancel`, { reason });
+      bootstrap.Modal.getInstance(document.getElementById('shipmentDetailModal'))?.hide();
+      showToast('Envío cancelado', 'success');
+      loadShipments(true);
+    } catch (e) {
+      showToast(e.message || 'No se pudo cancelar', 'danger');
+    }
+  }
+
+  loadShipments();
+  setInterval(() => { if (!document.hidden) loadShipments(true); }, 15000);
+</script>
+{% endblock %}

@@ -58,6 +58,7 @@
     <button class="dp-tab-btn text-center" data-tab="payouts" onclick="switchTab('payouts')">Ganancias</button>
     <button class="dp-tab-btn text-center" data-tab="settings" onclick="switchTab('settings')">Ajustes</button>
     <button class="dp-tab-btn text-center" data-tab="mandados" onclick="switchTab('mandados')">Mandados</button>
+    <button class="dp-tab-btn text-center" data-tab="shipments" onclick="switchTab('shipments')">Envíos</button>
   </div>
 
   <div id="tabContent">
@@ -66,6 +67,7 @@
     <div class="tab-pane" id="tab-payouts"></div>
     <div class="tab-pane" id="tab-settings"></div>
     <div class="tab-pane" id="tab-mandados"></div>
+    <div class="tab-pane" id="tab-shipments"></div>
   </div>
 {% endblock %}
 {% block scripts %}
@@ -87,6 +89,11 @@ document.addEventListener('DOMContentLoaded', () => {
   if (gpsWatchId == null) startGps();
   document.getElementById('availSwitch')?.addEventListener('change', toggleAvailability);
   startAvailablePolling();
+  setInterval(() => {
+    if (!document.hidden && document.getElementById('tab-shipments')?.classList.contains('active')) {
+      loadShipmentsWeb();
+    }
+  }, 20000);
   document.addEventListener('click', () => {
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
@@ -159,6 +166,7 @@ function switchTab(name) {
   else if (name === 'payouts') loadPayouts();
   else if (name === 'settings') loadSettings();
   else if (name === 'mandados') loadMandadosWeb();
+  else if (name === 'shipments') loadShipmentsWeb();
 }
 
 async function loadDeliveryData() {
@@ -774,6 +782,164 @@ async function deliverMandadoWeb(mid) {
     await deliverMandado(mid);
     showToast('Mandado entregado');
     loadMandadosWeb();
+  } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+}
+
+// ===== TAB: Envíos de negocio =====
+function escShip(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+async function loadShipmentsWeb() {
+  const el = document.getElementById('tab-shipments');
+  el.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
+  try {
+    const rows = await apiRequest('GET', '/delivery/shipments');
+    const available = rows.filter(s => s.status === 'pending' && !s.delivery_person_id);
+    const active = rows.filter(s => s.delivery_person_id && ['accepted', 'picked_up'].includes(s.status));
+    const done = rows.filter(s => s.delivery_person_id && ['delivered', 'failed'].includes(s.status)).slice(0, 5);
+    let html = '<h6>Envíos disponibles</h6>';
+    if (available.length) {
+      for (const s of available) {
+        html += `<div class="dp-card">
+          <strong>${escShip(s.recipient_name)}</strong>
+          <div><small>${escShip(s.package_description)}</small></div>
+          <div><small class="text-muted">${escShip(s.delivery_address)}</small></div>
+          <div><small>Envío: $${Number(s.delivery_fee).toFixed(2)}${Number(s.amount_to_collect) > 0 ? ` · Cobrar: $${Number(s.amount_to_collect).toFixed(2)}` : ' · Sin cobro'}</small></div>
+          <button class="btn btn-sm btn-success mt-2" onclick="acceptShipmentWeb('${s.id}')">Aceptar envío</button>
+        </div>`;
+      }
+    } else html += '<p class="text-muted">No hay envíos disponibles</p>';
+
+    html += '<hr><h6>Mis envíos activos</h6>';
+    if (active.length) {
+      for (const s of active) {
+        const label = s.status === 'accepted' ? 'Por recoger' : 'En camino';
+        html += `<div class="dp-card">
+          <strong>${escShip(s.recipient_name)}</strong> <span class="badge bg-primary">${label}</span>
+          <div><small>${escShip(s.package_description)}</small></div>
+          <div><small class="text-muted">${escShip(s.delivery_address)}</small></div>
+          <div><small>Envío: $${Number(s.delivery_fee).toFixed(2)}${Number(s.amount_to_collect) > 0 ? ` · Cobrar: $${Number(s.amount_to_collect).toFixed(2)}` : ' · Sin cobro'}</small></div>`;
+        if (s.status === 'accepted') {
+          html += `<button class="btn btn-sm btn-primary mt-2" onclick="showShipmentPickup('${s.id}')">Recoger paquete</button>`;
+        } else {
+          html += `<button class="btn btn-sm btn-success mt-2" onclick="showShipmentDeliver('${s.id}', ${Number(s.amount_to_collect)})">Entregar</button>
+                   <button class="btn btn-sm btn-outline-danger mt-2" onclick="failShipmentWeb('${s.id}')">No entregado</button>`;
+        }
+        html += '</div>';
+      }
+    } else html += '<p class="text-muted">No tienes envíos activos</p>';
+
+    if (done.length) {
+      html += '<hr><h6>Últimos envíos</h6>';
+      for (const s of done) {
+        html += `<div class="dp-card"><small><strong>${escShip(s.recipient_name)}</strong> · ${s.status === 'delivered' ? 'Entregado' : 'No entregado'} · $${Number(s.delivery_fee).toFixed(2)}</small></div>`;
+      }
+    }
+    el.innerHTML = html;
+  } catch (e) { el.innerHTML = `<div class="alert alert-danger">${escShip(e.message)}</div>`; }
+}
+
+async function acceptShipmentWeb(id) {
+  try {
+    await apiRequest('PATCH', `/delivery/shipments/${id}/accept`);
+    showToast('Envío aceptado');
+    loadShipmentsWeb();
+  } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+}
+
+function showShipmentPickup(id) {
+  const el = document.getElementById('tab-shipments');
+  el.innerHTML = `<div class="dp-card">
+    <strong>Recoger paquete</strong>
+    <div class="alert alert-info small py-2 mt-2">Confirma que ya tienes el paquete en el negocio.</div>
+    <label class="form-label">Foto del paquete (opcional)</label>
+    <input id="shipPickupPhoto" class="form-control" type="file" accept="image/*" capture="environment">
+    <button class="btn btn-primary mt-2" onclick="submitShipmentPickup('${id}')">Confirmar recolección</button>
+    <button class="btn btn-outline-secondary mt-2" onclick="loadShipmentsWeb()">Cancelar</button>
+    <div id="shipPickupStatus" class="mt-2"></div>
+  </div>`;
+}
+
+async function submitShipmentPickup(id) {
+  const file = document.getElementById('shipPickupPhoto').files[0];
+  let photoUrl = null;
+  const status = document.getElementById('shipPickupStatus');
+  try {
+    if (file) {
+      status.textContent = 'Subiendo foto...';
+      const uploaded = await uploadDocument(file);
+      photoUrl = uploaded.url;
+    }
+    await apiRequest('PATCH', `/delivery/shipments/${id}/pickup`, { pickup_photo_url: photoUrl });
+    showToast('Paquete recogido');
+    loadShipmentsWeb();
+  } catch (e) {
+    status.innerHTML = `<div class="alert alert-danger py-2">${escShip(e.message)}</div>`;
+  }
+}
+
+function showShipmentDeliver(id, amount) {
+  const el = document.getElementById('tab-shipments');
+  el.innerHTML = `<div class="dp-card">
+    <strong>Entregar paquete</strong>
+    <div class="mb-2">
+      <label class="form-label">Código de 4 dígitos del cliente</label>
+      <input id="shipDeliveryCode" class="form-control" maxlength="4" inputmode="numeric" placeholder="0000">
+      <div class="form-text">El cliente lo ve en su link de seguimiento. También puedes subir una foto.</div>
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Foto de entrega</label>
+      <input id="shipDeliveryPhoto" class="form-control" type="file" accept="image/*" capture="environment">
+    </div>
+    <div class="mb-2" id="shipCashBox" style="${Number(amount) > 0 ? '' : 'display:none'}">
+      <label class="form-label">Efectivo a cobrar ($)</label>
+      <input id="shipCash" class="form-control" type="number" step="0.01" value="${Number(amount).toFixed(2)}">
+    </div>
+    <button class="btn btn-success mt-2" onclick="submitShipmentDeliver('${id}', ${Number(amount)})">Confirmar entrega</button>
+    <button class="btn btn-outline-secondary mt-2" onclick="loadShipmentsWeb()">Cancelar</button>
+    <div id="shipDeliverStatus" class="mt-2"></div>
+  </div>`;
+}
+
+async function submitShipmentDeliver(id, amount) {
+  const code = (document.getElementById('shipDeliveryCode').value || '').trim();
+  const file = document.getElementById('shipDeliveryPhoto').files[0];
+  const cashInput = document.getElementById('shipCash');
+  const cash = cashInput ? Number(cashInput.value || 0) : 0;
+  const status = document.getElementById('shipDeliverStatus');
+  if (!code && !file) {
+    status.innerHTML = '<div class="alert alert-warning py-2">Pide el código o sube una foto de entrega.</div>';
+    return;
+  }
+  try {
+    let photoUrl = null;
+    if (file) {
+      status.textContent = 'Subiendo foto...';
+      const uploaded = await uploadDocument(file);
+      photoUrl = uploaded.url;
+    }
+    await apiRequest('PATCH', `/delivery/shipments/${id}/deliver`, {
+      delivery_code: code || null,
+      delivery_photo_url: photoUrl,
+      cash_collected: Number(amount) > 0 ? cash : 0,
+    });
+    showToast('Envío entregado');
+    loadShipmentsWeb();
+  } catch (e) {
+    status.innerHTML = `<div class="alert alert-danger py-2">${escShip(e.message)}</div>`;
+  }
+}
+
+async function failShipmentWeb(id) {
+  const reason = prompt('¿Por qué no se pudo entregar?');
+  if (!reason) return;
+  try {
+    await apiRequest('PATCH', `/delivery/shipments/${id}/fail`, { reason });
+    showToast('Envío marcado como no entregado');
+    loadShipmentsWeb();
   } catch (e) { showToast('Error: ' + e.message, 'danger'); }
 }
 </script>

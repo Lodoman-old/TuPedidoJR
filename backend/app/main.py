@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from sqladmin import Admin
 
-from app.admin import AdminAuth, CashAdvanceAdmin, CouponAdmin, DeliveryLocationAdmin, DeliveryPayoutAdmin, DeliveryPersonAdmin, MandadoAdmin, MenuCategoryAdmin, MenuItemAdmin, OrderAdmin, OrderItemAdmin, RestaurantAdmin, RestaurantPayoutAdmin, ReviewAdmin, SavedAddressAdmin, SettingAdmin, UserAdmin
+from app.admin import AdminAuth, CashAdvanceAdmin, CouponAdmin, DeliveryLocationAdmin, DeliveryPayoutAdmin, DeliveryPersonAdmin, MandadoAdmin, MenuCategoryAdmin, MenuItemAdmin, OrderAdmin, OrderItemAdmin, RestaurantAdmin, RestaurantPayoutAdmin, ReviewAdmin, SavedAddressAdmin, SettingAdmin, ShipmentAdmin, UserAdmin
 from app.api.v1.router import router as api_router
 from app.routes.web import router as web_router
 from app.routes.public import router as public_router
@@ -153,6 +153,7 @@ admin.add_view(SettingAdmin)
 admin.add_view(DeliveryPayoutAdmin)
 admin.add_view(RestaurantPayoutAdmin)
 admin.add_view(MandadoAdmin)
+admin.add_view(ShipmentAdmin)
 admin.add_view(CashAdvanceAdmin)
 
 

@@ -106,6 +106,21 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "La plataforma entrega el presupuesto al repartidor antes de comprar. Si se desactiva, el repartidor pone el dinero y se le reembolsa.",
         "type": "bool", "default": "true",
     },
+    "SHIPMENT_PLATFORM_FEE": {
+        "group": "Motomandados", "label": "Comisión por envío de negocio ($)",
+        "description": "Comisión que paga el negocio por cada envío de su cliente. El envío va completo al repartidor.",
+        "type": "money", "default": "10.0",
+    },
+    "SHIPMENT_COD_MAX": {
+        "group": "Motomandados", "label": "Tope de cobro contra entrega ($)",
+        "description": "Monto máximo que el repartidor puede cobrar en efectivo al entregar un envío de negocio.",
+        "type": "money", "default": "1500.0",
+    },
+    "SHIPMENT_RETURN_PERCENT": {
+        "group": "Motomandados", "label": "Cargo por retorno (%)",
+        "description": "Porcentaje del envío que se cobra al negocio cuando el cliente no recibe el paquete.",
+        "type": "int", "default": "50",
+    },
     "CANCELLATION_WINDOW_MIN": {
         "group": "Cancelaciones", "label": "Minutos de gracia",
         "description": "Tiempo que tiene el cliente para cancelar después de que el restaurante confirma.",

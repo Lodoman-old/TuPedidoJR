@@ -12,6 +12,7 @@ from app.models.delivery_payout import DeliveryPayout
 from app.models.delivery_person import DeliveryPerson
 from app.models.order import Order
 from app.models.restaurant_payout import RestaurantPayout
+from app.models.shipment import Shipment
 from app.services.settlement_service import is_order_settleable
 
 
@@ -71,14 +72,38 @@ async def restaurant_balance(db: AsyncSession, restaurant_id) -> dict:
     )
     payouts = list(payouts_result.scalars().all())
     requested = sum((p.net_payout or Decimal("0")) for p in payouts)
+
+    shipments_result = await db.execute(
+        select(Shipment).where(
+            Shipment.store_id == restaurant_id,
+            Shipment.status.in_(("delivered", "failed")),
+        )
+    )
+    shipments = list(shipments_result.scalars().all())
+    shipment_credit = sum(
+        (s.store_credit or Decimal("0"))
+        for s in shipments
+        if s.status == "delivered" and not s.store_credit_settled
+    )
+    shipment_charge = sum(
+        (s.store_charge or Decimal("0"))
+        for s in shipments
+        if not s.store_charge_settled
+    )
+    earned += shipment_credit
+    cash_debt += shipment_charge
+
     pending = max(earned - requested - cash_debt, Decimal("0"))
 
     return {
         "orders": payable_orders,
         "all_orders": orders,
+        "shipments": shipments,
         "earned": earned,
         "requested": requested,
         "cash_debt": cash_debt,
+        "shipment_credit": shipment_credit,
+        "shipment_charge": shipment_charge,
         "loyalty_credit": loyalty_credit,
         "pending": pending,
         "last_payout": max(
@@ -101,6 +126,19 @@ async def courier_balance(db: AsyncSession, dp: DeliveryPerson) -> dict:
     ]
     earned = sum((o.delivery_earnings or Decimal("0")) for o in orders)
 
+    shipments_result = await db.execute(
+        select(Shipment).where(
+            Shipment.delivery_person_id == dp.id,
+            Shipment.status.in_(("delivered", "failed")),
+            Shipment.courier_settled.is_(False),
+        )
+    )
+    shipments = list(shipments_result.scalars().all())
+    shipment_earnings = sum(
+        (s.courier_earnings or Decimal("0")) for s in shipments
+    )
+    earned += shipment_earnings
+
     payouts_result = await db.execute(
         select(DeliveryPayout).where(
             DeliveryPayout.delivery_person_id == dp.id,
@@ -116,6 +154,8 @@ async def courier_balance(db: AsyncSession, dp: DeliveryPerson) -> dict:
 
     return {
         "orders": orders,
+        "shipments": shipments,
+        "shipment_earnings": shipment_earnings,
         "earned": earned,
         "requested": requested,
         "debt": debt,
@@ -161,6 +201,13 @@ async def create_restaurant_payout(db: AsyncSession, restaurant_id) -> Restauran
             and not order.restaurant_charge_settled
         ):
             order.restaurant_charge_settled = True
+    settled_shipments = 0
+    for shipment in balance.get("shipments", []):
+        if shipment.status == "delivered" and not shipment.store_credit_settled:
+            shipment.store_credit_settled = True
+            settled_shipments += 1
+        if not shipment.store_charge_settled:
+            shipment.store_charge_settled = True
     payout = RestaurantPayout(
         restaurant_id=restaurant_id,
         period_start=period_start,
@@ -171,6 +218,10 @@ async def create_restaurant_payout(db: AsyncSession, restaurant_id) -> Restauran
         total_flat_fees=sum((o.flat_usage_fee or Decimal("0")) for o in orders),
         net_payout=balance["pending"],
         status="pending",
+        notes=(
+            f"Incluye {settled_shipments} envío(s) de negocio liquidado(s)."
+            if settled_shipments else None
+        ),
     )
     db.add(payout)
     await db.commit()
@@ -199,6 +250,8 @@ async def create_courier_payout(db: AsyncSession, dp: DeliveryPerson) -> Deliver
         confirmation_code="".join(random.choices(string.digits, k=6)),
         status="pending",
     )
+    for shipment in balance.get("shipments", []):
+        shipment.courier_settled = True
     db.add(payout)
     # The payout amount already deducted the cash debt, so clear it to avoid
     # discounting the same debt again from future earnings.

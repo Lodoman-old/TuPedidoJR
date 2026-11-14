@@ -13,6 +13,7 @@ from app.models.delivery_person import DeliveryPerson
 from app.models.delivery_payout import DeliveryPayout
 from app.models.cash_advance import CashAdvance
 from app.models.order import Order
+from app.models.shipment import Shipment
 from app.models.user import User
 from app.schemas.delivery import (
     AvailabilityUpdate,
@@ -549,6 +550,28 @@ async def get_delivery_earnings(
         elif o.payment_method == "cash":
             total_cash_collected += o.total or Decimal("0")
 
+    shipments_result = await db.execute(
+        select(Shipment).where(
+            Shipment.delivery_person_id == dp.id,
+            Shipment.status.in_(("delivered", "failed")),
+        )
+    )
+    shipments = shipments_result.scalars().all()
+    for s in shipments:
+        earning = s.courier_earnings or Decimal("0")
+        items.append(DeliveryEarningsItem(
+            id=s.id,
+            placed_at=s.created_at,
+            total=s.amount_to_collect or Decimal("0"),
+            delivery_earnings=earning,
+            status=s.status,
+            payment_method="cash" if (s.amount_to_collect or 0) > 0 else "transfer",
+        ))
+        total_earned += earning
+        total_transfer_earnings += earning
+        if (s.amount_to_collect or 0) > 0:
+            total_cash_collected += s.amount_to_collect
+
     payouts_result = await db.execute(
         select(DeliveryPayout)
         .where(
@@ -579,7 +602,7 @@ async def get_delivery_earnings(
         pending_from_platform = Decimal("0")
 
     return DeliveryEarningsOut(
-        total_deliveries=len(orders),
+        total_deliveries=len(orders) + len(shipments),
         total_earned=total_earned,
         total_transfer_earnings=total_transfer_earnings,
         total_cash_collected=total_cash_collected,

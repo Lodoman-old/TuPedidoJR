@@ -12,6 +12,11 @@ from app.api.v1.profile import router as profile_router
 from app.api.v1.coupons import router as coupons_router
 from app.api.v1.geocode import router as geocode_router
 from app.api.v1.mandados import router as mandados_router
+from app.api.v1.shipments import (
+    courier_router as courier_shipments_router,
+    public_router as public_shipments_router,
+    store_router as store_shipments_router,
+)
 from app.api.v1.upload import router as upload_router
 from app.api.v1.map import router as map_router
 from app.api.v1.push import router as push_router
@@ -42,6 +47,9 @@ router.include_router(profile_router, prefix="/profile", tags=["Perfil"])
 router.include_router(coupons_router, prefix="/coupons", tags=["Cupones"])
 router.include_router(geocode_router, prefix="/geocode", tags=["Geocodificación"])
 router.include_router(mandados_router, prefix="/mandados", tags=["Mandados"])
+router.include_router(store_shipments_router, prefix="/restaurants", tags=["Envíos"])
+router.include_router(courier_shipments_router, prefix="/delivery", tags=["Envíos"])
+router.include_router(public_shipments_router, prefix="/shipments", tags=["Envíos"])
 router.include_router(upload_router, prefix="/upload", tags=["Cargas"])
 router.include_router(map_router, prefix="/map", tags=["Mapa"])
 router.include_router(push_router, prefix="/push", tags=["Notificaciones"])

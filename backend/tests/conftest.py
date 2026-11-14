@@ -63,6 +63,7 @@ async def clean_db():
         await conn.execute(text("DELETE FROM restaurant_payouts"))
         await conn.execute(text("DELETE FROM cash_advances"))
         await conn.execute(text("DELETE FROM mandados"))
+        await conn.execute(text("DELETE FROM shipments"))
         await conn.execute(text("DELETE FROM reservations"))
         await conn.execute(text("DELETE FROM delivery_persons"))
         await conn.execute(text("DELETE FROM menu_items"))

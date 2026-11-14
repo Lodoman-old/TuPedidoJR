@@ -134,6 +134,20 @@ async def web_restaurant_requests(request: Request, restaurant_id: str):
     )
 
 
+@router.get("/restaurants/{restaurant_id}/shipments")
+async def web_restaurant_shipments(request: Request, restaurant_id: str):
+    return templates.TemplateResponse(
+        request, "restaurant_shipments.html", {"restaurant_id": restaurant_id}
+    )
+
+
+@router.get("/shipments/{token}")
+async def web_public_shipment(request: Request, token: str):
+    return templates.TemplateResponse(
+        request, "shipment_tracking.html", {"token": token}
+    )
+
+
 @router.get("/cart")
 async def web_cart(request: Request):
     return templates.TemplateResponse(request, "cart.html")

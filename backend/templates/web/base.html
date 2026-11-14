@@ -132,6 +132,7 @@
               <li><a class="dropdown-item" data-rnav="orders" href="#"><i class="bi bi-receipt"></i> Pedidos <span id="restaurantPendingBadge" class="badge rounded-pill bg-danger d-none">0</span></a></li>
               <li><a class="dropdown-item rnav-restaurant-only" data-rnav="reservations" href="#"><i class="bi bi-calendar-check"></i> Reservaciones</a></li>
               <li><a class="dropdown-item" data-rnav="requests" href="#"><i class="bi bi-chat-square-text"></i> Solicitudes</a></li>
+              <li><a class="dropdown-item" data-rnav="shipments" href="#"><i class="bi bi-box-seam"></i> Envíos</a></li>
               <li class="rnav-manager"><a class="dropdown-item" data-rnav="earnings" href="#"><i class="bi bi-cash-stack"></i> Ganancias</a></li>
               <li class="rnav-manager"><a class="dropdown-item" data-rnav="team" href="#"><i class="bi bi-people"></i> Equipo</a></li>
               <li class="rnav-manager"><hr class="dropdown-divider"></li>
@@ -814,7 +815,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
       });
       if (menu && restaurantId) {
         const routes = {
-          panel: '', orders: '/orders', reservations: '/reservations', requests: '/requests', earnings: '/earnings',
+          panel: '', orders: '/orders', reservations: '/reservations', requests: '/requests', shipments: '/shipments', earnings: '/earnings',
           team: '/team', profile: '/profile', location: '/location',
         };
         menu.querySelectorAll('[data-rnav]').forEach(link => {
@@ -1023,6 +1024,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         '/web/forgot-password',
         '/web/reset-password',
         '/web/app',
+        '/web/shipments',
       ];
       const isPublic = publicPaths.some(p => window.location.pathname.startsWith(p));
       if (!token && !isPublic) {

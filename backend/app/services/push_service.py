@@ -17,6 +17,7 @@ from app.models.order import Order
 from app.models.push_token import PushToken
 from app.models.reservation import Reservation
 from app.models.restaurant import Restaurant
+from app.models.shipment import Shipment
 from app.models.store_request import StoreRequest
 from app.models.restaurant_user import RestaurantUser
 from app.models.setting import Setting
@@ -923,6 +924,96 @@ def schedule_new_mandado(mandado_id: str) -> None:
 def schedule_mandado_status(mandado_id: str, status: str) -> None:
     try:
         asyncio.create_task(notify_mandado_status(mandado_id, status))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
+SHIPMENT_MESSAGES = {
+    "accepted": ("Repartidor asignado", "Un repartidor aceptó el envío."),
+    "picked_up": ("Paquete en camino", "El repartidor ya recogió el paquete."),
+    "delivered": ("Envío entregado", "El paquete fue entregado."),
+    "failed": ("Envío no entregado", "No se pudo entregar el paquete."),
+    "cancelled": ("Envío cancelado", "El envío fue cancelado."),
+}
+
+
+async def notify_new_shipment(shipment_id: str) -> None:
+    """Avisa a los repartidores disponibles que hay un envío de negocio."""
+    try:
+        async with async_session() as db:
+            shipment = await db.get(Shipment, uuid.UUID(shipment_id))
+            if not shipment or shipment.status != "pending":
+                return
+            dp_result = await db.execute(
+                select(DeliveryPerson).where(DeliveryPerson.is_available.is_(True))
+            )
+            body = (
+                f"{shipment.package_description[:80]} · "
+                f"Envío ${shipment.delivery_fee:.2f}"
+            )
+            for dp in dp_result.scalars().all():
+                await send_to_user(
+                    db,
+                    dp.user_id,
+                    "Nuevo envío disponible",
+                    body,
+                    {"type": "new_shipment", "shipment_id": str(shipment.id)},
+                    "green",
+                )
+    except Exception:
+        logger.exception("Push new shipment notification failed for %s", shipment_id)
+
+
+async def notify_shipment_status(shipment_id: str, status: str) -> None:
+    """Avisa al negocio cuando su envío cambia de estado."""
+    try:
+        async with async_session() as db:
+            shipment = await db.get(Shipment, uuid.UUID(shipment_id))
+            if not shipment:
+                return
+            store = await db.get(Restaurant, shipment.store_id)
+            if not store:
+                return
+            members_result = await db.execute(
+                select(RestaurantUser.user_id).where(
+                    RestaurantUser.restaurant_id == store.id,
+                    RestaurantUser.is_active.is_(True),
+                    RestaurantUser.role.in_(ORDER_ROLES),
+                )
+            )
+            user_ids = {store.owner_id, *members_result.scalars().all()}
+            title, body = SHIPMENT_MESSAGES.get(
+                status, ("Envío actualizado", "Tu envío cambió de estado.")
+            )
+            body = f"{shipment.recipient_name}: {body}"
+            style = {"delivered": "green", "failed": "red", "cancelled": "red"}.get(status)
+            for user_id in user_ids:
+                await send_to_user(
+                    db,
+                    user_id,
+                    title,
+                    body,
+                    {
+                        "type": "shipment_status",
+                        "shipment_id": str(shipment.id),
+                        "status": status,
+                    },
+                    style,
+                )
+    except Exception:
+        logger.exception("Push shipment status failed for %s", shipment_id)
+
+
+def schedule_new_shipment(shipment_id: str) -> None:
+    try:
+        asyncio.create_task(notify_new_shipment(shipment_id))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
+def schedule_shipment_status(shipment_id: str, status: str) -> None:
+    try:
+        asyncio.create_task(notify_shipment_status(shipment_id, status))
     except RuntimeError:
         logger.debug("No event loop for push notification")
 

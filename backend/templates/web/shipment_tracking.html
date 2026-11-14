@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seguimiento de envío · TuPedidoJR</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f4f6fa; }
+    .hero { background: #12224f; color: #fff; border-radius: 1rem 1rem 0 0; }
+    .hero .logo { height: 42px; }
+    .step-dot { width: 14px; height: 14px; border-radius: 50%; background: #cbd5e1; }
+    .step-dot.done { background: #2e7d32; }
+    .step-line { width: 3px; height: 26px; background: #e2e8f0; margin: 2px auto; }
+    .step-line.done { background: #2e7d32; }
+    .card { border: 0; box-shadow: 0 8px 24px rgba(15, 23, 42, .08); }
+  </style>
+</head>
+<body>
+  <div class="container py-4" style="max-width: 720px;">
+    <div class="card overflow-hidden">
+      <div class="hero p-4">
+        <div class="d-flex justify-content-between align-items-center">
+          <img class="logo" src="/static/logo.png" alt="TuPedidoJR">
+          <span class="badge bg-warning text-dark" id="statusBadge">Cargando…</span>
+        </div>
+        <h4 class="mt-3 mb-1" id="storeName">Tu envío</h4>
+        <div class="text-white-50 small" id="trackingCode"></div>
+      </div>
+      <div class="p-4">
+        <div id="errorBox" class="alert alert-danger d-none"></div>
+        <div id="content" class="d-none">
+          <div class="row g-2 mb-4">
+            <div class="col-6">
+              <div class="border rounded p-2">
+                <div class="text-muted small">Llegada estimada</div>
+                <div class="fw-bold" id="eta">—</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="border rounded p-2">
+                <div class="text-muted small">Pagar al recibir</div>
+                <div class="fw-bold" id="amount">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div id="codeBox" class="alert alert-warning d-none">
+            <div class="small text-uppercase">Código de entrega</div>
+            <div class="fs-3 fw-bold" id="deliveryCode"></div>
+            <div class="small">Dáselo al repartidor cuando recibas tu paquete.</div>
+          </div>
+
+          <h6 class="text-uppercase text-muted small">Avance</h6>
+          <div id="timeline" class="mb-3"></div>
+
+          <div class="border rounded p-3 mb-3">
+            <div class="fw-semibold" id="package">—</div>
+            <div class="text-muted small" id="address">—</div>
+          </div>
+
+          <div class="alert alert-light border mb-0 small">
+            Comparte este link con quien recibe. No necesita cuenta ni app.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="text-center text-muted small mt-3">TuPedidoJR · Juventino Rosas, Gto.</div>
+  </div>
+
+  <script>
+    const TOKEN = '{{ token }}';
+    const LABELS = {
+      pending: 'Buscando repartidor', accepted: 'Repartidor asignado',
+      picked_up: 'En camino', delivered: 'Entregado', failed: 'No entregado',
+      cancelled: 'Cancelado',
+    };
+    const COLORS = {
+      pending: 'warning', accepted: 'primary', picked_up: 'info',
+      delivered: 'success', failed: 'danger', cancelled: 'secondary',
+    };
+    function money(v) {
+      return '$' + Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function esc(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+    async function load() {
+      try {
+        const res = await fetch(`/api/v1/shipments/public/${encodeURIComponent(TOKEN)}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error('No encontramos este envío.');
+        const data = await res.json();
+        document.getElementById('errorBox').classList.add('d-none');
+        document.getElementById('content').classList.remove('d-none');
+        const badge = document.getElementById('statusBadge');
+        badge.textContent = LABELS[data.status] || data.status;
+        badge.className = `badge bg-${COLORS[data.status] || 'secondary'} ${data.status === 'pending' ? 'text-dark' : ''}`;
+        document.getElementById('storeName').textContent = data.store_name || 'Tu envío';
+        document.getElementById('trackingCode').textContent = 'Envío ' + String(data.shipment_id).slice(0, 8).toUpperCase();
+        document.getElementById('eta').textContent = data.eta_min ? `${data.eta_min} min` : 'Por confirmar';
+        document.getElementById('amount').textContent = Number(data.amount_to_collect) > 0 ? money(data.amount_to_collect) : 'Sin cobro';
+        document.getElementById('package').textContent = data.package_description || '';
+        document.getElementById('address').textContent = data.delivery_address || '';
+        const codeBox = document.getElementById('codeBox');
+        if (data.delivery_code) {
+          document.getElementById('deliveryCode').textContent = data.delivery_code;
+          codeBox.classList.remove('d-none');
+        } else {
+          codeBox.classList.add('d-none');
+        }
+        const steps = data.timeline || [];
+        document.getElementById('timeline').innerHTML = steps.map((s, i) => `
+          <div class="d-flex gap-2">
+            <div class="text-center">
+              <div class="step-dot ${s.completed ? 'done' : ''}"></div>
+              ${i < steps.length - 1 ? `<div class="step-line ${s.completed ? 'done' : ''}"></div>` : ''}
+            </div>
+            <div class="pb-2">
+              <div class="${s.completed ? 'fw-semibold' : 'text-muted'}">${esc(s.label)}</div>
+              ${s.at ? `<div class="text-muted small">${new Date(s.at).toLocaleString()}</div>` : ''}
+            </div>
+          </div>`).join('');
+      } catch (e) {
+        document.getElementById('errorBox').textContent = e.message;
+        document.getElementById('errorBox').classList.remove('d-none');
+      }
+    }
+    load();
+    setInterval(() => { if (!document.hidden) load(); }, 20000);
+  </script>
+</body>
+</html>

@@ -23,6 +23,7 @@ from app.models.review import Review
 from app.models.saved_address import SavedAddress
 from app.models.setting import Setting
 from app.models.coupon import Coupon
+from app.models.shipment import Shipment
 from app.models.user import User
 from app.schemas.review import ReviewOut
 
@@ -65,6 +66,19 @@ PAYMENT_METHOD_ES = {
     "cash": "Efectivo",
     "mp": "Mercado Pago",
     "transfer": "Transferencia",
+}
+SHIPMENT_STATUS_ES = {
+    "pending": "Buscando repartidor",
+    "accepted": "Aceptado",
+    "picked_up": "Recogido",
+    "delivered": "Entregado",
+    "failed": "No entregado",
+    "cancelled": "Cancelado",
+}
+COD_STATUS_ES = {
+    "not_required": "Sin cobro",
+    "pending": "Por cobrar",
+    "collected": "Cobrado",
 }
 REFUND_STATUS_ES = {
     "none": "Sin reembolso",
@@ -659,6 +673,55 @@ class MandadoAdmin(ModelView, model=Mandado):
         Mandado.status: lambda m, a: _es(MANDADO_STATUS_ES, m.status),
         Mandado.payment_status: lambda m, a: _es(PAYMENT_STATUS_ES, m.payment_status),
         Mandado.payment_method: lambda m, a: _es(PAYMENT_METHOD_ES, m.payment_method),
+    }
+    column_formatters_detail = column_formatters
+
+
+class ShipmentAdmin(ModelView, model=Shipment):
+    name = "Envío de negocio"
+    name_plural = "Envíos de negocio"
+    icon = "fa-solid fa-truck-fast"
+    can_create = False
+    can_edit = False
+    can_delete = False
+    column_list = [
+        Shipment.created_at,
+        Shipment.store_id,
+        Shipment.recipient_name,
+        Shipment.status,
+        Shipment.collect_amount,
+        Shipment.delivery_fee,
+        Shipment.platform_fee,
+    ]
+    column_labels = {
+        Shipment.store_id: "Negocio",
+        Shipment.created_by_id: "Creado por",
+        Shipment.delivery_person_id: "Repartidor",
+        Shipment.recipient_name: "Cliente",
+        Shipment.recipient_phone: "Teléfono",
+        Shipment.package_description: "Paquete",
+        Shipment.delivery_address: "Dirección",
+        Shipment.delivery_references: "Referencias",
+        Shipment.collect_amount: "Cobrar",
+        Shipment.amount_to_collect: "Total a cobrar",
+        Shipment.delivery_fee: "Envío",
+        Shipment.platform_fee: "Comisión",
+        Shipment.store_charge: "Cargo al negocio",
+        Shipment.store_credit: "Crédito al negocio",
+        Shipment.courier_earnings: "Ganancia repartidor",
+        Shipment.cash_collected: "Efectivo cobrado",
+        Shipment.status: "Estado",
+        Shipment.cod_status: "Contra entrega",
+        Shipment.payment_status: "Pago negocio",
+        Shipment.failure_reason: "Motivo de falla",
+        Shipment.created_at: "Creado",
+        Shipment.delivered_at: "Entregado",
+    }
+    column_sortable_list = [Shipment.created_at]
+    column_formatters = {
+        Shipment.status: lambda m, a: _es(SHIPMENT_STATUS_ES, m.status),
+        Shipment.cod_status: lambda m, a: _es(COD_STATUS_ES, m.cod_status),
+        Shipment.payment_status: lambda m, a: _es(PAYMENT_STATUS_ES, m.payment_status),
     }
     column_formatters_detail = column_formatters
 

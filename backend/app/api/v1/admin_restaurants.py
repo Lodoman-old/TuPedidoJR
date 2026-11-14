@@ -45,6 +45,7 @@ def _row(restaurant: Restaurant, owner: User | None) -> RestaurantRegistrationOu
         id=restaurant.id,
         name=restaurant.name,
         cuisine=restaurant.cuisine,
+        business_type=restaurant.business_type or "restaurant",
         address=restaurant.address,
         phone=restaurant.phone,
         status=restaurant.status,

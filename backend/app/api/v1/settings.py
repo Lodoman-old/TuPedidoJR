@@ -76,29 +76,35 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Activa o desactiva el servicio de mandados.",
         "type": "bool", "default": "true",
     },
-    "MANDADO_PLATFORM_FEE": {
-        "group": "Mandados", "label": "Comisión por mandado",
-        "description": "Ganancia fija de la plataforma por cada mandado.",
-        "type": "money", "default": "10.0",
-    },
-    "MANDADO_RISK_FEE_TYPE": {
-        "group": "Mandados", "label": "Tipo de extra por riesgo",
-        "description": "Solo se aplica el método seleccionado. El otro valor se ignora.",
-        "type": "select", "default": "percentage",
-        "options": [
-            {"value": "percentage", "label": "Porcentaje"},
-            {"value": "fixed", "label": "Monto fijo"},
-        ],
-    },
-    "MANDADO_RISK_PERCENTAGE": {
-        "group": "Mandados", "label": "Riesgo (%)",
-        "description": "Se usa únicamente cuando el tipo es porcentaje.",
-        "type": "percent", "default": "10.0",
-    },
     "MANDADO_RISK_FIXED_AMOUNT": {
-        "group": "Mandados", "label": "Riesgo (monto fijo)",
-        "description": "Se usa únicamente cuando el tipo es monto fijo.",
+        "group": "Mandados", "label": "Cargo por riesgo (mandado abierto)",
+        "description": "Cargo único que paga el cliente en un mandado abierto. Sustituye el porcentaje de riesgo y la comisión de plataforma.",
         "type": "money", "default": "15.0",
+    },
+    "MANDADO_PREPAY_THRESHOLD": {
+        "group": "Mandados", "label": "Prepago obligatorio desde ($)",
+        "description": "Los mandados abiertos con este presupuesto o más requieren pago por transferencia antes de publicarse, salvo clientes confiables.",
+        "type": "money", "default": "1000.0",
+    },
+    "MANDADO_TRUSTED_MIN_DAYS": {
+        "group": "Mandados", "label": "Antigüedad para cliente confiable (días)",
+        "description": "Días mínimos de antigüedad de la cuenta para no pedir prepago.",
+        "type": "int", "default": "60",
+    },
+    "MANDADO_TRUSTED_MIN_COMPLETED": {
+        "group": "Mandados", "label": "Pedidos completados para cliente confiable",
+        "description": "Pedidos o mandados completados necesarios para no pedir prepago.",
+        "type": "int", "default": "5",
+    },
+    "MANDADO_TRUSTED_MAX_CASH": {
+        "group": "Mandados", "label": "Tope de efectivo para cliente confiable ($)",
+        "description": "Arriba de este monto se pide prepago aunque el cliente sea confiable. 0 desactiva el tope.",
+        "type": "money", "default": "3000.0",
+    },
+    "MANDADO_PREPAY_ADVANCE_TO_COURIER": {
+        "group": "Mandados", "label": "Adelanto al repartidor en prepagos",
+        "description": "La plataforma entrega el presupuesto al repartidor antes de comprar. Si se desactiva, el repartidor pone el dinero y se le reembolsa.",
+        "type": "bool", "default": "true",
     },
     "CANCELLATION_WINDOW_MIN": {
         "group": "Cancelaciones", "label": "Minutos de gracia",

@@ -24,6 +24,7 @@ from app.models.order_item_option import OrderItemOption
 from app.models.user_cart import UserCart
 from app.models.audit_log import AuditLog
 from app.models.reservation import Reservation
+from app.models.store_request import StoreRequest
 
 __all__ = [
     "User",
@@ -54,4 +55,5 @@ __all__ = [
     "UserCart",
     "AuditLog",
     "Reservation",
+    "StoreRequest",
 ]

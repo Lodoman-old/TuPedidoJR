@@ -36,6 +36,7 @@
   let restaurantData = null;
   let isOwner = false;
   let viewerIsStaff = false;
+  let businessIsStore = false;
   let commissionRate = 0;
   let scheduleState = [];
   let pendingItemId = null;
@@ -133,11 +134,16 @@
     try {
       const r = await getRestaurant(RID);
       restaurantData = r;
+      const isStore = Boolean(r.business_type && r.business_type !== 'restaurant');
+      businessIsStore = isStore;
       commissionRate = Number(r.effective_commission_percentage || 0);
       loading.classList.add('d-none');
 
       const cuisine = r.cuisine
         ? `<span class="badge bg-dark ms-1">${esc(r.cuisine)}</span>`
+        : '';
+      const businessBadge = isStore
+        ? '<span class="badge bg-info text-dark ms-1">Tienda</span>'
         : '';
       const openBadge = r.is_open_now === false
         ? '<span class="badge bg-secondary">Cerrado</span>'
@@ -169,6 +175,7 @@
               <div class="mb-1">
                 <span class="badge bg-warning text-dark">${r.rating || '0.0'}</span>
                 ${cuisine}
+                ${businessBadge}
                 ${openBadge}
                 ${deliveryBadge}
                 ${pickupBadge}
@@ -176,7 +183,12 @@
               </div>
               <p class="text-muted mb-1">${esc(r.description || '')}</p>
               <small class="text-muted">${esc(r.open_message || '')}</small>
-              ${r.reservations_enabled && !r.viewer_role
+              ${isStore && r.accepts_custom_requests && !r.viewer_role
+                ? `<div class="mt-2"><button type="button" class="btn btn-sm btn-outline-primary" onclick="openStoreRequest()">
+                     <i class="bi bi-chat-square-text"></i> ¿No encuentras lo que buscas? Pídelo a esta tienda
+                   </button></div>`
+                : ''}
+              ${r.reservations_enabled && !r.viewer_role && !isStore
                 ? `<div class="mt-2"><a class="btn btn-sm btn-outline-success" href="/web/restaurants/${RID}/reserve"><i class="bi bi-calendar-check"></i> Reservar mesa</a></div>`
                 : ''}
             </div>
@@ -200,11 +212,14 @@
           const buttons = [];
           if (canManage) {
             buttons.push('<button class="btn btn-sm btn-outline-primary" onclick="showAddCategory()">+ Categoría</button>');
-            buttons.push('<button class="btn btn-sm btn-outline-success" onclick="showAddItem()">+ Platillo</button>');
+            buttons.push(`<button class="btn btn-sm btn-outline-success" onclick="showAddItem()">+ ${isStore ? 'Producto' : 'Platillo'}</button>`);
             buttons.push(`<a href="/web/restaurants/${RID}/profile" class="btn btn-sm btn-outline-dark"><i class="bi bi-shop-window"></i> Perfil del negocio</a>`);
           }
           buttons.push(`<a href="/web/restaurants/${RID}/orders" class="btn btn-sm btn-outline-info">Pedidos</a>`);
-          buttons.push(`<a href="/web/restaurants/${RID}/reservations" class="btn btn-sm btn-outline-info"><i class="bi bi-calendar-check"></i> Reservaciones</a>`);
+          buttons.push(`<a href="/web/restaurants/${RID}/requests" class="btn btn-sm btn-outline-info"><i class="bi bi-chat-square-text"></i> Solicitudes</a>`);
+          if (!isStore) {
+            buttons.push(`<a href="/web/restaurants/${RID}/reservations" class="btn btn-sm btn-outline-info"><i class="bi bi-calendar-check"></i> Reservaciones</a>`);
+          }
           if (canFinance) {
             buttons.push(`<a href="/web/restaurants/${RID}/earnings" class="btn btn-sm btn-outline-warning">Ganancias</a>`);
           }
@@ -217,7 +232,7 @@
           buttons.push('<a href="/manuales/restaurante" target="_blank" class="btn btn-sm btn-outline-secondary">Manual</a>');
           ownerPanel.innerHTML = `
             <div class="card p-3">
-              <h6>Panel del restaurante</h6>
+              <h6>${isStore ? 'Panel de la tienda' : 'Panel del restaurante'}</h6>
               <div class="d-flex gap-2 flex-wrap">${buttons.join('')}</div>
               ${canManage ? '<div class="form-text mt-2">Los datos, el logo, el horario y la ubicación se editan en el perfil del negocio.</div>' : ''}
               <input type="file" id="logoFile" accept="image/jpeg,image/png,image/webp" class="d-none">
@@ -232,6 +247,28 @@
       if (commissionRate > 0 && canManage) {
         const note = `Tus precios son la base. Al cliente se le suma ${commissionRate.toFixed(1)}% de comisión de plataforma y ese porcentaje ya está incluido en el precio que ve.`;
         header.insertAdjacentHTML('beforeend', `<div class="alert alert-info py-2 small mt-2 mb-0">${esc(note)}</div>`);
+      }
+
+      if (r.catalog_enabled === false) {
+        container.innerHTML = `<div class="card p-4 text-center text-muted">
+          Esta tienda todavía no publicó su catálogo.
+          ${r.accepts_custom_requests && !r.viewer_role
+            ? '<br>Usa el botón <strong>“Pídelo a esta tienda”</strong> para solicitar un producto.'
+            : ''}
+        </div>`;
+        updateCartBadge();
+        return;
+      }
+
+      if (!(r.menu || []).length) {
+        container.innerHTML = `<div class="card p-4 text-center text-muted">
+          Este negocio todavía no tiene productos publicados.
+          ${r.accepts_custom_requests && !r.viewer_role
+            ? '<br>Puedes solicitar un producto con el botón de arriba.'
+            : ''}
+        </div>`;
+        updateCartBadge();
+        return;
       }
 
       container.innerHTML = '';
@@ -910,6 +947,112 @@
     if (!optionEditorState[gi]?.options) return;
     optionEditorState[gi].options.splice(oi, 1);
     renderOptionsEditor();
+  }
+
+  async function openStoreRequest() {
+    document.querySelectorAll('[data-store-request-modal]').forEach((existing) => {
+      bootstrap.Modal.getInstance(existing)?.hide();
+      existing.remove();
+    });
+    let addresses = [];
+    try {
+      addresses = await listAddresses();
+    } catch (e) {
+      addresses = [];
+    }
+    if (!addresses.length) {
+      showToast('Agrega una dirección de entrega en tu perfil antes de solicitar un producto', 'warning');
+      setTimeout(() => { window.location.href = '/web/profile'; }, 1200);
+      return;
+    }
+    const options = addresses.map((address) => {
+      const location = address.location || {};
+      return `<option value="${address.id}" data-lat="${location.lat ?? ''}" data-lng="${location.lng ?? ''}">
+        ${esc(address.name)} — ${esc(address.address)}
+      </option>`;
+    }).join('');
+    const body = `
+      <div class="alert alert-light border small mb-3">
+        La tienda revisará si tiene el producto, te enviará el precio y después podrás confirmar el pedido.
+      </div>
+      <div class="mb-2">
+        <label class="form-label small mb-1">¿Qué producto necesitas?</label>
+        <textarea id="srDescription" class="form-control" rows="3" maxlength="500"
+                  placeholder="Ej: 2 kg de azúcar, 1 paquete de pañales tamaño G, 1 foco ahorrador..."></textarea>
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-6">
+          <label class="form-label small mb-1">Cantidad</label>
+          <input id="srQuantity" type="number" class="form-control" min="1" max="50" value="1">
+        </div>
+        <div class="col-6">
+          <label class="form-label small mb-1">Presupuesto aprox. (opcional)</label>
+          <input id="srBudget" type="number" class="form-control" min="0" step="0.01" placeholder="$0.00">
+        </div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small mb-1">Foto de referencia (opcional)</label>
+        <input id="srPhoto" type="file" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp">
+      </div>
+      <div class="mb-2">
+        <label class="form-label small mb-1">Dirección de entrega</label>
+        <select id="srAddress" class="form-select">${options}</select>
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-6">
+          <label class="form-label small mb-1">Pago</label>
+          <select id="srPayment" class="form-select">
+            <option value="cash">Efectivo al recibir</option>
+            <option value="transfer">Transferencia</option>
+          </select>
+        </div>
+        <div class="col-6">
+          <label class="form-label small mb-1">Notas (opcional)</label>
+          <input id="srNotes" class="form-control" maxlength="500" placeholder="Marca, color, referencia...">
+        </div>
+      </div>`;
+    const storeRequestModal = openFormModal({
+      title: 'Pedir producto a esta tienda',
+      size: 'modal-lg',
+      saveLabel: 'Enviar solicitud',
+      body,
+      onSave: async (modalEl) => {
+        const description = modalEl.querySelector('#srDescription').value.trim();
+        if (description.length < 5) {
+          throw new Error('Describe el producto que necesitas');
+        }
+        const selected = modalEl.querySelector('#srAddress').selectedOptions[0];
+        const lat = Number(selected?.dataset.lat);
+        const lng = Number(selected?.dataset.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          throw new Error('La dirección seleccionada no tiene ubicación. Agrégala de nuevo en tu perfil.');
+        }
+        const file = modalEl.querySelector('#srPhoto').files[0];
+        let photoUrl = null;
+        if (file) {
+          const uploaded = await uploadFile(file);
+          photoUrl = uploaded.url || uploaded.file_url || uploaded.path;
+        }
+        const addressText = selected.textContent.split('—').slice(1).join('—').trim()
+          || selected.textContent.trim();
+        const payload = {
+          description,
+          quantity: Math.max(1, Math.min(50, Number(modalEl.querySelector('#srQuantity').value) || 1)),
+          budget: modalEl.querySelector('#srBudget').value
+            ? Number(modalEl.querySelector('#srBudget').value) : null,
+          reference_photo_url: photoUrl,
+          delivery_address: addressText,
+          delivery_location: { lat, lng },
+          payment_method: modalEl.querySelector('#srPayment').value,
+          notes: modalEl.querySelector('#srNotes').value.trim() || null,
+        };
+        const request = await apiRequest('POST', `/restaurants/${RID}/requests`, payload);
+        showToast('Solicitud enviada. La tienda te responderá.');
+        window.location.href = `/web/store-requests/${request.id}`;
+        return false;
+      },
+    });
+    storeRequestModal.el.dataset.storeRequestModal = '1';
   }
 
   loadMenu();

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h5 class="mb-0"><i class="bi bi-chat-square-text"></i> Mis solicitudes de producto</h5>
+    <small class="text-muted">Peticiones que enviaste a tiendas registradas.</small>
+  </div>
+  <a class="btn btn-sm btn-outline-secondary" href="/web/mandados">Volver a mandados</a>
+</div>
+<div id="storeRequestsError" class="alert alert-danger d-none"></div>
+<div id="storeRequestsLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+<div id="storeRequestsList"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const LABELS = {
+    pending: ['Esperando respuesta', 'warning text-dark'],
+    quoted: ['Cotizada', 'info text-dark'],
+    converted: ['Pedido creado', 'success'],
+    rejected: ['No disponible', 'danger'],
+    cancelled: ['Cancelada', 'secondary'],
+  };
+  const money = n => '$' + Number(n || 0).toFixed(2);
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function card(request) {
+    const [label, color] = LABELS[request.status] || [request.status, 'secondary'];
+    const when = new Date(request.created_at).toLocaleString('es-MX', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+    return `<div class="card p-3 mb-2">
+      <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+        <div>
+          <h6 class="mb-1">${esc(request.store_name || 'Tienda')}</h6>
+          <div class="small text-muted">${esc(when)} · ${request.quantity} pieza(s)</div>
+        </div>
+        <span class="badge bg-${color}">${label}</span>
+      </div>
+      <p class="small mb-1 mt-2">${esc(request.description)}</p>
+      ${request.quoted_price != null ? `<div class="small">Precio cotizado: <strong>${money(request.quoted_price)}</strong></div>` : ''}
+      ${request.store_notes ? `<div class="small text-muted">Nota de la tienda: ${esc(request.store_notes)}</div>` : ''}
+      <a class="btn btn-sm btn-outline-primary mt-2" href="/web/store-requests/${request.id}">Ver detalle</a>
+    </div>`;
+  }
+
+  async function loadRequests() {
+    try {
+      const rows = await apiRequest('GET', '/store-requests/my');
+      document.getElementById('storeRequestsLoading').classList.add('d-none');
+      document.getElementById('storeRequestsList').innerHTML = rows.length
+        ? rows.map(card).join('')
+        : '<div class="card p-4 text-center text-muted">Todavía no has enviado solicitudes de producto.</div>';
+    } catch (e) {
+      document.getElementById('storeRequestsLoading').classList.add('d-none');
+      const box = document.getElementById('storeRequestsError');
+      box.textContent = e.message; box.classList.remove('d-none');
+    }
+  }
+  loadRequests();
+</script>
+{% endblock %}

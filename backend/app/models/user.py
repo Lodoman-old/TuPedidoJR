@@ -16,6 +16,7 @@ class User(TimestampMixin, Base):
     location = Column(Geography(geometry_type="POINT", srid=4326), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
+    trusted_customer = Column(Boolean, default=False, nullable=False)
     loyalty_points = Column(Integer, default=0, nullable=False)
     referral_code = Column(String(20), unique=True, nullable=True, index=True)
     referred_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)

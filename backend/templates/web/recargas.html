@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<style>
+  .recharge-hero {
+    background: linear-gradient(135deg, #1B2F6B 0%, #3153a3 100%);
+    color: #fff;
+    border-radius: 18px;
+    box-shadow: 0 12px 28px rgba(15, 27, 61, .18);
+  }
+  .recharge-hero .badge { font-size: .72rem; letter-spacing: .03em; }
+  .recharge-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    background: #eef3ff;
+    color: #1B2F6B;
+    flex: 0 0 54px;
+  }
+  .recharge-card { height: 100%; }
+  .recharge-card .btn { cursor: not-allowed; }
+  .recharge-step {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #1B2F6B;
+    color: #fff;
+    font-weight: 700;
+    font-size: .85rem;
+    flex: 0 0 30px;
+  }
+  .recharge-preview {
+    border: 1px dashed #ced4da;
+    border-radius: 14px;
+    background: #fbfcfe;
+    padding: 1rem;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="recharge-hero p-4 mb-3">
+  <span class="badge bg-warning text-dark mb-2">Próximamente</span>
+  <h4 class="mb-1"><i class="bi bi-phone"></i> Tiempo aire y pago de servicios</h4>
+  <p class="mb-0 opacity-75">
+    Estamos integrando el proveedor para que puedas recargar saldo y pagar servicios
+    desde TuPedidoJR, sin salir de la app.
+  </p>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card p-3 recharge-card">
+      <div class="d-flex gap-3 align-items-start mb-2">
+        <div class="recharge-icon"><i class="bi bi-phone"></i></div>
+        <div>
+          <h5 class="mb-1">Tiempo aire</h5>
+          <p class="small text-muted mb-0">Telcel, AT&amp;T, Movistar, Bait, Unefon y más.</p>
+        </div>
+      </div>
+      <ul class="small text-muted mb-3">
+        <li>Recargas desde $20.</li>
+        <li>Confirmación inmediata.</li>
+        <li>Para tu número o para otra persona.</li>
+      </ul>
+      <button class="btn btn-outline-secondary mt-auto" disabled>
+        <i class="bi bi-clock"></i> Próximamente
+      </button>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card p-3 recharge-card">
+      <div class="d-flex gap-3 align-items-start mb-2">
+        <div class="recharge-icon"><i class="bi bi-receipt"></i></div>
+        <div>
+          <h5 class="mb-1">Pago de servicios</h5>
+          <p class="small text-muted mb-0">CFE, agua, Telmex, predial y más.</p>
+        </div>
+      </div>
+      <ul class="small text-muted mb-3">
+        <li>Paga tus recibos sin salir de casa.</li>
+        <li>Comprobante digital.</li>
+        <li>Más servicios en camino.</li>
+      </ul>
+      <button class="btn btn-outline-secondary mt-auto" disabled>
+        <i class="bi bi-clock"></i> Próximamente
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mt-3">
+  <h6 class="mb-3">¿Cómo funcionará?</h6>
+  <div class="row g-3 small">
+    <div class="col-12 col-md-4 d-flex gap-2">
+      <span class="recharge-step">1</span>
+      <span>Elige el servicio, la compañía y el monto.</span>
+    </div>
+    <div class="col-12 col-md-4 d-flex gap-2">
+      <span class="recharge-step">2</span>
+      <span>Paga con Mercado Pago, transferencia o saldo a favor.</span>
+    </div>
+    <div class="col-12 col-md-4 d-flex gap-2">
+      <span class="recharge-step">3</span>
+      <span>Recibe la confirmación y tu comprobante al instante.</span>
+    </div>
+  </div>
+</div>
+
+<div class="recharge-preview mt-3">
+  <h6 class="mb-2"><i class="bi bi-eye"></i> Vista previa</h6>
+  <div class="row g-2">
+    <div class="col-12 col-md-4">
+      <label class="form-label small mb-1">Compañía</label>
+      <select class="form-select form-select-sm" disabled>
+        <option>Telcel</option>
+        <option>AT&amp;T</option>
+        <option>Movistar</option>
+        <option>Bait</option>
+      </select>
+    </div>
+    <div class="col-12 col-md-4">
+      <label class="form-label small mb-1">Número de celular</label>
+      <input type="tel" class="form-control form-control-sm" placeholder="10 dígitos" disabled>
+    </div>
+    <div class="col-12 col-md-4">
+      <label class="form-label small mb-1">Monto</label>
+      <select class="form-select form-select-sm" disabled>
+        <option>$20</option>
+        <option>$50</option>
+        <option>$100</option>
+        <option>$200</option>
+      </select>
+    </div>
+  </div>
+  <div class="small text-muted mt-2">Los controles se habilitarán cuando termine la integración.</div>
+</div>
+
+<div class="alert alert-light border small mt-3 mb-0">
+  <i class="bi bi-info-circle"></i>
+  Aún no se realizan cobros ni recargas. Estamos en la etapa de integración con el proveedor.
+  ¿Necesitas una recarga urgente?
+  <a href="https://wa.me/524121340765" target="_blank" rel="noopener">Escríbenos por WhatsApp</a>.
+</div>
+{% endblock %}

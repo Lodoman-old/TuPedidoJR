@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h5 class="mb-0"><i class="bi bi-chat-square-text"></i> Solicitud de producto</h5>
+  <a class="btn btn-sm btn-outline-secondary" href="/web/store-requests">Mis solicitudes</a>
+</div>
+<div id="requestError" class="alert alert-danger d-none"></div>
+<div id="requestLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+<div id="requestContent" class="d-none"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const REQUEST_ID = '{{ request_id }}';
+  const LABELS = {
+    pending: ['Esperando respuesta', 'warning text-dark'],
+    quoted: ['Cotizada', 'info text-dark'],
+    converted: ['Pedido creado', 'success'],
+    rejected: ['No disponible', 'danger'],
+    cancelled: ['Cancelada', 'secondary'],
+  };
+  const money = n => '$' + Number(n || 0).toFixed(2);
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let current = null;
+
+  function render(request) {
+    current = request;
+    const [label, color] = LABELS[request.status] || [request.status, 'secondary'];
+    const when = new Date(request.created_at).toLocaleString('es-MX', {
+      weekday: 'long', day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit',
+    });
+    const canCancel = ['pending', 'quoted'].includes(request.status);
+    const canConfirm = request.status === 'quoted';
+    document.getElementById('requestContent').innerHTML = `
+      <div class="card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+          <div>
+            <h5 class="mb-1">${esc(request.store_name || 'Tienda')}</h5>
+            <div class="small text-muted">${esc(when)}</div>
+          </div>
+          <span class="badge bg-${color}">${label}</span>
+        </div>
+      </div>
+      <div class="row g-3">
+        <div class="col-lg-7">
+          <div class="card p-3 mb-3">
+            <h6>Producto solicitado</h6>
+            <p class="mb-2">${esc(request.description)}</p>
+            <div class="small text-muted">Cantidad: ${request.quantity}</div>
+            ${request.budget != null ? `<div class="small text-muted">Presupuesto: ${money(request.budget)}</div>` : ''}
+            ${request.reference_photo_url ? `<a class="small" href="${esc(request.reference_photo_url)}" target="_blank">Ver foto de referencia</a>` : ''}
+            ${request.notes ? `<div class="small text-muted mt-2">Notas: ${esc(request.notes)}</div>` : ''}
+          </div>
+          <div class="card p-3 mb-3">
+            <h6>Respuesta de la tienda</h6>
+            ${request.quoted_price != null
+              ? `<div class="fs-5 fw-bold text-success">${money(request.quoted_price)}</div>`
+              : '<p class="small text-muted mb-0">La tienda todavía no ha respondido.</p>'}
+            ${request.store_notes ? `<p class="small text-muted mt-2 mb-0">${esc(request.store_notes)}</p>` : ''}
+          </div>
+          ${request.status === 'converted' && request.order_id
+            ? `<a class="btn btn-success w-100" href="/web/orders/${request.order_id}">Ver pedido</a>`
+            : ''}
+          ${canConfirm ? `<button class="btn btn-success w-100" id="confirmRequestBtn" onclick="confirmRequest()">Confirmar precio y crear pedido</button>` : ''}
+          ${canCancel ? `<button class="btn btn-outline-danger w-100 mt-2" onclick="cancelRequest()">Cancelar solicitud</button>` : ''}
+        </div>
+        <div class="col-lg-5">
+          <div class="card p-3">
+            <h6>Entrega y pago</h6>
+            <div class="small text-muted">${esc(request.delivery_address)}</div>
+            <div class="small text-muted mt-2">Pago: ${request.payment_method === 'cash' ? 'Efectivo al recibir' : (request.payment_method === 'transfer' ? 'Transferencia' : 'Mercado Pago')}</div>
+            <div class="small text-muted mt-2">Si confirmas, se genera un pedido y la tienda empieza a prepararlo.</div>
+          </div>
+        </div>
+      </div>`;
+    document.getElementById('requestLoading').classList.add('d-none');
+    document.getElementById('requestContent').classList.remove('d-none');
+  }
+
+  async function confirmRequest() {
+    if (!confirm('¿Confirmas el precio y quieres generar el pedido?')) return;
+    const btn = document.getElementById('confirmRequestBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Creando pedido...';
+    try {
+      const result = await apiRequest('POST', `/store-requests/${REQUEST_ID}/confirm`, {});
+      showToast('Pedido creado');
+      window.location.href = `/web/orders/${result.order_id}`;
+    } catch (e) {
+      showToast(e.message, 'danger');
+      btn.disabled = false;
+      btn.textContent = 'Confirmar precio y crear pedido';
+    }
+  }
+
+  async function cancelRequest() {
+    if (!confirm('¿Cancelar esta solicitud?')) return;
+    try {
+      await apiRequest('POST', `/store-requests/${REQUEST_ID}/cancel`, {});
+      showToast('Solicitud cancelada');
+      loadRequest();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
+  async function loadRequest() {
+    try {
+      const request = await apiRequest('GET', `/store-requests/${REQUEST_ID}`);
+      render(request);
+    } catch (e) {
+      document.getElementById('requestLoading').classList.add('d-none');
+      const box = document.getElementById('requestError');
+      box.textContent = e.message; box.classList.remove('d-none');
+    }
+  }
+  loadRequest();
+</script>
+{% endblock %}

@@ -48,6 +48,7 @@ async def get_nearby_restaurants(
     q: str | None = None,
     skip: int = 0,
     limit: int = 20,
+    business_type: str | None = None,
 ) -> list[RestaurantListItem]:
     where_clause = ""
     if q:
@@ -66,10 +67,12 @@ async def get_nearby_restaurants(
                 )
             )
         """
+    if business_type and business_type != "all":
+        where_clause += " AND r.business_type = :business_type "
 
     sql = text(f"""
         SELECT r.id, r.name, r.description, r.cuisine, r.slug, r.delivery_mode, r.logo_url, r.is_open, r.rating,
-               r.delivery_fee,
+               r.delivery_fee, r.business_type,
                ST_Distance(r.location::geography,
                            ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) AS distance_m
         FROM restaurants r
@@ -83,6 +86,8 @@ async def get_nearby_restaurants(
     params = {"lat": lat, "lng": lng, "limit": limit, "skip": skip}
     if q:
         params["q"] = f"%{q}%"
+    if business_type and business_type != "all":
+        params["business_type"] = business_type
 
     result = await db.execute(sql, params)
     rows = result.fetchall()
@@ -94,6 +99,7 @@ async def get_nearby_restaurants(
             cuisine=row.cuisine,
             slug=row.slug,
             delivery_mode=row.delivery_mode,
+            business_type=row.business_type or "restaurant",
             logo_url=row.logo_url,
             is_open=row.is_open,
             rating=float(row.rating),

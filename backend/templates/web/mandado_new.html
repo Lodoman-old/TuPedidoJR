@@ -50,7 +50,18 @@
       <input class="form-check-input" type="radio" name="payMethod" id="payCash" value="cash" checked>
       <label class="form-check-label" for="payCash"><i class="bi bi-cash"></i> Efectivo (pagas al repartidor)</label>
     </div>
-    <div class="form-text">Por el momento solo está disponible el pago en efectivo.</div>
+    <div class="form-check">
+      <input class="form-check-input" type="radio" name="payMethod" id="payTransfer" value="transfer">
+      <label class="form-check-label" for="payTransfer"><i class="bi bi-bank"></i> Transferencia antes de publicar</label>
+    </div>
+    <div id="prepayNotice" class="alert alert-warning small d-none mt-2 mb-0"></div>
+    <div id="proofBox" class="mt-2 d-none">
+      <label class="form-label small mb-1" for="paymentProof">Comprobante de transferencia</label>
+      <input type="file" class="form-control form-control-sm" id="paymentProof"
+             accept="image/jpeg,image/png,image/webp,application/pdf">
+      <div class="form-text">El mandado se publica cuando el admin confirma el pago.</div>
+    </div>
+    <div class="form-text" id="paymentHelp">Para compras altas se pedirá transferencia antes de publicar el mandado.</div>
   </div>
 </div>
 
@@ -58,8 +69,7 @@
   <h6>Desglose estimado</h6>
   <div class="d-flex justify-content-between small"><span>Productos (presupuesto)</span><span id="estProducts">$0.00</span></div>
   <div class="d-flex justify-content-between small"><span>Envío</span><span id="estDelivery">—</span></div>
-  <div class="d-flex justify-content-between small"><span id="estRiskLabel">Extra por riesgo</span><span id="estRisk">—</span></div>
-  <div class="d-flex justify-content-between small"><span>Comisión plataforma</span><span id="estPlatform">—</span></div>
+  <div class="d-flex justify-content-between small"><span id="estRiskLabel">Cargo por riesgo</span><span id="estRisk">—</span></div>
   <hr>
   <div class="d-flex justify-content-between fw-bold"><span>Total estimado</span><span id="estTotal">—</span></div>
 </div>
@@ -240,10 +250,65 @@
   });
 
   function resetEstimate() {
-    ['estDelivery', 'estRisk', 'estPlatform', 'estTotal'].forEach(id => {
+    ['estDelivery', 'estRisk', 'estTotal'].forEach(id => {
       document.getElementById(id).textContent = '—';
     });
-    document.getElementById('estRiskLabel').textContent = 'Extra por riesgo';
+    document.getElementById('estRiskLabel').textContent = 'Cargo por riesgo';
+  }
+
+  let paymentPolicy = null;
+
+  function paymentMethod() {
+    return document.querySelector('input[name="payMethod"]:checked')?.value || 'cash';
+  }
+
+  function toggleProofBox() {
+    const needsProof = paymentMethod() !== 'cash';
+    document.getElementById('proofBox')?.classList.toggle('d-none', !needsProof);
+    if (needsProof && paymentPolicy?.requires_prepayment) {
+      document.getElementById('paymentHelp').textContent =
+        'Esta compra requiere transferencia. El mandado no se publica hasta confirmar el pago.';
+    } else if (needsProof) {
+      document.getElementById('paymentHelp').textContent =
+        'Puedes pagar por transferencia. El mandado se publica al confirmar el pago.';
+    } else {
+      document.getElementById('paymentHelp').textContent =
+        'Para compras altas se pedirá transferencia antes de publicar el mandado.';
+    }
+  }
+
+  async function updatePaymentPolicy() {
+    const budget = parseFloat(document.getElementById('budgetInput').value) || 0;
+    const notice = document.getElementById('prepayNotice');
+    if (!notice) return;
+    if (budget <= 0) {
+      notice.classList.add('d-none');
+      paymentPolicy = null;
+      toggleProofBox();
+      return;
+    }
+    try {
+      const policy = await apiRequest('POST', '/mandados/payment-policy', {
+        estimated_budget: budget,
+      });
+      paymentPolicy = policy;
+      if (policy.requires_prepayment) {
+        document.getElementById('payTransfer').checked = true;
+        notice.innerHTML = `<i class="bi bi-shield-check"></i>
+          Para compras de <strong>$${Number(policy.threshold).toFixed(2)}</strong> o más
+          se requiere transferencia antes de publicar el mandado.`;
+        notice.classList.remove('d-none');
+      } else if (policy.trusted_customer && budget >= Number(policy.threshold)) {
+        notice.innerHTML = `<i class="bi bi-patch-check"></i>
+          Por tu historial puedes pagar en efectivo hasta $${Number(policy.max_cash).toFixed(2)}.`;
+        notice.classList.remove('d-none');
+      } else {
+        notice.classList.add('d-none');
+      }
+      toggleProofBox();
+    } catch (e) {
+      notice.classList.add('d-none');
+    }
   }
 
   async function updateEstimate() {
@@ -263,10 +328,7 @@
       });
       document.getElementById('estDelivery').textContent = '$' + parseFloat(est.delivery_fee).toFixed(2);
       document.getElementById('estRisk').textContent = '$' + parseFloat(est.risk_fee).toFixed(2);
-      document.getElementById('estRiskLabel').textContent = est.risk_type === 'percentage'
-        ? `Extra por riesgo (${parseFloat(est.risk_value)}%)`
-        : `Extra por riesgo (monto fijo $${parseFloat(est.risk_value).toFixed(2)})`;
-      document.getElementById('estPlatform').textContent = '$' + parseFloat(est.platform_fee).toFixed(2);
+      document.getElementById('estRiskLabel').textContent = 'Cargo por riesgo';
       document.getElementById('estTotal').textContent = '$' + parseFloat(est.estimated_total).toFixed(2);
     } catch (ex) {
       resetEstimate();
@@ -275,10 +337,17 @@
 
   function scheduleEstimate() {
     clearTimeout(estimateTimer);
-    estimateTimer = setTimeout(updateEstimate, 400);
+    estimateTimer = setTimeout(() => {
+      updateEstimate();
+      updatePaymentPolicy();
+    }, 400);
   }
 
   document.getElementById('budgetInput').addEventListener('input', scheduleEstimate);
+  document.querySelectorAll('input[name="payMethod"]').forEach(input => {
+    input.addEventListener('change', toggleProofBox);
+  });
+  toggleProofBox();
 
   document.getElementById('submitMandado').addEventListener('click', async () => {
     const desc = document.getElementById('mandadoDesc').value.trim();
@@ -292,11 +361,39 @@
     if (desc.length < 10) { showToast('Describe qué necesitas (mín 10 caracteres)', 'danger'); return; }
     if (!budget || budget <= 0) { showToast('Ingresa un presupuesto válido', 'danger'); return; }
     if (addr.length < 5) { showToast('Escribe la dirección de entrega', 'danger'); return; }
+    if (!paymentPolicy) await updatePaymentPolicy();
+    if (paymentPolicy?.requires_prepayment && payMethod === 'cash') {
+      showToast('Esta compra requiere pago por transferencia antes de publicar el mandado', 'danger');
+      return;
+    }
 
     let coords = await resolveCoordinates(street, cp, colonia, addr);
     if (!coords) {
       geoMsg('No pudimos ubicar la dirección. Ajusta el pin en el mapa.', 'danger');
       return;
+    }
+
+    let proofUrl = null;
+    if (payMethod !== 'cash') {
+      const file = document.getElementById('paymentProof')?.files?.[0];
+      if (!file) {
+        showToast('Sube el comprobante de transferencia', 'warning');
+        return;
+      }
+      const submitBtn = document.getElementById('submitMandado');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Subiendo comprobante...';
+      try {
+        const uploaded = await uploadFile(file);
+        proofUrl = uploaded.url || uploaded.file_url || uploaded.path;
+      } catch (e) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Solicitar mandado';
+        showToast(e.message, 'danger');
+        return;
+      }
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Solicitar mandado';
     }
 
     try {
@@ -306,8 +403,11 @@
         delivery_address: addr,
         delivery_location: { lat: coords.lat, lng: coords.lng },
         payment_method: payMethod,
+        payment_proof_url: proofUrl,
       });
-      showToast('Mandado solicitado exitosamente');
+      showToast(payMethod === 'cash'
+        ? 'Mandado solicitado exitosamente'
+        : 'Mandado creado. Se publicará al confirmar el pago.');
       window.location.href = `/web/mandados/${m.id}`;
     } catch (ex) {
       const box = document.getElementById('mandadoError');

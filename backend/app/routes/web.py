@@ -115,6 +115,25 @@ async def web_reservation_detail(request: Request, reservation_id: str):
     )
 
 
+@router.get("/store-requests")
+async def web_store_requests(request: Request):
+    return templates.TemplateResponse(request, "store_requests.html")
+
+
+@router.get("/store-requests/{request_id}")
+async def web_store_request_detail(request: Request, request_id: str):
+    return templates.TemplateResponse(
+        request, "store_request_detail.html", {"request_id": request_id}
+    )
+
+
+@router.get("/restaurants/{restaurant_id}/requests")
+async def web_restaurant_requests(request: Request, restaurant_id: str):
+    return templates.TemplateResponse(
+        request, "restaurant_requests.html", {"restaurant_id": restaurant_id}
+    )
+
+
 @router.get("/cart")
 async def web_cart(request: Request):
     return templates.TemplateResponse(request, "cart.html")
@@ -163,6 +182,11 @@ async def web_mandado_list(request: Request):
 @router.get("/mandados/{mandado_id}")
 async def web_mandado_detail(request: Request, mandado_id: str):
     return templates.TemplateResponse(request, "mandado_detail.html", {"mandado_id": mandado_id})
+
+
+@router.get("/recargas")
+async def web_recharges(request: Request):
+    return templates.TemplateResponse(request, "recargas.html")
 
 
 @router.get("/app")

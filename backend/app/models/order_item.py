@@ -9,7 +9,7 @@ class OrderItem(TimestampMixin, Base):
     __tablename__ = "order_items"
 
     order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=False)
-    menu_item_id = Column(UUID(as_uuid=True), ForeignKey("menu_items.id"), nullable=False)
+    menu_item_id = Column(UUID(as_uuid=True), ForeignKey("menu_items.id"), nullable=True)
     name = Column(String(150), nullable=False)
     quantity = Column(Integer, nullable=False)
     unit_price = Column(DECIMAL(10, 2), nullable=False)

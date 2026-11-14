@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, DECIMAL, ForeignKey, String, Text
+from sqlalchemy import Boolean, Column, DateTime, DECIMAL, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from geoalchemy2 import Geography
 
@@ -22,6 +22,9 @@ class Mandado(TimestampMixin, Base):
     final_total = Column(DECIMAL(10, 2), nullable=True)
     payment_method = Column(String(10), default="cash", nullable=False)
     payment_status = Column(String(15), default="pending", nullable=False)
+    prepayment_required = Column(Boolean, default=False, nullable=False)
+    prepayment_proof_url = Column(Text, nullable=True)
+    prepayment_confirmed_at = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(20), default="pending", nullable=False)
     delivery_address = Column(Text, nullable=False)
     delivery_location = Column(Geography(geometry_type="POINT", srid=4326), nullable=False)

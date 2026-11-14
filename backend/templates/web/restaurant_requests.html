@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h5 class="mb-0"><i class="bi bi-chat-square-text"></i> Solicitudes de producto</h5>
+    <small class="text-muted">Peticiones de clientes para productos que no están en el catálogo.</small>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-sm btn-outline-secondary" href="/web/restaurants/{{ restaurant_id }}">Volver al panel</a>
+    <button class="btn btn-sm btn-outline-primary" onclick="loadRequests()"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+  </div>
+</div>
+<div id="requestsError" class="alert alert-danger d-none"></div>
+<div id="requestsLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+<div id="requestsList"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  const LABELS = {
+    pending: ['Pendiente', 'warning text-dark'],
+    quoted: ['Cotizada', 'info text-dark'],
+    converted: ['Pedido creado', 'success'],
+    rejected: ['Rechazada', 'danger'],
+    cancelled: ['Cancelada', 'secondary'],
+  };
+  const money = n => '$' + Number(n || 0).toFixed(2);
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function actions(request) {
+    if (request.status !== 'pending') {
+      return request.order_id
+        ? `<a class="btn btn-sm btn-outline-success" href="/web/orders/${request.order_id}">Ver pedido</a>`
+        : '';
+    }
+    return `<button class="btn btn-sm btn-success" onclick="quoteRequest('${request.id}')">Cotizar</button>
+      <button class="btn btn-sm btn-outline-danger" onclick="rejectRequest('${request.id}')">Rechazar</button>`;
+  }
+
+  function card(request) {
+    const [label, color] = LABELS[request.status] || [request.status, 'secondary'];
+    const when = new Date(request.created_at).toLocaleString('es-MX', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+    return `<div class="card p-3 mb-2">
+      <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+        <div>
+          <h6 class="mb-1">${esc(request.customer_name || 'Cliente')} <span class="badge bg-${color}">${label}</span></h6>
+          <div class="small text-muted">${esc(when)} · ${request.quantity} pieza(s)</div>
+          <div class="small text-muted"><i class="bi bi-telephone"></i> ${esc(request.customer_phone || 'Sin teléfono')}</div>
+        </div>
+        <div class="text-end small">
+          ${request.budget != null ? `<div>Presupuesto: ${money(request.budget)}</div>` : ''}
+          ${request.quoted_price != null ? `<div>Cotizado: <strong>${money(request.quoted_price)}</strong></div>` : ''}
+        </div>
+      </div>
+      <p class="small mb-1 mt-2">${esc(request.description)}</p>
+      ${request.notes ? `<div class="small text-muted">Nota del cliente: ${esc(request.notes)}</div>` : ''}
+      ${request.reference_photo_url ? `<a class="small" href="${esc(request.reference_photo_url)}" target="_blank">Ver foto de referencia</a>` : ''}
+      ${request.store_notes ? `<div class="small text-muted">Respuesta: ${esc(request.store_notes)}</div>` : ''}
+      <div class="small text-muted mt-2">Entrega: ${esc(request.delivery_address)}</div>
+      <div class="mt-2 d-flex gap-2 flex-wrap">${actions(request)}</div>
+    </div>`;
+  }
+
+  async function quoteRequest(id) {
+    const raw = prompt('Precio del producto (solo el producto, sin envío):');
+    if (raw === null) return;
+    const price = Number(raw);
+    if (!Number.isFinite(price) || price <= 0) {
+      showToast('Escribe un precio válido', 'warning');
+      return;
+    }
+    const notes = prompt('Nota para el cliente (opcional):') || null;
+    try {
+      await apiRequest('PATCH', `/restaurants/${RID}/requests/${id}/respond`, {
+        status: 'quoted', quoted_price: price, store_notes: notes,
+      });
+      showToast('Cotización enviada');
+      loadRequests();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
+  async function rejectRequest(id) {
+    const notes = prompt('Motivo del rechazo (opcional):');
+    if (notes === null) return;
+    try {
+      await apiRequest('PATCH', `/restaurants/${RID}/requests/${id}/respond`, {
+        status: 'rejected', store_notes: notes || null,
+      });
+      showToast('Solicitud rechazada');
+      loadRequests();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
+  async function loadRequests() {
+    const loading = document.getElementById('requestsLoading');
+    loading.classList.remove('d-none');
+    try {
+      const rows = await apiRequest('GET', `/restaurants/${RID}/requests`);
+      document.getElementById('requestsList').innerHTML = rows.length
+        ? rows.map(card).join('')
+        : '<div class="card p-4 text-center text-muted">Todavía no hay solicitudes de producto.</div>';
+      document.getElementById('requestsError').classList.add('d-none');
+    } catch (e) {
+      const box = document.getElementById('requestsError');
+      box.textContent = e.message; box.classList.remove('d-none');
+    } finally {
+      loading.classList.add('d-none');
+    }
+  }
+  loadRequests();
+  setInterval(loadRequests, 30000);
+</script>
+{% endblock %}

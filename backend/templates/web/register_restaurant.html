@@ -7,7 +7,7 @@
 <div class="row justify-content-center">
   <div class="col-lg-8">
     <div class="card p-4">
-      <h4 class="mb-1">Registra tu restaurante</h4>
+      <h4 class="mb-1">Registra tu negocio</h4>
       <p class="text-muted small mb-4">Envía tu solicitud. El equipo de TuPedidoJR la revisará y te avisará por correo.</p>
       <div id="regRestError" class="alert alert-danger d-none"></div>
       <div id="regRestSuccess" class="alert alert-success d-none"></div>
@@ -20,10 +20,21 @@
           <div class="col-md-6"><label class="form-label">Contraseña</label><input id="ownerPassword" type="password" minlength="6" class="form-control" required></div>
         </div>
 
-        <h6 class="mt-4">Datos del restaurante</h6>
+        <h6 class="mt-4">Datos del negocio</h6>
         <div class="row g-3">
-          <div class="col-md-6"><label class="form-label">Nombre del restaurante</label><input id="restName" class="form-control" required></div>
-          <div class="col-md-6"><label class="form-label">Giro / cocina</label><input id="restCuisine" class="form-control" placeholder="Pizza, tacos, sushi..."></div>
+          <div class="col-md-6"><label class="form-label">Nombre del negocio</label><input id="restName" class="form-control" required></div>
+          <div class="col-md-6">
+            <label class="form-label">Tipo de negocio</label>
+            <select id="restBusinessType" class="form-select">
+              <option value="restaurant">Restaurante</option>
+              <option value="store">Tienda</option>
+              <option value="grocery">Abarrotes</option>
+              <option value="pharmacy">Farmacia</option>
+              <option value="hardware">Ferretería</option>
+              <option value="other">Otro</option>
+            </select>
+          </div>
+          <div class="col-md-6"><label class="form-label">Giro / categoría</label><input id="restCuisine" class="form-control" placeholder="Pizza, abarrotes, farmacia..."></div>
           <div class="col-md-4">
             <label class="form-label">Código postal</label>
             <input id="postalCode" class="form-control" maxlength="5" inputmode="numeric" placeholder="Ej. 38240" required>
@@ -382,6 +393,7 @@
         password: $('ownerPassword').value,
         restaurant_name: $('restName').value.trim(),
         cuisine: $('restCuisine').value.trim() || null,
+        business_type: $('restBusinessType').value,
         address: fullAddress(),
         lat, lng,
       });

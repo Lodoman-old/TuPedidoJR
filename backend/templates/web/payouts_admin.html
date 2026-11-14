@@ -9,6 +9,7 @@
 <div id="payoutsError" class="alert alert-danger d-none"></div>
 <div id="refundsCard" class="mb-3"></div>
 <div id="reservationDepositsCard" class="mb-3"></div>
+<div id="mandadoPrepaymentsCard" class="mb-3"></div>
 <div id="payoutsLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
 <div id="payoutsContent" class="d-none"></div>
 {% endblock %}
@@ -456,6 +457,54 @@
     } catch (e) { showToast(e.message, 'danger'); }
   }
 
+  async function loadMandadoPrepayments() {
+    const card = document.getElementById('mandadoPrepaymentsCard');
+    if (!card) return;
+    try {
+      const rows = await apiRequest('GET', '/admin/mandados/prepayments');
+      if (!rows.length) { card.innerHTML = ''; return; }
+      card.innerHTML = `<div class="card p-3 border-warning">
+        <h6 class="m-0"><i class="bi bi-shield-check"></i> Mandados con prepago pendiente
+          <span class="badge bg-warning text-dark">${rows.length}</span></h6>
+        <p class="small text-muted mb-2">Compras altas que no se publican hasta confirmar la transferencia.</p>
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Cliente</th><th>Mandado</th><th class="text-end">Presupuesto</th><th class="text-end">Total</th><th>Comprobante</th><th></th></tr></thead>
+          <tbody>${rows.map(row => `<tr>
+            <td><small>${esc(row.customer_name)}<br>${esc(row.customer_email)}</small></td>
+            <td><small>${esc(row.description)}</small></td>
+            <td class="text-end">${money(row.estimated_budget)}</td>
+            <td class="text-end fw-bold">${money(row.estimated_total)}</td>
+            <td>${row.prepayment_proof_url ? `<a class="small" href="${esc(row.prepayment_proof_url)}" target="_blank">Ver</a>` : '<small class="text-muted">Sin comprobante</small>'}</td>
+            <td class="text-end">
+              <button class="btn btn-sm btn-success" onclick="confirmMandadoPayment('${row.id}')">Confirmar pago</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="rejectMandadoPayment('${row.id}')">Rechazar</button>
+            </td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+    } catch (e) {
+      card.innerHTML = `<div class="alert alert-danger py-2">${esc(e.message)}</div>`;
+    }
+  }
+
+  async function confirmMandadoPayment(id) {
+    if (!confirm('¿Confirmas que la transferencia ya llegó? El mandado se publicará a los repartidores.')) return;
+    try {
+      await apiRequest('POST', `/admin/mandados/${id}/confirm-payment`);
+      showToast('Pago confirmado y mandado publicado');
+      loadMandadoPrepayments();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
+  async function rejectMandadoPayment(id) {
+    if (!confirm('¿Rechazar este prepago y cancelar el mandado?')) return;
+    try {
+      await apiRequest('POST', `/admin/mandados/${id}/reject-payment`);
+      showToast('Mandado cancelado');
+      loadMandadoPrepayments();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
   async function loadPayouts() {
     const loading = document.getElementById('payoutsLoading');
     const content = document.getElementById('payoutsContent');
@@ -463,6 +512,7 @@
     error.classList.add('d-none');
     loading.classList.remove('d-none');
     loadReservationDeposits();
+    loadMandadoPrepayments();
     try {
       const [data, history, advances] = await Promise.all([getAdminPayouts(), getPayoutHistory(), getAdminAdvances()]);
       const restaurants = data.restaurants || [];

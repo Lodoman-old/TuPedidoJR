@@ -1,7 +1,20 @@
 {% extends "base.html" %}
+{% block head_extra %}
+<style>
+  #tabRestaurants.active, #tabStores.active {
+    background: #1B2F6B;
+    border-color: #1B2F6B;
+    color: #fff;
+  }
+</style>
+{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h4 class="m-0">Restaurantes</h4>
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+  <h4 class="m-0" id="pageTitle">Restaurantes</h4>
+  <div class="d-flex gap-2">
+    <a class="btn btn-sm btn-outline-primary" id="tabRestaurants" href="/web/restaurants">Restaurantes</a>
+    <a class="btn btn-sm btn-outline-primary" id="tabStores" href="/web/restaurants?type=store">Tiendas</a>
+  </div>
 </div>
 <div class="input-group mb-3">
   <input type="text" class="form-control" id="searchInput" autocomplete="off"
@@ -35,7 +48,24 @@
 {% endblock %}
 {% block scripts %}
 <script>
+  const PAGE_TYPE = new URLSearchParams(window.location.search).get('type') === 'store' ? 'store' : 'restaurant';
   let searchTimer = null;
+
+  function applyPageType() {
+    const isStore = PAGE_TYPE === 'store';
+    document.getElementById('pageTitle').textContent = isStore ? 'Tiendas' : 'Restaurantes';
+    document.getElementById('searchInput').placeholder = isStore
+      ? 'Buscar tienda, giro o producto...'
+      : 'Buscar restaurante, giro o platillo (ej. sushi, taco, pizza)...';
+    document.getElementById('tabRestaurants').classList.toggle('active', !isStore);
+    document.getElementById('tabStores').classList.toggle('active', isStore);
+    document.getElementById('emptyText').textContent = isStore
+      ? 'No hay tiendas con esos filtros'
+      : 'No hay restaurantes cerca de tu ubicación';
+    document.getElementById('showAllBtn').textContent = isStore
+      ? 'Ver todas las tiendas'
+      : 'Ver todos los restaurantes';
+  }
 
   function restaurantCard(r) {
     const cuisine = r.cuisine
@@ -92,7 +122,7 @@
   }
 
   function getFilters() {
-    const filters = {};
+    const filters = { business_type: PAGE_TYPE };
     const sort = document.getElementById('filterSort')?.value;
     if (sort) filters.sort = sort;
     if (document.getElementById('filterOpen')?.checked) filters.open_now = 'true';
@@ -238,6 +268,7 @@
   document.getElementById('filterSort').addEventListener('change', () => loadRestaurants(document.getElementById('searchInput').value));
   document.getElementById('filterOpen').addEventListener('change', () => loadRestaurants(document.getElementById('searchInput').value));
   document.getElementById('filterFree').addEventListener('change', () => loadRestaurants(document.getElementById('searchInput').value));
+  applyPageType();
   loadRestaurants();
 </script>
 {% endblock %}

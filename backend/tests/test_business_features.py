@@ -1480,6 +1480,14 @@ class TestRestaurantRegistrationAndTeam:
         assert invalid.status_code == 400
 
 
+class TestRechargesPage:
+    async def test_recharges_coming_soon_page(self, client):
+        resp = await client.get("/web/recargas")
+        assert resp.status_code == 200
+        assert "Tiempo aire y pago de servicios" in resp.text
+        assert "Próximamente" in resp.text
+
+
 class TestImageOptimization:
     async def test_logo_is_resized_and_converted_to_webp(
         self, client, restaurant, owner_token,

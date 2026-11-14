@@ -44,7 +44,7 @@ class OrderItemOptionOut(BaseModel):
 
 class OrderItemOut(BaseModel):
     id: UUID
-    menu_item_id: UUID
+    menu_item_id: UUID | None = None
     name: str
     quantity: int
     unit_price: Decimal

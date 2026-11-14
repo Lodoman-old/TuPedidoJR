@@ -85,6 +85,21 @@
       </div>
 
       <div class="card p-3 mb-3">
+        <h6 class="mb-1">Catálogo y solicitudes</h6>
+        <p class="small text-muted mb-2">
+          Si eres tienda, puedes mostrar tu catálogo y recibir pedidos de productos que no estén publicados.
+        </p>
+        <div class="form-check mb-1">
+          <input class="form-check-input" type="checkbox" id="bizCatalogEnabled">
+          <label class="form-check-label" for="bizCatalogEnabled">Mostrar catálogo de productos</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="bizAcceptsRequests">
+          <label class="form-check-label" for="bizAcceptsRequests">Aceptar solicitudes de productos no publicados</label>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
         <h6 class="mb-1">Reservaciones</h6>
         <p class="small text-muted mb-2">
           Los clientes pueden reservar mesa y, si quieren, dejar un pre-pedido. El depósito solo aplica al pre-pedido.
@@ -205,6 +220,8 @@
     el('bizReservationDeposit').value = Number(r.reservation_deposit_percent ?? 20);
     el('bizReservationAdvance').value = Number((r.reservation_min_advance_min ?? 120) / 60).toFixed(2).replace(/\.?0+$/, '');
     el('bizReservationTolerance').value = Number(r.reservation_late_tolerance_min ?? 60);
+    el('bizCatalogEnabled').checked = r.catalog_enabled !== false;
+    el('bizAcceptsRequests').checked = r.accepts_custom_requests !== false;
     el('bizIsOpen').checked = Boolean(r.is_open);
     el('bizPublicPage').checked = Boolean(r.public_page_enabled);
     el('profileRole').textContent = ROLE_LABELS[r.viewer_role] || r.viewer_role || '';
@@ -276,6 +293,8 @@
       reservation_deposit_percent: Number(el('bizReservationDeposit').value || 20),
       reservation_min_advance_min: Math.round(Number(el('bizReservationAdvance').value || 2) * 60),
       reservation_late_tolerance_min: Math.round(Number(el('bizReservationTolerance').value || 60)),
+      catalog_enabled: el('bizCatalogEnabled').checked,
+      accepts_custom_requests: el('bizAcceptsRequests').checked,
     };
     try {
       el('saveBusinessBtn').disabled = true;

@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import time
+import uuid
 
 import httpx
 from jose import jwt
@@ -16,6 +17,7 @@ from app.models.order import Order
 from app.models.push_token import PushToken
 from app.models.reservation import Reservation
 from app.models.restaurant import Restaurant
+from app.models.store_request import StoreRequest
 from app.models.restaurant_user import RestaurantUser
 from app.models.setting import Setting
 from app.models.user import User
@@ -502,6 +504,115 @@ def schedule_new_reservation(reservation_id: str, deposit_pending: bool = False)
 def schedule_reservation_status(reservation_id: str) -> None:
     try:
         asyncio.create_task(notify_reservation_status(reservation_id))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
+STORE_REQUEST_MESSAGES = {
+    "quoted": (
+        "La tienda respondió",
+        "Tu solicitud tiene precio. Confírmala para generar el pedido.",
+    ),
+    "rejected": (
+        "Solicitud no disponible",
+        "La tienda no pudo conseguir el producto solicitado.",
+    ),
+    "converted": (
+        "Pedido creado",
+        "Tu solicitud fue confirmada y ya se está preparando.",
+    ),
+    "cancelled": (
+        "Solicitud cancelada",
+        "La solicitud de producto fue cancelada.",
+    ),
+}
+
+STORE_REQUEST_STYLES = {
+    "quoted": "green",
+    "rejected": "red",
+    "converted": "green",
+    "cancelled": "red",
+}
+
+
+async def notify_new_store_request(request_id: str) -> None:
+    """Avisa a la tienda que recibió una solicitud de producto."""
+    try:
+        async with async_session() as db:
+            request = await db.get(StoreRequest, uuid.UUID(request_id))
+            if not request:
+                return
+            store = await db.get(Restaurant, request.store_id)
+            if not store:
+                return
+            customer = await db.get(User, request.user_id)
+            members_result = await db.execute(
+                select(RestaurantUser.user_id).where(
+                    RestaurantUser.restaurant_id == store.id,
+                    RestaurantUser.is_active.is_(True),
+                    RestaurantUser.role.in_(ORDER_ROLES),
+                )
+            )
+            user_ids = {store.owner_id, *members_result.scalars().all()}
+            name = customer.name if customer else "Cliente"
+            body = f"{name}: {request.description[:90]}"
+            for user_id in user_ids:
+                await send_to_user(
+                    db,
+                    user_id,
+                    "Nueva solicitud de producto",
+                    body,
+                    {
+                        "type": "restaurant_store_request",
+                        "request_id": str(request.id),
+                        "store_id": str(store.id),
+                    },
+                    "amber",
+                )
+    except Exception:
+        logger.exception("Push new store-request notification failed for %s", request_id)
+
+
+async def notify_store_request_status(request_id: str) -> None:
+    """Avisa al cliente cuando la tienda responde o cambia la solicitud."""
+    try:
+        async with async_session() as db:
+            request = await db.get(StoreRequest, uuid.UUID(request_id))
+            if not request:
+                return
+            title, body = STORE_REQUEST_MESSAGES.get(
+                request.status,
+                ("Solicitud actualizada", "Tu solicitud de producto cambió de estado."),
+            )
+            if request.status == "quoted" and request.quoted_price is not None:
+                body = f"La tienda cotizó ${request.quoted_price:.2f}. Confirma para generar el pedido."
+            await send_to_user(
+                db,
+                request.user_id,
+                title,
+                body,
+                {
+                    "type": "store_request",
+                    "request_id": str(request.id),
+                    "store_id": str(request.store_id),
+                    "status": request.status,
+                },
+                STORE_REQUEST_STYLES.get(request.status),
+            )
+    except Exception:
+        logger.exception("Push store-request status failed for %s", request_id)
+
+
+def schedule_new_store_request(request_id: str) -> None:
+    try:
+        asyncio.create_task(notify_new_store_request(request_id))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
+def schedule_store_request_status(request_id: str) -> None:
+    try:
+        asyncio.create_task(notify_store_request_status(request_id))
     except RuntimeError:
         logger.debug("No event loop for push notification")
 

@@ -15,6 +15,9 @@ from app.schemas.mandado import (
     MandadoEstimateOut,
     MandadoEstimateRequest,
     MandadoOut,
+    MandadoPaymentPolicyOut,
+    MandadoPaymentPolicyRequest,
+    MandadoPaymentProof,
     MandadoPurchase,
     MandadoTrackingOut,
 )
@@ -24,6 +27,7 @@ from app.services.push_service import (
     schedule_new_mandado,
 )
 from app.services.tracking_service import build_mandado_tracking
+from app.services.trust_service import mandado_payment_policy
 
 router = APIRouter()
 
@@ -72,6 +76,18 @@ async def create_mandado(
     elif payment_method != "cash":
         raise HTTPException(status_code=400, detail="Método de pago no válido")
 
+    policy = await mandado_payment_policy(db, current_user, body.estimated_budget)
+    if policy["requires_prepayment"] and payment_method == "cash":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Para compras de ${policy['threshold']:.2f} o más se requiere "
+                "pago por transferencia antes de publicar el mandado. "
+                "Si ya tienes buen historial, el sistema te permite pagar en efectivo."
+            ),
+        )
+
+    prepayment_required = policy["requires_prepayment"] or payment_method != "cash"
     mandado = Mandado(
         user_id=current_user.id,
         description=body.description,
@@ -82,14 +98,40 @@ async def create_mandado(
         estimated_total=estimated_total,
         payment_method=payment_method,
         payment_status="pending",
-        status="pending",
+        prepayment_required=prepayment_required,
+        prepayment_proof_url=body.payment_proof_url,
+        status="pending_payment" if prepayment_required else "pending",
         delivery_address=body.delivery_address,
         delivery_location=f"SRID=4326;POINT({body.delivery_location.lng} {body.delivery_location.lat})",
     )
     db.add(mandado)
     await db.commit()
     await db.refresh(mandado)
-    schedule_new_mandado(str(mandado.id))
+    if not prepayment_required:
+        schedule_new_mandado(str(mandado.id))
+    return mandado
+
+
+@router.patch("/{mandado_id}/payment-proof", response_model=MandadoOut)
+async def upload_mandado_payment_proof(
+    mandado_id: str,
+    body: MandadoPaymentProof,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Mandado).where(Mandado.id == mandado_id))
+    mandado = result.scalar_one_or_none()
+    if not mandado:
+        raise HTTPException(status_code=404, detail="Mandado no encontrado")
+    if mandado.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No puedes editar este mandado")
+    if not mandado.prepayment_required:
+        raise HTTPException(status_code=400, detail="Este mandado no requiere prepago")
+    if mandado.payment_status == "paid":
+        raise HTTPException(status_code=400, detail="El pago ya fue confirmado")
+    mandado.prepayment_proof_url = body.proof_url
+    await db.commit()
+    await db.refresh(mandado)
     return mandado
 
 
@@ -106,6 +148,15 @@ async def estimate_mandado(
         body.delivery_location.lng,
     )
     return MandadoEstimateOut(**fees)
+
+
+@router.post("/payment-policy", response_model=MandadoPaymentPolicyOut)
+async def payment_policy(
+    body: MandadoPaymentPolicyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await mandado_payment_policy(db, current_user, body.estimated_budget)
 
 
 @router.get("", response_model=list[MandadoOut])
@@ -300,7 +351,7 @@ async def cancel_mandado(
         raise HTTPException(status_code=404, detail="Mandado no encontrado")
     if mandado.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="No puedes cancelar este mandado")
-    if mandado.status not in ("pending", "accepted"):
+    if mandado.status not in ("pending", "pending_payment", "accepted"):
         raise HTTPException(status_code=400, detail="Solo se pueden cancelar mandados pendientes o aceptados")
 
     mandado.status = "cancelled"

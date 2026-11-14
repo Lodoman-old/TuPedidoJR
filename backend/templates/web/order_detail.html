@@ -193,9 +193,12 @@
         ${parseFloat(o.refund_amount || 0) > 0 ? `<br><small>Reembolso: $${parseFloat(o.refund_amount).toFixed(2)} (${REFUND_LABELS[o.refund_status] || o.refund_status})</small>` : ''}
       </div>`;
     }
-    html += `<button class="btn btn-outline-primary w-100 mb-2" onclick="repeatOrder()">
-      <i class="bi bi-arrow-repeat"></i> Repetir pedido
-    </button>`;
+    const canRepeat = (o.items || []).every(item => item.menu_item_id);
+    if (canRepeat) {
+      html += `<button class="btn btn-outline-primary w-100 mb-2" onclick="repeatOrder()">
+        <i class="bi bi-arrow-repeat"></i> Repetir pedido
+      </button>`;
+    }
     if (supportPhone) {
       html += `<a class="btn btn-outline-success w-100 mb-2" target="_blank"
         href="https://wa.me/${supportPhone}?text=${encodeURIComponent(`Hola, necesito ayuda con el pedido #${o.id.slice(0, 8)}`)}">

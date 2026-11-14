@@ -12,17 +12,19 @@
 <script>
   const MID = '{{ mandado_id }}';
   const STATUS_LABELS = {
+    pending_payment: 'Pendiente de pago',
     pending: 'Pendiente', accepted: 'Aceptado', buying: 'Comprando',
     purchased: 'Comprado', in_delivery: 'En camino', completed: 'Entregado',
     delivered: 'Entregado', cancelled: 'Cancelado'
   };
   const STATUS_COLORS = {
+    pending_payment: 'bg-warning text-dark',
     pending: 'bg-warning text-dark', accepted: 'bg-info text-dark', buying: 'bg-primary text-white',
     purchased: 'bg-primary text-white', in_delivery: 'bg-success text-white',
     completed: 'bg-secondary text-white', delivered: 'bg-secondary text-white',
     cancelled: 'bg-danger text-white'
   };
-  const ACTIVE = ['pending', 'accepted', 'buying', 'purchased', 'in_delivery'];
+  const ACTIVE = ['pending_payment', 'pending', 'accepted', 'buying', 'purchased', 'in_delivery'];
   let map = null;
   let courierMarker = null;
   let destinationMarker = null;
@@ -80,12 +82,24 @@
         <h6>Descripción</h6>
         <p class="mb-0">${m.description}</p>
       </div>
+      ${m.prepayment_required && m.payment_status !== 'paid' ? `
+        <div class="card p-3 mb-3 border-warning">
+          <h6><i class="bi bi-shield-check"></i> Pago por transferencia</h6>
+          <p class="small text-muted mb-2">
+            Este mandado no se publica a los repartidores hasta que se confirme la transferencia.
+          </p>
+          <div class="small mb-2" id="mandadoBankInfo">Consultando cuenta...</div>
+          <div class="small mb-2">Monto del presupuesto: <strong>$${parseFloat(m.estimated_budget).toFixed(2)}</strong></div>
+          <input type="file" class="form-control form-control-sm mb-2" id="mandadoProof"
+                 accept="image/jpeg,image/png,image/webp,application/pdf">
+          <button class="btn btn-sm btn-success" id="mandadoProofBtn" onclick="uploadMandadoProof()">Subir comprobante</button>
+          ${m.prepayment_proof_url ? '<div class="small text-success mt-2">Comprobante recibido. Esperando validación.</div>' : ''}
+        </div>` : ''}
       <div class="card p-3 mb-3">
         <h6>Desglose</h6>
         <div class="d-flex justify-content-between small"><span>Productos (${m.product_total ? 'real' : 'presupuesto'})</span><span>$${parseFloat(m.product_total || m.estimated_budget).toFixed(2)}</span></div>
         <div class="d-flex justify-content-between small"><span>Envío</span><span>$${parseFloat(m.delivery_fee).toFixed(2)}</span></div>
-        <div class="d-flex justify-content-between small"><span>Extra por riesgo</span><span>$${parseFloat(m.risk_fee).toFixed(2)}</span></div>
-        <div class="d-flex justify-content-between small"><span>Comisión plataforma</span><span>$${parseFloat(m.platform_fee).toFixed(2)}</span></div>
+        <div class="d-flex justify-content-between small"><span>Cargo por riesgo</span><span>$${parseFloat(m.risk_fee).toFixed(2)}</span></div>
         <hr>
         <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>$${parseFloat(total).toFixed(2)}</span></div>
         <small class="text-muted">Método de pago: ${m.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</small>
@@ -97,12 +111,13 @@
         <img src="${m.receipt_photo_url}" class="img-fluid rounded" alt="Ticket"></div>`;
     }
 
-    if (m.status === 'pending' || m.status === 'accepted') {
+    if (m.status === 'pending' || m.status === 'pending_payment' || m.status === 'accepted') {
       html += `<button class="btn btn-outline-danger w-100" id="cancelBtn">Cancelar mandado</button>`;
     }
 
     document.getElementById('content').innerHTML = html;
     initMap(t);
+    if (m.prepayment_required && m.payment_status !== 'paid') loadMandadoBank();
     document.getElementById('cancelBtn')?.addEventListener('click', async () => {
       if (!confirm('¿Cancelar este mandado?')) return;
       try { await apiRequest('POST', `/mandados/${MID}/cancel`); showToast('Mandado cancelado'); loadMandado(); }
@@ -182,6 +197,39 @@
         schedulePoll(status);
       }
     }, 12000);
+  }
+
+  async function loadMandadoBank() {
+    const box = document.getElementById('mandadoBankInfo');
+    if (!box) return;
+    try {
+      const bank = await getBankDetails();
+      box.innerHTML = bank
+        ? `<strong>Transferencia a TuPedidoJR</strong><br>Banco: ${bank.bank_name || '—'}<br>Titular: ${bank.account_holder || '—'}<br>CLABE: ${bank.clabe || '—'}`
+        : '<span class="text-danger">La cuenta bancaria aún no está configurada.</span>';
+    } catch (e) {
+      box.textContent = 'No se pudo cargar la cuenta bancaria.';
+    }
+  }
+
+  async function uploadMandadoProof() {
+    const file = document.getElementById('mandadoProof')?.files?.[0];
+    if (!file) { showToast('Selecciona el comprobante', 'warning'); return; }
+    const btn = document.getElementById('mandadoProofBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    try {
+      const uploaded = await uploadFile(file);
+      await apiRequest('PATCH', `/mandados/${MID}/payment-proof`, {
+        proof_url: uploaded.url || uploaded.file_url || uploaded.path,
+      });
+      showToast('Comprobante enviado. Esperando validación.');
+      loadMandado();
+    } catch (e) {
+      showToast(e.message, 'danger');
+      btn.disabled = false;
+      btn.textContent = 'Subir comprobante';
+    }
   }
 
   loadMandado();

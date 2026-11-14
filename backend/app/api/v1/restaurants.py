@@ -113,11 +113,15 @@ async def list_restaurants(
     min_rating: float | None = None,
     free_delivery: bool | None = None,
     sort: str | None = None,
+    business_type: str | None = "restaurant",
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
     if lat is not None and lng is not None:
-        items = await get_nearby_restaurants(db, lat=lat, lng=lng, q=q, skip=pagination.skip, limit=pagination.limit)
+        items = await get_nearby_restaurants(
+            db, lat=lat, lng=lng, q=q, skip=pagination.skip, limit=pagination.limit,
+            business_type=business_type,
+        )
         states = await open_state_map(db, [item.id for item in items])
         for item in items:
             state = states.get(item.id)
@@ -137,6 +141,8 @@ async def list_restaurants(
         Restaurant.affiliation_expires_at.is_not(None),
         Restaurant.affiliation_expires_at >= date.today(),
     )
+    if business_type and business_type != "all":
+        stmt = stmt.where(Restaurant.business_type == business_type)
     if q:
         like = f"%{q.strip()}%"
         stmt = stmt.where(

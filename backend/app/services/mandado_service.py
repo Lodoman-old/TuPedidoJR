@@ -13,10 +13,10 @@ async def calculate_mandado_fees(
     delivery_lat: float,
     delivery_lng: float,
 ) -> dict:
-    """Return delivery, risk, platform and total for a mandado.
+    """Return delivery, risk, platform and total for an open mandado.
 
-    The risk rule is exclusive: if ``MANDADO_RISK_FEE_TYPE`` is ``percentage``
-    only the percentage is used; otherwise only the fixed amount is used.
+    Open mandados charge one fixed risk fee. It replaces the old percentage
+    risk fee and the separate platform commission.
     """
     estimated_budget = Decimal(estimated_budget)
 
@@ -40,25 +40,18 @@ async def calculate_mandado_fees(
         else:
             delivery_fee = base_fee + (Decimal(str(distance_km - free_radius)) * extra_per_km)
 
-    raw_type = (await get_setting_value(db, "MANDADO_RISK_FEE_TYPE", "percentage")).strip().lower()
-    if raw_type == "fixed":
-        risk_type = "fixed"
-        risk_value = Decimal(await get_setting_value(db, "MANDADO_RISK_FIXED_AMOUNT", "15.0"))
-        risk_fee = risk_value
-    else:
-        risk_type = "percentage"
-        risk_value = Decimal(await get_setting_value(db, "MANDADO_RISK_PERCENTAGE", "10.0"))
-        risk_fee = (estimated_budget * risk_value / Decimal("100")).quantize(Decimal("0.01"))
-
-    platform_fee = Decimal(await get_setting_value(db, "MANDADO_PLATFORM_FEE", "10.0"))
-    estimated_total = estimated_budget + delivery_fee + risk_fee + platform_fee
+    risk_fee = Decimal(
+        await get_setting_value(db, "MANDADO_RISK_FIXED_AMOUNT", "15.0")
+    ).quantize(Decimal("0.01"))
+    platform_fee = Decimal("0.00")
+    estimated_total = estimated_budget + delivery_fee + risk_fee
 
     return {
         "estimated_budget": estimated_budget,
         "delivery_fee": delivery_fee,
         "distance_km": distance_km,
-        "risk_type": risk_type,
-        "risk_value": risk_value,
+        "risk_type": "fixed",
+        "risk_value": risk_fee,
         "risk_fee": risk_fee,
         "platform_fee": platform_fee,
         "estimated_total": estimated_total,

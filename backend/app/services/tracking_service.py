@@ -205,7 +205,8 @@ async def build_mandado_tracking(db: AsyncSession, mandado) -> dict:
             courier = {"lat": float(row["courier_lat"]), "lng": float(row["courier_lng"])}
 
     keys = [key for key, _ in MANDADO_STEPS]
-    current_index = keys.index(mandado.status) if mandado.status in keys else -1
+    status_key = "pending" if mandado.status == "pending_payment" else mandado.status
+    current_index = keys.index(status_key) if status_key in keys else -1
 
     timeline = []
     for idx, (key, label) in enumerate(MANDADO_STEPS):

@@ -54,6 +54,8 @@ async def clean_db():
     async with engine.begin() as conn:
         await conn.execute(text("DELETE FROM delivery_locations"))
         await conn.execute(text("DELETE FROM cash_advances"))
+        await conn.execute(text("DELETE FROM store_requests"))
+        await conn.execute(text("DELETE FROM reviews"))
         await conn.execute(text("DELETE FROM order_items"))
         await conn.execute(text("UPDATE delivery_persons SET current_order_id = NULL"))
         await conn.execute(text("DELETE FROM orders"))

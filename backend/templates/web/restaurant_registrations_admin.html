@@ -96,6 +96,13 @@
     return `<span class="badge bg-${item[0]}">${item[1]}</span>`;
   }
   function modal(id) { return bootstrap.Modal.getOrCreateInstance(document.getElementById(id)); }
+  const TYPE_LABELS = {
+    restaurant: 'Restaurante', store: 'Tienda', grocery: 'Abarrotes',
+    pharmacy: 'Farmacia', hardware: 'Ferretería', other: 'Otro',
+  };
+  function typeBadge(type) {
+    return `<span class="badge bg-light text-dark border">${TYPE_LABELS[type] || 'Negocio'}</span>`;
+  }
 
   async function loadRegistrations() {
     const loading = document.getElementById('regAdminLoading');
@@ -117,7 +124,7 @@
           <div class="table-responsive"><table class="table table-sm align-middle">
             <thead><tr><th>Restaurante</th><th>Responsable</th><th>Contacto</th><th>Estado</th><th>Fecha</th><th></th></tr></thead>
             <tbody>${rows.map(r => `<tr class="${r.status === 'pending' ? 'table-warning' : ''}">
-              <td><strong>${esc(r.name)}</strong><br><small class="text-muted">${esc(r.cuisine || '')}</small><br><small>${esc(r.address)}</small></td>
+              <td><strong>${esc(r.name)}</strong> ${typeBadge(r.business_type)}<br><small class="text-muted">${esc(r.cuisine || '')}</small><br><small>${esc(r.address)}</small></td>
               <td>${esc(r.owner_name)}</td>
               <td><small>${esc(r.owner_email)}<br>${esc(r.phone || '')}</small></td>
               <td>${badge(r.status)}${r.rejection_reason ? `<br><small class="text-danger">${esc(r.rejection_reason)}</small>` : ''}</td>

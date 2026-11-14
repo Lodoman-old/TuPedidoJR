@@ -105,6 +105,9 @@ class RestaurantOut(BaseModel):
     slug: str | None = None
     public_page_enabled: bool = True
     delivery_mode: str = "platform"
+    business_type: str = "restaurant"
+    catalog_enabled: bool = True
+    accepts_custom_requests: bool = True
     pickup_enabled: bool = False
     effective_commission_percentage: Decimal = Decimal("0")
     affiliated: bool = False
@@ -140,6 +143,9 @@ class RestaurantListItem(BaseModel):
     cuisine: str | None = None
     slug: str | None = None
     delivery_mode: str = "platform"
+    business_type: str = "restaurant"
+    catalog_enabled: bool = True
+    accepts_custom_requests: bool = True
     pickup_enabled: bool = False
     logo_url: str | None
     is_open: bool
@@ -217,6 +223,8 @@ class RestaurantProfileUpdate(BaseModel):
     public_page_enabled: bool | None = None
     delivery_mode: str | None = Field(default=None, pattern="^(platform|own)$")
     pickup_enabled: bool | None = None
+    catalog_enabled: bool | None = None
+    accepts_custom_requests: bool | None = None
     reservations_enabled: bool | None = None
     reservation_deposit_percent: Decimal | None = Field(default=None, ge=0, le=100)
     reservation_min_advance_min: int | None = Field(default=None, ge=15, le=10080)
@@ -235,6 +243,7 @@ class RestaurantRegistrationCreate(BaseModel):
     password: str = Field(..., min_length=6, max_length=128)
     restaurant_name: str = Field(..., min_length=2, max_length=150)
     cuisine: str | None = Field(default=None, max_length=100)
+    business_type: str = Field(default="restaurant", pattern="^(restaurant|store|pharmacy|grocery|hardware|other)$")
     address: str = Field(..., min_length=5)
     lat: float
     lng: float
@@ -244,6 +253,7 @@ class RestaurantRegistrationOut(BaseModel):
     id: UUID
     name: str
     cuisine: str | None = None
+    business_type: str = "restaurant"
     address: str
     phone: str | None = None
     status: str

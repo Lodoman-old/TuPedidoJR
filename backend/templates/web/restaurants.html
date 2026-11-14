@@ -100,6 +100,35 @@
     return filters;
   }
 
+  const COORDS_KEY = 'tupedidojr_coords_v1';
+  const COORDS_TTL_MS = 30 * 60 * 1000;
+  let loadSeq = 0;
+
+  function readCachedCoords() {
+    try {
+      const raw = localStorage.getItem(COORDS_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!data || Date.now() - Number(data.ts || 0) > COORDS_TTL_MS) return null;
+      const lat = Number(data.lat);
+      const lng = Number(data.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return { lat, lng };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveCoords(coords) {
+    try {
+      localStorage.setItem(COORDS_KEY, JSON.stringify({
+        lat: coords.lat,
+        lng: coords.lng,
+        ts: Date.now(),
+      }));
+    } catch (e) { /* almacenamiento no disponible */ }
+  }
+
   async function loadRestaurants(q) {
     const container = document.getElementById('restaurantsList');
     const spinner = document.getElementById('loadingSpinner');
@@ -108,6 +137,7 @@
     const showAll = document.getElementById('showAllBtn');
     const query = (q || '').trim();
     const filters = getFilters();
+    const seq = ++loadSeq;
 
     container.innerHTML = '';
     empty.classList.add('d-none');
@@ -117,30 +147,66 @@
       if (query) {
         // Global search: name, giro, description, dishes or categories.
         data = await listRestaurants(null, null, query, filters);
+        if (seq !== loadSeq) return;
         emptyText.textContent = `No encontramos restaurantes para “${query}”`;
         showAll.classList.add('d-none');
-      } else {
-        const coords = await getCoords();
-        data = await listRestaurants(coords.lat, coords.lng, null, filters);
-        emptyText.textContent = 'No hay restaurantes con esos filtros';
-        showAll.classList.toggle('d-none', data.length > 0);
+        spinner.classList.add('d-none');
+        renderRestaurants(data);
+        if (!data.length) empty.classList.remove('d-none');
+        return;
       }
+
+      // Primera pintura: usa la ubicación guardada o muestra la lista sin
+      // esperar al GPS. Así el listado aparece en menos de un segundo.
+      const cached = readCachedCoords();
+      data = await listRestaurants(
+        cached ? cached.lat : null,
+        cached ? cached.lng : null,
+        null,
+        filters,
+      );
+      if (seq !== loadSeq) return;
+      emptyText.textContent = 'No hay restaurantes con esos filtros';
+      showAll.classList.toggle('d-none', data.length > 0);
       spinner.classList.add('d-none');
       renderRestaurants(data);
       if (!data.length) empty.classList.remove('d-none');
+
+      // Refinado en segundo plano: si el GPS entrega una ubicación distinta,
+      // actualiza distancias y envío estimado sin bloquear la pantalla.
+      refineLocation(seq, cached, filters);
     } catch (ex) {
+      if (seq !== loadSeq) return;
       spinner.classList.add('d-none');
       showToast(ex.message, 'danger');
     }
   }
 
+  async function refineLocation(seq, cached, filters) {
+    const coords = await getCoords();
+    if (!coords || seq !== loadSeq) return;
+    const moved = !cached
+      || Math.abs(coords.lat - cached.lat) > 0.001
+      || Math.abs(coords.lng - cached.lng) > 0.001;
+    if (!moved) return;
+    saveCoords(coords);
+    try {
+      const data = await listRestaurants(coords.lat, coords.lng, null, filters);
+      if (seq !== loadSeq) return;
+      renderRestaurants(data);
+      document.getElementById('emptyMsg')?.classList.toggle('d-none', data.length > 0);
+    } catch (e) {
+      // Si falla el refinado, se conserva la lista que ya está en pantalla.
+    }
+  }
+
   function getCoords() {
-    return new Promise(res => {
-      if (!navigator.geolocation) return res({ lat: 20.644, lng: -100.993 });
+    return new Promise(resolve => {
+      if (!navigator.geolocation) return resolve(null);
       navigator.geolocation.getCurrentPosition(
-        p => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
-        () => res({ lat: 20.644, lng: -100.993 }),
-        { timeout: 5000, maximumAge: 300000 }
+        p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        () => resolve(null),
+        { timeout: 4000, maximumAge: 600000 },
       );
     });
   }

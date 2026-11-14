@@ -162,7 +162,7 @@
         <div class="card p-3">
           <div class="d-flex align-items-center">
             <img src="${esc(r.logo_url || '/static/logo.png')}" height="80"
-                 style="border-radius:12px;object-fit:cover;width:80px;"
+                 style="border-radius:12px;object-fit:contain;background:#fff;padding:4px;width:80px;height:80px;"
                  onerror="this.src='/static/logo.png'" alt="${esc(r.name)}">
             <div class="ms-3 min-w-0">
               <h4 class="mb-1">${esc(r.name)}</h4>

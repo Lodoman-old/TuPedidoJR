@@ -1508,7 +1508,7 @@ class TestImageOptimization:
         try:
             with Image.open(path) as output:
                 assert output.format == "WEBP"
-                assert output.size == (800, 800)
+                assert output.size == (800, 600)
         finally:
             path.unlink(missing_ok=True)
 

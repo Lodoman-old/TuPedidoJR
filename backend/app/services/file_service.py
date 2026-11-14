@@ -28,7 +28,7 @@ def _validate(file: UploadFile):
 
 
 def _compress(content: bytes, size: int, quality: int) -> bytes:
-    """Crop to a square, resize, strip metadata and encode as WebP."""
+    """Resize within a square, strip metadata and encode as WebP."""
     try:
         with Image.open(io.BytesIO(content)) as source:
             source.load()
@@ -45,13 +45,9 @@ def _compress(content: bytes, size: int, quality: int) -> bytes:
             else:
                 image = image.convert("RGB")
 
-            # Every photo ends up exactly size x size so menus never break.
-            image = ImageOps.fit(
-                image,
-                (size, size),
-                method=Image.Resampling.LANCZOS,
-                centering=(0.5, 0.5),
-            )
+            # Keep the whole image visible: scale it down to fit inside the
+            # square without cropping. Small images are left untouched.
+            image.thumbnail((size, size), Image.Resampling.LANCZOS)
 
             # Real phone photos compress very well, but noisy images may still
             # exceed the target. Step the quality down instead of storing
@@ -79,10 +75,11 @@ async def save_upload(
     size: int = 800,
     quality: int = DEFAULT_QUALITY,
 ) -> str:
-    """Optimize and store a square image, returning its public URL.
+    """Optimize and store an image, returning its public URL.
 
-    Images are cropped to ``size x size``, converted to WebP and stripped of
-    EXIF metadata. A 4 MB phone photo usually ends up between 80 and 300 KB.
+    Images are scaled to fit inside ``size x size`` without cropping, converted
+    to WebP and stripped of EXIF metadata. A 4 MB phone photo usually ends up
+    between 80 and 300 KB.
     """
     _validate(file)
     content = await file.read()

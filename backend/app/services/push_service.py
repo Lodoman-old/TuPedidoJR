@@ -617,6 +617,36 @@ def schedule_store_request_status(request_id: str) -> None:
         logger.debug("No event loop for push notification")
 
 
+async def notify_mandado_fee_adjustment(mandado_id: str) -> None:
+    try:
+        async with async_session() as db:
+            result = await db.execute(select(Mandado).where(Mandado.id == mandado_id))
+            mandado = result.scalar_one_or_none()
+            if not mandado:
+                return
+            amount = abs(float(mandado.fee_adjustment_amount or 0))
+            await send_to_user(
+                db,
+                mandado.user_id,
+                "Ajuste de envío del mandado",
+                f"El envío real cambió. Revisa y autoriza ${amount:.2f} adicionales.",
+                {
+                    "type": "mandado_fee_adjustment",
+                    "mandado_id": str(mandado.id),
+                },
+                "amber",
+            )
+    except Exception:
+        logger.exception("Push mandado fee adjustment failed for %s", mandado_id)
+
+
+def schedule_mandado_fee_adjustment(mandado_id: str) -> None:
+    try:
+        asyncio.create_task(notify_mandado_fee_adjustment(mandado_id))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
 async def notify_new_mandado(mandado_id: str) -> None:
     """Notify every mandadero that a new mandado is available."""
     try:

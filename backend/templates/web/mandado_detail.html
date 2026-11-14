@@ -98,15 +98,37 @@
           <button class="btn btn-sm btn-success" id="mandadoProofBtn" onclick="uploadMandadoProof()">Subir comprobante</button>
           ${m.prepayment_proof_url ? '<div class="small text-success mt-2">Comprobante recibido. Esperando validación.</div>' : ''}
         </div>` : ''}
+      ${m.fee_adjustment_status === 'pending_customer' ? `
+        <div class="alert alert-warning">
+          <h6 class="alert-heading"><i class="bi bi-signpost-split"></i> Ajuste de envío</h6>
+          <p class="small mb-2">
+            El envío estimado era <strong>$${parseFloat(m.delivery_fee_estimated || m.delivery_fee).toFixed(2)}</strong>
+            y el envío real desde la tienda es <strong>$${parseFloat(m.delivery_fee_final || 0).toFixed(2)}</strong>.
+            La diferencia es <strong>$${parseFloat(Math.abs(m.fee_adjustment_amount || 0)).toFixed(2)}</strong>.
+          </p>
+          <p class="small mb-2">Para continuar, autoriza el ajuste. Si no, el mandado se cancela.</p>
+          <button class="btn btn-sm btn-success" onclick="approveFeeAdjustment()">Autorizar ajuste</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="rejectFeeAdjustment()">Cancelar mandado</button>
+        </div>` : ''}
+      ${m.fee_adjustment_status === 'refund_pending' ? `
+        <div class="alert alert-info small">
+          El envío final fue menor. La diferencia de
+          <strong>$${parseFloat(Math.abs(m.fee_adjustment_amount || 0)).toFixed(2)}</strong>
+          se reembolsará o se ajustará en tu cobro.
+        </div>` : ''}
       <div class="card p-3 mb-3">
         <h6>Desglose</h6>
         <div class="d-flex justify-content-between small"><span>Compra (${m.product_total ? 'real' : 'presupuesto'})</span><span>$${parseFloat(m.product_total || m.estimated_budget).toFixed(2)}</span></div>
         <div class="d-flex justify-content-between small"><span>Envío</span><span>$${parseFloat(m.delivery_fee).toFixed(2)}</span></div>
+        ${m.delivery_fee_final != null && Math.abs(parseFloat(m.delivery_fee_final) - parseFloat(m.delivery_fee)) > 0.009
+          ? `<div class="small text-muted">Envío real: $${parseFloat(m.delivery_fee_final).toFixed(2)} ${m.fee_adjustment_status === 'absorbed' ? '(diferencia absorbida por la plataforma)' : ''}</div>`
+          : ''}
         <div class="d-flex justify-content-between small"><span>Cargo por riesgo</span><span>$${parseFloat(m.risk_fee).toFixed(2)}</span></div>
         <hr>
         <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>$${parseFloat(total).toFixed(2)}</span></div>
         <small class="text-muted">Método de pago: ${m.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</small>
         <br><small class="text-muted">Dirección: ${m.delivery_address}</small>
+        ${m.pickup_address ? `<br><small class="text-muted">Tienda de compra: ${esc(m.pickup_address)}</small>` : ''}
       </div>`;
 
     if (m.receipt_photo_url) {
@@ -238,6 +260,24 @@
       btn.disabled = false;
       btn.textContent = 'Subir comprobante';
     }
+  }
+
+  async function approveFeeAdjustment() {
+    if (!confirm('¿Autorizas el ajuste de envío para continuar?')) return;
+    try {
+      await apiRequest('POST', `/mandados/${MID}/fee-adjustment/approve`, {});
+      showToast('Ajuste autorizado');
+      loadMandado();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
+  async function rejectFeeAdjustment() {
+    if (!confirm('¿Cancelar el mandado por el ajuste de envío?')) return;
+    try {
+      await apiRequest('POST', `/mandados/${MID}/fee-adjustment/reject`, {});
+      showToast('Mandado cancelado');
+      loadMandado();
+    } catch (e) { showToast(e.message, 'danger'); }
   }
 
   loadMandado();

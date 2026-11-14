@@ -15,6 +15,8 @@ class MandadoCreate(BaseModel):
     delivery_location: GeoPoint
     payment_method: str = "cash"
     payment_proof_url: str | None = Field(default=None, max_length=1000)
+    pickup_address: str | None = Field(default=None, max_length=500)
+    pickup_location: GeoPoint | None = None
 
 
 class MandadoPaymentPolicyOut(BaseModel):
@@ -32,6 +34,7 @@ class MandadoPaymentPolicyRequest(BaseModel):
 class MandadoEstimateRequest(BaseModel):
     estimated_budget: Decimal = Field(..., gt=0)
     delivery_location: GeoPoint
+    pickup_location: GeoPoint | None = None
 
 
 class MandadoEstimateOut(BaseModel):
@@ -53,6 +56,15 @@ class MandadoOut(BaseModel):
     estimated_budget: Decimal
     product_total: Decimal | None
     delivery_fee: Decimal
+    delivery_fee_estimated: Decimal | None = None
+    delivery_fee_final: Decimal | None = None
+    distance_km_estimated: Decimal | None = None
+    distance_km_final: Decimal | None = None
+    fee_adjustment_amount: Decimal = Decimal("0")
+    fee_adjustment_status: str = "not_required"
+    pickup_address: str | None = None
+    pickup_confirmed_at: datetime | None = None
+    fee_customer_responded_at: datetime | None = None
     risk_fee: Decimal
     platform_fee: Decimal
     estimated_total: Decimal
@@ -90,6 +102,11 @@ class MandadoPurchase(BaseModel):
 
 class MandadoPaymentProof(BaseModel):
     proof_url: str = Field(..., min_length=1, max_length=1000)
+
+
+class MandadoPickupUpdate(BaseModel):
+    pickup_address: str = Field(..., min_length=5, max_length=500)
+    pickup_location: GeoPoint
 
 
 class MandadoTrackingStep(BaseModel):

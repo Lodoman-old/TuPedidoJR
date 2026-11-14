@@ -463,6 +463,12 @@ async function createMandado(description, estimatedBudget, deliveryAddress, lat,
 async function listMandados() { return await apiRequest('GET', '/mandados'); }
 async function getMandado(id) { return await apiRequest('GET', `/mandados/${id}`); }
 async function acceptMandado(id) { return await apiRequest('PATCH', `/mandados/${id}/accept`, {}); }
+async function setMandadoPickup(id, address, lat, lng) {
+  return await apiRequest('POST', `/mandados/${id}/pickup`, {
+    pickup_address: address,
+    pickup_location: { lat, lng },
+  });
+}
 async function purchaseMandado(id, productTotal, receiptPhotoUrl) {
   return await apiRequest('PATCH', `/mandados/${id}/purchase`, { product_total: productTotal, receipt_photo_url: receiptPhotoUrl });
 }
@@ -899,6 +905,8 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
             target = '/web/restaurants/' + data.store_id + '/requests';
           } else if (data.type === 'store_request' && data.request_id) {
             target = '/web/store-requests/' + data.request_id;
+          } else if (data.type === 'mandado_fee_adjustment' && data.mandado_id) {
+            target = '/web/mandados/' + data.mandado_id;
           } else if (data.order_id) {
             target = '/web/orders/' + data.order_id;
             if (data.type === 'order_status' && data.status === 'delivered') {

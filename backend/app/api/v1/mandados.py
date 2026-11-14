@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -18,6 +19,7 @@ from app.schemas.mandado import (
     MandadoPaymentPolicyOut,
     MandadoPaymentPolicyRequest,
     MandadoPaymentProof,
+    MandadoPickupUpdate,
     MandadoPurchase,
     MandadoTrackingOut,
 )
@@ -52,6 +54,8 @@ async def create_mandado(
         body.estimated_budget,
         body.delivery_location.lat,
         body.delivery_location.lng,
+        pickup_lat=body.pickup_location.lat if body.pickup_location else None,
+        pickup_lng=body.pickup_location.lng if body.pickup_location else None,
     )
     delivery_fee = fees["delivery_fee"]
     risk_fee = fees["risk_fee"]
@@ -93,6 +97,16 @@ async def create_mandado(
         description=body.description,
         estimated_budget=body.estimated_budget,
         delivery_fee=delivery_fee,
+        delivery_fee_estimated=delivery_fee,
+        delivery_fee_final=delivery_fee if body.pickup_location else None,
+        distance_km_estimated=fees.get("distance_km"),
+        distance_km_final=fees.get("distance_km") if body.pickup_location else None,
+        pickup_address=(body.pickup_address or "").strip() or None,
+        pickup_location=(
+            f"SRID=4326;POINT({body.pickup_location.lng} {body.pickup_location.lat})"
+            if body.pickup_location else None
+        ),
+        pickup_confirmed_at=datetime.now(timezone.utc) if body.pickup_location else None,
         risk_fee=risk_fee,
         platform_fee=platform_fee,
         estimated_total=estimated_total,
@@ -135,6 +149,128 @@ async def upload_mandado_payment_proof(
     return mandado
 
 
+@router.post("/{mandado_id}/pickup", response_model=MandadoOut)
+async def confirm_mandado_pickup(
+    mandado_id: str,
+    body: MandadoPickupUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    dp_result = await db.execute(
+        select(DeliveryPerson).where(DeliveryPerson.user_id == current_user.id)
+    )
+    dp = dp_result.scalar_one_or_none()
+    if not dp:
+        raise HTTPException(status_code=403, detail="Solo repartidores pueden confirmar la tienda")
+    result = await db.execute(select(Mandado).where(Mandado.id == mandado_id))
+    mandado = result.scalar_one_or_none()
+    if not mandado:
+        raise HTTPException(status_code=404, detail="Mandado no encontrado")
+    if mandado.delivery_person_id != dp.id:
+        raise HTTPException(status_code=403, detail="No eres el repartidor asignado")
+    if mandado.status not in ("accepted", "buying"):
+        raise HTTPException(status_code=400, detail="Estado inválido para confirmar la tienda")
+    if mandado.pickup_confirmed_at:
+        raise HTTPException(status_code=400, detail="La tienda ya fue confirmada")
+
+    coords = await db.execute(
+        text(
+            "SELECT ST_Y(delivery_location::geometry) AS lat, "
+            "ST_X(delivery_location::geometry) AS lng FROM mandados WHERE id = :id"
+        ),
+        {"id": mandado.id},
+    )
+    delivery = coords.mappings().first()
+    if not delivery or delivery["lat"] is None:
+        raise HTTPException(status_code=400, detail="La dirección de entrega no es válida")
+
+    fees = await calculate_mandado_fees(
+        db,
+        mandado.estimated_budget,
+        float(delivery["lat"]),
+        float(delivery["lng"]),
+        pickup_lat=body.pickup_location.lat,
+        pickup_lng=body.pickup_location.lng,
+    )
+    final_fee = fees["delivery_fee"]
+    final_km = fees.get("distance_km")
+    estimated = mandado.delivery_fee_estimated or mandado.delivery_fee or Decimal("0")
+    difference = (Decimal(final_fee) - Decimal(estimated)).quantize(Decimal("0.01"))
+    tolerance = max(Decimal("10.00"), (Decimal(estimated) * Decimal("0.10")).quantize(Decimal("0.01")))
+
+    mandado.pickup_address = body.pickup_address.strip()
+    mandado.pickup_location = (
+        f"SRID=4326;POINT({body.pickup_location.lng} {body.pickup_location.lat})"
+    )
+    mandado.pickup_confirmed_at = datetime.now(timezone.utc)
+    mandado.delivery_fee_final = final_fee
+    mandado.distance_km_final = final_km
+    mandado.fee_adjustment_amount = difference
+    if difference > tolerance:
+        mandado.fee_adjustment_status = "pending_customer"
+    elif difference < 0:
+        mandado.delivery_fee = final_fee
+        mandado.estimated_total = (mandado.estimated_total or Decimal("0")) + difference
+        mandado.fee_adjustment_status = "refund_pending"
+    else:
+        mandado.fee_adjustment_status = "absorbed"
+    await db.commit()
+    await db.refresh(mandado)
+    if mandado.fee_adjustment_status == "pending_customer":
+        from app.services.push_service import schedule_mandado_fee_adjustment
+        schedule_mandado_fee_adjustment(str(mandado.id))
+    return mandado
+
+
+@router.post("/{mandado_id}/fee-adjustment/approve", response_model=MandadoOut)
+async def approve_mandado_fee_adjustment(
+    mandado_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Mandado).where(Mandado.id == mandado_id))
+    mandado = result.scalar_one_or_none()
+    if not mandado:
+        raise HTTPException(status_code=404, detail="Mandado no encontrado")
+    if mandado.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No puedes autorizar este ajuste")
+    if mandado.fee_adjustment_status != "pending_customer":
+        raise HTTPException(status_code=400, detail="No hay ajuste pendiente")
+    extra = Decimal(mandado.fee_adjustment_amount or 0)
+    mandado.delivery_fee = mandado.delivery_fee_final or mandado.delivery_fee
+    mandado.estimated_total = (mandado.estimated_total or Decimal("0")) + extra
+    mandado.fee_adjustment_status = "approved"
+    mandado.fee_customer_responded_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(mandado)
+    return mandado
+
+
+@router.post("/{mandado_id}/fee-adjustment/reject", response_model=MandadoOut)
+async def reject_mandado_fee_adjustment(
+    mandado_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Mandado).where(Mandado.id == mandado_id))
+    mandado = result.scalar_one_or_none()
+    if not mandado:
+        raise HTTPException(status_code=404, detail="Mandado no encontrado")
+    if mandado.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No puedes rechazar este ajuste")
+    if mandado.fee_adjustment_status != "pending_customer":
+        raise HTTPException(status_code=400, detail="No hay ajuste pendiente")
+    mandado.fee_adjustment_status = "rejected"
+    mandado.status = "cancelled"
+    mandado.cancelled_at = datetime.now(timezone.utc)
+    mandado.fee_customer_responded_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(mandado)
+    from app.services.push_service import schedule_mandado_status
+    schedule_mandado_status(str(mandado.id), "cancelled")
+    return mandado
+
+
 @router.post("/estimate", response_model=MandadoEstimateOut)
 async def estimate_mandado(
     body: MandadoEstimateRequest,
@@ -146,6 +282,8 @@ async def estimate_mandado(
         body.estimated_budget,
         body.delivery_location.lat,
         body.delivery_location.lng,
+        pickup_lat=body.pickup_location.lat if body.pickup_location else None,
+        pickup_lng=body.pickup_location.lng if body.pickup_location else None,
     )
     return MandadoEstimateOut(**fees)
 
@@ -286,6 +424,16 @@ async def purchase_mandado(
         raise HTTPException(status_code=403, detail="No eres el repartidor asignado")
     if mandado.status not in ("accepted", "buying"):
         raise HTTPException(status_code=400, detail="Estado inválido para marcar compra")
+    if not mandado.pickup_confirmed_at:
+        raise HTTPException(
+            status_code=400,
+            detail="Primero confirma la tienda y calcula el envío real.",
+        )
+    if mandado.fee_adjustment_status == "pending_customer":
+        raise HTTPException(
+            status_code=400,
+            detail="El cliente debe autorizar el ajuste de envío antes de comprar.",
+        )
     if mandado.prepayment_required and mandado.advance_status != "delivered":
         raise HTTPException(
             status_code=400,

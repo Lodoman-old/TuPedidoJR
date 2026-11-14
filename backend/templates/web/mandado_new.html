@@ -16,6 +16,16 @@
     <input type="number" class="form-control" id="budgetInput" step="0.01" min="1" placeholder="Ej: 150">
     <div class="form-text">Es el dinero estimado para comprar todo lo que necesitas. No es la cantidad de productos.</div>
   </div>
+  <div class="mb-0">
+    <label class="form-label"><strong>¿Ya sabes dónde comprar? (opcional)</strong></label>
+    <input id="pickupAddressInput" class="form-control" maxlength="500" placeholder="Tienda o dirección donde comprarás">
+    <div class="d-flex gap-2 align-items-center mt-1 flex-wrap">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="pickupSearchBtn">
+        <i class="bi bi-geo-alt"></i> Ubicar tienda
+      </button>
+      <span id="pickupMsg" class="small text-muted">Si no la sabes, el envío se calcula como estimado.</span>
+    </div>
+  </div>
 </div>
 
 <div class="card p-3 mb-3">
@@ -84,7 +94,7 @@
 <div class="card p-3 mb-3" id="feeSummary">
   <h6>Desglose estimado</h6>
   <div class="d-flex justify-content-between small"><span>Compra (presupuesto)</span><span id="estProducts">$0.00</span></div>
-  <div class="d-flex justify-content-between small"><span>Envío</span><span id="estDelivery">—</span></div>
+  <div class="d-flex justify-content-between small"><span id="estDeliveryLabel">Envío estimado</span><span id="estDelivery">—</span></div>
   <div class="d-flex justify-content-between small"><span id="estRiskLabel">Cargo por riesgo</span><span id="estRisk">—</span></div>
   <hr>
   <div class="d-flex justify-content-between fw-bold"><span>Total estimado</span><span id="estTotal">—</span></div>
@@ -105,6 +115,7 @@
   let coordsReady = false;
   let savedAddresses = [];
   let selectedMandadoAddressId = null;
+  let pickupCoords = null;
 
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -253,6 +264,45 @@
       useDeviceLocation(true);
     }
   }
+
+  async function locatePickup() {
+    const input = document.getElementById('pickupAddressInput');
+    const msg = document.getElementById('pickupMsg');
+    const address = input.value.trim();
+    if (address.length < 5) {
+      msg.className = 'small text-danger';
+      msg.textContent = 'Escribe la tienda o la dirección donde comprarás.';
+      return;
+    }
+    msg.className = 'small text-muted';
+    msg.textContent = 'Buscando la tienda...';
+    try {
+      const results = await apiRequest('POST', '/geocode', {
+        address: `${address}, Santa Cruz de Juventino Rosas, Guanajuato, México`,
+      });
+      if (!results || !results.length) {
+        pickupCoords = null;
+        msg.className = 'small text-danger';
+        msg.textContent = 'No encontramos esa tienda. Revisa la dirección o déjala vacía para usar envío estimado.';
+        return;
+      }
+      pickupCoords = { lat: Number(results[0].lat), lng: Number(results[0].lng) };
+      msg.className = 'small text-success';
+      msg.textContent = 'Tienda ubicada. El envío se calculará desde ahí.';
+      scheduleEstimate();
+    } catch (e) {
+      pickupCoords = null;
+      msg.className = 'small text-danger';
+      msg.textContent = 'No se pudo ubicar la tienda.';
+    }
+  }
+
+  document.getElementById('pickupSearchBtn').addEventListener('click', locatePickup);
+  document.getElementById('pickupAddressInput').addEventListener('input', () => {
+    pickupCoords = null;
+    document.getElementById('pickupMsg').className = 'small text-muted';
+    document.getElementById('pickupMsg').textContent = 'Si no la sabes, el envío se calcula como estimado.';
+  });
 
   document.getElementById('postalCode').addEventListener('input', (e) => {
     e.target.value = e.target.value.replace(/\D/g, '').slice(0, 5);
@@ -441,10 +491,13 @@
       ? picked
       : await getCoords();
     try {
-      const est = await apiRequest('POST', '/mandados/estimate', {
+      const payload = {
         estimated_budget: budget,
         delivery_location: { lat: coords.lat, lng: coords.lng },
-      });
+      };
+      if (pickupCoords) payload.pickup_location = pickupCoords;
+      const est = await apiRequest('POST', '/mandados/estimate', payload);
+      document.getElementById('estDeliveryLabel').textContent = pickupCoords ? 'Envío real' : 'Envío estimado';
       document.getElementById('estDelivery').textContent = '$' + parseFloat(est.delivery_fee).toFixed(2);
       document.getElementById('estRisk').textContent = '$' + parseFloat(est.risk_fee).toFixed(2);
       document.getElementById('estRiskLabel').textContent = 'Cargo por riesgo';
@@ -483,6 +536,11 @@
     if (desc.length < 10) { showToast('Describe qué necesitas (mín 10 caracteres)', 'danger'); return; }
     if (!budget || budget <= 0) { showToast('Ingresa un presupuesto válido', 'danger'); return; }
     if (addr.length < 5) { showToast('Elige o escribe la dirección de entrega', 'danger'); return; }
+    const pickupAddress = document.getElementById('pickupAddressInput').value.trim();
+    if (pickupAddress && !pickupCoords) {
+      showToast('Ubica la tienda con el botón "Ubicar tienda" o borra ese campo para usar envío estimado', 'warning');
+      return;
+    }
     if (!paymentPolicy) await updatePaymentPolicy();
     if (paymentPolicy?.requires_prepayment && payMethod === 'cash') {
       showToast('Esta compra requiere pago por transferencia antes de publicar el mandado', 'danger');
@@ -544,6 +602,8 @@
         delivery_location: { lat: coords.lat, lng: coords.lng },
         payment_method: payMethod,
         payment_proof_url: proofUrl,
+        pickup_address: pickupAddress || null,
+        pickup_location: pickupCoords || null,
       });
       showToast(payMethod === 'cash'
         ? 'Mandado solicitado exitosamente'

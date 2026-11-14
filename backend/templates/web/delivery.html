@@ -634,9 +634,16 @@ async function loadMandadosWeb() {
         const statusColor = m.status === 'accepted' ? 'primary' : 'teal';
         html += `<div class="dp-card">
           <strong>${m.description}</strong> <span class="badge bg-${statusColor}">${mandadoStatusLabels[m.status] || m.status}</span>
-          <div><small>Presupuesto: $${parseFloat(m.estimated_budget).toFixed(2)}</small></div>`;
+          <div><small>Presupuesto: $${parseFloat(m.estimated_budget).toFixed(2)}</small></div>
+          <div><small>Envío estimado: $${parseFloat(m.delivery_fee_estimated || m.delivery_fee).toFixed(2)}${m.delivery_fee_final != null ? ` · real: $${parseFloat(m.delivery_fee_final).toFixed(2)}` : ''}</small></div>`;
         if (m.status === 'accepted') {
-          html += `<button class="btn btn-sm btn-primary mt-2" onclick="showPurchaseDialog('${m.id}')">Marcar como comprado</button>`;
+          if (!m.pickup_address) {
+            html += `<button class="btn btn-sm btn-primary mt-2" onclick="showPickupDialog('${m.id}')">Confirmar tienda y envío</button>`;
+          } else if (m.fee_adjustment_status === 'pending_customer') {
+            html += `<div class="alert alert-warning py-2 mt-2 small">Esperando que el cliente autorice el ajuste de envío.</div>`;
+          } else {
+            html += `<button class="btn btn-sm btn-primary mt-2" onclick="showPurchaseDialog('${m.id}')">Marcar como comprado</button>`;
+          }
         } else if (m.status === 'purchased') {
           html += `<button class="btn btn-sm btn-success mt-2" onclick="deliverMandadoWeb('${m.id}')">Entregar mandado</button>`;
         }
@@ -654,6 +661,77 @@ async function acceptMandadoWeb(mid) {
     showToast('Mandado aceptado');
     loadMandadosWeb();
   } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+}
+
+let pickupCoords = null;
+
+function showPickupDialog(mid) {
+  pickupCoords = null;
+  const el = document.getElementById('tab-mandados');
+  el.innerHTML = `
+    <div class="dp-card">
+      <strong>Confirmar tienda y envío real</strong>
+      <div class="alert alert-info small py-2 mt-2">
+        Haz esto cuando estés en la tienda. Usaremos tu ubicación para calcular la distancia real hasta el cliente.
+      </div>
+      <div class="mb-2">
+        <label class="form-label">Nombre o dirección de la tienda</label>
+        <input id="pickupAddress" class="form-control" maxlength="500" placeholder="Ej: Abarrotes La Esquina">
+      </div>
+      <button class="btn btn-outline-primary btn-sm" onclick="usePickupLocation()">
+        <i class="bi bi-crosshair"></i> Usar mi ubicación actual
+      </button>
+      <div id="pickupCoordsMsg" class="small text-muted mt-1">Aún no se ha tomado la ubicación.</div>
+      <button class="btn btn-primary mt-2" onclick="submitPickup('${mid}')">Calcular envío y continuar</button>
+      <button class="btn btn-outline-secondary mt-2" onclick="loadMandadosWeb()">Cancelar</button>
+      <div id="pickupStatus" class="mt-2"></div>
+    </div>`;
+}
+
+function usePickupLocation() {
+  if (!navigator.geolocation) {
+    document.getElementById('pickupCoordsMsg').textContent = 'Este dispositivo no permite ubicación.';
+    return;
+  }
+  document.getElementById('pickupCoordsMsg').textContent = 'Obteniendo ubicación...';
+  navigator.geolocation.getCurrentPosition((position) => {
+    pickupCoords = {
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+    };
+    const address = document.getElementById('pickupAddress');
+    if (!address.value.trim()) address.value = 'Ubicación de la tienda';
+    document.getElementById('pickupCoordsMsg').innerHTML =
+      `<span class="text-success">Ubicación lista (${pickupCoords.lat.toFixed(5)}, ${pickupCoords.lng.toFixed(5)})</span>`;
+  }, () => {
+    document.getElementById('pickupCoordsMsg').textContent = 'No se pudo obtener la ubicación. Revisa los permisos.';
+  }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+}
+
+async function submitPickup(mid) {
+  const address = document.getElementById('pickupAddress').value.trim();
+  if (!pickupCoords) {
+    document.getElementById('pickupStatus').innerHTML =
+      '<div class="alert alert-warning py-2">Primero usa tu ubicación actual en la tienda.</div>';
+    return;
+  }
+  if (address.length < 5) {
+    document.getElementById('pickupStatus').innerHTML =
+      '<div class="alert alert-warning py-2">Escribe el nombre o la dirección de la tienda.</div>';
+    return;
+  }
+  try {
+    const result = await setMandadoPickup(mid, address, pickupCoords.lat, pickupCoords.lng);
+    if (result.fee_adjustment_status === 'pending_customer') {
+      showToast('El cliente debe autorizar un ajuste de envío');
+    } else {
+      showToast('Tienda confirmada y envío calculado');
+    }
+    loadMandadosWeb();
+  } catch (e) {
+    document.getElementById('pickupStatus').innerHTML =
+      `<div class="alert alert-danger py-2">${e.message}</div>`;
+  }
 }
 
 function showPurchaseDialog(mid) {

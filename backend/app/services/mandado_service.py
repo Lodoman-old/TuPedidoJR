@@ -12,21 +12,26 @@ async def calculate_mandado_fees(
     estimated_budget: Decimal,
     delivery_lat: float,
     delivery_lng: float,
+    pickup_lat: float | None = None,
+    pickup_lng: float | None = None,
 ) -> dict:
     """Return delivery, risk, platform and total for an open mandado.
 
-    Open mandados charge one fixed risk fee. It replaces the old percentage
-    risk fee and the separate platform commission.
+    If pickup coordinates are known, the delivery fee uses the real
+    pickup -> customer distance. Otherwise it uses the city center as a
+    reference and the result is an estimate.
     """
     estimated_budget = Decimal(estimated_budget)
 
     city_lat = float(await get_setting_value(db, "CITY_CENTER_LAT", "20.644"))
     city_lng = float(await get_setting_value(db, "CITY_CENTER_LNG", "-100.993"))
+    origin_lat = float(pickup_lat) if pickup_lat is not None else city_lat
+    origin_lng = float(pickup_lng) if pickup_lng is not None else city_lng
     distance_km = None
     delivery_fee = Decimal("0.00")
     try:
         distance_km, _source = await route_distance_km(
-            db, city_lat, city_lng, delivery_lat, delivery_lng,
+            db, origin_lat, origin_lng, delivery_lat, delivery_lng,
         )
     except Exception:
         distance_km = None

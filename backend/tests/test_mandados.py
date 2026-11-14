@@ -169,6 +169,65 @@ class TestMandadoPrepayment:
         assert detail.status_code == 200
         assert detail.json()["status"] == "pending"
 
+    async def test_courier_confirms_pickup(
+        self, client: AsyncClient, user_token, db_session
+    ):
+        created = await client.post(
+            "/api/v1/mandados",
+            json={
+                "description": "Comprar leche y pan",
+                "estimated_budget": 100,
+                "delivery_address": "Calle Principal 123",
+                "delivery_location": {"lat": 19.44, "lng": -99.14},
+                "payment_method": "cash",
+            },
+            headers={"Authorization": f"Bearer {user_token}"},
+        )
+        assert created.status_code == 201, created.text
+        mandado_id = created.json()["id"]
+
+        courier_resp = await client.post(
+            "/api/v1/auth/register",
+            json={
+                "name": "Mandadero Pickup",
+                "email": "mandadero-pickup@test.com",
+                "password": "pass123",
+            },
+        )
+        courier_token = courier_resp.json()["access_token"]
+        courier_user = await db_session.get(
+            User, uuid.UUID(decode_access_token(courier_token)["sub"])
+        )
+        courier = DeliveryPerson(
+            user_id=courier_user.id,
+            vehicle_type="motorcycle",
+            is_mandadero=True,
+        )
+        db_session.add(courier)
+        await db_session.flush()
+
+        from app.models.mandado import Mandado
+        mandado = await db_session.get(Mandado, uuid.UUID(mandado_id))
+        mandado.status = "accepted"
+        mandado.delivery_person_id = courier.id
+        await db_session.commit()
+
+        pickup = await client.post(
+            f"/api/v1/mandados/{mandado_id}/pickup",
+            json={
+                "pickup_address": "Tienda de la esquina",
+                "pickup_location": {"lat": 19.43, "lng": -99.13},
+            },
+            headers={"Authorization": f"Bearer {courier_token}"},
+        )
+        assert pickup.status_code == 200, pickup.text
+        data = pickup.json()
+        assert data["pickup_address"] == "Tienda de la esquina"
+        assert data["delivery_fee_final"] is not None
+        assert data["fee_adjustment_status"] in (
+            "absorbed", "pending_customer", "refund_pending",
+        )
+
     async def test_advance_delivered_and_settled(
         self, client: AsyncClient, user_token, superuser_token, db_session
     ):
@@ -213,10 +272,13 @@ class TestMandadoPrepayment:
         db_session.add(courier)
         await db_session.flush()
 
+        from datetime import datetime, timezone
         from app.models.mandado import Mandado
         mandado = await db_session.get(Mandado, uuid.UUID(mandado_id))
         mandado.status = "accepted"
         mandado.delivery_person_id = courier.id
+        mandado.pickup_address = "Tienda de prueba"
+        mandado.pickup_confirmed_at = datetime.now(timezone.utc)
         await db_session.commit()
 
         delivered = await client.post(

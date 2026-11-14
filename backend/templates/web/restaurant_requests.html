@@ -56,7 +56,7 @@
       </div>
       <p class="small mb-1 mt-2">${esc(request.description)}</p>
       ${request.notes ? `<div class="small text-muted">Nota del cliente: ${esc(request.notes)}</div>` : ''}
-      ${request.reference_photo_url ? `<a class="small" href="${esc(request.reference_photo_url)}" target="_blank">Ver foto de referencia</a>` : ''}
+      ${request.reference_photo_url ? `<img src="${esc(request.reference_photo_url)}" class="document-thumb mt-2" alt="Foto de referencia" onclick="openDocumentPreview('${esc(request.reference_photo_url)}','Foto de referencia')">` : ''}
       ${request.store_notes ? `<div class="small text-muted">Respuesta: ${esc(request.store_notes)}</div>` : ''}
       <div class="small text-muted mt-2">Entrega: ${esc(request.delivery_address)}</div>
       <div class="mt-2 d-flex gap-2 flex-wrap">${actions(request)}</div>

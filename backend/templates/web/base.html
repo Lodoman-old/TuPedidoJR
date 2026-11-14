@@ -58,6 +58,16 @@
       padding: 0 5px;
       font-weight: 700;
     }
+    .document-thumb {
+      max-width: 100%;
+      max-height: 220px;
+      object-fit: contain;
+      border: 1px solid #e9ecef;
+      border-radius: 12px;
+      background: #f8f9fa;
+      cursor: zoom-in;
+    }
+    .document-thumb:hover { opacity: .9; }
     body { padding-top: env(safe-area-inset-top, 0px); }
     html.capacitor-app body { padding-top: 30px; padding-bottom: 34px; }
     html.capacitor-app .floating-cart { bottom: 46px; }
@@ -135,31 +145,22 @@
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/reservations"><i class="bi bi-calendar-check"></i> Reservaciones</a></li>
           <li class="nav-item d-none" id="deliveryNav"><a class="nav-link" href="/web/delivery"><i class="bi bi-bicycle"></i> Repartidor</a></li>
           <li class="nav-item" id="downloadAppNav"><a class="nav-link" href="/web/app"><i class="bi bi-phone"></i> Descargar app</a></li>
-          <li class="nav-item dropdown d-none" id="adminOpsNav">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="bi bi-speedometer2"></i> Operación
+          <li class="nav-item dropdown d-none" id="adminNav">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
+               aria-expanded="false" title="Administración" aria-label="Administración">
+              <i class="bi bi-speedometer2"></i><span class="d-lg-none ms-1">Admin</span>
             </a>
             <ul class="dropdown-menu dropdown-menu-end">
+              <li><h6 class="dropdown-header">Operación</h6></li>
               <li><a class="dropdown-item" href="/web/admin/dashboard"><i class="bi bi-speedometer2"></i> Resumen operativo</a></li>
-              <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item" href="/web/admin/restaurants"><i class="bi bi-shop"></i> Restaurantes <span id="pendingRestaurantsBadge" class="badge rounded-pill bg-danger d-none">0</span></a></li>
               <li><a class="dropdown-item" href="/web/admin/couriers"><i class="bi bi-bicycle"></i> Repartidores</a></li>
-            </ul>
-          </li>
-          <li class="nav-item dropdown d-none" id="adminFinanceNav">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="bi bi-wallet2"></i> Finanzas
-            </a>
-            <ul class="dropdown-menu dropdown-menu-end">
+              <li><hr class="dropdown-divider"></li>
+              <li><h6 class="dropdown-header">Finanzas</h6></li>
               <li><a class="dropdown-item" href="/web/admin/payouts"><i class="bi bi-wallet2"></i> Pagos y reembolsos</a></li>
               <li><a class="dropdown-item" href="/web/admin/reports"><i class="bi bi-graph-up-arrow"></i> Reportes</a></li>
-            </ul>
-          </li>
-          <li class="nav-item dropdown d-none" id="adminConfigNav">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="bi bi-gear"></i> Configuración
-            </a>
-            <ul class="dropdown-menu dropdown-menu-end">
+              <li><hr class="dropdown-divider"></li>
+              <li><h6 class="dropdown-header">Configuración</h6></li>
               <li><a class="dropdown-item" href="/web/admin/settings"><i class="bi bi-sliders"></i> Comisiones y ajustes</a></li>
               <li><a class="dropdown-item" href="/web/admin/push"><i class="bi bi-bell"></i> Notificaciones push</a></li>
               <li><a class="dropdown-item" href="/web/admin/audit"><i class="bi bi-journal-text"></i> Auditoría</a></li>
@@ -190,6 +191,22 @@
     <i class="bi bi-cart3"></i>
     <span id="floatingCartCount" class="floating-cart-count">0</span>
   </a>
+
+  <div class="modal fade" id="documentPreviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title" id="documentPreviewTitle">Comprobante</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body text-center p-2">
+          <img id="documentPreviewImage" class="img-fluid rounded d-none" alt="Comprobante">
+          <iframe id="documentPreviewPdf" class="w-100 d-none" style="height: 75vh;" title="Comprobante PDF"></iframe>
+          <a id="documentPreviewOpen" class="btn btn-sm btn-outline-primary mt-2" target="_blank" rel="noopener">Abrir en otra pestaña</a>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
 
@@ -427,6 +444,16 @@ async function uploadFile(file) {
   const headers = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const r = await fetch(`${API_BASE}/upload`, { method: 'POST', headers, body: formData });
+  if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Upload error'); }
+  return await r.json();
+}
+async function uploadDocument(file) {
+  const token = sessionStorage.getItem('token');
+  const formData = new FormData();
+  formData.append('file', file);
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const r = await fetch(`${API_BASE}/upload/document`, { method: 'POST', headers, body: formData });
   if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Upload error'); }
   return await r.json();
 }
@@ -888,9 +915,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
     }
 
     function applyAdminNav(isSuperuser) {
-      ['adminOpsNav', 'adminFinanceNav', 'adminConfigNav'].forEach(id => {
-        document.getElementById(id)?.classList.toggle('d-none', !isSuperuser);
-      });
+      document.getElementById('adminNav')?.classList.toggle('d-none', !isSuperuser);
       if (isSuperuser) startPendingRestaurantWatch();
     }
 
@@ -1083,6 +1108,22 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
       document.getElementById('toastContainer').appendChild(el);
       const t = new bootstrap.Toast(el); t.show();
       el.addEventListener('hidden.bs.toast', () => el.remove());
+    }
+
+    function openDocumentPreview(url, title = 'Comprobante') {
+      const modalEl = document.getElementById('documentPreviewModal');
+      if (!modalEl || !url) return;
+      const image = document.getElementById('documentPreviewImage');
+      const pdf = document.getElementById('documentPreviewPdf');
+      const open = document.getElementById('documentPreviewOpen');
+      document.getElementById('documentPreviewTitle').textContent = title;
+      const isPdf = /\.pdf($|\?)/i.test(url);
+      image.classList.toggle('d-none', isPdf);
+      pdf.classList.toggle('d-none', !isPdf);
+      image.src = isPdf ? '' : url;
+      pdf.src = isPdf ? url : '';
+      open.href = url;
+      bootstrap.Modal.getOrCreateInstance(modalEl).show();
     }
 
     function loadScriptOnce(src) {

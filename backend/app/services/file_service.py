@@ -8,26 +8,38 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 UPLOAD_DIR = Path(__file__).parent.parent.parent / "static" / "uploads"
 ALLOWED_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
+ALLOWED_DOCUMENT_TYPES = ALLOWED_TYPES | {"application/pdf"}
 MAX_SIZE = 12 * 1024 * 1024  # input limit before compression
+MAX_DOCUMENT_SIZE = 8 * 1024 * 1024
 DEFAULT_QUALITY = 82
+DOCUMENT_QUALITY = 75
 TARGET_BYTES = 450 * 1024
+DOCUMENT_TARGET_BYTES = 300 * 1024
 
 
 def ensure_upload_dir():
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def _validate(file: UploadFile):
-    if file.content_type not in ALLOWED_TYPES:
-        raise ValueError(f"Tipo no permitido: {file.content_type}. Usa JPEG, PNG o WebP.")
+def _validate(file: UploadFile, allowed: set[str] | None = None, max_size: int = MAX_SIZE):
+    allowed = allowed or ALLOWED_TYPES
+    if file.content_type not in allowed:
+        raise ValueError(
+            f"Tipo no permitido: {file.content_type}. Usa JPEG, PNG, WebP o PDF."
+        )
     file.file.seek(0, 2)
     size = file.file.tell()
     file.file.seek(0)
-    if size > MAX_SIZE:
-        raise ValueError("Archivo demasiado grande. Máximo 12 MB.")
+    if size > max_size:
+        raise ValueError(f"Archivo demasiado grande. Máximo {max_size // (1024 * 1024)} MB.")
 
 
-def _compress(content: bytes, size: int, quality: int) -> bytes:
+def _compress(
+    content: bytes,
+    size: int,
+    quality: int,
+    target_bytes: int = TARGET_BYTES,
+) -> bytes:
     """Resize within a square, strip metadata and encode as WebP."""
     try:
         with Image.open(io.BytesIO(content)) as source:
@@ -63,7 +75,7 @@ def _compress(content: bytes, size: int, quality: int) -> bytes:
                     optimize=True,
                 )
                 encoded = output.getvalue()
-                if len(encoded) <= TARGET_BYTES:
+                if len(encoded) <= target_bytes:
                     break
             return encoded
     except (UnidentifiedImageError, OSError, ValueError) as exc:
@@ -89,6 +101,40 @@ async def save_upload(
     ensure_upload_dir()
     processed = await asyncio.to_thread(_compress, content, size, quality)
 
+    filename = f"{uuid.uuid4().hex}.webp"
+    destination = UPLOAD_DIR / filename
+    destination.write_bytes(processed)
+    return f"/static/uploads/{filename}"
+
+
+async def save_document(file: UploadFile) -> str:
+    """Store a receipt or payment proof, accepting images or PDF.
+
+    Images are resized to a readable size and converted to WebP with a smaller
+    target size. PDFs are stored as-is after validating the file signature.
+    """
+    _validate(file, ALLOWED_DOCUMENT_TYPES, MAX_DOCUMENT_SIZE)
+    content = await file.read()
+    if not content:
+        raise ValueError("El archivo está vacío")
+
+    ensure_upload_dir()
+    is_pdf = file.content_type == "application/pdf" or content.startswith(b"%PDF")
+    if is_pdf:
+        if not content.startswith(b"%PDF"):
+            raise ValueError("El archivo no es un PDF válido")
+        filename = f"{uuid.uuid4().hex}.pdf"
+        destination = UPLOAD_DIR / filename
+        destination.write_bytes(content)
+        return f"/static/uploads/{filename}"
+
+    processed = await asyncio.to_thread(
+        _compress,
+        content,
+        1400,
+        DOCUMENT_QUALITY,
+        DOCUMENT_TARGET_BYTES,
+    )
     filename = f"{uuid.uuid4().hex}.webp"
     destination = UPLOAD_DIR / filename
     destination.write_bytes(processed)

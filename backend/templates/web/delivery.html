@@ -661,8 +661,8 @@ function showPurchaseDialog(mid) {
   el.innerHTML = `
     <div class="dp-card">
       <strong>Registrar compra</strong>
-      <div class="mb-2"><label class="form-label">Total de productos ($)</label><input id="purchaseTotal" class="form-control" type="number" step="0.01"></div>
-      <div class="mb-2"><label class="form-label">Foto del comprobante</label><input id="receiptFile" class="form-control" type="file" accept="image/*"></div>
+      <div class="mb-2"><label class="form-label">Total real del ticket ($)</label><input id="purchaseTotal" class="form-control" type="number" step="0.01"><div class="form-text">Monto total de la compra; no la cantidad de artículos.</div></div>
+      <div class="mb-2"><label class="form-label">Foto del comprobante</label><input id="receiptFile" class="form-control" type="file" accept="image/*,application/pdf" capture="environment"></div>
       <div id="uploadProgress" class="text-muted small"></div>
       <button class="btn btn-primary mt-2" onclick="submitPurchase('${mid}')">Confirmar compra</button>
       <button class="btn btn-outline-secondary mt-2" onclick="loadMandadosWeb()">Cancelar</button>
@@ -679,7 +679,7 @@ async function submitPurchase(mid) {
   if (fileInput.files.length > 0) {
     document.getElementById('uploadProgress').textContent = 'Subiendo foto...';
     try {
-      const uploadResult = await uploadFile(fileInput.files[0]);
+      const uploadResult = await uploadDocument(fileInput.files[0]);
       photoUrl = uploadResult.url;
       document.getElementById('uploadProgress').textContent = 'Foto subida';
     } catch (e) { document.getElementById('purchaseStatus').innerHTML = `<div class="alert alert-danger">Error al subir foto: ${e.message}</div>`; return; }

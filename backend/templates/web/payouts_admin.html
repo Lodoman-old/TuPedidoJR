@@ -423,7 +423,7 @@
                 ${r.service_fee_cash ? `<br><small class="text-muted">Cuota cliente: ${r.service_fee_status === 'settled' ? 'Cobrada' : 'En efectivo'}</small>` : ''}</td>
               <td class="text-end">${money(r.remaining_to_charge)}</td>
               <td><span class="badge bg-${color}">${label}</span>
-                ${r.deposit_proof_url ? `<br><a class="small" href="${esc(r.deposit_proof_url)}" target="_blank">Comprobante</a>` : ''}</td>
+                ${r.deposit_proof_url ? `<br><button class="btn btn-sm btn-link p-0" onclick="openDocumentPreview('${esc(r.deposit_proof_url)}','Comprobante de depósito')">Comprobante</button>` : ''}</td>
               <td class="text-end">${reservationActions(r)}</td>
             </tr>`;
           }).join('')}</tbody>
@@ -475,7 +475,7 @@
             <td><small>${esc(row.description)}</small></td>
             <td class="text-end">${money(row.estimated_budget)}</td>
             <td class="text-end fw-bold">${money(row.estimated_total)}</td>
-            <td>${row.prepayment_proof_url ? `<a class="small" href="${esc(row.prepayment_proof_url)}" target="_blank">Ver</a>` : '<small class="text-muted">Sin comprobante</small>'}</td>
+            <td>${row.prepayment_proof_url ? `<button class="btn btn-sm btn-link p-0" onclick="openDocumentPreview('${esc(row.prepayment_proof_url)}','Comprobante de prepago')">Ver</button>` : '<small class="text-muted">Sin comprobante</small>'}</td>
             <td class="text-end">
               <button class="btn btn-sm btn-success" onclick="confirmMandadoPayment('${row.id}')">Confirmar pago</button>
               <button class="btn btn-sm btn-outline-danger" onclick="rejectMandadoPayment('${row.id}')">Rechazar</button>

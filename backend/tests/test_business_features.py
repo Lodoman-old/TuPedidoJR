@@ -1531,6 +1531,61 @@ class TestImageOptimization:
         )
         assert resp.status_code == 400
 
+    async def test_document_image_is_compressed(self, client, owner_token):
+        import io
+        from pathlib import Path
+
+        from PIL import Image
+
+        from app.services.file_service import UPLOAD_DIR
+
+        buffer = io.BytesIO()
+        Image.new("RGB", (2400, 1800), (240, 240, 240)).save(buffer, "PNG")
+        resp = await client.post(
+            "/api/v1/upload/document",
+            files={"file": ("ticket.png", buffer.getvalue(), "image/png")},
+            headers=_headers(owner_token),
+        )
+        assert resp.status_code == 200, resp.text
+        url = resp.json()["url"]
+        assert url.endswith(".webp")
+        path = UPLOAD_DIR / Path(url).name
+        try:
+            with Image.open(path) as output:
+                assert output.format == "WEBP"
+                assert max(output.size) <= 1400
+            assert path.stat().st_size <= 320 * 1024
+        finally:
+            path.unlink(missing_ok=True)
+
+    async def test_document_accepts_pdf(self, client, owner_token):
+        from pathlib import Path
+
+        from app.services.file_service import UPLOAD_DIR
+
+        content = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF"
+        resp = await client.post(
+            "/api/v1/upload/document",
+            files={"file": ("comprobante.pdf", content, "application/pdf")},
+            headers=_headers(owner_token),
+        )
+        assert resp.status_code == 200, resp.text
+        url = resp.json()["url"]
+        assert url.endswith(".pdf")
+        path = UPLOAD_DIR / Path(url).name
+        try:
+            assert path.read_bytes() == content
+        finally:
+            path.unlink(missing_ok=True)
+
+    async def test_document_rejects_other_files(self, client, owner_token):
+        resp = await client.post(
+            "/api/v1/upload/document",
+            files={"file": ("nota.txt", b"hola", "text/plain")},
+            headers=_headers(owner_token),
+        )
+        assert resp.status_code == 400
+
 
 class TestCancellationPolicy:
     async def test_policy_endpoint(self, client, customer_token):

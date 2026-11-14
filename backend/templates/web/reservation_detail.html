@@ -86,9 +86,9 @@
               <p class="small text-muted">Para confirmar la reservación, transfiere el depósito y sube el comprobante.</p>
               <div class="small mb-2" id="bankInfo">Consultando cuenta...</div>
               <input type="file" class="form-control form-control-sm mb-2" id="proofFile"
-                     accept="image/jpeg,image/png,image/webp,application/pdf">
+                     accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment">
               <button class="btn btn-sm btn-primary" id="proofBtn" onclick="uploadProof()">Subir comprobante</button>
-              ${r.deposit_proof_url ? `<div class="small text-success mt-2">Comprobante recibido. Esperando validación.</div>` : ''}
+              ${r.deposit_proof_url ? `<div class="mt-2"><button class="btn btn-sm btn-outline-primary" onclick="openDocumentPreview('${esc(r.deposit_proof_url)}','Comprobante de depósito')"><i class="bi bi-file-earmark-text"></i> Ver comprobante</button><div class="small text-success">Comprobante recibido. Esperando validación.</div></div>` : ''}
             </div>` : ''}
           ${r.status === 'cancelled' || r.status === 'rejected' || r.status === 'no_show' ? `
             <div class="alert alert-secondary py-2 small">
@@ -137,7 +137,7 @@
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     try {
-      const uploaded = await uploadFile(file);
+      const uploaded = await uploadDocument(file);
       await apiRequest('PATCH', `/reservations/${RES_ID}/deposit-proof`, {
         proof_url: uploaded.url || uploaded.file_url || uploaded.path,
       });

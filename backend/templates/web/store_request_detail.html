@@ -47,7 +47,7 @@
             <p class="mb-2">${esc(request.description)}</p>
             <div class="small text-muted">Cantidad: ${request.quantity}</div>
             ${request.budget != null ? `<div class="small text-muted">Presupuesto: ${money(request.budget)}</div>` : ''}
-            ${request.reference_photo_url ? `<a class="small" href="${esc(request.reference_photo_url)}" target="_blank">Ver foto de referencia</a>` : ''}
+            ${request.reference_photo_url ? `<img src="${esc(request.reference_photo_url)}" class="document-thumb mt-2" alt="Foto de referencia" onclick="openDocumentPreview('${esc(request.reference_photo_url)}','Foto de referencia')">` : ''}
             ${request.notes ? `<div class="small text-muted mt-2">Notas: ${esc(request.notes)}</div>` : ''}
           </div>
           <div class="card p-3 mb-3">

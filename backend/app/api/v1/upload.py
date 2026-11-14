@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 
 from app.api.deps import get_current_user
 from app.models.user import User
-from app.services.file_service import save_upload
+from app.services.file_service import save_document, save_upload
 
 router = APIRouter()
 
@@ -16,6 +16,20 @@ async def upload_file(
         raise HTTPException(status_code=400, detail="No se envió ningún archivo")
     try:
         url = await save_upload(file)
+        return {"url": url}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/document")
+async def upload_document(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    if not file:
+        raise HTTPException(status_code=400, detail="No se envió ningún archivo")
+    try:
+        url = await save_document(file)
         return {"url": url}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

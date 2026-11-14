@@ -298,7 +298,7 @@
         <div class="small mb-2" id="resBankInfo"></div>
         <label class="form-label small mb-1" for="resProof">Comprobante de transferencia</label>
         <input type="file" class="form-control form-control-sm" id="resProof"
-               accept="image/jpeg,image/png,image/webp,application/pdf">
+               accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment">
         <div class="form-text">El restaurante podrá ver la reservación cuando el depósito sea validado.</div>
       </div>
 
@@ -719,7 +719,7 @@
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Subiendo comprobante...';
       try {
-        const uploaded = await uploadFile(file);
+        const uploaded = await uploadDocument(file);
         proofUrl = uploaded.url || uploaded.file_url || uploaded.path;
       } catch (e) {
         btn.disabled = false;

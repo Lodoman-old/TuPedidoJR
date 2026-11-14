@@ -11,6 +11,9 @@
 {% block scripts %}
 <script>
   const MID = '{{ mandado_id }}';
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
   const STATUS_LABELS = {
     pending_payment: 'Pendiente de pago',
     pending: 'Pendiente', accepted: 'Aceptado', buying: 'Comprando',
@@ -91,13 +94,13 @@
           <div class="small mb-2" id="mandadoBankInfo">Consultando cuenta...</div>
           <div class="small mb-2">Monto del presupuesto: <strong>$${parseFloat(m.estimated_budget).toFixed(2)}</strong></div>
           <input type="file" class="form-control form-control-sm mb-2" id="mandadoProof"
-                 accept="image/jpeg,image/png,image/webp,application/pdf">
+                 accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment">
           <button class="btn btn-sm btn-success" id="mandadoProofBtn" onclick="uploadMandadoProof()">Subir comprobante</button>
           ${m.prepayment_proof_url ? '<div class="small text-success mt-2">Comprobante recibido. Esperando validación.</div>' : ''}
         </div>` : ''}
       <div class="card p-3 mb-3">
         <h6>Desglose</h6>
-        <div class="d-flex justify-content-between small"><span>Productos (${m.product_total ? 'real' : 'presupuesto'})</span><span>$${parseFloat(m.product_total || m.estimated_budget).toFixed(2)}</span></div>
+        <div class="d-flex justify-content-between small"><span>Compra (${m.product_total ? 'real' : 'presupuesto'})</span><span>$${parseFloat(m.product_total || m.estimated_budget).toFixed(2)}</span></div>
         <div class="d-flex justify-content-between small"><span>Envío</span><span>$${parseFloat(m.delivery_fee).toFixed(2)}</span></div>
         <div class="d-flex justify-content-between small"><span>Cargo por riesgo</span><span>$${parseFloat(m.risk_fee).toFixed(2)}</span></div>
         <hr>
@@ -107,8 +110,13 @@
       </div>`;
 
     if (m.receipt_photo_url) {
+      const isPdf = /\.pdf($|\?)/i.test(m.receipt_photo_url);
       html += `<div class="card p-3 mb-3"><h6>📷 Ticket de compra</h6>
-        <img src="${m.receipt_photo_url}" class="img-fluid rounded" alt="Ticket"></div>`;
+        ${isPdf
+          ? `<button class="btn btn-outline-danger btn-sm" onclick="openDocumentPreview('${esc(m.receipt_photo_url)}','Ticket de compra')"><i class="bi bi-file-earmark-pdf"></i> Ver PDF</button>`
+          : `<img src="${esc(m.receipt_photo_url)}" class="document-thumb" alt="Ticket de compra"
+                  onclick="openDocumentPreview('${esc(m.receipt_photo_url)}','Ticket de compra')">`}
+      </div>`;
     }
 
     if (m.status === 'pending' || m.status === 'pending_payment' || m.status === 'accepted') {
@@ -219,7 +227,7 @@
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     try {
-      const uploaded = await uploadFile(file);
+      const uploaded = await uploadDocument(file);
       await apiRequest('PATCH', `/mandados/${MID}/payment-proof`, {
         proof_url: uploaded.url || uploaded.file_url || uploaded.path,
       });

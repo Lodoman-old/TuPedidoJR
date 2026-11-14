@@ -12,8 +12,9 @@
     <textarea class="form-control" id="mandadoDesc" rows="3" placeholder="Ej: 1kg de tortillas, 2L de leche, jabón de trastes..."></textarea>
   </div>
   <div class="mb-3">
-    <label class="form-label"><strong>Presupuesto estimado de productos ($)</strong></label>
+    <label class="form-label"><strong>Presupuesto total de la compra ($)</strong></label>
     <input type="number" class="form-control" id="budgetInput" step="0.01" min="1" placeholder="Ej: 150">
+    <div class="form-text">Es el dinero estimado para comprar todo lo que necesitas. No es la cantidad de productos.</div>
   </div>
 </div>
 
@@ -73,7 +74,7 @@
     <div id="proofBox" class="mt-2 d-none">
       <label class="form-label small mb-1" for="paymentProof">Comprobante de transferencia</label>
       <input type="file" class="form-control form-control-sm" id="paymentProof"
-             accept="image/jpeg,image/png,image/webp,application/pdf">
+             accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment">
       <div class="form-text">El mandado se publica cuando el admin confirma el pago.</div>
     </div>
     <div class="form-text" id="paymentHelp">Para compras altas se pedirá transferencia antes de publicar el mandado.</div>
@@ -82,7 +83,7 @@
 
 <div class="card p-3 mb-3" id="feeSummary">
   <h6>Desglose estimado</h6>
-  <div class="d-flex justify-content-between small"><span>Productos (presupuesto)</span><span id="estProducts">$0.00</span></div>
+  <div class="d-flex justify-content-between small"><span>Compra (presupuesto)</span><span id="estProducts">$0.00</span></div>
   <div class="d-flex justify-content-between small"><span>Envío</span><span id="estDelivery">—</span></div>
   <div class="d-flex justify-content-between small"><span id="estRiskLabel">Cargo por riesgo</span><span id="estRisk">—</span></div>
   <hr>
@@ -523,7 +524,7 @@
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Subiendo comprobante...';
       try {
-        const uploaded = await uploadFile(file);
+        const uploaded = await uploadDocument(file);
         proofUrl = uploaded.url || uploaded.file_url || uploaded.path;
       } catch (e) {
         submitBtn.disabled = false;

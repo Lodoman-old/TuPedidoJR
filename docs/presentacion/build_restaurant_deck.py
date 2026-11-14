@@ -16,14 +16,14 @@ add_rect(slide, 0, 0, 13.333, 7.5, NAVY_DARK)
 add_rect(slide, 0, 0, 0.16, 7.5, ORANGE)
 add_circle(slide, 10.9, -1.1, 3.4, RGBColor(0x24, 0x3B, 0x7A))
 add_circle(slide, 11.6, 5.7, 2.2, RGBColor(0x22, 0x35, 0x6E))
-add_text(slide, 0.85, 0.75, 5.0, 0.35, "PARA RESTAURANTES · 2026", size=11,
+add_text(slide, 0.85, 0.75, 6.0, 0.35, "PARA RESTAURANTES Y TIENDAS · 2026", size=11,
          color=ORANGE, bold=True)
 add_logo(slide, 0.85, 1.3, 5.25, on_dark=True)
 add_text(slide, 0.85, 3.05, 10.8, 0.9,
-         "Tu menú, tu marca,\ntu margen.",
+         "Tu menú, tu catálogo,\ntu margen.",
          size=40, color=WHITE, bold=True, spacing=0.95)
 add_text(slide, 0.85, 4.35, 9.9, 0.75,
-         "Menú digital, pedidos y reparto local\nsin comisión por platillo.",
+         "Menú digital, catálogo, pedidos y reparto local\nsin comisión por platillo.",
          size=17, color=RGBColor(0xC9, 0xD2, 0xE3), spacing=1.1)
 chips = [("$500/año", "afiliación"), ("0%", "comisión por platillo"), ("QR + fotos", "incluidos")]
 x = 0.85
@@ -324,15 +324,93 @@ add_text(slide, 0.9, 5.82, 11.5, 0.6,
          "Todo el paquete está incluido en la afiliación anual. Coordinamos contigo la fecha de arranque.",
          size=11.5, color=ORANGE_DARK, bold=True, spacing=1.05)
 
-# ---------------------------------------------------------------- 11 FAQ
+# ---------------------------------------------------------------- 11 Tipos de envío
+slide = add_slide_base(
+    prs, "Un ecosistema: restaurantes, tiendas y mandados",
+    kicker="Tipos de envío", number=11,
+    subtitle="TuPedidoJR no es solo comida. Conecta negocios locales con clientes y resuelve compras que no están en catálogo."
+)
+channels = [
+    ("Catálogo", "Restaurante o tienda",
+     "El cliente pide desde el catálogo, paga productos + envío + $5 de servicio y el negocio prepara el pedido.",
+     "Comisión del negocio: $5 por pedido."),
+    ("Solicitud", "Producto fuera de catálogo",
+     "El cliente describe el producto; la tienda cotiza, el cliente confirma y se genera un pedido normal.",
+     "Mismos cargos: $5 cliente + $5 tienda + envío."),
+    ("Mandado abierto", "Compra asistida",
+     "El cliente describe lo que necesita y un repartidor lo compra en cualquier negocio con presupuesto y comprobante.",
+     "Cargo por riesgo: $15. Envío real por km."),
+]
+for i, (tag, title, desc, note) in enumerate(channels):
+    cx = 0.62 + i * 4.08
+    add_card(slide, cx, 2.0, 3.88, 3.55)
+    add_rect(slide, cx + 0.25, 2.2, 1.35, 0.3, ORANGE if i < 2 else NAVY, rounded=True, radius=0.3)
+    add_text(slide, cx + 0.25, 2.25, 1.35, 0.2, tag, size=8.5, color=WHITE, bold=True,
+             align=PP_ALIGN.CENTER)
+    add_text(slide, cx + 0.25, 2.65, 3.35, 0.35, title, size=14, color=NAVY, bold=True)
+    add_text(slide, cx + 0.25, 3.1, 3.35, 1.15, desc, size=9.8, color=GRAY, spacing=1.08)
+    add_line(slide, cx + 0.25, 4.35, cx + 3.6, 4.35, color=LIGHT2, width=0.6)
+    add_text(slide, cx + 0.25, 4.5, 3.35, 0.55, note, size=9.2, color=ORANGE_DARK,
+             bold=True, spacing=1.05)
+add_card(slide, 0.62, 5.85, 12.1, 0.8, fill=RGBColor(0xE8, 0xF5, 0xE9))
+add_text(slide, 0.9, 6.02, 11.5, 0.45,
+         "Una tienda puede empezar sin catálogo, recibir solicitudes y publicar después sus productos principales.",
+         size=11.5, color=GREEN, bold=True)
+
+# ---------------------------------------------------------------- 12 Procesos
+slide = add_slide_base(
+    prs, "Cómo se mueve cada pedido",
+    kicker="Procesos claros", number=12,
+    subtitle="Cada flujo tiene un responsable, un comprobante y un cobro transparente."
+)
+flows = [
+    ("Catálogo", [
+        "Cliente pide y paga",
+        "Negocio confirma y prepara",
+        "Repartidor recoge",
+        "Cliente recibe",
+    ], "Productos + envío + $5 cliente.\nNegocio: $5 de comisión."),
+    ("Solicitud a tienda", [
+        "Cliente describe el producto",
+        "Tienda cotiza disponibilidad y precio",
+        "Cliente confirma",
+        "Se genera un pedido normal",
+    ], "Producto cotizado + envío + $5.\nNegocio: $5 de comisión."),
+    ("Mandado abierto", [
+        "Cliente describe y pone presupuesto",
+        "Repartidor acepta",
+        "Confirma tienda y envío real",
+        "Compra, sube ticket y entrega",
+    ], "Compra + envío real + $15 de riesgo.\nPrepago desde $1,000 sin historial."),
+]
+for i, (title, steps, fees) in enumerate(flows):
+    cx = 0.62 + i * 4.08
+    add_card(slide, cx, 2.0, 3.88, 3.55)
+    add_text(slide, cx + 0.25, 2.18, 3.35, 0.3, title, size=14, color=NAVY, bold=True)
+    sy = 2.68
+    for idx, step in enumerate(steps):
+        add_circle(slide, cx + 0.25, sy, 0.3, ORANGE if idx == 0 else NAVY)
+        add_text(slide, cx + 0.25, sy + 0.055, 0.3, 0.18, str(idx + 1), size=7.5,
+                 color=WHITE, bold=True, align=PP_ALIGN.CENTER)
+        add_text(slide, cx + 0.68, sy - 0.01, 2.9, 0.32, step, size=9.3, color=GRAY, spacing=1.0)
+        sy += 0.43
+    add_line(slide, cx + 0.25, 4.45, cx + 3.6, 4.45, color=LIGHT2, width=0.6)
+    add_text(slide, cx + 0.25, 4.58, 3.35, 0.7, fees, size=8.8, color=ORANGE_DARK,
+             bold=True, spacing=1.05)
+add_card(slide, 0.62, 5.85, 12.1, 0.8, fill=RGBColor(0xFF, 0xF2, 0xE8))
+add_text(slide, 0.9, 6.02, 11.5, 0.45,
+         "En mandados abiertos el envío se estima y se ajusta con la distancia real tienda → cliente.",
+         size=11.5, color=ORANGE_DARK, bold=True)
+
+# ---------------------------------------------------------------- 13 FAQ
 slide = add_slide_base(
     prs, "Preguntas frecuentes",
-    kicker="Antes de decidir", number=11,
-    subtitle="Lo que más nos preguntan los restaurantes."
+    kicker="Antes de decidir", number=13,
+    subtitle="Lo que más nos preguntan los restaurantes y tiendas."
 )
 faqs = [
-    ("¿Pago comisión por platillo?", "No. Tu costo es $500 al año + $5 por pedido."),
-    ("¿Necesito página web?", "No. Tu menú digital y tu QR están incluidos."),
+    ("¿Solo es para restaurantes?", "No. También tiendas con catálogo, farmacias, abarrotes y mandados abiertos."),
+    ("¿Necesito subir todo mi catálogo?", "No. Puedes empezar con tus productos principales y recibir solicitudes de lo que falte."),
     ("¿Quién cobra el envío?", "El cliente. El repartidor recibe el 100% del envío."),
     ("¿Puedo seguir usando Uber Eats o DIDI?", "Sí. TuPedidoJR es un canal adicional, no te obliga a dejar los demás."),
     ("¿Qué pasa si no hay repartidor?", "En pedidos de 8 km o más no preparas hasta que alguien acepte. Si no ocurre en 30 min, se cancela."),
@@ -358,10 +436,10 @@ add_rect(slide, 0, 0, 0.16, 7.5, ORANGE)
 add_circle(slide, 10.7, -1.0, 3.3, RGBColor(0x24, 0x3B, 0x7A))
 add_logo(slide, 0.85, 0.8, 5.0, on_dark=True)
 add_text(slide, 0.85, 2.2, 11.4, 0.8,
-         "Haz que tu menú trabaje para ti.",
+         "Haz que tu negocio trabaje para ti.",
          size=34, color=WHITE, bold=True)
 add_text(slide, 0.85, 3.05, 11.0, 0.7,
-         "Afíliate por $500 al año. Incluye menú digital, QR, volantes y fotografía.\nSin comisión por platillo.",
+         "Afíliate por $500 al año. Incluye menú o catálogo digital, QR, volantes y fotografía.\nSin comisión por platillo.",
          size=16, color=RGBColor(0xC9, 0xD2, 0xE3), spacing=1.15)
 add_card(slide, 0.85, 4.25, 5.7, 1.45, fill=RGBColor(0x22, 0x35, 0x6E))
 add_text(slide, 1.1, 4.42, 5.2, 0.3, "Agenda una visita", size=12, color=ORANGE, bold=True)

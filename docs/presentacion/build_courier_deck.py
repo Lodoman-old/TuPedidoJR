@@ -23,7 +23,7 @@ add_text(slide, 0.85, 3.05, 11.0, 0.9,
          "Reparte con TuPedidoJR.\nTú decides cuándo.",
          size=38, color=WHITE, bold=True, spacing=0.95)
 add_text(slide, 0.85, 4.4, 9.8, 0.7,
-         "Pedidos locales, 100% del envío y 100% de la propina.",
+         "Pedidos de restaurantes, tiendas y mandados.\n100% del envío y 100% de la propina.",
          size=17, color=RGBColor(0xC9, 0xD2, 0xE3))
 chips = [("100%", "del envío"), ("100%", "de la propina"), ("Tú", "decides tu horario")]
 x = 0.85
@@ -276,10 +276,43 @@ add_text(slide, 0.9, 6.2, 11.5, 0.3,
          "WhatsApp 412 134 0765  ·  old.lodoman@gmail.com",
          size=10, color=RGBColor(0xC9, 0xD2, 0xE3))
 
-# ---------------------------------------------------------------- 10 FAQ
+# ---------------------------------------------------------------- 10 Tipos de servicio
+slide = add_slide_base(
+    prs, "Tres tipos de servicio, un mismo panel",
+    kicker="Tipos de trabajo", number=10,
+    subtitle="Puedes repartir pedidos de restaurantes, tiendas o mandados abiertos. Tú eliges lo que aceptas."
+)
+jobs = [
+    ("Pedido de catálogo", "Restaurante o tienda",
+     "Recoges un pedido ya preparado y lo entregas. No compras nada.",
+     "Ganas: 100% del envío + 100% de la propina."),
+    ("Solicitud a tienda", "Producto cotizado",
+     "La tienda ya confirmó disponibilidad y precio. Recoges y entregas.",
+     "Ganas: 100% del envío + propina."),
+    ("Mandado abierto", "Compra asistida",
+     "Compras con el presupuesto del cliente, confirmas la tienda, subes el ticket y entregas.",
+     "Ganas: envío real + propina. El cargo de $15 por riesgo lo paga el cliente a la plataforma."),
+]
+for i, (title, tag, desc, note) in enumerate(jobs):
+    cx = 0.62 + i * 4.08
+    add_card(slide, cx, 2.0, 3.88, 3.45)
+    add_rect(slide, cx + 0.25, 2.2, 1.55, 0.3, ORANGE if i < 2 else NAVY, rounded=True, radius=0.3)
+    add_text(slide, cx + 0.25, 2.25, 1.55, 0.2, tag, size=8.2, color=WHITE, bold=True,
+             align=PP_ALIGN.CENTER)
+    add_text(slide, cx + 0.25, 2.65, 3.35, 0.35, title, size=14, color=NAVY, bold=True)
+    add_text(slide, cx + 0.25, 3.08, 3.35, 1.05, desc, size=9.7, color=GRAY, spacing=1.08)
+    add_line(slide, cx + 0.25, 4.28, cx + 3.6, 4.28, color=LIGHT2, width=0.6)
+    add_text(slide, cx + 0.25, 4.42, 3.35, 0.75, note, size=8.8, color=ORANGE_DARK,
+             bold=True, spacing=1.05)
+add_card(slide, 0.62, 5.75, 12.1, 0.95, fill=RGBColor(0xE8, 0xF5, 0xE9))
+add_text(slide, 0.9, 5.9, 11.5, 0.55,
+         "En mandados prepagados recibes un adelanto antes de comprar. En mandados abiertos confirmas la tienda con GPS para calcular el envío real.",
+         size=10.8, color=GREEN, bold=True, spacing=1.05)
+
+# ---------------------------------------------------------------- 11 FAQ
 slide = add_slide_base(
     prs, "Preguntas frecuentes",
-    kicker="Antes de empezar", number=10,
+    kicker="Antes de empezar", number=11,
     subtitle="Lo que más nos preguntan los repartidores."
 )
 faqs = [
@@ -287,8 +320,8 @@ faqs = [
     ("¿Cuánto cuesta unirme?", "No hay cuota de alta para repartidores."),
     ("¿Cómo recibo mis pagos?", "En efectivo o por transferencia, con historial en la app."),
     ("¿Puedo usar bicicleta, moto o auto?", "Sí, los tres vehículos son bienvenidos."),
-    ("¿Qué pasa si no puedo entregar?", "No aceptes el pedido si no puedes cubrirlo; si surge algo, contacta a soporte."),
-    ("¿Puedo trabajar en otra app?", "Tú decides tu disponibilidad y tus horarios."),
+    ("¿Qué pasa si el envío real sube?", "Se pide autorización al cliente; no compras hasta que autorice."),
+    ("¿Cómo funciona el adelanto?", "En mandados prepagados, el admin te entrega el presupuesto antes de comprar."),
 ]
 for i, (q, a) in enumerate(faqs):
     col = i % 2

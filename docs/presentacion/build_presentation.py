@@ -276,10 +276,10 @@ add_text(slide, 0.85, 0.75, 4.0, 0.35, "PROPUESTA 2026", size=11,
          color=ORANGE, bold=True)
 add_logo(slide, 0.85, 1.3, 5.25, on_dark=True)
 add_text(slide, 0.85, 3.05, 10.6, 0.85,
-         "La plataforma local que sí deja crecer\na los restaurantes.",
+         "La plataforma local que sí deja crecer\na restaurantes y tiendas.",
          size=36, color=WHITE, bold=True, spacing=0.95)
 add_text(slide, 0.85, 4.25, 9.8, 0.72,
-         "Menú digital, pedidos y reparto con costo fijo, sin comisiones\nporcentuales sobre los alimentos.",
+         "Menú digital, catálogo, mandados y reparto con costo fijo,\nsin comisiones porcentuales sobre los alimentos.",
          size=16, color=RGBColor(0xC9,0xD2,0xE3), spacing=1.1)
 chips = [("$500/año", "afiliación"), ("0%", "comisión por platillo"), ("100%", "del envío al repartidor")]
 x = 0.85
@@ -289,14 +289,14 @@ for value, label in chips:
     add_text(slide, x + 0.2, 5.88, 3.0, 0.25, label, size=9, color=RGBColor(0xC9,0xD2,0xE3))
     x += 3.75
 add_text(slide, 0.85, 6.85, 9.5, 0.28,
-         "Juventino Rosas, Guanajuato  ·  Documento para restaurantes e inversionistas",
+         "Juventino Rosas, Guanajuato  ·  Documento para restaurantes, tiendas e inversionistas",
          size=9, color=RGBColor(0x9F,0xAD,0xC8))
 
 # ---------------------------------------------------------------- Slide 2
 slide, y = add_slide_base(
     "Un modelo simple, transparente y ya operativo",
     kicker="Resumen ejecutivo", number=2,
-    subtitle="TuPedidoJR digitaliza restaurantes locales con menú propio, QR, pedidos y reparto respaldado por la plataforma. El restaurante conserva su margen; el cliente sabe exactamente qué paga."
+    subtitle="TuPedidoJR digitaliza restaurantes y tiendas locales con catálogo propio, QR, pedidos, reparto respaldado y mandados asistidos. El negocio conserva su margen; el cliente sabe exactamente qué paga."
 )
 kpis = [
     ("$500 / año", "Afiliación por restaurante", "Incluye menú, materiales y soporte."),
@@ -744,7 +744,7 @@ slide, y = add_slide_base(
 phases = [
     ("FASE 1 · CONSOLIDAR", "20–30 restaurantes", "Juventino Rosas. Medir tiempos, recompra y satisfacción."),
     ("FASE 2 · EXPANDIR", "60+ restaurantes", "Comunidades y municipios cercanos. Alianzas locales."),
-    ("FASE 3 · ESCALAR", "150+ restaurantes", "Nuevos servicios: mandados, lealtad y promociones."),
+    ("FASE 3 · ESCALAR", "150+ negocios", "Restaurantes, tiendas, mandados, lealtad y promociones."),
 ]
 for i, (phase, target, desc) in enumerate(phases):
     cx = 0.62 + i * 4.08
@@ -762,17 +762,53 @@ add_text(slide, 0.9, 6.05, 11.5, 0.3,
          "Cada restaurante adicional y cada pedido adicional son margen para reinvertir en crecimiento.",
          size=10.5, color=RGBColor(0xC9,0xD2,0xE3))
 
-# ---------------------------------------------------------------- Slide 17 closing
+# ---------------------------------------------------------------- Slide 17 tiendas y mandados
+slide, y = add_slide_base(
+    "Más pedidos por la misma red: tiendas y mandados",
+    kicker="Expansión del modelo", number=17,
+    subtitle="La misma plataforma, los mismos repartidores y una nueva demanda: comercio local y compras asistidas."
+)
+lines = [
+    ("Tiendas con catálogo", "Productos principales",
+     "Abarrotes, farmacias, ferreterías y más. El cliente pide desde el catálogo, igual que en un restaurante.",
+     "Ingreso plataforma: $10 por pedido."),
+    ("Solicitudes a tienda", "Lo que no está en catálogo",
+     "El cliente describe el producto; la tienda cotiza, el cliente confirma y se genera un pedido.",
+     "Mismos $10 por pedido."),
+    ("Mandado abierto", "Compra asistida",
+     "El cliente describe lo que necesita y un repartidor lo compra en cualquier negocio con presupuesto y ticket.",
+     "Ingreso plataforma: $15 por mandado."),
+]
+for i, (title, tag, desc, note) in enumerate(lines):
+    cx = 0.62 + i * 4.08
+    add_card(slide, cx, 1.95, 3.88, 3.45)
+    add_rect(slide, cx + 0.25, 2.15, 1.55, 0.3, ORANGE if i < 2 else NAVY, rounded=True, radius=0.3)
+    add_text(slide, cx + 0.25, 2.2, 1.55, 0.2, tag, size=7.8, color=WHITE, bold=True,
+             align=PP_ALIGN.CENTER)
+    add_text(slide, cx + 0.25, 2.58, 3.35, 0.35, title, size=14, color=NAVY, bold=True)
+    add_text(slide, cx + 0.25, 3.0, 3.35, 1.05, desc, size=9.3, color=GRAY, spacing=1.05)
+    add_line(slide, cx + 0.25, 4.2, cx + 3.6, 4.2, color=LIGHT2, width=0.6)
+    add_text(slide, cx + 0.25, 4.35, 3.35, 0.6, note, size=9.2, color=ORANGE_DARK,
+             bold=True, spacing=1.0)
+add_card(slide, 0.62, 5.65, 12.1, 1.05, fill=RGBColor(0xE8, 0xF5, 0xE9))
+add_text(slide, 0.9, 5.8, 11.5, 0.35,
+         "Más densidad: los mismos repartidores cubren restaurantes, tiendas y mandados en la misma zona.",
+         size=14, color=GREEN, bold=True)
+add_text(slide, 0.9, 6.18, 11.5, 0.3,
+         "Prepago desde $1,000 para clientes sin historial. Clientes confiables pueden pagar en efectivo.",
+         size=9.5, color=GRAY)
+
+# ---------------------------------------------------------------- Slide 18 closing
 slide = prs.slides.add_slide(BLANK)
 add_rect(slide, 0, 0, 13.333, 7.5, NAVY_DARK)
 add_rect(slide, 0, 0, 0.16, 7.5, ORANGE)
 add_circle(slide, 10.7, -1.0, 3.3, RGBColor(0x24,0x3B,0x7A))
 add_logo(slide, 0.85, 0.8, 5.0, on_dark=True)
 add_text(slide, 0.85, 2.25, 11.4, 0.8,
-         "Tecnología local, margen para el restaurante.",
+         "Tecnología local, margen para el negocio.",
          size=32, color=WHITE, bold=True)
 add_text(slide, 0.85, 3.15, 11.0, 0.7,
-         "TuPedidoJR ya está en operación. Buscamos restaurantes y aliados para escalar el modelo a nuevos municipios.",
+         "TuPedidoJR ya está en operación. Buscamos restaurantes, tiendas y aliados para escalar el modelo a nuevos municipios.",
          size=14, color=RGBColor(0xC9,0xD2,0xE3), spacing=1.1)
 add_card(slide, 0.85, 4.2, 5.7, 1.55, fill=RGBColor(0x22,0x35,0x6E))
 add_text(slide, 1.1, 4.38, 5.2, 0.3, "Para restaurantes", size=12, color=ORANGE, bold=True)

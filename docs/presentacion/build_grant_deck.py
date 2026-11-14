@@ -20,12 +20,12 @@ add_text(slide, 0.85, 0.75, 6.0, 0.35, "FONDO PERDIDO · CONVOCATORIA 2026", siz
          color=ORANGE, bold=True)
 add_logo(slide, 0.85, 1.3, 5.25, on_dark=True)
 add_text(slide, 0.85, 3.0, 11.0, 0.8,
-         "Digitalización de restaurantes locales\ny empleo para repartidores.",
+         "Digitalización de restaurantes y tiendas locales\ny empleo para repartidores.",
          size=30, color=WHITE, bold=True, spacing=0.98)
 add_text(slide, 0.85, 4.05, 9.8, 0.6,
          "Proyecto en operación · Juventino Rosas y comunidades de Guanajuato",
          size=14, color=RGBColor(0xC9, 0xD2, 0xE3))
-chips = [("$150,000", "apoyo solicitado"), ("100", "restaurantes meta"), ("30", "repartidores meta")]
+chips = [("$150,000", "apoyo solicitado"), ("100", "restaurantes y tiendas"), ("30", "repartidores meta")]
 x = 0.85
 for value, label in chips:
     add_card(slide, x, 5.35, 3.5, 0.78, fill=RGBColor(0x22, 0x35, 0x6E), radius=0.1)
@@ -43,7 +43,7 @@ add_text(slide, 0.85, 6.88, 11.0, 0.28,
 slide = add_slide_base(
     prs, "Una plataforma local que ya opera y puede escalar",
     kicker="Resumen del proyecto", number=2,
-    subtitle="TuPedidoJR digitaliza restaurantes, coordina reparto local y genera ingresos para repartidores. Solicitamos apoyo para acelerar la adopción, no para construir el software desde cero."
+    subtitle="TuPedidoJR digitaliza restaurantes y tiendas, coordina reparto local y genera ingresos para repartidores. Solicitamos apoyo para acelerar la adopción, no para construir el software desde cero."
 )
 kpis = [
     ("100", "restaurantes meta", "Afiliados y con menú digital al mes 12."),
@@ -67,7 +67,7 @@ add_text(slide, 0.9, 6.32, 11.5, 0.3,
 
 # ---------------------------------------------------------------- 3 Problema
 slide = add_slide_base(
-    prs, "Restaurantes locales sin canal digital propio",
+    prs, "Negocios locales sin canal digital propio",
     kicker="Problemática", number=3,
     subtitle="En Juventino Rosas y comunidades cercanas, los negocios pequeños dependen de Uber Eats y DIDI o de canales informales para vender."
 )
@@ -337,7 +337,7 @@ slide = add_slide_base(
     subtitle="Un proyecto que combina digitalización de MIPYMES, empleo local y derrama económica."
 )
 alignment = [
-    ("Digitalización de MIPYMES", "Menús, pedidos y cobros digitales para restaurantes pequeños."),
+    ("Digitalización de MIPYMES", "Menús, catálogos, pedidos y cobros digitales para restaurantes y tiendas."),
     ("Empleo y autoempleo", "Red formal de repartidores con ingresos claros y flexibles."),
     ("Derrama económica local", "El gasto de los clientes se queda en la comunidad."),
     ("Inclusión financiera", "Pagos, cuentas claras y comprobantes para negocios y repartidores."),
@@ -356,7 +356,43 @@ add_text(slide, 0.9, 5.8, 11.5, 0.5,
          "Cada peso del apoyo se traduce en restaurantes digitalizados, empleo local y dinero que se queda en la comunidad.",
          size=11.5, color=ORANGE_DARK, bold=True, spacing=1.05)
 
-# ---------------------------------------------------------------- 14 Cierre
+# ---------------------------------------------------------------- 14 Tiendas y mandados
+slide = add_slide_base(
+    prs, "Más que restaurantes: tiendas y mandados",
+    kicker="Ampliación del impacto", number=14,
+    subtitle="La misma plataforma puede digitalizar tiendas y resolver compras asistidas, ampliando el impacto a más MIPYMES."
+)
+impact_lines = [
+    ("Tiendas locales", "Comercio local",
+     "Catálogo parcial de productos principales, pedidos y reparto con la misma operación.",
+     "Ingreso plataforma: $10 por pedido."),
+    ("Solicitudes a tienda", "Producto fuera de catálogo",
+     "El cliente pide lo que no está publicado; la tienda cotiza y el pedido se genera al confirmar.",
+     "Mismos $10 por pedido."),
+    ("Mandado abierto", "Compra asistida",
+     "Un repartidor compra en cualquier negocio con presupuesto, ticket y seguimiento.",
+     "Ingreso plataforma: $15 por mandado."),
+]
+for i, (title, tag, desc, note) in enumerate(impact_lines):
+    cx = 0.62 + i * 4.08
+    add_card(slide, cx, 1.95, 3.88, 3.4)
+    add_rect(slide, cx + 0.25, 2.15, 1.55, 0.3, ORANGE if i < 2 else NAVY, rounded=True, radius=0.3)
+    add_text(slide, cx + 0.25, 2.2, 1.55, 0.2, tag, size=7.6, color=WHITE, bold=True,
+             align=PP_ALIGN.CENTER)
+    add_text(slide, cx + 0.25, 2.58, 3.35, 0.35, title, size=14, color=NAVY, bold=True)
+    add_text(slide, cx + 0.25, 3.0, 3.35, 1.05, desc, size=9.4, color=GRAY, spacing=1.05)
+    add_line(slide, cx + 0.25, 4.15, cx + 3.6, 4.15, color=LIGHT2, width=0.6)
+    add_text(slide, cx + 0.25, 4.3, 3.35, 0.6, note, size=9.2, color=ORANGE_DARK,
+             bold=True, spacing=1.0)
+add_card(slide, 0.62, 5.55, 12.1, 0.95, fill=RGBColor(0xE8, 0xF5, 0xE9))
+add_text(slide, 0.9, 5.7, 11.5, 0.35,
+         "Más negocios digitalizados, más pedidos por zona y más ingresos para repartidores locales.",
+         size=13, color=GREEN, bold=True)
+add_text(slide, 0.9, 6.08, 11.5, 0.3,
+         "Prepago desde $1,000 para clientes sin historial. Clientes confiables pueden pagar en efectivo.",
+         size=9.3, color=GRAY)
+
+# ---------------------------------------------------------------- 15 Cierre
 slide = blank(prs)
 add_rect(slide, 0, 0, 13.333, 7.5, NAVY_DARK)
 add_rect(slide, 0, 0, 0.16, 7.5, ORANGE)
@@ -366,7 +402,7 @@ add_text(slide, 0.85, 2.2, 11.4, 0.8,
          "Tecnología local que genera empleo y margen.",
          size=32, color=WHITE, bold=True)
 add_text(slide, 0.85, 3.15, 11.0, 0.7,
-         "Solicitud: $150,000 MXN para 100 restaurantes, 30 repartidores y 60 personas capacitadas.",
+         "Solicitud: $150,000 MXN para 100 restaurantes y tiendas, 30 repartidores y 60 personas capacitadas.",
          size=15, color=RGBColor(0xC9, 0xD2, 0xE3), spacing=1.1)
 add_card(slide, 0.85, 4.25, 5.7, 1.45, fill=RGBColor(0x22, 0x35, 0x6E))
 add_text(slide, 1.1, 4.42, 5.2, 0.3, "Solicitante", size=12, color=ORANGE, bold=True)
@@ -383,6 +419,6 @@ add_text(slide, 0.85, 6.2, 11.0, 0.3,
          size=10, color=RGBColor(0xC9, 0xD2, 0xE3))
 add_text(slide, 0.85, 6.65, 11.0, 0.3, "Gracias.", size=18, color=ORANGE, bold=True)
 
-path = OUT / "TuPedidoJR_FondoPerdido_2026.pptx"
+path = OUT / "TuPedidoJR_2026.pptx"
 prs.save(str(path))
 print(path)

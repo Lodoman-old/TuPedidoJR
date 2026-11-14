@@ -5,7 +5,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,6 +85,13 @@ class AffiliationUpdate(BaseModel):
     expires_at: date | None = None
 
 
+class BusinessTypeUpdate(BaseModel):
+    business_type: str = Field(
+        ...,
+        pattern="^(restaurant|store|pharmacy|grocery|hardware|other)$",
+    )
+
+
 def _affiliation_row(restaurant: Restaurant) -> dict:
     today = date.today()
     expires = restaurant.affiliation_expires_at
@@ -98,6 +105,33 @@ def _affiliation_row(restaurant: Restaurant) -> dict:
         "days_left": days_left,
         "affiliated": bool(expires and expires >= today),
     }
+
+
+@router.patch("/restaurants/{restaurant_id}/business-type")
+async def update_business_type(
+    restaurant_id: str,
+    body: BusinessTypeUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    try:
+        rid = uuid.UUID(restaurant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Negocio inválido") from exc
+    result = await db.execute(select(Restaurant).where(Restaurant.id == rid))
+    restaurant = result.scalar_one_or_none()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Negocio no encontrado")
+    previous = restaurant.business_type
+    restaurant.business_type = body.business_type
+    await log_action(
+        db, current_user.id, "restaurant.business_type.update", "restaurant",
+        restaurant.id, {"from": previous, "to": body.business_type},
+    )
+    await db.commit()
+    await db.refresh(restaurant)
+    owner = await db.get(User, restaurant.owner_id)
+    return _row(restaurant, owner)
 
 
 @router.get("/affiliations")

@@ -62,6 +62,11 @@ class MandadoOut(BaseModel):
     prepayment_required: bool = False
     prepayment_proof_url: str | None = None
     prepayment_confirmed_at: datetime | None = None
+    advance_amount: Decimal = Decimal("0")
+    advance_status: str = "not_required"
+    advance_difference: Decimal | None = None
+    advance_delivered_at: datetime | None = None
+    advance_settled_at: datetime | None = None
     status: str
     delivery_address: str
     receipt_photo_url: str | None

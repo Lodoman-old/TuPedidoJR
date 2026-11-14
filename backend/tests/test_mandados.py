@@ -6,6 +6,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.core.security import decode_access_token
+from app.models.delivery_person import DeliveryPerson
 from app.models.setting import Setting
 from app.models.user import User
 
@@ -152,6 +153,14 @@ class TestMandadoPrepayment:
         )
         assert confirmed.status_code == 200, confirmed.text
         assert confirmed.json()["payment_status"] == "paid"
+        assert confirmed.json()["advance_status"] == "pending"
+        assert confirmed.json()["advance_amount"] == "1000.00"
+
+        early_advance = await client.post(
+            f"/api/v1/admin/mandados/{mandado_id}/advance-delivered",
+            headers={"Authorization": f"Bearer {superuser_token}"},
+        )
+        assert early_advance.status_code == 400
 
         detail = await client.get(
             f"/api/v1/mandados/{mandado_id}",
@@ -159,6 +168,82 @@ class TestMandadoPrepayment:
         )
         assert detail.status_code == 200
         assert detail.json()["status"] == "pending"
+
+    async def test_advance_delivered_and_settled(
+        self, client: AsyncClient, user_token, superuser_token, db_session
+    ):
+        db_session.add(Setting(key="TRANSFER_ENABLED", value="true"))
+        await db_session.commit()
+        created = await client.post(
+            "/api/v1/mandados",
+            json={
+                "description": "Comprar una pantalla y un teclado",
+                "estimated_budget": 1000,
+                "delivery_address": "Calle Principal 123",
+                "delivery_location": {"lat": 19.44, "lng": -99.14},
+                "payment_method": "transfer",
+                "payment_proof_url": "/static/uploads/test.png",
+            },
+            headers={"Authorization": f"Bearer {user_token}"},
+        )
+        assert created.status_code == 201, created.text
+        mandado_id = created.json()["id"]
+        await client.post(
+            f"/api/v1/admin/mandados/{mandado_id}/confirm-payment",
+            headers={"Authorization": f"Bearer {superuser_token}"},
+        )
+
+        courier_resp = await client.post(
+            "/api/v1/auth/register",
+            json={
+                "name": "Mandadero Prueba",
+                "email": "mandadero-advance@test.com",
+                "password": "pass123",
+            },
+        )
+        courier_token = courier_resp.json()["access_token"]
+        courier_user = await db_session.get(
+            User, uuid.UUID(decode_access_token(courier_token)["sub"])
+        )
+        courier = DeliveryPerson(
+            user_id=courier_user.id,
+            vehicle_type="motorcycle",
+            is_mandadero=True,
+        )
+        db_session.add(courier)
+        await db_session.flush()
+
+        from app.models.mandado import Mandado
+        mandado = await db_session.get(Mandado, uuid.UUID(mandado_id))
+        mandado.status = "accepted"
+        mandado.delivery_person_id = courier.id
+        await db_session.commit()
+
+        delivered = await client.post(
+            f"/api/v1/admin/mandados/{mandado_id}/advance-delivered",
+            headers={"Authorization": f"Bearer {superuser_token}"},
+        )
+        assert delivered.status_code == 200, delivered.text
+        assert delivered.json()["advance_status"] == "delivered"
+
+        purchased = await client.patch(
+            f"/api/v1/mandados/{mandado_id}/purchase",
+            json={
+                "product_total": 900,
+                "receipt_photo_url": "/static/uploads/receipt.png",
+            },
+            headers={"Authorization": f"Bearer {courier_token}"},
+        )
+        assert purchased.status_code == 200, purchased.text
+        assert purchased.json()["advance_status"] == "used"
+        assert purchased.json()["advance_difference"] == "-100.00"
+
+        settled = await client.post(
+            f"/api/v1/admin/mandados/{mandado_id}/advance-settle",
+            headers={"Authorization": f"Bearer {superuser_token}"},
+        )
+        assert settled.status_code == 200, settled.text
+        assert settled.json()["advance_status"] == "settled"
 
 
 class TestMandadoTracking:

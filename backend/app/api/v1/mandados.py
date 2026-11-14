@@ -286,12 +286,22 @@ async def purchase_mandado(
         raise HTTPException(status_code=403, detail="No eres el repartidor asignado")
     if mandado.status not in ("accepted", "buying"):
         raise HTTPException(status_code=400, detail="Estado inválido para marcar compra")
+    if mandado.prepayment_required and mandado.advance_status != "delivered":
+        raise HTTPException(
+            status_code=400,
+            detail="El adelanto todavía no se entregó al repartidor. Espera la confirmación del admin.",
+        )
 
     from datetime import datetime, timezone
     mandado.product_total = body.product_total
     mandado.receipt_photo_url = body.receipt_photo_url
     mandado.status = "purchased"
     mandado.purchased_at = datetime.now(timezone.utc)
+    if mandado.prepayment_required:
+        mandado.advance_status = "used"
+        mandado.advance_difference = (
+            body.product_total - (mandado.advance_amount or 0)
+        ).quantize(Decimal("0.01"))
     await db.commit()
     await db.refresh(mandado)
     schedule_mandado_status(str(mandado.id), "purchased")
@@ -328,6 +338,13 @@ async def deliver_mandado(
     # Final total uses actual product_total if available, else estimated_budget
     actual_products = mandado.product_total or mandado.estimated_budget
     mandado.final_total = actual_products + mandado.delivery_fee + mandado.risk_fee + mandado.platform_fee
+    if (
+        mandado.prepayment_required
+        and mandado.advance_status == "used"
+        and (mandado.advance_difference or 0) == 0
+    ):
+        mandado.advance_status = "settled"
+        mandado.advance_settled_at = datetime.now(timezone.utc)
 
     # If cash payment, accumulate platform debt
     if mandado.payment_method == "cash":

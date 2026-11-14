@@ -32,6 +32,18 @@ async def customer_token(client: AsyncClient):
 
 
 @pytest.fixture
+async def superuser_token(client: AsyncClient, db_session):
+    resp = await client.post("/api/v1/auth/register", json={
+        "name": "Admin Tienda", "email": "admin-tienda@test.com", "password": "pass123",
+    })
+    token = resp.json()["access_token"]
+    user = await db_session.get(User, uuid.UUID(decode_access_token(token)["sub"]))
+    user.is_superuser = True
+    await db_session.commit()
+    return token
+
+
+@pytest.fixture
 async def restaurant(db_session, owner_token):
     owner_id = decode_access_token(owner_token)["sub"]
     resto = Restaurant(
@@ -95,6 +107,17 @@ class TestStoreListing:
         data = resp.json()
         assert [row["name"] for row in data] == ["Abarrotes Prueba"]
         assert data[0]["business_type"] == "store"
+
+    async def test_admin_changes_business_type(
+        self, client, restaurant, superuser_token,
+    ):
+        resp = await client.patch(
+            f"/api/v1/admin/restaurants/{restaurant.id}/business-type",
+            json={"business_type": "store"},
+            headers=_headers(superuser_token),
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["business_type"] == "store"
 
 
 class TestStoreRequests:

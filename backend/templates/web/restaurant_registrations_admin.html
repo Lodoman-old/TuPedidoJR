@@ -124,7 +124,14 @@
           <div class="table-responsive"><table class="table table-sm align-middle">
             <thead><tr><th>Restaurante</th><th>Responsable</th><th>Contacto</th><th>Estado</th><th>Fecha</th><th></th></tr></thead>
             <tbody>${rows.map(r => `<tr class="${r.status === 'pending' ? 'table-warning' : ''}">
-              <td><strong>${esc(r.name)}</strong> ${typeBadge(r.business_type)}<br><small class="text-muted">${esc(r.cuisine || '')}</small><br><small>${esc(r.address)}</small></td>
+              <td><strong>${esc(r.name)}</strong><br>
+                <select class="form-select form-select-sm mt-1" style="max-width:150px"
+                        onchange="changeBusinessType('${r.id}', this.value)">
+                  ${Object.entries(TYPE_LABELS).map(([value, label]) =>
+                    `<option value="${value}" ${r.business_type === value ? 'selected' : ''}>${label}</option>`
+                  ).join('')}
+                </select>
+                <small class="text-muted">${esc(r.cuisine || '')}</small><br><small>${esc(r.address)}</small></td>
               <td>${esc(r.owner_name)}</td>
               <td><small>${esc(r.owner_email)}<br>${esc(r.phone || '')}</small></td>
               <td>${badge(r.status)}${r.rejection_reason ? `<br><small class="text-danger">${esc(r.rejection_reason)}</small>` : ''}</td>
@@ -143,6 +150,23 @@
     } catch (ex) {
       error.textContent = ex.message; error.classList.remove('d-none');
     } finally { loading.classList.add('d-none'); }
+  }
+
+  async function changeBusinessType(id, value) {
+    if (!confirm('¿Cambiar el tipo de negocio? Solo el administrador puede hacerlo.')) {
+      loadRegistrations();
+      return;
+    }
+    try {
+      await apiRequest('PATCH', `/admin/restaurants/${id}/business-type`, {
+        business_type: value,
+      });
+      showToast('Tipo de negocio actualizado');
+      loadRegistrations();
+    } catch (ex) {
+      showToast(ex.message, 'danger');
+      loadRegistrations();
+    }
   }
 
   function askApprove(id) {

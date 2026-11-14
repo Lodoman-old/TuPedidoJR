@@ -10,6 +10,7 @@
 <div id="refundsCard" class="mb-3"></div>
 <div id="reservationDepositsCard" class="mb-3"></div>
 <div id="mandadoPrepaymentsCard" class="mb-3"></div>
+<div id="mandadoAdvancesCard" class="mb-3"></div>
 <div id="payoutsLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
 <div id="payoutsContent" class="d-none"></div>
 {% endblock %}
@@ -505,6 +506,55 @@
     } catch (e) { showToast(e.message, 'danger'); }
   }
 
+  async function loadMandadoAdvances() {
+    const card = document.getElementById('mandadoAdvancesCard');
+    if (!card) return;
+    try {
+      const rows = await apiRequest('GET', '/admin/mandados/advances');
+      if (!rows.length) { card.innerHTML = ''; return; }
+      card.innerHTML = `<div class="card p-3">
+        <h6 class="m-0"><i class="bi bi-cash-stack"></i> Adelantos de mandados prepagados</h6>
+        <p class="small text-muted mb-2">Entrega el presupuesto al repartidor antes de que compre. Al final liquida la diferencia.</p>
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Cliente</th><th>Repartidor</th><th class="text-end">Presupuesto</th><th class="text-end">Adelanto</th><th>Estado</th><th class="text-end">Diferencia</th><th></th></tr></thead>
+          <tbody>${rows.map(row => `<tr>
+            <td><small>${esc(row.customer_name)}</small></td>
+            <td><small>${esc(row.courier_name || 'Sin asignar')}<br>${esc(row.courier_bank_name || '')} ${esc(row.courier_clabe || '')}</small></td>
+            <td class="text-end">${money(row.estimated_budget)}</td>
+            <td class="text-end fw-bold">${money(row.advance_amount)}</td>
+            <td><span class="badge ${row.advance_status === 'pending' ? 'bg-warning text-dark' : (row.advance_status === 'settled' ? 'bg-success' : 'bg-info text-dark')}">${row.advance_status === 'pending' ? 'Por entregar' : (row.advance_status === 'delivered' ? 'Entregado' : (row.advance_status === 'used' ? 'Comprado' : 'Liquidado'))}</span></td>
+            <td class="text-end">${row.advance_difference != null ? money(row.advance_difference) : '—'}</td>
+            <td class="text-end">
+              ${row.advance_status === 'pending'
+                ? `<button class="btn btn-sm btn-success" onclick="deliverMandadoAdvance('${row.id}')">Marcar entregado</button>`
+                : `<button class="btn btn-sm btn-outline-success" onclick="settleMandadoAdvance('${row.id}')">Liquidar</button>`}
+            </td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+    } catch (e) {
+      card.innerHTML = `<div class="alert alert-danger py-2">${esc(e.message)}</div>`;
+    }
+  }
+
+  async function deliverMandadoAdvance(id) {
+    if (!confirm('¿Confirmas que ya entregaste el adelanto al repartidor?')) return;
+    try {
+      await apiRequest('POST', `/admin/mandados/${id}/advance-delivered`);
+      showToast('Adelanto marcado como entregado');
+      loadMandadoAdvances();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
+  async function settleMandadoAdvance(id) {
+    if (!confirm('¿Confirmas que la diferencia del adelanto ya quedó liquidada?')) return;
+    try {
+      await apiRequest('POST', `/admin/mandados/${id}/advance-settle`);
+      showToast('Adelanto liquidado');
+      loadMandadoAdvances();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
   async function loadPayouts() {
     const loading = document.getElementById('payoutsLoading');
     const content = document.getElementById('payoutsContent');
@@ -513,6 +563,7 @@
     loading.classList.remove('d-none');
     loadReservationDeposits();
     loadMandadoPrepayments();
+    loadMandadoAdvances();
     try {
       const [data, history, advances] = await Promise.all([getAdminPayouts(), getPayoutHistory(), getAdminAdvances()]);
       const restaurants = data.restaurants || [];

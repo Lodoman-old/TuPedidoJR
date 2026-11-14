@@ -99,7 +99,13 @@
       <a class="navbar-brand d-flex align-items-center" href="/web/restaurants">
         <span class="logo-wrapper"><img src="/static/logo.png" alt="TuPedidoJR" height="40"></span>
       </a>
-      <a href="/web/profile" class="navbar-text text-white ms-auto me-2 d-lg-none text-truncate" id="userNameTop" style="max-width: 130px;"></a>
+      <div class="d-flex align-items-center gap-2 ms-auto me-2 d-lg-none">
+        <a href="/web/cart" class="nav-link text-white p-1 position-relative nav-delivery-hide nav-customer-hide" id="cartTopMobile" aria-label="Carrito">
+          <i class="bi bi-cart fs-5"></i>
+          <span id="cartBadgeMobile" class="badge rounded-pill bg-warning text-dark d-none" style="position:absolute;top:-2px;right:-8px;font-size:.62rem;">0</span>
+        </a>
+        <a href="/web/profile" class="navbar-text text-white text-truncate mb-0" id="userNameTop" style="max-width: 130px;"></a>
+      </div>
       <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
@@ -125,7 +131,6 @@
           </li>
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/mandados"><i class="bi bi-box"></i> Mandados</a></li>
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/recargas"><i class="bi bi-phone"></i> Recargas</a></li>
-          <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/cart"><i class="bi bi-cart"></i> Carrito <span id="cartBadge" class="badge rounded-pill bg-warning text-dark d-none">0</span></a></li>
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/orders"><i class="bi bi-list-check"></i> Pedidos</a></li>
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/reservations"><i class="bi bi-calendar-check"></i> Reservaciones</a></li>
           <li class="nav-item d-none" id="deliveryNav"><a class="nav-link" href="/web/delivery"><i class="bi bi-bicycle"></i> Repartidor</a></li>
@@ -159,6 +164,9 @@
               <li><a class="dropdown-item" href="/web/admin/push"><i class="bi bi-bell"></i> Notificaciones push</a></li>
               <li><a class="dropdown-item" href="/web/admin/audit"><i class="bi bi-journal-text"></i> Auditoría</a></li>
             </ul>
+          </li>
+          <li class="nav-item nav-delivery-hide nav-customer-hide d-none d-lg-block">
+            <a class="nav-link" href="/web/cart"><i class="bi bi-cart"></i> Carrito <span id="cartBadge" class="badge rounded-pill bg-warning text-dark d-none">0</span></a>
           </li>
           <li class="nav-item d-none d-lg-block">
             <a class="nav-link" href="/web/profile" id="userNameNav" title="Mi perfil">
@@ -571,7 +579,7 @@ function setCartQuantity(menuItemId, qty, meta) {
   return quantity;
 }
 function getCartTotal() { return getCart().reduce((s, i) => s + i.price * i.quantity, 0); }
-function updateCartBadge() { const badge = document.getElementById('cartBadge'); if (!badge) return; const cart = getCart(); const count = cart.reduce((s, i) => s + i.quantity, 0); if (count > 0) { badge.textContent = count; badge.classList.remove('d-none'); } else { badge.classList.add('d-none'); } }
+function updateCartBadge() { const badges = [document.getElementById('cartBadge'), document.getElementById('cartBadgeMobile')].filter(Boolean); const cart = getCart(); const count = cart.reduce((s, i) => s + i.quantity, 0); badges.forEach(badge => { if (count > 0) { badge.textContent = count; badge.classList.remove('d-none'); } else { badge.classList.add('d-none'); } }); }
   </script>
   <script>
     async function refreshSession() {
@@ -1030,11 +1038,11 @@ function updateCartBadge() { const badge = document.getElementById('cartBadge');
         const cart = JSON.parse(sessionStorage.getItem('cart') || '[]');
         count = cart.reduce((s, i) => s + i.quantity, 0);
       } catch { count = 0; }
-      const badge = document.getElementById('cartBadge');
-      if (badge) {
+      const badges = [document.getElementById('cartBadge'), document.getElementById('cartBadgeMobile')].filter(Boolean);
+      badges.forEach(badge => {
         if (count > 0) { badge.textContent = count; badge.classList.remove('d-none'); }
         else { badge.classList.add('d-none'); }
-      }
+      });
       const floating = document.getElementById('floatingCart');
       if (floating) {
         const publicPath = ['/web/login', '/web/register', '/web/register-restaurant', '/web/forgot-password', '/web/reset-password', '/web/app']

@@ -24,22 +24,37 @@
       <i class="bi bi-crosshair"></i> Usar ubicación del dispositivo
     </button>
   </div>
-  <div class="row g-2 mb-2">
-    <div class="col-5">
-      <input class="form-control" id="postalCode" maxlength="5" inputmode="numeric" placeholder="C.P.">
+  <div id="mandadoSavedAddressBlock" class="mb-2 d-none">
+    <label class="form-label small mb-1" for="mandadoSavedAddressSelect">Dirección guardada</label>
+    <select class="form-select mb-1" id="mandadoSavedAddressSelect"></select>
+    <div class="small text-muted" id="mandadoSavedAddressDetail"></div>
+    <a href="/web/profile" class="small">Administrar mis direcciones</a>
+  </div>
+  <div id="mandadoManualAddress">
+    <div class="row g-2 mb-2">
+      <div class="col-5">
+        <input class="form-control" id="postalCode" maxlength="5" inputmode="numeric" placeholder="C.P.">
+      </div>
+      <div class="col-7">
+        <select class="form-select" id="coloniaSelect"><option value="">Colonia...</option></select>
+      </div>
     </div>
-    <div class="col-7">
-      <select class="form-select" id="coloniaSelect"><option value="">Colonia...</option></select>
+    <input class="form-control mb-2" id="deliveryAddress" placeholder="Calle y número">
+    <div class="d-flex gap-2 flex-wrap mb-2">
+      <button class="btn btn-sm btn-outline-secondary" id="searchMandadoBtn"><i class="bi bi-search"></i> Buscar calle</button>
+    </div>
+    <div id="mandadoGeoMsg" class="small mb-2 text-muted">
+      Elige una dirección guardada o escribe una nueva. También puedes usar tu ubicación actual.
+    </div>
+    <div class="form-check mt-2">
+      <input class="form-check-input" type="checkbox" id="saveMandadoAddress">
+      <label class="form-check-label" for="saveMandadoAddress">Guardar esta dirección en mi perfil</label>
+    </div>
+    <div id="saveMandadoAddressNameBox" class="mt-2 d-none">
+      <input class="form-control form-control-sm" id="mandadoAddressName" maxlength="100" placeholder="Nombre: Casa, Trabajo...">
     </div>
   </div>
-  <input class="form-control mb-2" id="deliveryAddress" placeholder="Calle y número">
-  <div class="d-flex gap-2 flex-wrap mb-2">
-    <button class="btn btn-sm btn-outline-secondary" id="searchMandadoBtn"><i class="bi bi-search"></i> Buscar calle</button>
-  </div>
-  <div id="mandadoGeoMsg" class="small mb-2 text-muted">
-    Si no escribes la dirección, intentamos usar la ubicación del dispositivo. Puedes corregir la calle y mover el pin.
-  </div>
-  <div id="mandadoMap" style="height: 280px; border-radius: 12px;" class="border"></div>
+  <div id="mandadoMap" style="height: 280px; border-radius: 12px;" class="border mt-2"></div>
   <div class="form-text">Arrastra el pin o toca el mapa para ajustar el punto exacto de entrega.</div>
 </div>
 
@@ -87,6 +102,12 @@
   let cpCenter = null;
   let deviceTried = false;
   let coordsReady = false;
+  let savedAddresses = [];
+  let selectedMandadoAddressId = null;
+
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
 
   function geoMsg(text, kind = 'muted') {
     const node = document.getElementById('mandadoGeoMsg');
@@ -110,12 +131,14 @@
     mmarker = L.marker([lat, lng], { draggable: true }).addTo(mmap);
     mmarker.on('dragend', () => {
       const p = mmarker.getLatLng();
+      if (selectedMandadoAddressId) { selectedMandadoAddressId = null; renderMandadoAddressSection(); }
       picked = { lat: p.lat, lng: p.lng };
       coordsReady = true;
       geoMsg('Pin ajustado. Esta será la ubicación de entrega.', 'success');
       scheduleEstimate();
     });
     mmap.on('click', (e) => {
+      if (selectedMandadoAddressId) { selectedMandadoAddressId = null; renderMandadoAddressSection(); }
       mmarker.setLatLng(e.latlng);
       picked = { lat: e.latlng.lat, lng: e.latlng.lng };
       coordsReady = true;
@@ -146,6 +169,90 @@
     } catch (e) { /* sin colonias */ }
   }
 
+  function renderMandadoAddressSection() {
+    const block = document.getElementById('mandadoSavedAddressBlock');
+    const select = document.getElementById('mandadoSavedAddressSelect');
+    const manual = document.getElementById('mandadoManualAddress');
+    const detail = document.getElementById('mandadoSavedAddressDetail');
+    if (!block || !select || !manual) return;
+    if (!savedAddresses.length) {
+      block.classList.add('d-none');
+      manual.classList.remove('d-none');
+      return;
+    }
+    block.classList.remove('d-none');
+    const options = savedAddresses.map(address => {
+      const label = `${address.name}${address.is_default ? ' (Principal)' : ''} — ${address.address}`;
+      return `<option value="saved:${address.id}" ${selectedMandadoAddressId === address.id ? 'selected' : ''}>${esc(label)}</option>`;
+    }).join('');
+    select.innerHTML = options + `<option value="manual" ${selectedMandadoAddressId ? '' : 'selected'}>Otra dirección / usar mi ubicación</option>`;
+    const isSaved = Boolean(selectedMandadoAddressId);
+    manual.classList.toggle('d-none', isSaved);
+    if (detail) {
+      const address = savedAddresses.find(a => a.id === selectedMandadoAddressId);
+      detail.textContent = isSaved && address ? `Se entregará en: ${address.address}` : '';
+    }
+  }
+
+  function applyMandadoSavedAddress(address) {
+    selectedMandadoAddressId = address.id;
+    const location = address.location || {};
+    const lat = Number(location.lat);
+    const lng = Number(location.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      picked = { lat, lng };
+      coordsReady = true;
+      movePin(lat, lng);
+    }
+    document.getElementById('deliveryAddress').value = address.address || '';
+    document.getElementById('postalCode').value = '';
+    document.getElementById('coloniaSelect').innerHTML = '<option value="">Colonia...</option>';
+    geoMsg(`Se entregará en: ${address.address}.`, 'success');
+    renderMandadoAddressSection();
+    scheduleEstimate();
+  }
+
+  function selectMandadoManualAddress() {
+    selectedMandadoAddressId = null;
+    coordsReady = false;
+    picked = { lat: null, lng: null };
+    document.getElementById('deliveryAddress').value = '';
+    document.getElementById('postalCode').value = '';
+    document.getElementById('coloniaSelect').innerHTML = '<option value="">Colonia...</option>';
+    document.getElementById('saveMandadoAddress').checked = false;
+    document.getElementById('saveMandadoAddressNameBox').classList.add('d-none');
+    geoMsg('Escribe calle y número, usa tu GPS o ajusta el pin en el mapa.', 'muted');
+    renderMandadoAddressSection();
+  }
+
+  function onMandadoSavedAddressChange(event) {
+    if (event.target.value === 'manual') {
+      selectMandadoManualAddress();
+      return;
+    }
+    const address = savedAddresses.find(a => `saved:${a.id}` === event.target.value);
+    if (address) applyMandadoSavedAddress(address);
+  }
+
+  async function loadMandadoSavedAddresses() {
+    try {
+      savedAddresses = await listAddresses();
+    } catch (e) {
+      savedAddresses = [];
+    }
+    renderMandadoAddressSection();
+    if (savedAddresses.length) {
+      const preferred = savedAddresses.find(a => a.is_default) || savedAddresses[0];
+      applyMandadoSavedAddress(preferred);
+      return;
+    }
+    const street = document.getElementById('deliveryAddress').value.trim();
+    if (!street && !deviceTried) {
+      deviceTried = true;
+      useDeviceLocation(true);
+    }
+  }
+
   document.getElementById('postalCode').addEventListener('input', (e) => {
     e.target.value = e.target.value.replace(/\D/g, '').slice(0, 5);
     if (e.target.value.length === 5) loadColonias(e.target.value);
@@ -173,6 +280,10 @@
   }
 
   function useDeviceLocation(auto = false) {
+    if (selectedMandadoAddressId) {
+      selectedMandadoAddressId = null;
+      renderMandadoAddressSection();
+    }
     if (!navigator.geolocation) {
       geoMsg('Este navegador no permite obtener la ubicación.', 'danger');
       return;
@@ -194,7 +305,14 @@
     }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
   }
 
-  document.getElementById('gpsMandadoBtn').addEventListener('click', () => useDeviceLocation(false));
+  document.getElementById('gpsMandadoBtn').addEventListener('click', () => {
+    if (selectedMandadoAddressId) selectMandadoManualAddress();
+    useDeviceLocation(false);
+  });
+  document.getElementById('mandadoSavedAddressSelect').addEventListener('change', onMandadoSavedAddressChange);
+  document.getElementById('saveMandadoAddress').addEventListener('change', (event) => {
+    document.getElementById('saveMandadoAddressNameBox').classList.toggle('d-none', !event.target.checked);
+  });
 
   ['deliveryAddress', 'postalCode'].forEach(id => {
     document.getElementById(id).addEventListener('input', () => { coordsReady = false; });
@@ -356,21 +474,42 @@
     const cp = document.getElementById('postalCode').value.trim();
     const colonia = document.getElementById('coloniaSelect').value;
     const payMethod = document.querySelector('input[name="payMethod"]:checked')?.value || 'cash';
-    const addr = [street, colonia, cp ? `C.P. ${cp}` : ''].filter(Boolean).join(', ');
+    const savedAddress = savedAddresses.find(a => a.id === selectedMandadoAddressId);
+    const addr = savedAddress
+      ? savedAddress.address
+      : [street, colonia, cp ? `C.P. ${cp}` : ''].filter(Boolean).join(', ');
 
     if (desc.length < 10) { showToast('Describe qué necesitas (mín 10 caracteres)', 'danger'); return; }
     if (!budget || budget <= 0) { showToast('Ingresa un presupuesto válido', 'danger'); return; }
-    if (addr.length < 5) { showToast('Escribe la dirección de entrega', 'danger'); return; }
+    if (addr.length < 5) { showToast('Elige o escribe la dirección de entrega', 'danger'); return; }
     if (!paymentPolicy) await updatePaymentPolicy();
     if (paymentPolicy?.requires_prepayment && payMethod === 'cash') {
       showToast('Esta compra requiere pago por transferencia antes de publicar el mandado', 'danger');
       return;
     }
 
-    let coords = await resolveCoordinates(street, cp, colonia, addr);
+    let coords = null;
+    if (savedAddress) {
+      const location = savedAddress.location || {};
+      const lat = Number(location.lat);
+      const lng = Number(location.lng);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) coords = { lat, lng };
+    } else {
+      coords = await resolveCoordinates(street, cp, colonia, addr);
+    }
     if (!coords) {
       geoMsg('No pudimos ubicar la dirección. Ajusta el pin en el mapa.', 'danger');
       return;
+    }
+
+    if (!savedAddress && document.getElementById('saveMandadoAddress').checked) {
+      const name = document.getElementById('mandadoAddressName').value.trim() || 'Mi dirección';
+      try {
+        await createAddress(name, addr, coords.lat, coords.lng, savedAddresses.length === 0, null);
+        showToast('Dirección guardada');
+      } catch (e) {
+        showToast('No se pudo guardar la dirección: ' + e.message, 'warning');
+      }
     }
 
     let proofUrl = null;
@@ -418,11 +557,7 @@
 
   async function init() {
     initMandadoMap(20.644, -100.993);
-    const street = document.getElementById('deliveryAddress').value.trim();
-    if (!street && !deviceTried) {
-      deviceTried = true;
-      useDeviceLocation(true);
-    }
+    await loadMandadoSavedAddresses();
     updateEstimate();
   }
 

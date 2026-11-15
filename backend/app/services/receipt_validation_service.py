@@ -280,7 +280,7 @@ def _recipient_ok(expected: str | None, extracted: dict) -> bool | None:
 async def _validate_record(db: AsyncSession, record: ReceiptValidation) -> ReceiptValidation:
     enabled = (await get_setting_value(db, "RECEIPT_VALIDATION_ENABLED", "false")).lower() == "true"
     api_key = (await get_setting_value(db, "GEMINI_API_KEY", "")).strip()
-    model = (await get_setting_value(db, "GEMINI_MODEL", "gemini-2.5-flash")).strip()
+    model = (await get_setting_value(db, "GEMINI_MODEL", "gemini-3.5-flash-lite")).strip()
     if not enabled or not api_key:
         return record
 

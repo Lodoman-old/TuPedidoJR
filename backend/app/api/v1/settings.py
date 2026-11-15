@@ -133,8 +133,8 @@ KNOWN_SETTINGS: dict[str, dict] = {
     },
     "GEMINI_MODEL": {
         "group": "Validación de comprobantes", "label": "Modelo de Gemini",
-        "description": "Modelo usado para leer imágenes y PDF. Ejemplo: gemini-2.5-flash.",
-        "type": "text", "default": "gemini-2.5-flash",
+        "description": "Modelo usado para leer imágenes y PDF. Ejemplo: gemini-3.5-flash-lite.",
+        "type": "text", "default": "gemini-3.5-flash-lite",
     },
     "RECEIPT_AMOUNT_TOLERANCE": {
         "group": "Validación de comprobantes", "label": "Tolerancia de monto ($)",

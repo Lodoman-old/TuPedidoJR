@@ -121,6 +121,31 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Porcentaje del envío que se cobra al negocio cuando el cliente no recibe el paquete.",
         "type": "int", "default": "50",
     },
+    "RECEIPT_VALIDATION_ENABLED": {
+        "group": "Validación de comprobantes", "label": "Validar comprobantes con Gemini",
+        "description": "Analiza tickets y comprobantes de transferencia y muestra un grado de certeza. No aprueba pagos automáticamente.",
+        "type": "bool", "default": "false",
+    },
+    "GEMINI_API_KEY": {
+        "group": "Validación de comprobantes", "label": "Gemini API key",
+        "description": "Clave gratuita de Google AI Studio: https://aistudio.google.com/apikey",
+        "type": "text", "default": "",
+    },
+    "GEMINI_MODEL": {
+        "group": "Validación de comprobantes", "label": "Modelo de Gemini",
+        "description": "Modelo usado para leer imágenes y PDF. Ejemplo: gemini-2.5-flash.",
+        "type": "text", "default": "gemini-2.5-flash",
+    },
+    "RECEIPT_AMOUNT_TOLERANCE": {
+        "group": "Validación de comprobantes", "label": "Tolerancia de monto ($)",
+        "description": "Diferencia permitida entre el monto del comprobante y el monto esperado.",
+        "type": "money", "default": "10.0",
+    },
+    "RECEIPT_DATE_WINDOW_HOURS": {
+        "group": "Validación de comprobantes", "label": "Ventana de fecha (horas)",
+        "description": "Margen permitido entre la fecha del comprobante y la fecha del pedido.",
+        "type": "int", "default": "48",
+    },
     "CANCELLATION_WINDOW_MIN": {
         "group": "Cancelaciones", "label": "Minutos de gracia",
         "description": "Tiempo que tiene el cliente para cancelar después de que el restaurante confirma.",

@@ -24,6 +24,7 @@ from app.models.saved_address import SavedAddress
 from app.models.setting import Setting
 from app.models.coupon import Coupon
 from app.models.shipment import Shipment
+from app.models.receipt_validation import ReceiptValidation
 from app.models.user import User
 from app.schemas.review import ReviewOut
 
@@ -79,6 +80,15 @@ COD_STATUS_ES = {
     "not_required": "Sin cobro",
     "pending": "Por cobrar",
     "collected": "Cobrado",
+}
+RECEIPT_STATUS_ES = {
+    "high": "Se puede aprobar",
+    "review": "Revisar",
+    "low": "Revisar a fondo",
+}
+RECEIPT_KIND_ES = {
+    "purchase_receipt": "Ticket de compra",
+    "transfer_receipt": "Transferencia",
 }
 REFUND_STATUS_ES = {
     "none": "Sin reembolso",
@@ -722,6 +732,46 @@ class ShipmentAdmin(ModelView, model=Shipment):
         Shipment.status: lambda m, a: _es(SHIPMENT_STATUS_ES, m.status),
         Shipment.cod_status: lambda m, a: _es(COD_STATUS_ES, m.cod_status),
         Shipment.payment_status: lambda m, a: _es(PAYMENT_STATUS_ES, m.payment_status),
+    }
+    column_formatters_detail = column_formatters
+
+
+class ReceiptValidationAdmin(ModelView, model=ReceiptValidation):
+    name = "Comprobante"
+    name_plural = "Comprobantes"
+    icon = "fa-solid fa-patch-check"
+    can_create = False
+    can_edit = False
+    can_delete = False
+    column_list = [
+        ReceiptValidation.created_at,
+        ReceiptValidation.entity_type,
+        ReceiptValidation.expected_kind,
+        ReceiptValidation.confidence,
+        ReceiptValidation.status,
+        ReceiptValidation.document_type,
+    ]
+    column_labels = {
+        ReceiptValidation.entity_type: "Origen",
+        ReceiptValidation.entity_id: "ID de origen",
+        ReceiptValidation.file_url: "Archivo",
+        ReceiptValidation.expected_kind: "Tipo esperado",
+        ReceiptValidation.expected_amount: "Monto esperado",
+        ReceiptValidation.expected_date: "Fecha esperada",
+        ReceiptValidation.expected_recipient: "Destinatario esperado",
+        ReceiptValidation.document_type: "Tipo detectado",
+        ReceiptValidation.confidence: "Certeza (%)",
+        ReceiptValidation.status: "Resultado",
+        ReceiptValidation.summary: "Resumen de la IA",
+        ReceiptValidation.provider: "Proveedor",
+        ReceiptValidation.model: "Modelo",
+        ReceiptValidation.error: "Error",
+        ReceiptValidation.created_at: "Creado",
+    }
+    column_sortable_list = [ReceiptValidation.created_at, ReceiptValidation.confidence]
+    column_formatters = {
+        ReceiptValidation.status: lambda m, a: _es(RECEIPT_STATUS_ES, m.status),
+        ReceiptValidation.expected_kind: lambda m, a: _es(RECEIPT_KIND_ES, m.expected_kind),
     }
     column_formatters_detail = column_formatters
 

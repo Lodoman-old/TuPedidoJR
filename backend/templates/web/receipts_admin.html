@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h5 class="mb-0"><i class="bi bi-patch-check"></i> Validación de comprobantes</h5>
+    <small class="text-muted">La IA no aprueba ni rechaza. Solo indica el grado de certeza para que tú decidas.</small>
+  </div>
+  <button class="btn btn-sm btn-outline-secondary" onclick="loadValidations()">
+    <i class="bi bi-arrow-clockwise"></i> Actualizar
+  </button>
+</div>
+
+<div class="alert alert-info py-2 small">
+  <strong>Cómo leerlo:</strong> 85% o más = se puede aprobar sin problema; 50–84% = revisa algo;
+  menos de 50% = revisa a fondo. La IA puede equivocarse, sobre todo con PDFs editados.
+</div>
+
+<div class="d-flex gap-2 mb-3 flex-wrap">
+  <button class="btn btn-sm btn-outline-secondary active" data-filter="all" onclick="setFilter('all')">Todos</button>
+  <button class="btn btn-sm btn-outline-success" data-filter="high" onclick="setFilter('high')">Se puede aprobar</button>
+  <button class="btn btn-sm btn-outline-warning" data-filter="review" onclick="setFilter('review')">Revisar</button>
+  <button class="btn btn-sm btn-outline-danger" data-filter="low" onclick="setFilter('low')">Revisar a fondo</button>
+</div>
+
+<div id="receiptsError" class="alert alert-danger d-none"></div>
+<div id="receiptsLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+<div id="receiptsList"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let validations = [];
+  let currentFilter = 'all';
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, c => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  function badgeFor(v) {
+    if (v.status === 'high') return 'success';
+    if (v.status === 'review') return 'warning text-dark';
+    return 'danger';
+  }
+
+  function setFilter(value) {
+    currentFilter = value;
+    document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b.dataset.filter === value));
+    render();
+  }
+
+  function visibleRows() {
+    if (currentFilter === 'all') return validations;
+    return validations.filter(v => v.status === currentFilter);
+  }
+
+  function render() {
+    const box = document.getElementById('receiptsList');
+    const rows = visibleRows();
+    if (!rows.length) {
+      box.innerHTML = '<div class="card p-4 text-center text-muted">No hay comprobantes en esta vista.</div>';
+      return;
+    }
+    box.innerHTML = rows.map(v => {
+      const ex = v.extracted || {};
+      const total = ex.total != null ? money0(ex.total) : '—';
+      const date = [ex.date, ex.time].filter(Boolean).join(' ') || '—';
+      const issues = (v.issues || []).length
+        ? `<ul class="mb-0 small text-danger">${v.issues.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`
+        : '<div class="small text-success">Sin observaciones.</div>';
+      return `<div class="card mb-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+              <div class="fw-bold">${esc(v.entity_label)}</div>
+              <div class="small text-muted">${esc(v.expected_kind_label)} · ${v.expected_amount ? money0(v.expected_amount) : 'Monto no definido'} · ${esc(v.created_at || '')}</div>
+            </div>
+            <div class="text-end">
+              <span class="badge bg-${badgeFor(v)} fs-6">${v.confidence}%</span>
+              <div class="small text-muted">${esc(v.status_label)}</div>
+            </div>
+          </div>
+
+          <div class="row g-2 mt-3">
+            <div class="col-6 col-md-3"><div class="border rounded p-2"><small class="text-muted d-block">Monto leído</small><strong>${total}</strong></div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2"><small class="text-muted d-block">Fecha leída</small><strong>${esc(date)}</strong></div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2"><small class="text-muted d-block">Comercio</small><strong>${esc(ex.merchant || '—')}</strong></div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2"><small class="text-muted d-block">Referencia</small><strong>${esc(ex.reference || ex.account || '—')}</strong></div></div>
+          </div>
+
+          <div class="mt-3">
+            <div class="small text-muted mb-1">Resumen de la IA</div>
+            <div class="small">${esc(v.summary || 'Sin resumen.')}</div>
+          </div>
+          <div class="mt-2">${issues}</div>
+          ${v.error ? `<div class="alert alert-danger py-2 small mt-2">${esc(v.error)}</div>` : ''}
+
+          <div class="d-flex gap-2 mt-3 flex-wrap">
+            <button class="btn btn-sm btn-outline-primary" onclick="openDocumentPreview('${esc(v.file_url)}','Comprobante')">
+              <i class="bi bi-file-earmark-text"></i> Ver comprobante
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="revalidate('${v.id}')">
+              <i class="bi bi-arrow-repeat"></i> Validar de nuevo
+            </button>
+            <span class="small text-muted align-self-center">${esc(v.provider)} · ${esc(v.model || '')}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function loadValidations() {
+    const loading = document.getElementById('receiptsLoading');
+    const error = document.getElementById('receiptsError');
+    loading.classList.remove('d-none');
+    try {
+      validations = await apiRequest('GET', '/admin/receipts');
+      error.classList.add('d-none');
+      render();
+    } catch (e) {
+      error.textContent = e.message;
+      error.classList.remove('d-none');
+    } finally {
+      loading.classList.add('d-none');
+    }
+  }
+
+  async function revalidate(id) {
+    try {
+      await apiRequest('POST', `/admin/receipts/${id}/revalidate`, {});
+      showToast('Comprobante validado de nuevo', 'success');
+      loadValidations();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
+  loadValidations();
+</script>
+{% endblock %}

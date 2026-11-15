@@ -18,6 +18,7 @@ from app.schemas.reservation import (
     ReservationStatusUpdate,
 )
 from app.services.order_service import get_setting_value, resolve_item_options
+from app.services.receipt_validation_service import schedule_receipt_validation
 from app.services.push_service import (
     schedule_new_reservation,
     schedule_reservation_status,
@@ -131,6 +132,18 @@ async def upload_deposit_proof(
     reservation.deposit_proof_url = body.proof_url
     await db.commit()
     await db.refresh(reservation)
+    recipient = " · ".join(
+        part for part in (restaurant.name, restaurant.bank_clabe) if part
+    ) or None
+    schedule_receipt_validation(
+        "reservation_deposit",
+        str(reservation.id),
+        reservation.deposit_proof_url,
+        "transfer_receipt",
+        reservation.deposit_amount,
+        datetime.now(timezone.utc),
+        recipient,
+    )
     return _out(reservation, restaurant, user)
 
 

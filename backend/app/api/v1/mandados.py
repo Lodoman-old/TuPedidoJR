@@ -28,6 +28,7 @@ from app.services.push_service import (
     schedule_mandado_status,
     schedule_new_mandado,
 )
+from app.services.receipt_validation_service import schedule_receipt_validation
 from app.services.rounding import round_half_down
 from app.services.tracking_service import build_mandado_tracking
 from app.services.trust_service import mandado_payment_policy
@@ -149,6 +150,14 @@ async def upload_mandado_payment_proof(
     mandado.prepayment_proof_url = body.proof_url
     await db.commit()
     await db.refresh(mandado)
+    schedule_receipt_validation(
+        "mandado_prepayment",
+        str(mandado.id),
+        mandado.prepayment_proof_url,
+        "transfer_receipt",
+        mandado.estimated_budget,
+        datetime.now(timezone.utc),
+    )
     return mandado
 
 
@@ -455,6 +464,14 @@ async def purchase_mandado(
         )
     await db.commit()
     await db.refresh(mandado)
+    schedule_receipt_validation(
+        "mandado_purchase",
+        str(mandado.id),
+        mandado.receipt_photo_url,
+        "purchase_receipt",
+        mandado.product_total,
+        datetime.now(timezone.utc),
+    )
     schedule_mandado_status(str(mandado.id), "purchased")
     return mandado
 

@@ -26,6 +26,7 @@ from app.models.audit_log import AuditLog
 from app.models.reservation import Reservation
 from app.models.store_request import StoreRequest
 from app.models.shipment import Shipment
+from app.models.receipt_validation import ReceiptValidation
 
 __all__ = [
     "User",
@@ -58,4 +59,5 @@ __all__ = [
     "Reservation",
     "StoreRequest",
     "Shipment",
+    "ReceiptValidation",
 ]

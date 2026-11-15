@@ -254,7 +254,8 @@ async function apiRequest(method, path, body = null) {
 function roundHalfDown(value) {
   const n = Number(value || 0);
   if (!Number.isFinite(n)) return 0;
-  return Math.ceil(n - 0.5);
+  const rounded = Math.ceil(n - 0.5);
+  return rounded === 0 ? 0 : rounded;
 }
 function money0(value) {
   return '$' + roundHalfDown(value).toLocaleString('es-MX');

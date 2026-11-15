@@ -597,7 +597,10 @@ async def get_delivery_earnings(
             total=s.amount_to_collect or Decimal("0"),
             delivery_earnings=earning,
             status=s.status,
-            payment_method="cash" if (has_cod and s.status == "delivered") else "transfer",
+            payment_method=(
+                "failed" if s.status == "failed"
+                else ("cash" if (has_cod and s.status == "delivered") else "transfer")
+            ),
         ))
         total_earned += earning
         if platform_paid:

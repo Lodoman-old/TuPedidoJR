@@ -755,7 +755,8 @@ class TestCashAdvances:
         )
         courier = next(c for c in payouts.json()["couriers"] if c["id"] == str(dp.id))
         assert float(courier["pending_advances"]) == 25.5
-        assert float(courier["pending_amount"]) == 174.5
+        assert float(courier["pending_amount"]) == 200.0
+        assert float(courier["net_amount"]) == 174.5
 
         generated = await client.post(
             f"/api/v1/admin/payouts/couriers/{dp.id}",

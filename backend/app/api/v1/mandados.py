@@ -24,6 +24,7 @@ from app.schemas.mandado import (
     MandadoTrackingOut,
 )
 from app.services.mandado_service import calculate_mandado_fees
+from app.services.courier_limits import ensure_can_accept
 from app.services.push_service import (
     schedule_mandado_status,
     schedule_new_mandado,
@@ -403,6 +404,8 @@ async def accept_mandado(
         raise HTTPException(status_code=404, detail="Mandado no encontrado")
     if mandado.status != "pending":
         raise HTTPException(status_code=400, detail="Mandado no está pendiente")
+
+    await ensure_can_accept(db, dp)
 
     from datetime import datetime, timezone
     mandado.delivery_person_id = dp.id

@@ -25,6 +25,7 @@ from app.schemas.shipment import (
     ShipmentTrackingOut,
 )
 from app.services.order_service import get_setting_value
+from app.services.courier_limits import ensure_can_accept
 from app.services.push_service import schedule_new_shipment, schedule_shipment_status
 from app.services.restaurant_access import ORDER_ROLES, have_role
 from app.services.rounding import round_half_down
@@ -309,6 +310,7 @@ async def accept_shipment(
     current_user: User = Depends(get_current_user),
 ):
     dp = await _delivery_person(db, current_user)
+    await ensure_can_accept(db, dp)
     result = await db.execute(
         select(Shipment).where(Shipment.id == _uuid(shipment_id)).with_for_update()
     )

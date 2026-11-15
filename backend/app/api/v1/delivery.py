@@ -30,6 +30,7 @@ from app.schemas.delivery import (
 from app.schemas.order import AvailableOrderOut, OrderOut
 from app.schemas.cash_advance import CashAdvanceCreate, CashAdvanceOut
 from app.services.cash_advance_service import create_advance_request
+from app.services.courier_limits import active_service_count, ensure_can_accept, service_limits
 from app.services.geo_service import find_nearby_delivery_persons
 from app.services.loyalty_service import award_on_delivery
 from app.services.order_service import get_setting_value
@@ -209,6 +210,8 @@ async def accept_order(
                 detail="El tiempo para aceptar este pedido ya venció",
             )
 
+    await ensure_can_accept(db, dp)
+
     approval_flow = order.status == "awaiting_courier"
     reserved_flow = order.requires_courier_approval and order.status in (
         "pending",
@@ -241,7 +244,6 @@ async def accept_order(
             pass
 
     dp.current_order_id = order.id
-    dp.is_available = False
     await db.commit()
     await db.refresh(order)
     if approval_flow:
@@ -317,8 +319,16 @@ async def deliver_order(
     order.status = "delivered"
     if order.delivered_at is None:
         order.delivered_at = datetime.now(timezone.utc)
-    dp.current_order_id = None
-    dp.is_available = True
+    remaining_order_id = await db.scalar(
+        select(Order.id)
+        .where(
+            Order.delivery_person_id == dp.id,
+            Order.id != order.id,
+            Order.status.notin_(("delivered", "cancelled")),
+        )
+        .order_by(Order.created_at.desc())
+    )
+    dp.current_order_id = remaining_order_id
     if order.payment_method == "cash":
         de = order.delivery_earnings or Decimal("0")
         debt = (order.total or Decimal("0")) - de
@@ -438,6 +448,22 @@ async def list_cash_advances(
         .order_by(CashAdvance.created_at.desc())
     )
     return result.scalars().all()
+
+
+@router.get("/limits")
+async def delivery_limits(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    dp = await _get_dp(current_user, db)
+    max_services, warn_services = await service_limits(db)
+    active = await active_service_count(db, dp.id)
+    return {
+        "active": active,
+        "max": max_services,
+        "warn": warn_services,
+        "can_accept": active < max_services,
+    }
 
 
 @router.get("/profile", response_model=DeliveryProfileOut)

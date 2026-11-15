@@ -221,6 +221,16 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Se suma a la ganancia del repartidor por cada entrega en esa franja.",
         "type": "money", "default": "5.0",
     },
+    "MAX_ACTIVE_SERVICES": {
+        "group": "Repartidores", "label": "Servicios activos por repartidor",
+        "description": "Cuántos pedidos, mandados y envíos puede traer al mismo tiempo. Mínimo 1.",
+        "type": "int", "default": "5",
+    },
+    "WARN_ACTIVE_SERVICES": {
+        "group": "Repartidores", "label": "Aviso de servicios activos",
+        "description": "Al llegar a esta cantidad se le advierte al repartidor antes de aceptar otro servicio.",
+        "type": "int", "default": "4",
+    },
     "LOYALTY_ENABLED": {
         "group": "Lealtad", "label": "Programa de puntos",
         "description": "Activa los puntos por compra y los referidos.",

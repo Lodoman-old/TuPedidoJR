@@ -93,6 +93,7 @@ let firstAvailableLoad = true;
 let availableTimer = null;
 let audioCtx = null;
 let myDeliveryOrdersCache = [];
+let serviceLimits = { active: 0, max: 5, warn: 4 };
 
 document.addEventListener('DOMContentLoaded', () => {
   loadDeliveryData().then(() => refreshTabBadges());
@@ -180,6 +181,22 @@ function setTabBadge(id, count) {
   el.classList.toggle('d-none', !count);
 }
 
+function confirmAcceptService() {
+  const active = Number(serviceLimits.active) || 0;
+  const max = Number(serviceLimits.max) || 5;
+  const warn = Number(serviceLimits.warn) || 0;
+  if (active >= max) {
+    showToast(`Ya tienes ${active} servicios activos. El límite es ${max}. Termina uno antes de aceptar otro.`, 'danger');
+    return false;
+  }
+  if (warn > 0 && active >= warn) {
+    return confirm(
+      `Ya tienes ${active} servicios pendientes. Si aceptas este, tendrás ${active + 1} de ${max}. ¿Continuar?`
+    );
+  }
+  return true;
+}
+
 async function refreshTabBadges() {
   if (!dpProfile) return;
   try {
@@ -209,6 +226,8 @@ async function refreshTabBadges() {
       s => s.delivery_person_id && ['accepted', 'picked_up'].includes(s.status)
     );
 
+    serviceLimits.active = activeOrders.length + mandadoActive.length + shipmentActive.length;
+
     setTabBadge('availableBadge', availableOrders.length);
     setTabBadge('myordersActiveBadge', activeOrders.length);
     setTabBadge('mandadosAvailableBadge', mandadoAvailable.length);
@@ -223,6 +242,14 @@ async function loadDeliveryData() {
     dpProfile = await getDeliveryProfile();
     sessionStorage.setItem('is_delivery', 'true');
     hideDeliveryIrrelevantNav();
+    try {
+      const limits = await apiRequest('GET', '/delivery/limits');
+      serviceLimits = {
+        active: Number(limits?.active) || 0,
+        max: Number(limits?.max) || 5,
+        warn: Number(limits?.warn) || 0,
+      };
+    } catch (e) { /* se usan los valores por defecto */ }
   } catch (e) {
     sessionStorage.removeItem('is_delivery');
     document.getElementById('tabContent').innerHTML = '<div class="text-center py-5"><i class="bi bi-bicycle" style="font-size:3rem;color:#ccc;"></i><p class="mt-2 text-muted">No eres repartidor. Regístrate como repartidor en la app.</p></div>';
@@ -359,6 +386,7 @@ async function loadAvailable(silent = false) {
 }
 
 async function acceptOrder(oid) {
+  if (!confirmAcceptService()) return;
   try {
     await acceptDeliveryOrder(oid);
     showToast('Pedido aceptado — ve a Mis repartos');
@@ -726,6 +754,7 @@ async function loadMandadosWeb() {
 }
 
 async function acceptMandadoWeb(mid) {
+  if (!confirmAcceptService()) return;
   try {
     await acceptMandado(mid);
     showToast('Mandado aceptado');
@@ -909,6 +938,7 @@ async function loadShipmentsWeb() {
 }
 
 async function acceptShipmentWeb(id) {
+  if (!confirmAcceptService()) return;
   try {
     await apiRequest('PATCH', `/delivery/shipments/${id}/accept`);
     showToast('Envío aceptado');

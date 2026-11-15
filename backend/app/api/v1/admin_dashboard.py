@@ -39,6 +39,13 @@ def _money(value) -> str:
     return f"{float(value or 0):.2f}"
 
 
+def _uuid(value: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(value)
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail="Identificador inválido") from exc
+
+
 @router.get("/delivery-radius")
 async def delivery_radius(
     db: AsyncSession = Depends(get_db),
@@ -80,18 +87,26 @@ async def courier_locations(
     result = await db.execute(
         text("""
             SELECT
-                dp.id, u.name, u.email, u.phone,
+                dp.id, u.name, u.email, u.phone, u.is_active,
                 dp.is_available, dp.current_order_id,
                 dp.vehicle_type, dp.payout_method,
                 dp.bank_name, dp.bank_account_holder, dp.bank_clabe,
                 dp.is_mandadero, dp.delivery_bonus_per_order,
                 dp.rating, dp.total_deliveries, dp.pending_platform_debt,
+                dp.pending_platform_credit,
                 ST_Y(dp.current_location::geometry) AS lat,
                 ST_X(dp.current_location::geometry) AS lng,
-                dp.updated_at
+                dp.updated_at,
+                (
+                    (SELECT count(*) FROM orders o WHERE o.delivery_person_id = dp.id)
+                    + (SELECT count(*) FROM shipments s WHERE s.delivery_person_id = dp.id)
+                    + (SELECT count(*) FROM delivery_payouts p WHERE p.delivery_person_id = dp.id)
+                    + (SELECT count(*) FROM cash_advances ca WHERE ca.delivery_person_id = dp.id)
+                    + (SELECT count(*) FROM delivery_incidents di WHERE di.courier_id = dp.id)
+                ) AS history_count
             FROM delivery_persons dp
             JOIN users u ON u.id = dp.user_id
-            ORDER BY u.name
+            ORDER BY u.is_active DESC, u.name
         """)
     )
     rows = []
@@ -101,6 +116,7 @@ async def courier_locations(
             "name": row["name"] or row["email"],
             "email": row["email"],
             "phone": row["phone"],
+            "is_active": bool(row["is_active"]),
             "is_available": bool(row["is_available"]),
             "current_order_id": str(row["current_order_id"]) if row["current_order_id"] else None,
             "vehicle_type": row["vehicle_type"],
@@ -113,6 +129,8 @@ async def courier_locations(
             "rating": str(row["rating"] or 0),
             "total_deliveries": int(row["total_deliveries"] or 0),
             "pending_platform_debt": str(row["pending_platform_debt"] or 0),
+            "pending_platform_credit": str(row["pending_platform_credit"] or 0),
+            "history_count": int(row["history_count"] or 0),
             "lat": float(row["lat"]) if row["lat"] is not None else None,
             "lng": float(row["lng"]) if row["lng"] is not None else None,
             "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
@@ -337,3 +355,178 @@ async def create_courier(
         "phone": user.phone,
         "vehicle_type": courier.vehicle_type,
     }
+
+
+class CourierUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=100)
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=20)
+    password: str | None = Field(default=None, min_length=6, max_length=128)
+    vehicle_type: str | None = Field(default=None, pattern="^(bike|motorcycle|car)$")
+    payout_method: str | None = Field(default=None, pattern="^(cash|transfer)$")
+    bank_name: str | None = Field(default=None, max_length=100)
+    bank_account_holder: str | None = Field(default=None, max_length=150)
+    bank_clabe: str | None = Field(default=None, max_length=30)
+    is_mandadero: bool | None = None
+    delivery_bonus_per_order: Decimal | None = Field(default=None, ge=0)
+    is_active: bool | None = None
+
+
+@router.patch("/couriers/{dp_id}")
+async def update_courier(
+    dp_id: str,
+    body: CourierUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    dp = await db.get(DeliveryPerson, _uuid(dp_id))
+    if not dp:
+        raise HTTPException(status_code=404, detail="Repartidor no encontrado")
+    user = await db.get(User, dp.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Cuenta del repartidor no encontrada")
+
+    if body.email is not None:
+        email = body.email.strip().lower()
+        existing = await db.scalar(
+            select(User).where(func.lower(User.email) == email, User.id != user.id)
+        )
+        if existing:
+            raise HTTPException(status_code=400, detail="Ya existe una cuenta con ese correo")
+        user.email = email
+    if body.name is not None:
+        user.name = body.name.strip()
+    if body.phone is not None:
+        user.phone = body.phone.strip() or None
+    if body.password:
+        user.password_hash = hash_password(body.password)
+    if body.vehicle_type is not None:
+        dp.vehicle_type = body.vehicle_type
+    if body.payout_method is not None:
+        dp.payout_method = body.payout_method
+    if body.bank_name is not None:
+        dp.bank_name = body.bank_name.strip() or None
+    if body.bank_account_holder is not None:
+        dp.bank_account_holder = body.bank_account_holder.strip() or None
+    if body.bank_clabe is not None:
+        clabe = "".join(ch for ch in body.bank_clabe if ch.isdigit())
+        dp.bank_clabe = clabe or None
+    if body.is_mandadero is not None:
+        dp.is_mandadero = body.is_mandadero
+    if body.delivery_bonus_per_order is not None:
+        dp.delivery_bonus_per_order = body.delivery_bonus_per_order
+    if body.is_active is not None:
+        if body.is_active is False:
+            from app.services.courier_limits import active_service_count
+
+            active = await active_service_count(db, dp.id)
+            if active > 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Tiene {active} servicio(s) activo(s). "
+                        "Espera a que termine o reasigna el pedido antes de darlo de baja."
+                    ),
+                )
+        user.is_active = body.is_active
+        if not body.is_active:
+            dp.is_available = False
+
+    touches_bank = any(
+        value is not None
+        for value in (
+            body.payout_method,
+            body.bank_name,
+            body.bank_account_holder,
+            body.bank_clabe,
+        )
+    )
+    if dp.payout_method == "transfer" and touches_bank:
+        clabe = "".join(ch for ch in (dp.bank_clabe or "") if ch.isdigit())
+        if not (dp.bank_name or "").strip() or not (dp.bank_account_holder or "").strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Para pago por transferencia indica banco y titular",
+            )
+        if len(clabe) != 18:
+            raise HTTPException(status_code=400, detail="La CLABE debe tener 18 dígitos")
+
+    await log_action(
+        db, current_user.id, "courier.update", "delivery_person", dp.id,
+        {"name": user.name, "email": user.email, "is_active": user.is_active},
+    )
+    await db.commit()
+    await db.refresh(dp)
+    await db.refresh(user)
+    return {
+        "id": str(dp.id),
+        "user_id": str(user.id),
+        "name": user.name,
+        "email": user.email,
+        "phone": user.phone,
+        "vehicle_type": dp.vehicle_type,
+        "payout_method": dp.payout_method,
+        "is_mandadero": bool(dp.is_mandadero),
+        "delivery_bonus_per_order": _money(dp.delivery_bonus_per_order),
+        "is_active": bool(user.is_active),
+    }
+
+
+@router.delete("/couriers/{dp_id}")
+async def delete_courier(
+    dp_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    dp = await db.get(DeliveryPerson, _uuid(dp_id))
+    if not dp:
+        raise HTTPException(status_code=404, detail="Repartidor no encontrado")
+    user = await db.get(User, dp.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Cuenta del repartidor no encontrada")
+
+    history = await db.scalar(
+        text("""
+            SELECT
+                (SELECT count(*) FROM orders WHERE delivery_person_id = :id OR user_id = :uid)
+              + (SELECT count(*) FROM shipments WHERE delivery_person_id = :id
+                    OR created_by_id = :uid OR cancelled_by = :uid)
+              + (SELECT count(*) FROM delivery_payouts WHERE delivery_person_id = :id)
+              + (SELECT count(*) FROM cash_advances WHERE delivery_person_id = :id OR approved_by = :uid)
+              + (SELECT count(*) FROM delivery_incidents WHERE courier_id = :id OR customer_id = :uid)
+              + (SELECT count(*) FROM reviews WHERE user_id = :uid)
+              + (SELECT count(*) FROM reservations WHERE user_id = :uid OR cancelled_by = :uid)
+              + (SELECT count(*) FROM mandados WHERE user_id = :uid OR delivery_person_id = :id)
+              + (SELECT count(*) FROM store_requests WHERE user_id = :uid)
+              + (SELECT count(*) FROM restaurant_users WHERE user_id = :uid)
+              + (SELECT count(*) FROM restaurants WHERE owner_id = :uid OR approved_by = :uid)
+        """),
+        {"id": dp.id, "uid": user.id},
+    )
+    if int(history or 0) > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Este repartidor ya tiene historial de pedidos o pagos. "
+                "Dalo de baja para conservar el historial."
+            ),
+        )
+
+    for statement in (
+        "DELETE FROM push_tokens WHERE user_id = :uid",
+        "DELETE FROM saved_addresses WHERE user_id = :uid",
+        "DELETE FROM user_carts WHERE user_id = :uid",
+        "DELETE FROM audit_logs WHERE user_id = :uid",
+        "DELETE FROM delivery_locations WHERE delivery_person_id = :id",
+        "UPDATE users SET referred_by = NULL WHERE referred_by = :uid",
+    ):
+        await db.execute(text(statement), {"id": dp.id, "uid": user.id})
+
+    await db.delete(dp)
+    await db.delete(user)
+    await log_action(
+        db, current_user.id, "courier.delete", "delivery_person", dp.id,
+        {"name": user.name, "email": user.email},
+    )
+    await db.commit()
+    return {"deleted": True}

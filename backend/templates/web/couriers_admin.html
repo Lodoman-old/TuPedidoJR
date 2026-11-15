@@ -5,9 +5,14 @@
 {% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <h4 class="m-0"><i class="bi bi-bicycle"></i> Repartidores en vivo</h4>
+  <h4 class="m-0"><i class="bi bi-bicycle"></i> Repartidores</h4>
   <div class="d-flex align-items-center gap-2">
     <select id="coverageFilter" class="form-select form-select-sm" style="max-width:220px" onchange="onCoverageFilterChange(this.value)"></select>
+    <select id="courierFilter" class="form-select form-select-sm" style="max-width:150px" onchange="setCourierFilter(this.value)">
+      <option value="active">Activos</option>
+      <option value="inactive">Inactivos</option>
+      <option value="all">Todos</option>
+    </select>
     <span class="small text-muted" id="coverageNote">Cobertura de tarifa base: —</span>
     <span class="small text-muted" id="lastRefresh">—</span>
     <button class="btn btn-success btn-sm" onclick="openCourierModal()">
@@ -20,15 +25,15 @@
 </div>
 <div id="couriersError" class="alert alert-danger d-none"></div>
 <div class="row g-3">
-  <div class="col-lg-8">
+  <div class="col-lg-7">
     <div class="card p-2">
       <div id="couriersMap" style="height:560px;border-radius:10px;"></div>
     </div>
   </div>
-  <div class="col-lg-4">
+  <div class="col-lg-5">
     <div class="card p-3">
-      <h6>Estado</h6>
-      <div id="couriersList" class="small"></div>
+      <h6>Registro de repartidores</h6>
+      <div id="couriersList" class="small" style="max-height:520px;overflow-y:auto;"></div>
     </div>
   </div>
 </div>
@@ -37,7 +42,7 @@
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-person-plus"></i> Alta de repartidor</h5>
+        <h5 class="modal-title" id="courierModalTitle"><i class="bi bi-person-plus"></i> Alta de repartidor</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="modal-body">
@@ -139,6 +144,9 @@
   let firstCenter = true;
   let loadingCouriers = false;
   let couriersCache = {};
+  let couriersData = [];
+  let courierFilter = 'active';
+  let editingCourierId = null;
 
   function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -205,22 +213,38 @@
   }
 
   function statusInfo(c) {
+    if (!c.is_active) return { color: '#6c757d', label: 'Inactivo' };
     if (c.current_order_id) return { color: '#fd7e14', label: 'En reparto' };
     if (!c.is_available) return { color: '#6c757d', label: 'No disponible' };
     if (!c.lat || !c.lng) return { color: '#adb5bd', label: 'Sin ubicación' };
     return { color: '#198754', label: 'Disponible' };
   }
 
+  function setCourierFilter(value) {
+    courierFilter = value;
+    renderList(visibleCouriers());
+    renderMarkers(visibleCouriers());
+  }
+
+  function visibleCouriers() {
+    return couriersData.filter(c => (
+      courierFilter === 'all'
+        ? true
+        : (courierFilter === 'active' ? c.is_active !== false : c.is_active === false)
+    ));
+  }
+
   function renderList(couriers) {
     const box = document.getElementById('couriersList');
     if (!couriers.length) {
-      box.innerHTML = '<p class="text-muted mb-0">No hay repartidores registrados.</p>';
+      box.innerHTML = '<p class="text-muted mb-0">No hay repartidores con este filtro.</p>';
       return;
     }
     box.innerHTML = couriers.map(c => {
       const info = statusInfo(c);
       const vehicle = { bike: 'Bicicleta', motorcycle: 'Motocicleta', car: 'Automóvil' }[c.vehicle_type] || c.vehicle_type || '';
-      return `<div class="border-bottom py-2">
+      const active = c.is_active !== false;
+      return `<div class="border-bottom py-2 ${active ? '' : 'opacity-75'}">
         <div class="d-flex justify-content-between gap-2">
           <strong>${esc(c.name)}</strong>
           <span class="badge" style="background:${info.color}">${info.label}</span>
@@ -229,9 +253,21 @@
         <div class="text-muted"><i class="bi bi-telephone"></i> ${esc(c.phone || 'Sin teléfono')}</div>
         <div class="text-muted">${esc(vehicle)} · ${esc(c.payout_method === 'transfer' ? 'Pago por transferencia' : 'Pago en efectivo')}</div>
         ${c.current_order_id ? `<div class="text-muted">Pedido: ${esc(c.current_order_id.slice(0, 8))}</div>` : ''}
-        <button class="btn btn-sm btn-outline-primary mt-1" onclick="showCourierDetails('${c.id}')">
-          <i class="bi bi-person-vcard"></i> Ver datos y CLABE
-        </button>
+        <div class="d-flex gap-1 flex-wrap mt-1">
+          <button class="btn btn-sm btn-outline-primary" onclick="showCourierDetails('${c.id}')">
+            <i class="bi bi-person-vcard"></i> Ver datos
+          </button>
+          <button class="btn btn-sm btn-outline-dark" onclick="openCourierModal('${c.id}')">
+            <i class="bi bi-pencil"></i> Editar
+          </button>
+          <button class="btn btn-sm ${active ? 'btn-outline-warning' : 'btn-outline-success'}"
+                  onclick="setCourierActive('${c.id}', ${active ? 'false' : 'true'})">
+            ${active ? 'Dar de baja' : 'Reactivar'}
+          </button>
+          ${c.history_count === 0 ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteCourier('${c.id}')">
+            <i class="bi bi-trash"></i> Eliminar
+          </button>` : ''}
+        </div>
       </div>`;
     }).join('');
   }
@@ -273,10 +309,11 @@
     error.classList.add('d-none');
     try {
       const couriers = await apiRequest('GET', `/admin/couriers/locations?t=${Date.now()}`);
+      couriersData = couriers;
       couriersCache = {};
       couriers.forEach(c => { couriersCache[c.id] = c; });
-      renderList(couriers);
-      renderMarkers(couriers);
+      renderList(visibleCouriers());
+      renderMarkers(visibleCouriers());
       document.getElementById('lastRefresh').textContent =
         'Actualización automática cada 5 s · ' + new Date().toLocaleTimeString();
     } catch (ex) {
@@ -289,17 +326,36 @@
     }
   }
 
-  function openCourierModal() {
-    ['courierName','courierPhone','courierEmail','courierPassword','courierBank','courierHolder','courierClabe'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
-    });
-    document.getElementById('courierVehicle').value = 'motorcycle';
-    document.getElementById('courierPayout').value = 'cash';
-    document.getElementById('courierBonus').value = '0';
-    document.getElementById('courierMandadero').checked = false;
+  function openCourierModal(id = null) {
+    editingCourierId = id || null;
+    const c = id ? couriersCache[id] : null;
+    const set = (elId, value) => {
+      const el = document.getElementById(elId);
+      if (el) el.value = value ?? '';
+    };
+    set('courierName', c?.name || '');
+    set('courierPhone', c?.phone || '');
+    set('courierEmail', c?.email || '');
+    set('courierPassword', '');
+    document.getElementById('courierPassword').placeholder = c
+      ? 'Dejar vacío para conservarla'
+      : 'Mínimo 6 caracteres';
+    document.getElementById('courierVehicle').value = c?.vehicle_type || 'motorcycle';
+    document.getElementById('courierPayout').value = c?.payout_method || 'cash';
+    set('courierBonus', c?.delivery_bonus_per_order || '0');
+    document.getElementById('courierMandadero').checked = Boolean(c?.is_mandadero);
+    set('courierBank', c?.bank_name || '');
+    set('courierHolder', c?.bank_account_holder || '');
+    set('courierClabe', c?.bank_clabe || '');
+    document.getElementById('courierModalTitle').innerHTML = c
+      ? '<i class="bi bi-pencil"></i> Editar repartidor'
+      : '<i class="bi bi-person-plus"></i> Alta de repartidor';
+    const btn = document.getElementById('courierSaveBtn');
+    btn.disabled = false;
+    btn.innerHTML = c
+      ? '<i class="bi bi-check2"></i> Guardar cambios'
+      : '<i class="bi bi-check2"></i> Crear repartidor';
     document.getElementById('courierFormError').classList.add('d-none');
-    document.getElementById('courierSaveBtn').disabled = false;
     toggleCourierBank();
     bootstrap.Modal.getOrCreateInstance(document.getElementById('courierModal')).show();
   }
@@ -313,6 +369,7 @@
   async function saveCourier() {
     const error = document.getElementById('courierFormError');
     const btn = document.getElementById('courierSaveBtn');
+    const editing = Boolean(editingCourierId);
     error.classList.add('d-none');
     const name = document.getElementById('courierName').value.trim();
     const email = document.getElementById('courierEmail').value.trim();
@@ -321,36 +378,74 @@
     const clabe = document.getElementById('courierClabe').value.replace(/\D/g, '');
     if (name.length < 2) { error.textContent = 'Escribe el nombre completo'; error.classList.remove('d-none'); return; }
     if (!email || !email.includes('@')) { error.textContent = 'Escribe un correo válido'; error.classList.remove('d-none'); return; }
-    if (password.length < 6) { error.textContent = 'La contraseña debe tener al menos 6 caracteres'; error.classList.remove('d-none'); return; }
+    if (!editing && password.length < 6) { error.textContent = 'La contraseña debe tener al menos 6 caracteres'; error.classList.remove('d-none'); return; }
+    if (editing && password && password.length < 6) { error.textContent = 'La nueva contraseña debe tener al menos 6 caracteres'; error.classList.remove('d-none'); return; }
     if (payout === 'transfer' && (!document.getElementById('courierBank').value.trim()
         || !document.getElementById('courierHolder').value.trim() || clabe.length !== 18)) {
       error.textContent = 'Para transferencia completa banco, titular y CLABE de 18 dígitos';
       error.classList.remove('d-none'); return;
     }
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Creando...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Guardando...';
+    const payload = {
+      name,
+      email,
+      phone: document.getElementById('courierPhone').value.trim() || null,
+      vehicle_type: document.getElementById('courierVehicle').value,
+      payout_method: payout,
+      bank_name: document.getElementById('courierBank').value.trim() || null,
+      bank_account_holder: document.getElementById('courierHolder').value.trim() || null,
+      bank_clabe: clabe || null,
+      is_mandadero: document.getElementById('courierMandadero').checked,
+      delivery_bonus_per_order: Number(document.getElementById('courierBonus').value || 0),
+    };
+    if (password) payload.password = password;
     try {
-      const created = await apiRequest('POST', '/admin/couriers', {
-        name,
-        email,
-        phone: document.getElementById('courierPhone').value.trim() || null,
-        password,
-        vehicle_type: document.getElementById('courierVehicle').value,
-        payout_method: payout,
-        bank_name: document.getElementById('courierBank').value.trim() || null,
-        bank_account_holder: document.getElementById('courierHolder').value.trim() || null,
-        bank_clabe: clabe || null,
-        is_mandadero: document.getElementById('courierMandadero').checked,
-        delivery_bonus_per_order: Number(document.getElementById('courierBonus').value || 0),
-      });
-      bootstrap.Modal.getOrCreateInstance(document.getElementById('courierModal')).hide();
-      showToast(`Repartidor creado: ${created.name}. Ya puede iniciar sesión.`);
+      if (editing) {
+        await apiRequest('PATCH', `/admin/couriers/${editingCourierId}`, payload);
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('courierModal')).hide();
+        showToast('Repartidor actualizado');
+      } else {
+        const created = await apiRequest('POST', '/admin/couriers', payload);
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('courierModal')).hide();
+        showToast(`Repartidor creado: ${created.name}. Ya puede iniciar sesión.`);
+      }
+      editingCourierId = null;
       loadCouriers();
     } catch (e) {
       error.textContent = e.message;
       error.classList.remove('d-none');
       btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-check2"></i> Crear repartidor';
+      btn.innerHTML = editing
+        ? '<i class="bi bi-check2"></i> Guardar cambios'
+        : '<i class="bi bi-check2"></i> Crear repartidor';
+    }
+  }
+
+  async function setCourierActive(id, active) {
+    const c = couriersCache[id];
+    if (!c) return;
+    const action = active ? 'reactivar' : 'dar de baja';
+    if (!confirm(`¿${action.charAt(0).toUpperCase() + action.slice(1)} a ${c.name}?`)) return;
+    try {
+      await apiRequest('PATCH', `/admin/couriers/${id}`, { is_active: active });
+      showToast(active ? 'Repartidor reactivado' : 'Repartidor dado de baja');
+      loadCouriers();
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  async function deleteCourier(id) {
+    const c = couriersCache[id];
+    if (!c) return;
+    if (!confirm(`¿Eliminar definitivamente a ${c.name}? Esta acción no se puede deshacer.`)) return;
+    try {
+      await apiRequest('DELETE', `/admin/couriers/${id}`);
+      showToast('Repartidor eliminado');
+      loadCouriers();
+    } catch (e) {
+      alert(e.message);
     }
   }
 

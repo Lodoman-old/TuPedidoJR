@@ -54,18 +54,15 @@
       <thead class="table-light">
         <tr>
           <th class="text-nowrap">Repartidor</th>
-          <th class="text-nowrap">Teléfono</th>
-          <th class="text-nowrap">Vehículo</th>
-          <th class="text-nowrap">Pago</th>
+          <th class="text-nowrap">Contacto</th>
           <th class="text-nowrap">Estado</th>
           <th class="text-nowrap text-end">Entregas</th>
           <th class="text-nowrap text-end">Saldo</th>
-          <th class="text-nowrap">Alta</th>
           <th class="text-nowrap text-end">Acciones</th>
         </tr>
       </thead>
       <tbody id="couriersTableBody">
-        <tr><td colspan="9" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>
+        <tr><td colspan="6" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>
       </tbody>
     </table>
   </div>
@@ -261,7 +258,7 @@
     const start = (page - 1) * pageSize;
     const rows = filtered.slice(start, start + pageSize);
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No hay repartidores con este filtro.</td></tr>';
+      body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No hay repartidores con este filtro.</td></tr>';
     } else {
       body.innerHTML = rows.map(c => {
         const active = c.is_active !== false;
@@ -271,13 +268,13 @@
             ${active ? '' : ' <span class="badge bg-secondary">Inactivo</span>'}
             <div class="small text-muted text-break">${esc(c.email || 'Sin correo')}</div>
           </td>
-          <td>${esc(c.phone || '—')}</td>
-          <td>${esc(statusLabel(c.vehicle_type))}</td>
-          <td>${c.payout_method === 'transfer' ? 'Transferencia' : 'Efectivo'}</td>
+          <td>
+            <div>${esc(c.phone || 'Sin teléfono')}</div>
+            <div class="small text-muted">${esc(statusLabel(c.vehicle_type))} · ${c.payout_method === 'transfer' ? 'Transferencia' : 'Efectivo'}</div>
+          </td>
           <td>${stateBadge(c)}</td>
           <td class="text-end">${esc(c.total_deliveries || 0)}</td>
           <td class="text-end">${balanceCell(c)}</td>
-          <td class="small text-muted">${c.registered_at ? new Date(c.registered_at).toLocaleDateString('es-MX') : '—'}</td>
           <td class="text-end text-nowrap">
             <div class="btn-group btn-group-sm">
               <button class="btn btn-outline-primary" title="Ver todos los datos" onclick="showCourierDetails('${c.id}')"><i class="bi bi-eye"></i></button>

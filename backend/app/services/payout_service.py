@@ -2,7 +2,7 @@
 import random
 import string
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -14,6 +14,29 @@ from app.models.order import Order
 from app.models.restaurant_payout import RestaurantPayout
 from app.models.shipment import Shipment
 from app.services.settlement_service import is_order_settleable
+
+
+async def credit_courier_for_order(db: AsyncSession, order: Order) -> None:
+    """Suma al repartidor la ganancia de un pedido pagado por la plataforma.
+
+    Solo aplica a transferencia o pago en línea ya confirmado. Es idempotente
+    gracias a ``order.courier_credit_applied``.
+    """
+    if not order.delivery_person_id or order.status != "delivered":
+        return
+    if order.payment_method not in ("transfer", "mp"):
+        return
+    if getattr(order, "courier_credit_applied", False):
+        return
+    if not is_order_settleable(order):
+        return
+    dp = await db.get(DeliveryPerson, order.delivery_person_id)
+    if not dp:
+        return
+    amount = order.delivery_earnings or Decimal("0")
+    if amount > 0:
+        dp.pending_platform_credit = (dp.pending_platform_credit or Decimal("0")) + amount
+    order.courier_credit_applied = True
 
 
 async def restaurant_balance(db: AsyncSession, restaurant_id) -> dict:
@@ -124,20 +147,17 @@ async def courier_balance(db: AsyncSession, dp: DeliveryPerson) -> dict:
         order for order in orders_result.scalars().all()
         if is_order_settleable(order)
     ]
-    earned = sum((o.delivery_earnings or Decimal("0")) for o in orders)
+    order_earnings = sum((o.delivery_earnings or Decimal("0")) for o in orders)
 
     shipments_result = await db.execute(
         select(Shipment).where(
             Shipment.delivery_person_id == dp.id,
             Shipment.status.in_(("delivered", "failed")),
-            Shipment.courier_settled.is_(False),
         )
     )
     shipments = list(shipments_result.scalars().all())
-    shipment_earnings = sum(
-        (s.courier_earnings or Decimal("0")) for s in shipments
-    )
-    earned += shipment_earnings
+    shipment_earnings = sum((s.courier_earnings or Decimal("0")) for s in shipments)
+    earned = order_earnings + shipment_earnings
 
     payouts_result = await db.execute(
         select(DeliveryPayout).where(
@@ -146,21 +166,34 @@ async def courier_balance(db: AsyncSession, dp: DeliveryPerson) -> dict:
         )
     )
     payouts = list(payouts_result.scalars().all())
-    requested = sum((p.total_earnings or Decimal("0")) for p in payouts)
+    settled_earnings = sum((p.total_earnings or Decimal("0")) for p in payouts)
+    paid_to_courier = sum(
+        (p.net_amount or Decimal("0"))
+        for p in payouts
+        if p.direction == "to_courier" and p.status == "paid"
+    )
+    credit = dp.pending_platform_credit or Decimal("0")
+
     debt = dp.pending_platform_debt or Decimal("0")
     from app.services.cash_advance_service import advance_debt
     advances = await advance_debt(db, dp)
-    pending = max(earned - requested - debt - advances, Decimal("0"))
+    net = credit - debt - advances
 
     return {
         "orders": orders,
         "shipments": shipments,
         "shipment_earnings": shipment_earnings,
         "earned": earned,
-        "requested": requested,
+        "order_earnings": order_earnings,
+        "settled_earnings": settled_earnings,
+        "requested": settled_earnings,
+        "paid_to_courier": paid_to_courier,
+        "credit": credit,
+        "pending_earnings": credit,
+        "pending": credit,
         "debt": debt,
         "advances": advances,
-        "pending": pending,
+        "net": net,
         "last_payout": max(
             (p.period_end for p in payouts if p.period_end),
             default=None,
@@ -229,33 +262,62 @@ async def create_restaurant_payout(db: AsyncSession, restaurant_id) -> Restauran
     return payout
 
 
-async def create_courier_payout(db: AsyncSession, dp: DeliveryPerson) -> DeliveryPayout:
+async def create_courier_payout(
+    db: AsyncSession,
+    dp: DeliveryPerson,
+    payout_method: str | None = None,
+) -> DeliveryPayout:
     balance = await courier_balance(db, dp)
-    if balance["pending"] <= 0:
-        raise ValueError("No hay saldo disponible para liquidar")
+    pending = balance["pending_earnings"]
+    debt = balance["debt"]
+    advances = balance["advances"]
+    if pending <= 0 and debt <= 0 and advances <= 0:
+        raise ValueError("No hay movimientos por liquidar")
+
+    from app.services.cash_advance_service import settle_advances_for_payout
+
+    settled_advances = await settle_advances_for_payout(db, dp)
+    if settled_advances > 0:
+        advances = settled_advances
+    net = pending - debt - advances
+
+    method = payout_method or dp.payout_method or "cash"
+    if method not in ("cash", "transfer"):
+        method = "cash"
 
     orders = balance["orders"]
     period_start, period_end = _period(orders, balance["last_payout"])
-    from app.services.cash_advance_service import settle_advances_for_payout
-
-    await settle_advances_for_payout(db, dp)
     payout = DeliveryPayout(
         id=uuid.uuid4(),
         delivery_person_id=dp.id,
         period_start=period_start,
         period_end=period_end,
         orders_count=len(orders),
-        total_earnings=balance["pending"],
-        payout_method=dp.payout_method or "cash",
+        total_earnings=pending,
+        total_debt=debt,
+        total_advances=advances,
+        net_amount=net,
+        direction="to_courier" if net >= 0 else "to_platform",
+        payout_method=method,
         confirmation_code="".join(random.choices(string.digits, k=6)),
         status="pending",
+        notes=(
+            f"Corte: ganancia {pending} - efectivo por entregar {debt} "
+            f"- avances {advances} = {net}"
+        ),
     )
     for shipment in balance.get("shipments", []):
         shipment.courier_settled = True
     db.add(payout)
-    # The payout amount already deducted the cash debt, so clear it to avoid
-    # discounting the same debt again from future earnings.
+    # El corte ya descuenta la deuda y la ganancia, así que se limpian para
+    # no repetirlas en el siguiente corte.
     dp.pending_platform_debt = Decimal("0")
+    dp.pending_platform_credit = Decimal("0")
+    if net == 0:
+        now = datetime.now(timezone.utc)
+        payout.status = "paid"
+        payout.paid_at = now
+        payout.confirmed_at = now
     await db.commit()
     await db.refresh(payout)
     return payout

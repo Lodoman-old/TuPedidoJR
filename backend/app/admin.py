@@ -321,6 +321,8 @@ class OrderAdmin(ModelView, model=Order):
                 )
                 for order in result.scalars().all():
                     order.payment_status = "approved"
+                    from app.services.payout_service import credit_courier_for_order
+                    await credit_courier_for_order(session, order)
                 await session.commit()
         return RedirectResponse(
             request.url_for("admin:list", identity=self.identity), status_code=303

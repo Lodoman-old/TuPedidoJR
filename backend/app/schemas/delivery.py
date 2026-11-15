@@ -54,6 +54,7 @@ class DeliveryProfileOut(BaseModel):
     bank_clabe: str | None
     is_mandadero: bool
     pending_platform_debt: Decimal
+    pending_platform_credit: Decimal = Decimal("0")
     delivery_bonus_per_order: Decimal = Decimal("0")
     current_order_id: UUID | None
 
@@ -73,6 +74,10 @@ class DeliveryPayoutOut(BaseModel):
     period_end: date
     orders_count: int
     total_earnings: Decimal
+    total_debt: Decimal = Decimal("0")
+    total_advances: Decimal = Decimal("0")
+    net_amount: Decimal = Decimal("0")
+    direction: str = "to_courier"
     payout_method: str
     confirmation_code: str
     status: str
@@ -96,6 +101,10 @@ class DeliveryProfileUpdate(BaseModel):
     bank_clabe: str | None = None
 
 
+class PayoutRequest(BaseModel):
+    payout_method: str | None = Field(default=None, pattern="^(cash|transfer)$")
+
+
 class DeliveryEarningsItem(BaseModel):
     id: UUID
     placed_at: datetime
@@ -116,5 +125,7 @@ class DeliveryEarningsOut(BaseModel):
     total_pending_from_platform: Decimal
     total_pending_confirmation: Decimal = Decimal("0")
     total_advance_debt: Decimal = Decimal("0")
+    total_net: Decimal = Decimal("0")
+    total_pending_earnings: Decimal = Decimal("0")
     orders: list[DeliveryEarningsItem]
 

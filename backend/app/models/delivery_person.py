@@ -23,4 +23,5 @@ class DeliveryPerson(TimestampMixin, Base):
     bank_clabe = Column(String(18), nullable=True)
     is_mandadero = Column(Boolean, default=False, nullable=False)
     pending_platform_debt = Column(DECIMAL(10, 2), default=0, nullable=False)
+    pending_platform_credit = Column(DECIMAL(10, 2), default=0, nullable=False)
     delivery_bonus_per_order = Column(DECIMAL(10, 2), default=0, nullable=False)

@@ -200,9 +200,10 @@ class TestPayouts:
     ):
         from app.core.security import decode_access_token
         from app.models.order import Order
+        from app.services.payout_service import credit_courier_for_order
 
         payload = decode_access_token(user_token)
-        db_session.add(Order(
+        order = Order(
             user_id=payload["sub"],
             restaurant_id=seeded_restaurant.id,
             delivery_person_id=delivery_person.id,
@@ -213,8 +214,13 @@ class TestPayouts:
             delivery_address="Address 123",
             delivery_location="SRID=4326;POINT(-99.13 19.43)",
             delivery_earnings=50,
-            payment_method="cash",
-        ))
+            payment_method="transfer",
+            payment_status="approved",
+        )
+        db_session.add(order)
+        await db_session.commit()
+        await db_session.refresh(order)
+        await credit_courier_for_order(db_session, order)
         await db_session.commit()
 
         headers = {"Authorization": f"Bearer {delivery_token}"}
@@ -237,10 +243,11 @@ class TestPayouts:
         from decimal import Decimal
         from app.core.security import decode_access_token
         from app.models.order import Order
+        from app.services.payout_service import credit_courier_for_order
 
         payload = decode_access_token(user_token)
         delivery_person.pending_platform_debt = Decimal("20")
-        db_session.add(Order(
+        order = Order(
             user_id=payload["sub"],
             restaurant_id=seeded_restaurant.id,
             delivery_person_id=delivery_person.id,
@@ -251,19 +258,25 @@ class TestPayouts:
             delivery_address="Address 123",
             delivery_location="SRID=4326;POINT(-99.13 19.43)",
             delivery_earnings=50,
-            payment_method="cash",
-        ))
+            payment_method="transfer",
+            payment_status="approved",
+        )
+        db_session.add(order)
+        await db_session.commit()
+        await db_session.refresh(order)
+        await credit_courier_for_order(db_session, order)
         await db_session.commit()
 
         headers = {"Authorization": f"Bearer {delivery_token}"}
         first = await client.post("/api/v1/delivery/request-payout", headers=headers)
         assert first.status_code == 200, first.text
-        assert float(first.json()["total_earnings"]) == 30.0
+        assert float(first.json()["total_earnings"]) == 50.0
+        assert float(first.json()["net_amount"]) == 30.0
 
         await db_session.refresh(delivery_person)
         assert float(delivery_person.pending_platform_debt) == 0.0
 
-        db_session.add(Order(
+        second_order = Order(
             user_id=payload["sub"],
             restaurant_id=seeded_restaurant.id,
             delivery_person_id=delivery_person.id,
@@ -276,13 +289,41 @@ class TestPayouts:
             delivery_earnings=40,
             payment_method="transfer",
             payment_status="approved",
-        ))
+        )
+        db_session.add(second_order)
+        await db_session.commit()
+        await db_session.refresh(second_order)
+        await credit_courier_for_order(db_session, second_order)
         await db_session.commit()
 
         second = await client.post("/api/v1/delivery/request-payout", headers=headers)
         assert second.status_code == 200, second.text
-        # 50 + 40 earned - 30 already paid - 0 remaining debt = 60
-        assert float(second.json()["total_earnings"]) == 60.0
+        assert float(second.json()["total_earnings"]) == 40.0
+
+    async def test_negative_cut_is_paid_to_platform(
+        self, client: AsyncClient, db_session, user_token, delivery_token,
+        delivery_person, seeded_restaurant,
+    ):
+        from decimal import Decimal
+
+        delivery_person.pending_platform_credit = Decimal("20")
+        delivery_person.pending_platform_debt = Decimal("50")
+        await db_session.commit()
+
+        headers = {"Authorization": f"Bearer {delivery_token}"}
+        resp = await client.post("/api/v1/delivery/request-payout", headers=headers)
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["direction"] == "to_platform"
+        assert float(data["net_amount"]) == -30.0
+        assert float(data["total_earnings"]) == 20.0
+
+        await db_session.refresh(delivery_person)
+        assert float(delivery_person.pending_platform_debt) == 0.0
+        assert float(delivery_person.pending_platform_credit) == 0.0
+
+        again = await client.post("/api/v1/delivery/request-payout", headers=headers)
+        assert again.status_code == 400
 
 
 class TestUpdateLocation:

@@ -28,7 +28,7 @@
       <div>
         <strong id="dpName" class="fs-5">-</strong><br>
         <small class="text-muted" id="dpInfo">Cargando...</small>
-        <span id="debtBadge" class="badge bg-danger ms-2 d-none">Deuda: $0</span>
+        <span id="debtBadge" class="badge bg-danger ms-2 d-none">Efectivo por entregar: $0</span>
       </div>
       <div class="d-flex align-items-center gap-2">
         <span class="form-check form-switch mb-0">
@@ -262,7 +262,7 @@ async function loadDeliveryData() {
     document.getElementById('availSwitch').checked = dpProfile.is_available;
     const debt = parseFloat(dpProfile.pending_platform_debt || 0);
     const badge = document.getElementById('debtBadge');
-    if (debt > 0) { badge.textContent = `Deuda: ${money0(debt)}`; badge.classList.remove('d-none'); }
+    if (debt > 0) { badge.textContent = `Efectivo por entregar: ${money0(debt)}`; badge.classList.remove('d-none'); }
     else badge.classList.add('d-none');
     loadAvailable();
   } catch (e) { showToast('Error al cargar perfil: ' + e.message, 'danger'); }
@@ -577,46 +577,70 @@ async function loadPayouts() {
   el.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
   try {
     const [earnings, payouts] = await Promise.all([getDeliveryEarnings(), listDeliveryPayouts()]);
+    const net = parseFloat(earnings.total_net || 0);
+    const debt = parseFloat(earnings.total_pending_debt || 0);
+    const credit = parseFloat(earnings.total_pending_from_platform || 0);
+    const advances = parseFloat(earnings.total_advance_debt || 0);
+    const paid = parseFloat(earnings.total_paid || 0);
+    const pendingPayouts = parseFloat(earnings.total_pending_payouts || 0);
+
     let html = `<div class="row g-2 mb-3">
       <div class="col-6"><div class="card p-2 text-center border-primary"><small class="text-muted">Total ganado</small><strong class="fs-6 text-primary">${money0(earnings.total_earned)}</strong></div></div>
-      <div class="col-6"><div class="card p-2 text-center border-warning"><small class="text-muted">Por cobrar a plataforma (transferencias)</small><strong class="fs-6 text-warning">${money0(earnings.total_pending_from_platform)}</strong></div></div>
-      <div class="col-6"><div class="card p-2 text-center border-secondary"><small class="text-muted">Transferencias por confirmar</small><strong class="fs-6 text-secondary">${money0(earnings.total_pending_confirmation || 0)}</strong></div></div>
-      <div class="col-6"><div class="card p-2 text-center border-danger"><small class="text-muted">Deuda pendiente</small><strong class="fs-6 text-danger">${money0(earnings.total_pending_debt)}</strong></div></div>
-      <div class="col-6"><div class="card p-2 text-center border-warning"><small class="text-muted">Avances por descontar</small><strong class="fs-6 text-warning">${money0(earnings.total_advance_debt || 0)}</strong></div></div>
-      <div class="col-6"><div class="card p-2 text-center border-success"><small class="text-muted">Pagado</small><strong class="fs-6 text-success">${money0(earnings.total_paid)}</strong></div></div>
-    </div>
-    <div class="alert alert-info py-2 small">Las transferencias las recibe TuPedidoJR. Tu ganancia por esos pedidos te la paga la plataforma en efectivo o por transferencia, según tu configuración.</div>`;
-    if (!earnings.total_deliveries) {
-      html += '<p class="text-muted text-center py-3">Sin entregas realizadas</p>';
-      el.innerHTML = html;
-      return;
-    }
-    const pendingPayouts = parseFloat(earnings.total_pending_payouts || 0);
-    const available = parseFloat(earnings.total_earned) - parseFloat(earnings.total_pending_confirmation || 0) - parseFloat(earnings.total_paid) - pendingPayouts - parseFloat(earnings.total_pending_debt);
-    if (pendingPayouts > 0) {
-      html += `<div class="alert alert-warning py-2 text-center">Liquidación en proceso: ${money0(pendingPayouts)}</div>`;
-    }
-    if (available > 0) {
-      html += `<div class="text-center mb-3"><button class="btn btn-success btn-lg w-100" onclick="requestPayout()">Solicitar liquidación — ${money0(available)}</button></div>`;
-    }
-    html += `<h6 class="mt-3 mb-2">Últimas entregas</h6><div class="list-group mb-3">`;
-    for (const o of earnings.orders) {
-      const pm = o.payment_method === 'transfer' ? 'Transferencia (paga plataforma)' : 'Efectivo';
-      html += `<div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2">
-        <div><small class="text-muted">${new Date(o.placed_at).toLocaleDateString()} · ${pm}</small><br><small>#${o.id.substring(0,8)}</small></div>
-        <div class="text-end"><strong>${money0(o.total)}</strong><br><small class="text-success">+${money0(o.delivery_earnings)}</small></div>
+      <div class="col-6"><div class="card p-2 text-center border-warning"><small class="text-muted">Ganancia por cobrar</small><strong class="fs-6 text-warning">${money0(credit)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-danger"><small class="text-muted">Efectivo por entregar</small><strong class="fs-6 text-danger">${money0(debt)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-warning"><small class="text-muted">Avances por descontar</small><strong class="fs-6 text-warning">${money0(advances)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-success"><small class="text-muted">Ya te pagaron</small><strong class="fs-6 text-success">${money0(paid)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-secondary"><small class="text-muted">Liquidación en proceso</small><strong class="fs-6 text-secondary">${money0(pendingPayouts)}</strong></div></div>
+    </div>`;
+
+    html += `<div class="alert ${net >= 0 ? 'alert-success' : 'alert-danger'} py-2">
+      <div class="d-flex justify-content-between align-items-center">
+        <span class="small">${net >= 0 ? 'La plataforma te paga' : 'Tienes que entregar a la plataforma'}</span>
+        <strong class="fs-5">${money0(Math.abs(net))}</strong>
+      </div>
+      <small class="d-block mt-1">Ganancia por cobrar ${money0(credit)} − efectivo por entregar ${money0(debt)} − avances ${money0(advances)}</small>
+    </div>`;
+
+    if (net !== 0 || debt > 0 || credit > 0 || advances > 0) {
+      html += `<div class="card p-2 mb-3">
+        <label class="form-label small mb-1" for="cutMethod">¿Cómo quieres liquidar?</label>
+        <select id="cutMethod" class="form-select form-select-sm mb-2">
+          <option value="cash" ${dpProfile?.payout_method === 'cash' ? 'selected' : ''}>Efectivo</option>
+          <option value="transfer" ${dpProfile?.payout_method === 'transfer' ? 'selected' : ''}>Transferencia</option>
+        </select>
+        <button class="btn btn-success w-100" onclick="requestPayout()">
+          Hacer corte — ${net >= 0 ? 'cobrar' : 'pagar'} ${money0(Math.abs(net))}
+        </button>
+        <small class="text-muted d-block mt-1">Se genera un código. El administrador confirma el pago o la recepción del efectivo.</small>
       </div>`;
+    } else {
+      html += '<div class="alert alert-secondary py-2 text-center">Cuentas al día. No hay nada que liquidar.</div>';
     }
-    html += `</div>`;
+
+    html += `<div class="alert alert-info py-2 small">En pedidos en efectivo tú cobras al cliente y te quedas tu ganancia; el resto lo entregas a TuPedidoJR. En transferencia, la plataforma recibe el dinero y te paga tu ganancia.</div>`;
+
+    if (earnings.orders.length) {
+      html += `<h6 class="mt-3 mb-2">Últimas entregas</h6><div class="list-group mb-3">`;
+      for (const o of earnings.orders) {
+        const pm = o.payment_method === 'transfer' ? 'Transferencia (paga plataforma)' : 'Efectivo';
+        html += `<div class="list-group-item d-flex justify-content-between align-items-center py-2">
+          <div><small class="text-muted">${new Date(o.placed_at).toLocaleDateString()} · ${pm}</small><br><small>#${o.id.substring(0,8)}</small></div>
+          <div class="text-end"><strong>${money0(o.total)}</strong><br><small class="text-success">+${money0(o.delivery_earnings)}</small></div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
     if (payouts.length) {
-      html += `<h6 class="mt-3 mb-2">Historial de pagos</h6><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Período</th><th>Órdenes</th><th>Total</th><th>Estado</th></tr></thead><tbody>`;
+      html += `<h6 class="mt-3 mb-2">Historial de cortes</h6><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Período</th><th>Servicios</th><th class="text-end">Monto</th><th>Estado</th></tr></thead><tbody>`;
       for (const p of payouts) {
+        const toPlatform = p.direction === 'to_platform';
         const badge = p.status === 'paid' ? 'success' : (p.status === 'pending' ? 'warning' : 'secondary');
         html += `<tr>
           <td>${p.period_start} a ${p.period_end}</td>
           <td>${p.orders_count}</td>
-          <td>${money0(p.total_earnings)}</td>
-          <td><span class="badge bg-${badge}">${payoutStatusLabels[p.status] || p.status}</span></td>
+          <td class="text-end ${toPlatform ? 'text-danger' : 'text-success'}">${toPlatform ? '−' : '+'}${money0(Math.abs(p.net_amount || 0))}</td>
+          <td><span class="badge bg-${badge}">${payoutStatusLabels[p.status] || p.status}</span><br><small class="text-muted">${toPlatform ? 'Entregado a la plataforma' : 'Pagado al repartidor'}</small></td>
         </tr>`;
       }
       html += '</tbody></table></div>';
@@ -625,14 +649,36 @@ async function loadPayouts() {
   } catch (e) { el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
 }
 
-// ===== Solicitar liquidación =====
+// ===== Hacer corte =====
 async function requestPayout() {
-  if (!confirm('¿Solicitar liquidación de tu saldo disponible?')) return;
+  const method = document.getElementById('cutMethod')?.value || 'cash';
+  const label = method === 'transfer' ? 'transferencia' : 'efectivo';
+  if (!confirm(`¿Generar el corte y liquidar por ${label}?`)) return;
   try {
-    const payout = await apiRequest('POST', '/delivery/request-payout');
-    showToast(`Liquidación generada: ${money0(payout.total_earnings)} (código: ${payout.confirmation_code})`, 'success');
+    const payout = await apiRequest('POST', '/delivery/request-payout', { payout_method: method });
+    const direction = payout.direction === 'to_platform' ? 'por entregar' : 'a tu favor';
+    showToast(`Corte generado: ${money0(Math.abs(payout.net_amount || 0))} ${direction} (código: ${payout.confirmation_code})`, 'success');
+    await refreshProfileBadges();
     loadPayouts();
   } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+}
+
+async function refreshProfileBadges() {
+  try {
+    dpProfile = await getDeliveryProfile();
+    const debt = parseFloat(dpProfile.pending_platform_debt || 0);
+    const badge = document.getElementById('debtBadge');
+    if (badge) {
+      if (debt > 0) {
+        badge.textContent = `Efectivo por entregar: ${money0(debt)}`;
+        badge.classList.remove('d-none');
+      } else {
+        badge.classList.add('d-none');
+      }
+    }
+    const info = document.getElementById('dpInfo');
+    if (info) info.textContent = `⭐ ${dpProfile.rating} · ${dpProfile.total_deliveries} repartos`;
+  } catch (e) { /* silencioso */ }
 }
 
 // ===== TAB: Ajustes =====

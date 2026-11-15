@@ -59,6 +59,7 @@ class Order(TimestampMixin, Base):
     loyalty_discount = Column(DECIMAL(10, 2), default=0, nullable=False)
     points_awarded = Column(Boolean, default=False, nullable=False)
     requires_courier_approval = Column(Boolean, default=False, nullable=False)
+    courier_credit_applied = Column(Boolean, default=False, nullable=False)
     awaiting_courier_at = Column(DateTime(timezone=True), nullable=True)
     courier_approval_deadline = Column(DateTime(timezone=True), nullable=True)
     refund_account_holder = Column(String(150), nullable=True)

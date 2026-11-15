@@ -323,6 +323,7 @@ async def admin_payouts(
             "earned_total": _money(balance["earned"]),
             "pending_debt": _money(balance["debt"]),
             "pending_advances": _money(balance["advances"]),
+            "net_amount": _money(balance["net"]),
             "last_payout_date": balance["last_payout"].isoformat() if balance["last_payout"] else None,
             "next_payout_date": next_date.isoformat(),
             "status": _due_state(balance["pending"], next_date),
@@ -531,7 +532,9 @@ async def generate_courier_payout(
     return {
         "id": str(payout.id),
         "kind": "courier",
-        "amount": _money(payout.total_earnings),
+        "amount": _money(payout.net_amount),
+        "net_amount": _money(payout.net_amount),
+        "direction": payout.direction,
         "status": payout.status,
     }
 
@@ -629,6 +632,8 @@ async def confirm_transfer_received(
     if not order or order.payment_method != "transfer":
         raise HTTPException(status_code=404, detail="Transferencia no encontrada")
     order.payment_status = "approved"
+    from app.services.payout_service import credit_courier_for_order
+    await credit_courier_for_order(db, order)
     await log_action(
         db, current_user.id, "transfer.confirm", "order", order.id,
         {"total": _money(order.total)},

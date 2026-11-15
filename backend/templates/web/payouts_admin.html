@@ -90,7 +90,7 @@
       <div class="table-responsive"><table class="table table-sm align-middle">
         <thead><tr>
           <th>Repartidor</th><th class="text-end">Pendiente</th><th>Bono por envío</th>
-          <th>Método de pago</th><th>Frecuencia</th><th class="text-end">Deuda</th><th class="text-end">Avances</th><th>Próximo pago</th><th>Estado</th><th></th>
+          <th>Método de pago</th><th>Frecuencia</th><th class="text-end">Deuda</th><th class="text-end">Avances</th><th class="text-end">Saldo del corte</th><th>Próximo pago</th><th>Estado</th><th></th>
         </tr></thead>
         <tbody>${couriers.map(c => `
           <tr>
@@ -118,12 +118,16 @@
             </td>
             <td class="text-end text-danger">${money(c.pending_debt)}</td>
             <td class="text-end text-warning">${money(c.pending_advances)}</td>
+            <td class="text-end ${parseFloat(c.net_amount || 0) < 0 ? 'text-danger' : 'text-success'} fw-bold">
+              ${parseFloat(c.net_amount || 0) < 0 ? '−' : '+'}${money(Math.abs(parseFloat(c.net_amount || 0)))}
+              <br><small class="text-muted">${parseFloat(c.net_amount || 0) < 0 ? 'Por entregar' : 'Por pagar'}</small>
+            </td>
             <td>${c.next_payout_date || '—'}</td>
             <td>${statusBadge(c.status)}</td>
             <td class="text-end text-nowrap">
               <button class="btn btn-sm btn-outline-primary" onclick="saveCourier('${c.id}')">Guardar</button>
               <button class="btn btn-sm btn-success" onclick="payCourier('${c.id}')"
-                      ${parseFloat(c.pending_amount) <= 0 ? 'disabled' : ''}>Generar pago</button>
+                      ${parseFloat(c.net_amount || 0) === 0 ? 'disabled' : ''}>Generar corte</button>
             </td>
           </tr>`).join('')}</tbody>
       </table></div>
@@ -639,10 +643,11 @@
   }
 
   async function payCourier(id) {
-    if (!confirm('¿Generar la liquidación de este repartidor?')) return;
+    if (!confirm('¿Generar el corte de este repartidor?')) return;
     try {
-      await generateCourierPayout(id);
-      showToast('Liquidación generada');
+      const data = await generateCourierPayout(id);
+      const dir = data.direction === 'to_platform' ? 'por entregar' : 'por pagar';
+      showToast(`Corte generado: $${Math.abs(parseFloat(data.net_amount || 0)).toFixed(2)} ${dir}`, 'success');
       loadPayouts();
     } catch (ex) { showToast(ex.message, 'danger'); }
   }

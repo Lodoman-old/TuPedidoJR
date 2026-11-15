@@ -26,6 +26,7 @@ from app.schemas.delivery import (
     DeliveryProfileOut,
     DeliveryProfileUpdate,
     LocationUpdate,
+    PayoutRequest,
 )
 from app.schemas.order import AvailableOrderOut, OrderOut
 from app.schemas.cash_advance import CashAdvanceCreate, CashAdvanceOut
@@ -334,6 +335,9 @@ async def deliver_order(
         debt = (order.total or Decimal("0")) - de
         if debt > Decimal("0"):
             dp.pending_platform_debt = (dp.pending_platform_debt or Decimal("0")) + debt
+    dp.total_deliveries = (dp.total_deliveries or 0) + 1
+    from app.services.payout_service import credit_courier_for_order
+    await credit_courier_for_order(db, order)
     from app.services.cash_advance_service import settle_restaurant_advances_for_order
     await settle_restaurant_advances_for_order(db, order)
     await award_on_delivery(db, order)
@@ -585,65 +589,65 @@ async def get_delivery_earnings(
     shipments = shipments_result.scalars().all()
     for s in shipments:
         earning = s.courier_earnings or Decimal("0")
+        has_cod = (s.amount_to_collect or 0) > 0
+        platform_paid = s.status == "failed" or not has_cod
         items.append(DeliveryEarningsItem(
             id=s.id,
             placed_at=s.created_at,
             total=s.amount_to_collect or Decimal("0"),
             delivery_earnings=earning,
             status=s.status,
-            payment_method="cash" if (s.amount_to_collect or 0) > 0 else "transfer",
+            payment_method="cash" if (has_cod and s.status == "delivered") else "transfer",
         ))
         total_earned += earning
-        total_transfer_earnings += earning
-        if (s.amount_to_collect or 0) > 0:
-            total_cash_collected += s.amount_to_collect
+        if platform_paid:
+            total_transfer_earnings += earning
+        elif s.status == "delivered":
+            total_cash_collected += s.amount_to_collect or Decimal("0")
 
     payouts_result = await db.execute(
-        select(DeliveryPayout)
-        .where(
-            DeliveryPayout.delivery_person_id == dp.id,
-            DeliveryPayout.status == "paid",
-        )
-    )
-    total_paid = Decimal("0")
-    for p in payouts_result.scalars().all():
-        total_paid += p.total_earnings
-
-    pending_payouts_result = await db.execute(
         select(DeliveryPayout).where(
             DeliveryPayout.delivery_person_id == dp.id,
-            DeliveryPayout.status == "pending",
+            DeliveryPayout.status != "cancelled",
         )
     )
-    total_pending_payouts = sum(
-        (p.total_earnings or Decimal("0"))
-        for p in pending_payouts_result.scalars().all()
+    payouts = list(payouts_result.scalars().all())
+    total_paid = sum(
+        (p.net_amount or Decimal("0"))
+        for p in payouts
+        if p.direction == "to_courier" and p.status == "paid"
     )
-
+    total_pending_payouts = sum(
+        (p.net_amount or Decimal("0"))
+        for p in payouts
+        if p.direction == "to_courier" and p.status == "pending"
+    )
     pending_debt = dp.pending_platform_debt or Decimal("0")
+    pending_credit = dp.pending_platform_credit or Decimal("0")
     from app.services.cash_advance_service import advance_debt
     advance_owed = await advance_debt(db, dp)
-    pending_from_platform = total_transfer_earnings - total_paid
-    if pending_from_platform < Decimal("0"):
-        pending_from_platform = Decimal("0")
+    total_net = pending_credit - pending_debt - advance_owed
 
     return DeliveryEarningsOut(
-        total_deliveries=len(orders) + len(shipments),
+        total_deliveries=dp.total_deliveries or (len(orders) + len(shipments)),
         total_earned=total_earned,
         total_transfer_earnings=total_transfer_earnings,
         total_cash_collected=total_cash_collected,
         total_paid=total_paid,
         total_pending_payouts=total_pending_payouts,
         total_pending_debt=pending_debt,
-        total_pending_from_platform=pending_from_platform,
+        total_pending_from_platform=pending_credit,
         total_pending_confirmation=total_pending_confirmation,
         total_advance_debt=advance_owed,
+        total_net=total_net,
+        total_pending_earnings=pending_credit,
         orders=items,
     )
 
 
 @router.post("/request-payout", response_model=DeliveryPayoutOut)
 async def request_payout(
+    body: PayoutRequest | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -651,7 +655,9 @@ async def request_payout(
     from app.services.payout_service import create_courier_payout
 
     try:
-        payout = await create_courier_payout(db, dp)
+        payout = await create_courier_payout(
+            db, dp, payout_method=body.payout_method if body else None
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return payout

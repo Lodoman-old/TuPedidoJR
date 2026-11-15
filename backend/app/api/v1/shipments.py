@@ -423,6 +423,10 @@ async def deliver_shipment(
             )
     else:
         shipment.cod_status = "not_required"
+        if (shipment.courier_earnings or 0) > 0:
+            dp.pending_platform_credit = round_half_down(
+                (dp.pending_platform_credit or 0) + shipment.courier_earnings
+            )
     dp.total_deliveries = (dp.total_deliveries or 0) + 1
 
     await db.commit()
@@ -456,6 +460,10 @@ async def fail_shipment(
     shipment.courier_earnings = return_fee
     shipment.store_charge = round_half_down((shipment.platform_fee or 0) + return_fee)
     shipment.cod_status = "not_required"
+    if return_fee > 0:
+        dp.pending_platform_credit = round_half_down(
+            (dp.pending_platform_credit or 0) + return_fee
+        )
     await db.commit()
     await db.refresh(shipment)
     schedule_shipment_status(str(shipment.id), "failed")

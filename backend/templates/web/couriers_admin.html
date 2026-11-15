@@ -4,17 +4,12 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 {% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <h4 class="m-0"><i class="bi bi-bicycle"></i> Repartidores</h4>
-  <div class="d-flex align-items-center gap-2">
-    <select id="coverageFilter" class="form-select form-select-sm" style="max-width:220px" onchange="onCoverageFilterChange(this.value)"></select>
-    <select id="courierFilter" class="form-select form-select-sm" style="max-width:150px" onchange="setCourierFilter(this.value)">
-      <option value="active">Activos</option>
-      <option value="inactive">Inactivos</option>
-      <option value="all">Todos</option>
-    </select>
-    <span class="small text-muted" id="coverageNote">Cobertura de tarifa base: —</span>
-    <span class="small text-muted" id="lastRefresh">—</span>
+<div class="d-flex justify-content-between align-items-start mb-2 flex-wrap gap-2">
+  <div>
+    <h4 class="m-0"><i class="bi bi-bicycle"></i> Repartidores</h4>
+    <small class="text-muted">Mapa en vivo y acceso al listado completo.</small>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
     <button class="btn btn-success btn-sm" onclick="openCourierModal()">
       <i class="bi bi-person-plus"></i> Alta de repartidor
     </button>
@@ -25,6 +20,16 @@
       <i class="bi bi-arrow-clockwise"></i> Actualizar
     </button>
   </div>
+</div>
+<div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+  <select id="coverageFilter" class="form-select form-select-sm" style="max-width:220px" onchange="onCoverageFilterChange(this.value)"></select>
+  <select id="courierFilter" class="form-select form-select-sm" style="max-width:150px" onchange="setCourierFilter(this.value)">
+    <option value="active">Activos</option>
+    <option value="inactive">Inactivos</option>
+    <option value="all">Todos</option>
+  </select>
+  <span class="small text-muted" id="coverageNote">Cobertura de tarifa base: —</span>
+  <span class="small text-muted" id="lastRefresh">—</span>
 </div>
 <div id="couriersError" class="alert alert-danger d-none"></div>
 <div class="card p-2">

@@ -1,0 +1,129 @@
+{% extends "manuals/manual_base.html" %}
+{% block title %}Manual del repartidor{% endblock %}
+{% block heading %}Manual del repartidor{% endblock %}
+{% block content %}
+<h2>Trabajar como repartidor</h2>
+<p>Esta guía cubre la disponibilidad, los pedidos, mandados, envíos, incidencias y el corte de cuentas.</p>
+
+<h3>1. Ingresar y ponerte disponible</h3>
+<figure class="shot">
+  <img src="/static/manuals/repartidor-disponibles.png" alt="Panel del repartidor con pestañas, contadores y pedidos disponibles">
+  <figcaption>Panel principal: disponibilidad, contadores y pedidos disponibles.</figcaption>
+</figure>
+<ol>
+  <li>Inicia sesión con tu correo y contraseña.</li>
+  <li>Activa el interruptor <strong>Disponible</strong> para recibir servicios.</li>
+  <li>Activa <strong>Mi ubicación</strong> para calcular distancias y tiempos.</li>
+  <li>Revisa las pestañas: Disponibles, Mandados, Envíos, Mis repartos, Ganancias y Ajustes.</li>
+</ol>
+
+<h3>2. Contadores de las pestañas</h3>
+<figure class="shot">
+  <img src="/static/manuals/repartidor-mis-repartos.png" alt="Pestaña Mis repartos con contador azul y botón de incidencia">
+  <figcaption>El contador amarillo indica pendientes por aceptar; el azul, servicios que ya traes en proceso.</figcaption>
+</figure>
+<table>
+  <tr><th>Color</th><th>Significado</th></tr>
+  <tr><td>Amarillo</td><td>Servicios pendientes por aceptar en esa pestaña.</td></tr>
+  <tr><td>Azul</td><td>Servicios que ya aceptaste y todavía no terminas.</td></tr>
+</table>
+
+<h3>3. Cuántos servicios puedes traer</h3>
+<p>Puedes llevar hasta <strong>5 servicios activos</strong> al mismo tiempo: pedidos, mandados y envíos cuentan juntos. El límite es configurable por el administrador.</p>
+<div class="warn">
+  Si ya tienes <strong>4 servicios pendientes</strong> y aceptas otro, la app te muestra una advertencia. Si llegas al límite, no podrás aceptar más hasta terminar uno.
+</div>
+
+<h3>4. Pedidos</h3>
+<ol>
+  <li>En <strong>Disponibles</strong> revisa el negocio, la distancia, el tiempo estimado y el total.</li>
+  <li>Toca <strong>Aceptar pedido</strong>. El pedido pasa a <strong>Mis repartos</strong>.</li>
+  <li>Cuando lo tengas, toca <strong>Recoger pedido</strong>.</li>
+  <li>Al entregar, toca <strong>Entregar pedido</strong>, confirma el efectivo si aplica y revisa el cambio.</li>
+</ol>
+<div class="note">
+  En pedidos en efectivo tú cobras al cliente y te quedas tu ganancia. El resto lo entregas a TuPedidoJR en el corte.
+</div>
+
+<h3>5. Envíos de negocio</h3>
+<figure class="shot">
+  <img src="/static/manuals/repartidor-envios.png" alt="Pestaña de envíos con un paquete disponible">
+  <figcaption>Envíos: paquetes de negocios con cobro contra entrega y seguimiento.</figcaption>
+</figure>
+<ol>
+  <li>Acepta el envío.</li>
+  <li>Al recoger, pide al negocio el <strong>código de recolección</strong> y sube una <strong>foto del paquete</strong>.</li>
+  <li>Al entregar, pide al cliente el <strong>código de entrega</strong>, sube una <strong>foto</strong> y registra el efectivo si aplica.</li>
+  <li>Si no puedes entregar, usa <strong>No se pudo entregar</strong>.</li>
+</ol>
+<div class="note">Código y foto son obligatorios al recoger y al entregar. Sin ellos no se completa el paso.</div>
+
+<h3>6. Mandados</h3>
+<figure class="shot">
+  <img src="/static/manuals/repartidor-mandados.png" alt="Pestaña de mandados con presupuesto, envío y total">
+  <figcaption>Mandados: compras con presupuesto, envío y total a cobrar.</figcaption>
+</figure>
+<ol>
+  <li>Acepta el mandado.</li>
+  <li>Confirma la tienda y el envío calculado.</li>
+  <li>Compra los productos y marca <strong>Comprado</strong> con la foto del comprobante.</li>
+  <li>Entrega y marca <strong>Entregar mandado</strong>.</li>
+</ol>
+
+<h3>7. Ganancias y corte</h3>
+<figure class="shot">
+  <img src="/static/manuals/repartidor-ganancias.png" alt="Pantalla de ganancias con saldo del corte y botón Hacer corte">
+  <figcaption>Ganancias: desglose del saldo y botón para hacer el corte.</figcaption>
+</figure>
+<table>
+  <tr><th>Concepto</th><th>Qué significa</th></tr>
+  <tr><td>Total ganado</td><td>Lo que has ganado en todos tus servicios.</td></tr>
+  <tr><td>Ganancia por cobrar</td><td>Lo que la plataforma te debe: pedidos con transferencia, tarifas de retorno, etc.</td></tr>
+  <tr><td>Efectivo por entregar</td><td>El efectivo que cobraste y que le corresponde al negocio o a la plataforma.</td></tr>
+  <tr><td>Avances por descontar</td><td>Préstamos o adelantos que te dio la plataforma.</td></tr>
+  <tr><td>Saldo del corte</td><td>Ganancia por cobrar − efectivo por entregar − avances.</td></tr>
+</table>
+<p>Si el saldo es positivo, la plataforma te paga. Si es negativo, tú entregas la diferencia. El botón <strong>Hacer corte</strong> genera un código de confirmación.</p>
+<ol>
+  <li>Elige <strong>Efectivo</strong> o <strong>Transferencia</strong>.</li>
+  <li>Toca <strong>Hacer corte — cobrar/pagar</strong>.</li>
+  <li>Guarda el código de confirmación.</li>
+  <li>El administrador marca el pago o la recepción del efectivo.</li>
+</ol>
+<div class="note">
+  Ejemplo de la imagen: ganancia por cobrar $25 − efectivo por entregar $155 − avances $0 = <strong>pagar $130</strong>.
+</div>
+
+<h3>8. Si no se puede entregar</h3>
+<figure class="shot">
+  <img src="/static/manuals/repartidor-falla.png" alt="Formulario para reportar que no se pudo entregar">
+  <figcaption>Reporte de incidencia: motivo, detalle, foto y ubicación.</figcaption>
+</figure>
+<ol>
+  <li>Toca <strong>No se pudo entregar</strong> en el pedido, mandado o envío.</li>
+  <li>Elige el motivo: cliente no contesta, dirección incorrecta, cliente rechaza, negocio cerrado, producto dañado u otro.</li>
+  <li>Escribe el detalle y sube una <strong>foto de evidencia</strong>.</li>
+  <li>El administrador revisa y decide: reentrega, resguardo, devolución o desecho.</li>
+</ol>
+<table>
+  <tr><th>Situación</th><th>Qué pasa contigo</th></tr>
+  <tr><td>La falla no es tu culpa</td><td>Cobras tu viaje completo. La plataforma cubre al negocio.</td></tr>
+  <tr><td>La falla es tu culpa comprobada</td><td>Pierdes el envío de ese servicio. La plataforma absorbe el producto hasta $500.</td></tr>
+  <tr><td>Culpa tuya arriba de $500</td><td>El administrador revisa las evidencias y decide si la empresa absorbe o te lo carga.</td></tr>
+  <tr><td>Reentrega</td><td>Se cobra un costo configurable al cliente; tú cobras el nuevo viaje completo.</td></tr>
+  <tr><td>Comida</td><td>Se reintenta máximo 1 hora; después se desecha con evidencia.</td></tr>
+  <tr><td>No perecederos</td><td>Se resguardan hasta 48 horas en la oficina.</td></tr>
+</table>
+<div class="note">Desapareció la tarifa de retorno del 50%. Si la falla no es tuya, tu viaje se paga completo.</div>
+
+<h3>9. Recomendaciones</h3>
+<ul>
+  <li>Mantén la ubicación activa y el teléfono con batería.</li>
+  <li>Confirma el código y la foto antes de cerrar una entrega.</li>
+  <li>No aceptes más servicios de los que puedes atender.</li>
+  <li>Reporta cualquier problema de inmediato con evidencia.</li>
+</ul>
+
+<h3>10. Soporte</h3>
+<p>Si tienes un problema con un pedido, un corte o tu cuenta, contacta al administrador de TuPedidoJR por el canal de soporte configurado.</p>
+{% endblock %}

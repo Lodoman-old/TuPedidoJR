@@ -1,0 +1,111 @@
+{% extends "manuals/manual_base.html" %}
+{% block title %}Manual del cliente{% endblock %}
+{% block heading %}Manual del cliente{% endblock %}
+{% block content %}
+<h2>Pedir en TuPedidoJR</h2>
+<p>Esta guía explica cómo pedir, pagar, seguir tu pedido y qué pasa cuando algo no se puede entregar.</p>
+
+<h3>1. Crear tu cuenta e ingresar</h3>
+<ol>
+  <li>Entra a <a href="/web/login">Iniciar sesión</a> o crea tu cuenta.</li>
+  <li>Captura tu nombre, correo y contraseña.</li>
+  <li>Guarda tu dirección y ubicación para agilizar tus pedidos.</li>
+  <li>En la app puedes activar el acceso con huella o rostro desde <strong>Mi perfil → Seguridad</strong>.</li>
+</ol>
+
+<h3>2. Buscar un negocio y armar el pedido</h3>
+<figure class="shot">
+  <img src="/static/manuals/cliente-catalogo.png" alt="Catálogo de un negocio con productos y precios">
+  <figcaption>Catálogo del negocio: productos, precios y botones para agregar al carrito.</figcaption>
+</figure>
+<ol>
+  <li>En la pantalla principal elige <strong>Restaurantes</strong> o <strong>Tiendas</strong>.</li>
+  <li>Busca por nombre, giro o platillo.</li>
+  <li>Entra al negocio y revisa productos, precios y disponibilidad.</li>
+  <li>Agrega productos al carrito con el botón <strong>+</strong>.</li>
+</ol>
+<div class="note">
+  Un pedido solo puede incluir productos de un mismo negocio. Si agregas productos de otro, la plataforma te pedirá vaciar el carrito y empezar de nuevo.
+</div>
+
+<h3>3. Carrito, pago y saldo pendiente</h3>
+<figure class="shot">
+  <img src="/static/manuals/cliente-carrito.png" alt="Carrito con dirección, método de pago, propina y saldo pendiente">
+  <figcaption>Carrito: dirección, método de pago, propina y opciones para pagar una deuda pendiente.</figcaption>
+</figure>
+<ol>
+  <li>Confirma la dirección o marca tu ubicación en el mapa.</li>
+  <li>Elige <strong>entrega a domicilio</strong> o <strong>recoger en el negocio</strong> cuando esté disponible.</li>
+  <li>Selecciona el método de pago: efectivo, transferencia o pago en línea si está habilitado.</li>
+  <li>Agrega propina si lo deseas; el 100% es para el repartidor.</li>
+  <li>Puedes aplicar un cupón o canjear puntos.</li>
+</ol>
+
+<h4>Si tienes un saldo pendiente</h4>
+<p>Cuando un pedido anterior no se entregó y era en efectivo, el total queda como <strong>saldo pendiente</strong>. Al pagar un nuevo pedido puedes elegir:</p>
+<table>
+  <tr><th>Opción</th><th>Qué pasa</th></tr>
+  <tr><td>Pagar todo</td><td>El saldo completo se suma a este pedido.</td></tr>
+  <tr><td>Pagar en abonos</td><td>Se suma una parte del saldo; el resto se reparte en los siguientes pedidos.</td></tr>
+  <tr><td>Pago por transferencia</td><td>Se cobra el saldo completo en la transferencia.</td></tr>
+</table>
+<div class="note">
+  Si cancelas el pedido, el abono regresa a tu saldo pendiente. El número de abonos y el monto mínimo se configuran por la plataforma.
+</div>
+
+<h3>4. Seguimiento del pedido</h3>
+<p>Al confirmar el pedido puedes seguir su estado en tiempo real:</p>
+<ul>
+  <li><strong>Pedido recibido</strong>: el negocio lo recibió.</li>
+  <li><strong>Confirmado</strong>: el negocio lo aceptó.</li>
+  <li><strong>En preparación</strong>: se está preparando.</li>
+  <li><strong>Listo</strong>: espera al repartidor o que pases por él.</li>
+  <li><strong>En reparto</strong>: el repartidor va en camino.</li>
+  <li><strong>Entregado</strong>: pedido terminado.</li>
+</ul>
+<p>En envíos de negocio verás además un <strong>código de entrega</strong> que debes dar al repartidor.</p>
+
+<h3>5. Historial de pedidos</h3>
+<figure class="shot">
+  <img src="/static/manuals/cliente-pedidos.png" alt="Historial de pedidos con estados y totales">
+  <figcaption>Historial: pedidos activos, entregados y no entregados.</figcaption>
+</figure>
+<p>En <strong>Pedidos</strong> consultas todos tus pedidos. Los estados posibles son: pendiente, esperando repartidor, en reparto, entregado, no entregado y cancelado.</p>
+
+<h3>6. Si el pedido no se puede entregar</h3>
+<figure class="shot">
+  <img src="/static/manuals/cliente-detalle.png" alt="Detalle de un pedido marcado como no entregado">
+  <figcaption>El pedido queda marcado como <strong>No entregado</strong> y el administrador revisa la incidencia.</figcaption>
+</figure>
+<p>El repartidor reporta el motivo con foto y ubicación. Después se aplica esta política:</p>
+<table>
+  <tr><th>Tu caso</th><th>Qué pasa</th></tr>
+  <tr><td>Comida no entregada y desechada</td><td>No hay reembolso. La plataforma cubre al negocio y al repartidor.</td></tr>
+  <tr><td>Comida no entregada y pagaste en efectivo</td><td>El total queda como saldo pendiente para tu siguiente pedido o en abonos.</td></tr>
+  <tr><td>Comida no entregada y pagaste por transferencia</td><td>No se reembolsa; la plataforma absorbe el costo.</td></tr>
+  <tr><td>Producto no perecedero devuelto y pagado</td><td>Se reembolsa el producto por transferencia, descontando el envío.</td></tr>
+  <tr><td>Producto no perecedero devuelto y no pagado</td><td>No debes el producto.</td></tr>
+</table>
+<div class="note">
+  La plataforma puede ofrecerte una <strong>reentrega</strong>. La reentrega tiene un costo configurable (por ejemplo $15) y se cobra aparte. Si no la aceptas, el pedido se cierra según el caso anterior.
+</div>
+
+<h3>7. Cancelaciones</h3>
+<ul>
+  <li>Puedes cancelar sin costo mientras el negocio no haya aceptado el pedido.</li>
+  <li>Después de confirmado tienes unos minutos de gracia para cancelar.</li>
+  <li>Si el pedido ya está en reparto o recogido, contacta al negocio o a soporte.</li>
+  <li>Si pagaste por transferencia, el reembolso se procesa por el administrador.</li>
+</ul>
+
+<h3>8. Puntos y referidos</h3>
+<ul>
+  <li>Ganas puntos por cada compra, según la configuración de la plataforma.</li>
+  <li>Puedes canjearlos al pagar; cada punto tiene un valor en pesos.</li>
+  <li>Si un pedido se cancela, los puntos regresan a tu cuenta.</li>
+  <li>Comparte tu código de referido para que tú y tu invitado ganen puntos.</li>
+</ul>
+
+<h3>9. Soporte</h3>
+<p>Si tienes un problema con un pedido, un cobro o tu cuenta, usa el botón <strong>Contactar a soporte</strong> del detalle del pedido o el WhatsApp de soporte configurado.</p>
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends "manuals/manual_base.html" %}
+{% block title %}Manual del administrador{% endblock %}
+{% block heading %}Manual del administrador{% endblock %}
+{% block content %}
+<h2>Administrar TuPedidoJR</h2>
+<p>Esta guía cubre la operación diaria: pedidos, repartidores, incidencias, pagos, comprobantes y configuración.</p>
+
+<h3>1. Resumen operativo</h3>
+<figure class="shot">
+  <img src="/static/manuals/admin-dashboard.png" alt="Panel de operación en vivo con pedidos, ventas y repartidores">
+  <figcaption>Operación en vivo: pedidos activos, ventas del día, restaurantes y repartidores disponibles.</figcaption>
+</figure>
+<p>El panel muestra pedidos activos, entregados, ventas, propinas, transferencias por confirmar y avances por aprobar. Se actualiza automáticamente.</p>
+
+<h3>2. Repartidores: mapa y listado</h3>
+<figure class="shot">
+  <img src="/static/manuals/admin-mapa.png" alt="Mapa de repartidores con filtros y botones de alta y listado">
+  <figcaption>Mapa en vivo: cobertura, filtros y acceso al alta y al listado completo.</figcaption>
+</figure>
+<p>El botón <strong>Listado de repartidores</strong> abre la pantalla de registro con búsqueda, filtros, paginación y acciones por repartidor.</p>
+<figure class="shot">
+  <img src="/static/manuals/admin-listado.png" alt="Listado de repartidores con búsqueda, paginación y acciones">
+  <figcaption>Listado: buscar, filtrar por activos/inactivos, editar, dar de baja o eliminar.</figcaption>
+</figure>
+<table>
+  <tr><th>Acción</th><th>Qué hace</th></tr>
+  <tr><td>Ver datos</td><td>Muestra teléfono, correo, vehículo, calificación, entregas, saldo, banco y CLABE.</td></tr>
+  <tr><td>Editar</td><td>Cambia nombre, teléfono, correo, contraseña, vehículo, pago, banco, bono y mandados.</td></tr>
+  <tr><td>Dar de baja</td><td>Bloquea el inicio de sesión y lo oculta de activos. Conserva el historial.</td></tr>
+  <tr><td>Eliminar</td><td>Solo si no tiene historial. Si lo tiene, usa la baja.</td></tr>
+</table>
+<div class="warn">
+  No puedes dar de baja a un repartidor con un servicio activo. Primero debe terminar o reasignarse.
+</div>
+
+<h3>3. Incidencias de entrega</h3>
+<figure class="shot">
+  <img src="/static/manuals/admin-incidencias.png" alt="Panel de incidencias con una incidencia desechada y sus montos">
+  <figcaption>Incidencias: motivo, evidencia, montos y acciones de resolución.</figcaption>
+</figure>
+<p>Cuando un repartidor reporta que no pudo entregar, la incidencia llega aquí con foto, motivo y ubicación.</p>
+<table>
+  <tr><th>Acción</th><th>Cuándo usarla</th></tr>
+  <tr><td>Recibir en oficina</td><td>Producto no perecedero que se resguarda. Genera código y fecha límite.</td></tr>
+  <tr><td>Reenviar</td><td>Programa una reentrega. Se cobra el costo configurable al cliente.</td></tr>
+  <tr><td>Devolver al negocio</td><td>El producto se recupera. No se paga el producto.</td></tr>
+  <tr><td>Desechar</td><td>El producto se pierde o se daña. Se paga al negocio.</td></tr>
+  <tr><td>Autorizar</td><td>Culpa del repartidor arriba del límite. Decides si la empresa absorbe o se le carga.</td></tr>
+</table>
+<h4>Reglas de dinero</h4>
+<ul>
+  <li><strong>Producto recuperado</strong> (devuelto al negocio): no se paga el producto.</li>
+  <li><strong>Producto perdido, dañado o desechado</strong>: se paga el producto al negocio.</li>
+  <li><strong>Repartidor</strong>: cobra su viaje completo, salvo culpa comprobada.</li>
+  <li><strong>Culpa del repartidor</strong>: pierde el viaje; la empresa absorbe el producto hasta $500. Arriba de $500 decides con evidencias.</li>
+  <li><strong>No perecedero pagado y devuelto</strong>: se reembolsa el producto al cliente por transferencia, descontando el envío.</li>
+  <li><strong>Comida pagada por transferencia y desechada</strong>: sin reembolso; la plataforma absorbe.</li>
+  <li><strong>Comida en efectivo no pagada</strong>: el cliente queda debiendo el total.</li>
+</ul>
+
+<h3>4. Pagos y reembolsos</h3>
+<figure class="shot">
+  <img src="/static/manuals/admin-pagos.png" alt="Panel de pagos con pendientes de restaurantes y repartidores">
+  <figcaption>Pagos: pendientes, transferencias, efectivo por conciliar, avances y liquidaciones.</figcaption>
+</figure>
+<ul>
+  <li><strong>Restaurantes</strong>: ventas, comisión, deuda y próximo pago. Genera la liquidación y márcala como pagada.</li>
+  <li><strong>Repartidores</strong>: ganancia pendiente, deuda de efectivo, avances y <strong>saldo del corte</strong>.</li>
+  <li><strong>Cortes</strong>: el repartidor genera el corte; tú confirmas el pago o la recepción del efectivo.</li>
+  <li><strong>Transferencias</strong>: confirma las transferencias recibidas antes de liquidar.</li>
+  <li><strong>Reembolsos</strong>: revisa los pendientes y marca el reembolso cuando se haya enviado.</li>
+  <li><strong>Conciliación</strong>: compara pedidos entregados, ventas, propinas y comisiones por rango de fechas.</li>
+</ul>
+
+<h3>5. Validación de comprobantes</h3>
+<figure class="shot">
+  <img src="/static/manuals/admin-comprobantes.png" alt="Pantalla de validación de comprobantes con grado de certeza">
+  <figcaption>Comprobantes: la IA solo muestra el grado de certeza; tú decides.</figcaption>
+</figure>
+<p>La validación con IA no aprueba ni rechaza. Muestra:</p>
+<ul>
+  <li>Porcentaje de certeza.</li>
+  <li>Datos extraídos: monto, fecha, comercio, referencia.</li>
+  <li>Observaciones y errores detectados.</li>
+</ul>
+<div class="note">85% o más = se puede aprobar; 50–84% = revisa; menos de 50% = revisa a fondo. Un PDF editado puede engañar al modelo: la confirmación final es tuya.</div>
+
+<h3>6. Configuración</h3>
+<figure class="shot">
+  <img src="/static/manuals/admin-config.png" alt="Pantalla de comisiones y configuración">
+  <figcaption>Configuración: comisiones, envíos, cancelaciones, repartidores, incidencias y clientes.</figcaption>
+</figure>
+<table>
+  <tr><th>Grupo</th><th>Qué puedes ajustar</th></tr>
+  <tr><td>Comisiones y envíos</td><td>Comisión, cuotas, tarifa base, radio y costo por km.</td></tr>
+  <tr><td>Repartidores</td><td>Servicios activos (5), aviso (4), bonos y hora pico.</td></tr>
+  <tr><td>Incidencias</td><td>Minutos de reentrega de comida, horas de resguardo, costo de reentrega, tope de autorización y oficina.</td></tr>
+  <tr><td>Clientes</td><td>Abonos máximos y abono mínimo.</td></tr>
+  <tr><td>Pagos</td><td>Transferencia, banco, CLABE y Mercado Pago.</td></tr>
+  <tr><td>Comprobantes</td><td>Gemini API key, modelo, tolerancias y ventana de fecha.</td></tr>
+</table>
+
+<h3>7. Seguridad y auditoría</h3>
+<ul>
+  <li>Usa una cuenta de administrador solo para operación.</li>
+  <li>Revisa el historial de auditoría para saber quién cambió cada cosa.</li>
+  <li>No compartas la API key de Gemini ni las credenciales bancarias.</li>
+  <li>Da de baja a los repartidores que ya no trabajen contigo.</li>
+</ul>
+{% endblock %}

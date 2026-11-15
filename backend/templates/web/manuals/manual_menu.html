@@ -24,15 +24,15 @@
 <div class="note">En restaurantes puedes activar <strong>Pedidos especiales</strong> en Perfil del negocio para que los clientes soliciten platillos fuera del menú. En tiendas, la pestaña <strong>Solicitudes</strong> siempre está disponible.</div>
 
 <h3>3. Costos por pedido</h3>
-<p>El modelo es de cuota fija, no de porcentaje sobre el producto:</p>
+<p>El modelo puede combinar una comisión porcentual configurable con cuotas fijas por pedido:</p>
 <table>
   <tr><th>Concepto</th><th>Monto actual</th></tr>
+  <tr><td>Comisión de la plataforma</td><td>Según configuración (se descuenta del precio del negocio)</td></tr>
   <tr><td>Cuota del negocio por pedido</td><td>${{ '%.2f'|format(business_fee|float) }}</td></tr>
   <tr><td>Cuota de servicio del cliente</td><td>${{ '%.2f'|format(flat_fee|float) }}</td></tr>
-  <tr><td>Comisión porcentual sobre el producto</td><td>$0.00 (no aplica)</td></tr>
   <tr><td>Envío</td><td>Lo paga el cliente y va completo al repartidor</td></tr>
 </table>
-<div class="note">El precio del platillo/producto es el que recibe el negocio. Los $10 de ingreso de la plataforma por pedido son la suma de la cuota del negocio y la cuota de servicio del cliente. Esta página se actualiza cuando el administrador cambia las cuotas.</div>
+<div class="note">El precio que configuras es tu precio base. La comisión se descuenta de ese precio, no se suma al cliente. La cuota de servicio se suma al cliente. Esta página se actualiza cuando el administrador cambia las cuotas o la comisión.</div>
 
 <h3>4. Opciones y modificadores</h3>
 <p>Puedes crear grupos para tamaño, extras, salsas, ingredientes, colores o presentaciones.</p>

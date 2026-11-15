@@ -57,6 +57,17 @@ async def _manual_values(db: AsyncSession) -> dict:
     }
 
 
+@router.get("/manuales")
+async def public_manuals_index(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    values = await _manual_values(db)
+    return templates.TemplateResponse(
+        request, "manuals/manual_index.html", {"page": "index", **values}
+    )
+
+
 @router.get("/manuales/{name}")
 async def public_manual(
     request: Request,
@@ -65,16 +76,20 @@ async def public_manual(
 ):
     mapping = {
         "restaurante": "manuals/manual_restaurante.html",
+        "negocio": "manuals/manual_restaurante.html",
         "menu": "manuals/manual_menu.html",
         "pedidos": "manuals/manual_pedidos.html",
         "envios": "manuals/manual_envios.html",
+        "cliente": "manuals/manual_cliente.html",
+        "repartidor": "manuals/manual_repartidor.html",
+        "admin": "manuals/manual_admin.html",
     }
     template = mapping.get(name)
     values = await _manual_values(db)
     if not template:
         return templates.TemplateResponse(
-            request, "manuals/manual_restaurante.html",
-            {"page": "restaurante", **values}, status_code=404,
+            request, "manuals/manual_index.html",
+            {"page": "index", **values}, status_code=404,
         )
     return templates.TemplateResponse(request, template, {"page": name, **values})
 

@@ -31,9 +31,9 @@
   <tr><td>Comisión de la plataforma por envío</td><td>${{ '%.2f'|format(shipment_fee|float) }} (la paga el negocio)</td></tr>
   <tr><td>Envío por kilómetro</td><td>Se calcula igual que un pedido normal y va 100% al repartidor</td></tr>
   <tr><td>Máximo de cobro contra entrega</td><td>${{ '%.2f'|format(shipment_cod_max|float) }}</td></tr>
-  <tr><td>Retorno si el cliente no recibe</td><td>{{ '%.0f'|format(shipment_return_percent|float) }}% del envío</td></tr>
+  <tr><td>Incidencias</td><td>Sin tarifa de retorno. La plataforma cubre al negocio según el caso.</td></tr>
 </table>
-<div class="note">La comisión es fija por envío, no un porcentaje sobre el producto. No se cobra comisión sobre la venta que el negocio ya hizo.</div>
+<div class="note">La comisión es fija por envío, no un porcentaje sobre el producto. No se cobra comisión sobre la venta que el negocio ya hizo. Si el paquete no se entrega y regresa, no se paga el producto porque el negocio lo recupera.</div>
 
 <h3>4. Formas de pago</h3>
 <table>
@@ -60,12 +60,18 @@
 </ol>
 <div class="note">Siempre se piden código y foto, tanto al recoger como al entregar. El código de recolección lo ve el negocio en el detalle del envío; el de entrega lo ve el cliente en su link de seguimiento.</div>
 
-<h3>7. Cancelaciones y retornos</h3>
+<h3>7. Cancelaciones, devoluciones e incidencias</h3>
 <ul>
   <li>El negocio puede cancelar antes de que el repartidor recoja el paquete.</li>
   <li>Si el cliente no recibe, el paquete regresa al negocio.</li>
-  <li>Se cobra el porcentaje de retorno configurado sobre el envío.</li>
+  <li><strong>Ya no se cobra porcentaje de retorno.</strong> El repartidor cobra su viaje completo.</li>
+  <li>Si el paquete se pierde o se daña, la plataforma paga al negocio el <strong>valor declarado</strong>.</li>
+  <li>Si el producto se recupera, no se paga el producto.</li>
+  <li>Si la falla es culpa comprobada del repartidor, pierde el envío; la plataforma absorbe el producto hasta $500. Arriba de eso el administrador decide con evidencias.</li>
 </ul>
+<div class="note">
+  El administrador puede programar una reentrega. La reentrega tiene un costo configurable para el cliente y el repartidor cobra un nuevo viaje completo. El negocio no cobra dos veces.
+</div>
 
 <h3>8. Recomendaciones</h3>
 <ul>

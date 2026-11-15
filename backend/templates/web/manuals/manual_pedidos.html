@@ -69,9 +69,23 @@
   <tr><td>Comisión de la plataforma por envío</td><td>${{ '%.2f'|format(shipment_fee|float) }} (la paga el negocio)</td></tr>
   <tr><td>Envío</td><td>100% al repartidor</td></tr>
   <tr><td>Máximo de cobro contra entrega</td><td>${{ '%.2f'|format(shipment_cod_max|float) }}</td></tr>
-  <tr><td>Retorno si el cliente no recibe</td><td>{{ '%.0f'|format(shipment_return_percent|float) }}% del envío</td></tr>
+  <tr><td>Incidencias</td><td>La plataforma cubre al negocio según el caso. Ya no existe tarifa de retorno del 50%.</td></tr>
 </table>
 <div class="note">El cliente final no necesita cuenta: recibe un link de seguimiento y un código de entrega por WhatsApp. El repartidor confirma la recolección con el <strong>código del negocio y una foto</strong>; la entrega con el <strong>código del cliente y una foto</strong>. La comisión es fija por envío, no un porcentaje sobre el producto.</div>
+
+<h3>6.1 Incidencias y entregas no realizadas</h3>
+<p>Si el repartidor no logra entregar, reporta el motivo con foto y ubicación. La incidencia llega al administrador y se resuelve con una de estas acciones:</p>
+<table>
+  <tr><th>Resolución</th><th>Qué pasa con el negocio</th></tr>
+  <tr><td>Reentrega</td><td>Se programa otro intento. Se cobra un costo configurable al cliente. El negocio no cobra dos veces.</td></tr>
+  <tr><td>Devolución al negocio</td><td>El producto se recupera. No se paga el producto.</td></tr>
+  <tr><td>Desecho</td><td>El producto se pierde o se daña. La plataforma paga el producto al negocio.</td></tr>
+  <tr><td>Resguardo</td><td>No perecederos: hasta 48 horas en la oficina para un nuevo intento.</td></tr>
+  <tr><td>Culpa del repartidor</td><td>La plataforma absorbe el producto hasta $500. Arriba de eso el administrador decide con evidencias.</td></tr>
+</table>
+<div class="note">
+  La política es de certeza: si la falla no es culpa del negocio, el producto se le paga cuando se pierde o se desecha. Si el producto regresa, no se paga porque el negocio lo recuperó.
+</div>
 
 <h3>7. Pedido para recoger</h3>
 <ol>
@@ -82,14 +96,14 @@
 </ol>
 
 <h3>8. Cobros y cuotas</h3>
-<p>El modelo es de cuota fija por pedido, sin porcentaje sobre el producto.</p>
+<p>El modelo puede combinar una comisión porcentual configurable con cuotas fijas por pedido.</p>
 <table>
   <tr><th>Concepto</th><th>Monto actual</th></tr>
+  <tr><td>Comisión de la plataforma</td><td>Según configuración (se descuenta al negocio)</td></tr>
   <tr><td>Cuota del negocio por pedido</td><td>${{ '%.2f'|format(business_fee|float) }}</td></tr>
   <tr><td>Cuota de servicio del cliente</td><td>${{ '%.2f'|format(flat_fee|float) }}</td></tr>
-  <tr><td>Comisión porcentual sobre el producto</td><td>$0.00 (no aplica)</td></tr>
 </table>
-<p>El precio del platillo/producto es el que recibe el negocio.</p>
+<p>El precio del platillo/producto es tu precio base; la comisión se descuenta de ahí. La cuota de servicio se le suma al cliente.</p>
 <table>
   <tr><th>Forma de pago</th><th>Qué pasa</th></tr>
   <tr><td>Transferencia</td><td>La plataforma recibe y liquida al negocio su precio base.</td></tr>
@@ -97,6 +111,9 @@
   <tr><td>Efectivo entrega propia</td><td>El negocio cobra y debe la cuota del negocio a la plataforma.</td></tr>
   <tr><td>Efectivo al recoger</td><td>El negocio cobra y debe la cuota del negocio a la plataforma.</td></tr>
 </table>
+<div class="note">
+  Si un cliente no pagó un pedido en efectivo que no se entregó, la plataforma le queda debiendo el total. En su siguiente pedido puede pagar todo o en abonos. El negocio no tiene que perseguir ese cobro: lo administra la plataforma.
+</div>
 
 <h3>9. Liquidaciones</h3>
 <ol>

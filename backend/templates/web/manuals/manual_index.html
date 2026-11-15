@@ -1,0 +1,45 @@
+{% extends "manuals/manual_base.html" %}
+{% block title %}Manuales de usuario{% endblock %}
+{% block heading %}Manuales de usuario{% endblock %}
+{% block content %}
+<h2>Guías por rol</h2>
+<p>Estos manuales explican paso a paso cómo usar TuPedidoJR. Las imágenes corresponden a la operación real de la plataforma con datos de demostración.</p>
+
+<div class="role-grid">
+  <div class="role-card">
+    <span class="pill">Cliente</span>
+    <h3>Pedir y dar seguimiento</h3>
+    <p>Buscar negocios, armar el carrito, pagar, seguir el pedido, revisar el historial y resolver pedidos no entregados.</p>
+    <a href="/manuales/cliente">Abrir manual del cliente →</a>
+  </div>
+  <div class="role-card">
+    <span class="pill">Negocio</span>
+    <h3>Restaurantes y tiendas</h3>
+    <p>Registro, panel de pedidos, menú, envíos de negocio, pedidos especiales, ganancias y liquidaciones.</p>
+    <a href="/manuales/restaurante">Abrir manual del negocio →</a>
+  </div>
+  <div class="role-card">
+    <span class="pill">Repartidor</span>
+    <h3>Entregas y ganancias</h3>
+    <p>Disponibilidad, pedidos, mandados, envíos, límite de servicios, incidencias y corte de cuentas.</p>
+    <a href="/manuales/repartidor">Abrir manual del repartidor →</a>
+  </div>
+  <div class="role-card">
+    <span class="pill">Administrador</span>
+    <h3>Operación y finanzas</h3>
+    <p>Paneles, repartidores, incidencias, pagos, reembolsos, comprobantes y configuración de la plataforma.</p>
+    <a href="/manuales/admin">Abrir manual del administrador →</a>
+  </div>
+</div>
+
+<h3>Manuales detallados del negocio</h3>
+<ul>
+  <li><a href="/manuales/menu">Menú, catálogo y precios</a></li>
+  <li><a href="/manuales/pedidos">Pedidos, cobros e incidencias</a></li>
+  <li><a href="/manuales/envios">Envíos de negocio (motomandado)</a></li>
+</ul>
+
+<div class="note">
+  Puedes imprimir cualquier manual con el botón <strong>Imprimir / Guardar PDF</strong> de la esquina superior derecha.
+</div>
+{% endblock %}

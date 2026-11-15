@@ -58,7 +58,7 @@
         {% if restaurant.delivery_mode == 'own' %}
           <div class="small opacity-75">
             {% if restaurant.delivery_fee and restaurant.delivery_fee|float > 0 %}
-              Envío ${{ '%.2f'|format(restaurant.delivery_fee|float) }}
+              Envío ${{ restaurant.delivery_fee|round0 }}
             {% else %}
               Envío gratis
             {% endif %}
@@ -109,7 +109,7 @@
             <div class="flex-grow-1">
               <div class="fw-bold">{{ item.name }}</div>
               {% if item.description %}<div class="small text-muted">{{ item.description }}</div>{% endif %}
-              <div class="price">${{ '%.2f'|format(item.price|float * (1 + commission_rate / 100)) }}</div>
+              <div class="price">${{ (item.price|float * (1 + commission_rate / 100))|round0 }}</div>
             </div>
             {% if item.is_available %}
               <a class="btn btn-sm btn-outline-dark" href="/web/restaurants/{{ restaurant.id }}">Pedir</a>
@@ -134,7 +134,7 @@
           <div class="flex-grow-1">
             <div class="fw-bold">{{ item.name }}</div>
             {% if item.description %}<div class="small text-muted">{{ item.description }}</div>{% endif %}
-            <div class="price">${{ '%.2f'|format(item.price|float * (1 + commission_rate / 100)) }}</div>
+            <div class="price">${{ (item.price|float * (1 + commission_rate / 100))|round0 }}</div>
           </div>
           {% if item.is_available %}
             <a class="btn btn-sm btn-outline-dark" href="/web/restaurants/{{ restaurant.id }}">Pedir</a>

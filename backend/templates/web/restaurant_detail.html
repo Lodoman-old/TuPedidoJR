@@ -49,7 +49,7 @@
 
   function customerPrice(base) {
     const value = Number(base || 0);
-    return Math.round((value * (1 + commissionRate / 100) + Number.EPSILON) * 100) / 100;
+    return roundHalfDown(value * (1 + commissionRate / 100));
   }
 
   function menuPrice(item) {
@@ -119,7 +119,7 @@
         <div class="min-w-0">
           <strong>${esc(item.name)}</strong>
           <p class="mb-0 text-muted small">${esc(item.description || '')}</p>
-          <small class="text-muted">$${menuPrice(item).toFixed(2)}</small>
+          <small class="text-muted">${money0(menuPrice(item))}</small>
         </div>
       </div>
       <div class="text-end menu-item-actions">${ownerActions}</div>
@@ -160,7 +160,7 @@
         ? 'Envío o recoger en restaurante'
         : (r.delivery_mode === 'own'
           ? (Number(r.delivery_fee || 0) > 0
-            ? `Envío $${Number(r.delivery_fee).toFixed(2)}`
+            ? `Envío ${money0(r.delivery_fee)}`
             : 'Envío gratis')
           : 'Envío calculado por distancia');
 
@@ -408,14 +408,14 @@
               <label class="form-check-label ${option.is_available ? '' : 'text-muted'}">
                 ${esc(option.name)}
                 ${group.pricing_mode === 'max'
-                  ? ` $${customerPrice(option.price_delta).toFixed(2)} completo`
-                  : (parseFloat(option.price_delta) > 0 ? ` +$${customerPrice(option.price_delta).toFixed(2)}` : '')}
+                  ? ` ${money0(customerPrice(option.price_delta))} completo`
+                  : (parseFloat(option.price_delta) > 0 ? ` +${money0(customerPrice(option.price_delta))}` : '')}
                 ${option.is_available ? '' : ' (agotado)'}
               </label>
             </div>`).join('')}
         </div>`).join('')}
       <div class="alert alert-light py-2 small d-none" id="divisionPreview"></div>
-      <div class="fw-bold fs-5">Precio unitario: <span id="customPrice">$${customerPrice(item.price).toFixed(2)}</span></div>`;
+      <div class="fw-bold fs-5">Precio unitario: <span id="customPrice">${money0(customerPrice(item.price))}</span></div>`;
     function readSelection(modalEl) {
       const selected = [...modalEl.querySelectorAll('.option-choice:checked')];
       let unit = parseFloat(item.price);
@@ -482,7 +482,7 @@
     const updatePrice = () => {
       const qty = Math.max(1, parseInt(el.querySelector('#customQty').value, 10) || 1);
       const { unit } = readSelection(el);
-      el.querySelector('#customPrice').textContent = `$${(unit * qty).toFixed(2)}`;
+      el.querySelector('#customPrice').textContent = money0(unit * qty);
       const parts = [];
       for (const groupEl of el.querySelectorAll('.option-group')) {
         if (groupEl.dataset.pricing !== 'max') continue;

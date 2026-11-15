@@ -464,12 +464,12 @@
       if (policy.requires_prepayment) {
         document.getElementById('payTransfer').checked = true;
         notice.innerHTML = `<i class="bi bi-shield-check"></i>
-          Para compras de <strong>$${Number(policy.threshold).toFixed(2)}</strong> o más
+          Para compras de <strong>${money0(policy.threshold)}</strong> o más
           se requiere transferencia antes de publicar el mandado.`;
         notice.classList.remove('d-none');
       } else if (policy.trusted_customer && budget >= Number(policy.threshold)) {
         notice.innerHTML = `<i class="bi bi-patch-check"></i>
-          Por tu historial puedes pagar en efectivo hasta $${Number(policy.max_cash).toFixed(2)}.`;
+          Por tu historial puedes pagar en efectivo hasta ${money0(policy.max_cash)}.`;
         notice.classList.remove('d-none');
       } else {
         notice.classList.add('d-none');
@@ -482,7 +482,7 @@
 
   async function updateEstimate() {
     const budget = parseFloat(document.getElementById('budgetInput').value) || 0;
-    document.getElementById('estProducts').textContent = '$' + budget.toFixed(2);
+    document.getElementById('estProducts').textContent = money0(budget);
     if (budget <= 0) {
       resetEstimate();
       return;
@@ -498,10 +498,10 @@
       if (pickupCoords) payload.pickup_location = pickupCoords;
       const est = await apiRequest('POST', '/mandados/estimate', payload);
       document.getElementById('estDeliveryLabel').textContent = pickupCoords ? 'Envío real' : 'Envío estimado';
-      document.getElementById('estDelivery').textContent = '$' + parseFloat(est.delivery_fee).toFixed(2);
-      document.getElementById('estRisk').textContent = '$' + parseFloat(est.risk_fee).toFixed(2);
+      document.getElementById('estDelivery').textContent = money0(est.delivery_fee);
+      document.getElementById('estRisk').textContent = money0(est.risk_fee);
       document.getElementById('estRiskLabel').textContent = 'Cargo por riesgo';
-      document.getElementById('estTotal').textContent = '$' + parseFloat(est.estimated_total).toFixed(2);
+      document.getElementById('estTotal').textContent = money0(est.estimated_total);
     } catch (ex) {
       resetEstimate();
     }

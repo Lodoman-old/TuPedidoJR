@@ -27,6 +27,7 @@ from app.schemas.shipment import (
 from app.services.order_service import get_setting_value
 from app.services.push_service import schedule_new_shipment, schedule_shipment_status
 from app.services.restaurant_access import ORDER_ROLES, have_role
+from app.services.rounding import round_half_down
 from app.services.shipment_service import (
     build_shipment_tracking,
     calculate_shipment_fees,
@@ -170,12 +171,13 @@ async def create_shipment(
             ),
         )
 
+    collect = round_half_down(body.collect_amount)
     fees = await calculate_shipment_fees(
         db,
         _uuid(store_id),
         body.delivery_location.lat,
         body.delivery_location.lng,
-        collect_amount=body.collect_amount,
+        collect_amount=collect,
         shipping_paid_by=body.shipping_paid_by,
     )
     max_km = await _max_km(db)
@@ -185,7 +187,7 @@ async def create_shipment(
             detail=f"La dirección está fuera de la cobertura (máximo {max_km:g} km).",
         )
 
-    amount_to_collect = money(fees["amount_to_collect"])
+    amount_to_collect = round_half_down(fees["amount_to_collect"])
     shipment = Shipment(
         store_id=_uuid(store_id),
         created_by_id=current_user.id,
@@ -198,15 +200,15 @@ async def create_shipment(
         ),
         delivery_references=(body.delivery_references or "").strip() or None,
         package_description=body.package_description.strip(),
-        declared_value=money(body.declared_value),
-        collect_amount=money(body.collect_amount),
+        declared_value=round_half_down(body.declared_value),
+        collect_amount=collect,
         amount_to_collect=amount_to_collect,
         shipping_paid_by=body.shipping_paid_by,
         delivery_fee=fees["delivery_fee"],
         platform_fee=fees["platform_fee"],
         distance_km=fees["distance_km"],
-        tip_amount=money(body.tip_amount),
-        store_charge=money(fees["store_charge"]),
+        tip_amount=round_half_down(body.tip_amount),
+        store_charge=round_half_down(fees["store_charge"]),
         store_credit=Decimal("0"),
         payment_status="pending" if fees["store_charge"] > 0 else "not_required",
         cod_status="pending" if amount_to_collect > 0 else "not_required",
@@ -388,8 +390,11 @@ async def deliver_shipment(
             detail="El código de entrega no coincide con el del cliente.",
         )
 
-    expected = money(shipment.amount_to_collect)
-    collected = money(body.cash_collected) if body.cash_collected is not None else expected
+    expected = round_half_down(shipment.amount_to_collect)
+    collected = (
+        round_half_down(body.cash_collected)
+        if body.cash_collected is not None else expected
+    )
     if expected > 0 and collected < expected:
         raise HTTPException(
             status_code=400,
@@ -400,18 +405,18 @@ async def deliver_shipment(
     shipment.delivered_at = datetime.now(timezone.utc)
     shipment.delivery_photo_url = photo
     shipment.cash_collected = collected
-    shipment.courier_earnings = money(
+    shipment.courier_earnings = round_half_down(
         (shipment.delivery_fee or 0) + (shipment.tip_amount or 0)
     )
     if (shipment.collect_amount or 0) > 0:
         shipment.cod_status = "collected"
-        shipment.store_credit = money(shipment.collect_amount)
+        shipment.store_credit = round_half_down(shipment.collect_amount)
         # El repartidor se queda con su envío y su propina del efectivo que
         # cobró; el resto (producto) lo remite a la plataforma para abonarlo
         # al negocio en su liquidación.
-        owed = money(collected - (shipment.courier_earnings or 0))
+        owed = round_half_down(collected - (shipment.courier_earnings or 0))
         if owed > 0:
-            dp.pending_platform_debt = money(
+            dp.pending_platform_debt = round_half_down(
                 (dp.pending_platform_debt or 0) + owed
             )
     else:
@@ -442,12 +447,12 @@ async def fail_shipment(
         percent = Decimal(await get_setting_value(db, "SHIPMENT_RETURN_PERCENT", "50"))
     except Exception:
         percent = Decimal("50")
-    return_fee = money((shipment.delivery_fee or 0) * percent / Decimal("100"))
+    return_fee = round_half_down((shipment.delivery_fee or 0) * percent / Decimal("100"))
     shipment.status = "failed"
     shipment.failure_reason = body.reason.strip()
     shipment.return_fee = return_fee
     shipment.courier_earnings = return_fee
-    shipment.store_charge = money((shipment.platform_fee or 0) + return_fee)
+    shipment.store_charge = round_half_down((shipment.platform_fee or 0) + return_fee)
     shipment.cod_status = "not_required"
     await db.commit()
     await db.refresh(shipment)

@@ -24,7 +24,7 @@
     rejected: ['Rechazada', 'danger'],
     cancelled: ['Cancelada', 'secondary'],
   };
-  const money = n => '$' + Number(n || 0).toFixed(2);
+  const money = n => money0(n);
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   function actions(request) {

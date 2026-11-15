@@ -11,6 +11,7 @@ from app.core.security import decode_access_token
 from app.models.delivery_person import DeliveryPerson
 from app.models.restaurant import Restaurant
 from app.models.user import User
+from app.services.rounding import round_half_down
 
 LOCATION = {"lat": 20.6450, "lng": -100.9940}
 
@@ -327,9 +328,10 @@ class TestShipmentCourier:
         assert failed.status_code == 200, failed.text
         s = failed.json()
         assert s["status"] == "failed"
-        assert Decimal(s["return_fee"]) == (
+        expected_return = round_half_down(
             Decimal(s["delivery_fee"]) * Decimal("0.50")
-        ).quantize(Decimal("0.01"))
+        )
+        assert Decimal(s["return_fee"]) == expected_return
         assert Decimal(s["courier_earnings"]) == Decimal(s["return_fee"])
 
     async def test_non_courier_cannot_accept(self, client, owner_token, other_token, store):

@@ -12,9 +12,11 @@ from app.db.session import get_db
 from app.models.restaurant import Restaurant
 from app.services.schedule_service import restaurant_open_state
 from app.services.order_service import get_commission_rate, get_setting_value
+from app.services.rounding import round_half_down
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent.parent / "templates" / "web"))
+templates.env.filters["round0"] = lambda value: int(round_half_down(value))
 
 
 async def _manual_values(db: AsyncSession) -> dict:

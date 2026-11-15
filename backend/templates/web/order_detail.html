@@ -89,7 +89,7 @@
           ${s.at ? `<br><small class="text-muted">${new Date(s.at).toLocaleString()}</small>` : ''}
         </div>
       </div>`).join('');
-    const eta = t.eta_min ? `<div class="alert alert-info py-2 small mb-2">⏱ Llegada estimada: ~${t.eta_min} min${t.distance_km ? ` · ${t.distance_km} km` : ''}</div>` : '';
+    const eta = t.eta_min ? `<div class="alert alert-info py-2 small mb-2">⏱ Llegada estimada: ~${t.eta_min} min${t.distance_km != null ? ` · ${km0(t.distance_km)}` : ''}</div>` : '';
     return `<div class="card p-3 mb-3"><h6>Seguimiento</h6>${eta}${steps}</div>`;
   }
 
@@ -130,18 +130,18 @@
             <span>${i.name} x${i.quantity}
               ${(i.options || []).length ? `<br><span class="text-muted">${i.options.map(o => `${o.group_name}: ${o.name}${portionLabel(o.portion) ? ` (${portionLabel(o.portion)})` : ''}`).join(' · ')}</span>` : ''}
             </span>
-            <span>$${parseFloat(i.subtotal).toFixed(2)}</span>
+            <span>${money0(i.subtotal)}</span>
           </div>`).join('')}
       </div>
       <div class="card p-3 mb-3">
-        <div class="d-flex justify-content-between small"><span>Subtotal</span><span>$${parseFloat(o.subtotal).toFixed(2)}</span></div>
-        <div class="d-flex justify-content-between small"><span>Envío</span><span>$${parseFloat(o.delivery_fee).toFixed(2)}</span></div>
-        <div class="d-flex justify-content-between small"><span>Cuota de servicio</span><span>$${parseFloat(o.flat_usage_fee || 0).toFixed(2)}</span></div>` +
-        (o.discount_amount > 0 ? `<div class="d-flex justify-content-between small text-success"><span>Descuento</span><span>−$${parseFloat(o.discount_amount).toFixed(2)}</span></div>` : '') +
-        (parseFloat(o.loyalty_discount || 0) > 0 ? `<div class="d-flex justify-content-between small text-primary"><span>Puntos canjeados (${o.points_redeemed || 0})</span><span>−$${parseFloat(o.loyalty_discount).toFixed(2)}</span></div>` : '') +
-        (parseFloat(o.tip_amount || 0) > 0 ? `<div class="d-flex justify-content-between small text-success"><span>Propina</span><span>$${parseFloat(o.tip_amount).toFixed(2)}</span></div>` : '') +
+        <div class="d-flex justify-content-between small"><span>Subtotal</span><span>${money0(o.subtotal)}</span></div>
+        <div class="d-flex justify-content-between small"><span>Envío</span><span>${money0(o.delivery_fee)}</span></div>
+        <div class="d-flex justify-content-between small"><span>Cuota de servicio</span><span>${money0(o.flat_usage_fee || 0)}</span></div>` +
+        (o.discount_amount > 0 ? `<div class="d-flex justify-content-between small text-success"><span>Descuento</span><span>−${money0(o.discount_amount)}</span></div>` : '') +
+        (parseFloat(o.loyalty_discount || 0) > 0 ? `<div class="d-flex justify-content-between small text-primary"><span>Puntos canjeados (${o.points_redeemed || 0})</span><span>−${money0(o.loyalty_discount)}</span></div>` : '') +
+        (parseFloat(o.tip_amount || 0) > 0 ? `<div class="d-flex justify-content-between small text-success"><span>Propina</span><span>${money0(o.tip_amount)}</span></div>` : '') +
         `<hr>
-        <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>$${parseFloat(o.total).toFixed(2)}</span></div>
+        <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>${money0(o.total)}</span></div>
         <div class="small text-muted mt-1">${o.fulfillment_type === 'pickup' ? 'Recoger en' : 'Dirección'}: ${o.delivery_address}</div>
       ${o.estimated_delivery_min ? `<div class="small text-primary mt-1">Tiempo estimado original: ~${o.estimated_delivery_min} min</div>` : ''}
       ${o.scheduled_for ? `<div class="small text-info mt-1">Pedido programado para: ${new Date(o.scheduled_for).toLocaleString()}</div>` : ''}
@@ -167,8 +167,8 @@
       && (o.status === 'awaiting_courier' || (o.status === 'cancelled' && o.refund_status === 'pending'))
     ) {
       const amount = o.refund_amount && parseFloat(o.refund_amount) > 0
-        ? `$${parseFloat(o.refund_amount).toFixed(2)}`
-        : `$${parseFloat(o.total || 0).toFixed(2)}`;
+        ? `${money0(o.refund_amount)}`
+        : `${money0(o.total || 0)}`;
       html += `<div class="card p-3 mb-3 border-warning">
         <h6 class="mb-1"><i class="bi bi-bank"></i> Cuenta para reembolso</h6>
         <p class="small text-muted mb-2">
@@ -190,7 +190,7 @@
       html += `<div class="alert alert-secondary mb-2">
         <i class="bi bi-x-circle"></i> Pedido cancelado
         ${o.cancellation_reason ? `<br><small>Motivo: ${o.cancellation_reason}</small>` : ''}
-        ${parseFloat(o.refund_amount || 0) > 0 ? `<br><small>Reembolso: $${parseFloat(o.refund_amount).toFixed(2)} (${REFUND_LABELS[o.refund_status] || o.refund_status})</small>` : ''}
+        ${parseFloat(o.refund_amount || 0) > 0 ? `<br><small>Reembolso: ${money0(o.refund_amount)} (${REFUND_LABELS[o.refund_status] || o.refund_status})</small>` : ''}
       </div>`;
     }
     const canRepeat = (o.items || []).every(item => item.menu_item_id);

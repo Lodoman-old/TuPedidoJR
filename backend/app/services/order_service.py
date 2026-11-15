@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.coupon import Coupon
 from app.models.restaurant import Restaurant
+from app.services.rounding import round_half_down
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,9 @@ async def calculate_order_totals(
         base_subtotal += base_price * entry["item"].quantity
         subtotal += marked_price * entry["item"].quantity
 
+    # Los cálculos del pedido se muestran y cobran sin decimales.
+    subtotal = round_half_down(subtotal)
+
     base_fee = Decimal(await get_setting_value(db, "DELIVERY_BASE_FEE", "25.0"))
     delivery_fee = base_fee
     distance_km = None
@@ -176,6 +180,8 @@ async def calculate_order_totals(
                 extra_km = Decimal(str(distance_km - free_radius))
                 delivery_fee = base_fee + (extra_km * extra_per_km)
 
+    delivery_fee = round_half_down(delivery_fee)
+
     fee_raw = restaurant.fixed_fee
     if fee_raw is None:
         fee_raw = await get_setting_value(db, "APP_FIXED_RESTAURANT_FEE", "5.0")
@@ -186,10 +192,11 @@ async def calculate_order_totals(
     platform_commission = max(
         Decimal("0.00"),
         min(platform_commission, subtotal),
-    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    )
+    platform_commission = round_half_down(platform_commission)
 
     flat_fee_str = await get_setting_value(db, "APP_FLAT_USAGE_FEE", "5.0")
-    flat_usage_fee = Decimal(flat_fee_str)
+    flat_usage_fee = round_half_down(Decimal(flat_fee_str))
 
     discount = Decimal("0.00")
     coupon = None
@@ -201,14 +208,18 @@ async def calculate_order_totals(
                 raw = subtotal * (coupon.discount_value / Decimal("100"))
                 if coupon.max_discount is not None and raw > coupon.max_discount:
                     raw = coupon.max_discount
-                discount = raw
+                discount = round_half_down(raw)
             else:
-                discount = min(coupon.discount_value, subtotal)
+                discount = round_half_down(min(coupon.discount_value, subtotal))
 
-    delivery_earnings = Decimal("0") if own_delivery or pickup else delivery_fee + Decimal(tip_amount or 0)
-    total = (
-        subtotal + delivery_fee + flat_usage_fee - discount - Decimal(loyalty_discount or 0)
-        + Decimal(tip_amount or 0)
+    tip = round_half_down(Decimal(tip_amount or 0))
+    loyalty = round_half_down(Decimal(loyalty_discount or 0))
+    delivery_earnings = (
+        Decimal("0") if own_delivery or pickup
+        else round_half_down(delivery_fee + tip)
+    )
+    total = round_half_down(
+        subtotal + delivery_fee + flat_usage_fee - discount - loyalty + tip
     )
     if total < 0:
         total = Decimal("0.00")

@@ -8,7 +8,7 @@
 {% block scripts %}
 <script>
   const RID = '{{ restaurant_id }}';
-  const money = n => '$' + parseFloat(n || 0).toFixed(2);
+  const money = n => money0(n);
 
   const payoutStatus = {
     pending: ['Pendiente', 'warning'],

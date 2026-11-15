@@ -186,7 +186,7 @@ async function loadDeliveryData() {
     document.getElementById('availSwitch').checked = dpProfile.is_available;
     const debt = parseFloat(dpProfile.pending_platform_debt || 0);
     const badge = document.getElementById('debtBadge');
-    if (debt > 0) { badge.textContent = `Deuda: $${debt.toFixed(2)}`; badge.classList.remove('d-none'); }
+    if (debt > 0) { badge.textContent = `Deuda: ${money0(debt)}`; badge.classList.remove('d-none'); }
     else badge.classList.add('d-none');
     loadAvailable();
   } catch (e) { showToast('Error al cargar perfil: ' + e.message, 'danger'); }
@@ -288,12 +288,12 @@ async function loadAvailable(silent = false) {
     }
     for (const o of orders) {
       const badgeColor = statusBadgeColors[o.status] || 'secondary';
-      const distance = o.distance_km != null ? `${o.distance_km} km` : '—';
+      const distance = o.distance_km != null ? km0(o.distance_km) : '—';
       const eta = o.eta_min != null ? `~${o.eta_min} min` : '—';
       html += `<div class="dp-card">
         <div class="d-flex justify-content-between">
           <h6>#${o.id.slice(0, 8)} <span class="badge bg-${badgeColor}">${statusLabels[o.status] || "Desconocido"}</span></h6>
-          <small>$${parseFloat(o.total).toFixed(2)}</small>
+          <small>${money0(o.total)}</small>
         </div>
         <small class="text-muted">${o.restaurant_name || 'Restaurante'}</small><br>
         <small><i class="bi bi-geo-alt"></i> ${distance} al restaurante · <i class="bi bi-clock"></i> ${eta}</small><br>
@@ -336,7 +336,7 @@ async function loadMyOrders() {
       html += `<div class="dp-card">
         <div class="d-flex justify-content-between">
           <h6>#${o.id.slice(0, 8)} <span class="badge bg-${color}">${statusLabels[o.status] || "Desconocido"}</span></h6>
-          <small>$${parseFloat(o.total || 0).toFixed(2)}</small>
+          <small>${money0(o.total || 0)}</small>
         </div>
         <small>${o.delivery_address || ''}</small>
         <div class="mt-1">
@@ -370,7 +370,7 @@ async function pickupOrder(oid) {
 async function requestAdvance(oid) {
   try {
     const advance = await requestCashAdvance(oid);
-    showToast(`Avance solicitado: $${parseFloat(advance.amount).toFixed(2)}`);
+    showToast(`Avance solicitado: ${money0(advance.amount)}`);
   } catch (e) { showToast('Error: ' + e.message, 'danger'); }
 }
 
@@ -403,9 +403,9 @@ function deliverOrder(oid) {
         </div>
         <div class="modal-body">
           <p class="mb-2">Pedido <strong>#${order.id.slice(0, 8)}</strong></p>
-          <div class="d-flex justify-content-between fs-5 mb-1"><span>Total</span><strong>$${total.toFixed(2)}</strong></div>
-          ${tip > 0 ? `<div class="d-flex justify-content-between small text-muted mb-1"><span>Propina incluida</span><span>$${tip.toFixed(2)}</span></div>` : ''}
-          <div class="d-flex justify-content-between small text-muted mb-2"><span>Tu ganancia de reparto</span><span>$${earnings.toFixed(2)}</span></div>
+          <div class="d-flex justify-content-between fs-5 mb-1"><span>Total</span><strong>${money0(total)}</strong></div>
+          ${tip > 0 ? `<div class="d-flex justify-content-between small text-muted mb-1"><span>Propina incluida</span><span>${money0(tip)}</span></div>` : ''}
+          <div class="d-flex justify-content-between small text-muted mb-2"><span>Tu ganancia de reparto</span><span>${money0(earnings)}</span></div>
           ${payMessage}
           ${isCash ? `
             <div class="mb-2">
@@ -413,7 +413,7 @@ function deliverOrder(oid) {
               <input type="number" step="0.01" min="0" class="form-control" id="cashReceived" placeholder="0.00">
             </div>
             <div class="d-flex justify-content-between"><span>Cambio</span><strong id="changeAmount">$0.00</strong></div>
-            <div class="form-text">Debes entregar $${owed.toFixed(2)} a la plataforma/restaurante.</div>
+            <div class="form-text">Debes entregar ${money0(owed)} a la plataforma/restaurante.</div>
           ` : ''}
           <div id="deliverError" class="text-danger small mt-2"></div>
         </div>
@@ -441,7 +441,7 @@ function deliverOrder(oid) {
         return;
       }
       const change = received - total;
-      changeEl.textContent = change >= 0 ? `$${change.toFixed(2)}` : `Faltan $${Math.abs(change).toFixed(2)}`;
+      changeEl.textContent = change >= 0 ? `${money0(change)}` : `Faltan ${money0(Math.abs(change))}`;
       changeEl.className = change >= 0 ? 'text-success' : 'text-danger';
     };
     input.addEventListener('input', updateChange);
@@ -453,7 +453,7 @@ function deliverOrder(oid) {
     if (isCash) {
       received = parseFloat(modal.querySelector('#cashReceived').value);
       if (Number.isNaN(received) || received < total) {
-        errorEl.textContent = `El dinero recibido debe ser al menos $${total.toFixed(2)}.`;
+        errorEl.textContent = `El dinero recibido debe ser al menos ${money0(total)}.`;
         return;
       }
     }
@@ -464,7 +464,7 @@ function deliverOrder(oid) {
       bsModal.hide();
       if (isCash) {
         const change = received - total;
-        showToast(`Pedido entregado. Cambio: $${change.toFixed(2)}`);
+        showToast(`Pedido entregado. Cambio: ${money0(change)}`);
       } else if (isTransfer) {
         showToast(order.payment_status === 'approved'
           ? 'Pedido entregado. Transferencia ya validada.'
@@ -488,12 +488,12 @@ async function loadPayouts() {
   try {
     const [earnings, payouts] = await Promise.all([getDeliveryEarnings(), listDeliveryPayouts()]);
     let html = `<div class="row g-2 mb-3">
-      <div class="col-6"><div class="card p-2 text-center border-primary"><small class="text-muted">Total ganado</small><strong class="fs-6 text-primary">$${parseFloat(earnings.total_earned).toFixed(2)}</strong></div></div>
-      <div class="col-6"><div class="card p-2 text-center border-warning"><small class="text-muted">Por cobrar a plataforma (transferencias)</small><strong class="fs-6 text-warning">$${parseFloat(earnings.total_pending_from_platform).toFixed(2)}</strong></div></div>
-      <div class="col-6"><div class="card p-2 text-center border-secondary"><small class="text-muted">Transferencias por confirmar</small><strong class="fs-6 text-secondary">$${parseFloat(earnings.total_pending_confirmation || 0).toFixed(2)}</strong></div></div>
-      <div class="col-6"><div class="card p-2 text-center border-danger"><small class="text-muted">Deuda pendiente</small><strong class="fs-6 text-danger">$${parseFloat(earnings.total_pending_debt).toFixed(2)}</strong></div></div>
-      <div class="col-6"><div class="card p-2 text-center border-warning"><small class="text-muted">Avances por descontar</small><strong class="fs-6 text-warning">$${parseFloat(earnings.total_advance_debt || 0).toFixed(2)}</strong></div></div>
-      <div class="col-6"><div class="card p-2 text-center border-success"><small class="text-muted">Pagado</small><strong class="fs-6 text-success">$${parseFloat(earnings.total_paid).toFixed(2)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-primary"><small class="text-muted">Total ganado</small><strong class="fs-6 text-primary">${money0(earnings.total_earned)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-warning"><small class="text-muted">Por cobrar a plataforma (transferencias)</small><strong class="fs-6 text-warning">${money0(earnings.total_pending_from_platform)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-secondary"><small class="text-muted">Transferencias por confirmar</small><strong class="fs-6 text-secondary">${money0(earnings.total_pending_confirmation || 0)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-danger"><small class="text-muted">Deuda pendiente</small><strong class="fs-6 text-danger">${money0(earnings.total_pending_debt)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-warning"><small class="text-muted">Avances por descontar</small><strong class="fs-6 text-warning">${money0(earnings.total_advance_debt || 0)}</strong></div></div>
+      <div class="col-6"><div class="card p-2 text-center border-success"><small class="text-muted">Pagado</small><strong class="fs-6 text-success">${money0(earnings.total_paid)}</strong></div></div>
     </div>
     <div class="alert alert-info py-2 small">Las transferencias las recibe TuPedidoJR. Tu ganancia por esos pedidos te la paga la plataforma en efectivo o por transferencia, según tu configuración.</div>`;
     if (!earnings.total_deliveries) {
@@ -504,17 +504,17 @@ async function loadPayouts() {
     const pendingPayouts = parseFloat(earnings.total_pending_payouts || 0);
     const available = parseFloat(earnings.total_earned) - parseFloat(earnings.total_pending_confirmation || 0) - parseFloat(earnings.total_paid) - pendingPayouts - parseFloat(earnings.total_pending_debt);
     if (pendingPayouts > 0) {
-      html += `<div class="alert alert-warning py-2 text-center">Liquidación en proceso: $${pendingPayouts.toFixed(2)}</div>`;
+      html += `<div class="alert alert-warning py-2 text-center">Liquidación en proceso: ${money0(pendingPayouts)}</div>`;
     }
     if (available > 0) {
-      html += `<div class="text-center mb-3"><button class="btn btn-success btn-lg w-100" onclick="requestPayout()">Solicitar liquidación — $${available.toFixed(2)}</button></div>`;
+      html += `<div class="text-center mb-3"><button class="btn btn-success btn-lg w-100" onclick="requestPayout()">Solicitar liquidación — ${money0(available)}</button></div>`;
     }
     html += `<h6 class="mt-3 mb-2">Últimas entregas</h6><div class="list-group mb-3">`;
     for (const o of earnings.orders) {
       const pm = o.payment_method === 'transfer' ? 'Transferencia (paga plataforma)' : 'Efectivo';
       html += `<div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2">
         <div><small class="text-muted">${new Date(o.placed_at).toLocaleDateString()} · ${pm}</small><br><small>#${o.id.substring(0,8)}</small></div>
-        <div class="text-end"><strong>$${parseFloat(o.total).toFixed(2)}</strong><br><small class="text-success">+$${parseFloat(o.delivery_earnings).toFixed(2)}</small></div>
+        <div class="text-end"><strong>${money0(o.total)}</strong><br><small class="text-success">+${money0(o.delivery_earnings)}</small></div>
       </div>`;
     }
     html += `</div>`;
@@ -525,7 +525,7 @@ async function loadPayouts() {
         html += `<tr>
           <td>${p.period_start} a ${p.period_end}</td>
           <td>${p.orders_count}</td>
-          <td>$${parseFloat(p.total_earnings).toFixed(2)}</td>
+          <td>${money0(p.total_earnings)}</td>
           <td><span class="badge bg-${badge}">${payoutStatusLabels[p.status] || p.status}</span></td>
         </tr>`;
       }
@@ -540,7 +540,7 @@ async function requestPayout() {
   if (!confirm('¿Solicitar liquidación de tu saldo disponible?')) return;
   try {
     const payout = await apiRequest('POST', '/delivery/request-payout');
-    showToast(`Liquidación generada: $${parseFloat(payout.total_earnings).toFixed(2)} (código: ${payout.confirmation_code})`, 'success');
+    showToast(`Liquidación generada: ${money0(payout.total_earnings)} (código: ${payout.confirmation_code})`, 'success');
     loadPayouts();
   } catch (e) { showToast('Error: ' + e.message, 'danger'); }
 }
@@ -628,9 +628,9 @@ async function loadMandadosWeb() {
       for (const m of available) {
         html += `<div class="dp-card">
           <strong>${m.description}</strong>
-          <div><small>Presupuesto: $${parseFloat(m.estimated_budget).toFixed(2)} | Envío: $${parseFloat(m.delivery_fee).toFixed(2)}</small></div>
-          <div><small class="text-muted">Riesgo: $${parseFloat(m.risk_fee).toFixed(2)} | Plataforma: $${parseFloat(m.platform_fee).toFixed(2)}</small></div>
-          <div><strong>Total: $${parseFloat(m.estimated_total).toFixed(2)}</strong></div>
+          <div><small>Presupuesto: ${money0(m.estimated_budget)} | Envío: ${money0(m.delivery_fee)}</small></div>
+          <div><small class="text-muted">Riesgo: ${money0(m.risk_fee)} | Plataforma: ${money0(m.platform_fee)}</small></div>
+          <div><strong>Total: ${money0(m.estimated_total)}</strong></div>
           <button class="btn btn-sm btn-success mt-2" onclick="acceptMandadoWeb('${m.id}')">Aceptar mandado</button>
         </div>`;
       }
@@ -642,8 +642,8 @@ async function loadMandadosWeb() {
         const statusColor = m.status === 'accepted' ? 'primary' : 'teal';
         html += `<div class="dp-card">
           <strong>${m.description}</strong> <span class="badge bg-${statusColor}">${mandadoStatusLabels[m.status] || m.status}</span>
-          <div><small>Presupuesto: $${parseFloat(m.estimated_budget).toFixed(2)}</small></div>
-          <div><small>Envío estimado: $${parseFloat(m.delivery_fee_estimated || m.delivery_fee).toFixed(2)}${m.delivery_fee_final != null ? ` · real: $${parseFloat(m.delivery_fee_final).toFixed(2)}` : ''}</small></div>`;
+          <div><small>Presupuesto: ${money0(m.estimated_budget)}</small></div>
+          <div><small>Envío estimado: ${money0(m.delivery_fee_estimated || m.delivery_fee)}${m.delivery_fee_final != null ? ` · real: ${money0(m.delivery_fee_final)}` : ''}</small></div>`;
         if (m.status === 'accepted') {
           if (!m.pickup_address) {
             html += `<button class="btn btn-sm btn-primary mt-2" onclick="showPickupDialog('${m.id}')">Confirmar tienda y envío</button>`;
@@ -807,7 +807,7 @@ async function loadShipmentsWeb() {
           <strong>${escShip(s.recipient_name)}</strong>
           <div><small>${escShip(s.package_description)}</small></div>
           <div><small class="text-muted">${escShip(s.delivery_address)}</small></div>
-          <div><small>Envío: $${Number(s.delivery_fee).toFixed(2)}${Number(s.amount_to_collect) > 0 ? ` · Cobrar: $${Number(s.amount_to_collect).toFixed(2)}` : ' · Sin cobro'}</small></div>
+          <div><small>Envío: ${money0(s.delivery_fee)}${Number(s.amount_to_collect) > 0 ? ` · Cobrar: ${money0(s.amount_to_collect)}` : ' · Sin cobro'}</small></div>
           <button class="btn btn-sm btn-success mt-2" onclick="acceptShipmentWeb('${s.id}')">Aceptar envío</button>
         </div>`;
       }
@@ -821,7 +821,7 @@ async function loadShipmentsWeb() {
           <strong>${escShip(s.recipient_name)}</strong> <span class="badge bg-primary">${label}</span>
           <div><small>${escShip(s.package_description)}</small></div>
           <div><small class="text-muted">${escShip(s.delivery_address)}</small></div>
-          <div><small>Envío: $${Number(s.delivery_fee).toFixed(2)}${Number(s.amount_to_collect) > 0 ? ` · Cobrar: $${Number(s.amount_to_collect).toFixed(2)}` : ' · Sin cobro'}</small></div>`;
+          <div><small>Envío: ${money0(s.delivery_fee)}${Number(s.amount_to_collect) > 0 ? ` · Cobrar: ${money0(s.amount_to_collect)}` : ' · Sin cobro'}</small></div>`;
         if (s.status === 'accepted') {
           html += `<button class="btn btn-sm btn-primary mt-2" onclick="showShipmentPickup('${s.id}')">Recoger paquete</button>`;
         } else {
@@ -835,7 +835,7 @@ async function loadShipmentsWeb() {
     if (done.length) {
       html += '<hr><h6>Últimos envíos</h6>';
       for (const s of done) {
-        html += `<div class="dp-card"><small><strong>${escShip(s.recipient_name)}</strong> · ${s.status === 'delivered' ? 'Entregado' : 'No entregado'} · $${Number(s.delivery_fee).toFixed(2)}</small></div>`;
+        html += `<div class="dp-card"><small><strong>${escShip(s.recipient_name)}</strong> · ${s.status === 'delivered' ? 'Entregado' : 'No entregado'} · ${money0(s.delivery_fee)}</small></div>`;
       }
     }
     el.innerHTML = html;
@@ -908,7 +908,7 @@ function showShipmentDeliver(id, amount) {
     </div>
     <div class="mb-2" id="shipCashBox" style="${Number(amount) > 0 ? '' : 'display:none'}">
       <label class="form-label">Efectivo a cobrar ($)</label>
-      <input id="shipCash" class="form-control" type="number" step="0.01" value="${Number(amount).toFixed(2)}">
+      <input id="shipCash" class="form-control" type="number" step="0.01" value="${roundHalfDown(amount)}">
     </div>
     <button class="btn btn-success mt-2" onclick="submitShipmentDeliver('${id}', ${Number(amount)})">Confirmar entrega</button>
     <button class="btn btn-outline-secondary mt-2" onclick="loadShipmentsWeb()">Cancelar</button>

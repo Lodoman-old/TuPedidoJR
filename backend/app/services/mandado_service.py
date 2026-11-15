@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.order_service import get_setting_value
+from app.services.rounding import round_half_down, round_km
 from app.services.route_service import route_distance_km
 
 
@@ -21,7 +22,7 @@ async def calculate_mandado_fees(
     pickup -> customer distance. Otherwise it uses the city center as a
     reference and the result is an estimate.
     """
-    estimated_budget = Decimal(estimated_budget)
+    estimated_budget = round_half_down(Decimal(estimated_budget))
 
     city_lat = float(await get_setting_value(db, "CITY_CENTER_LAT", "20.644"))
     city_lng = float(await get_setting_value(db, "CITY_CENTER_LNG", "-100.993"))
@@ -45,16 +46,17 @@ async def calculate_mandado_fees(
         else:
             delivery_fee = base_fee + (Decimal(str(distance_km - free_radius)) * extra_per_km)
 
-    risk_fee = Decimal(
-        await get_setting_value(db, "MANDADO_RISK_FIXED_AMOUNT", "15.0")
-    ).quantize(Decimal("0.01"))
+    delivery_fee = round_half_down(delivery_fee)
+    risk_fee = round_half_down(
+        Decimal(await get_setting_value(db, "MANDADO_RISK_FIXED_AMOUNT", "15.0"))
+    )
     platform_fee = Decimal("0.00")
-    estimated_total = estimated_budget + delivery_fee + risk_fee
+    estimated_total = round_half_down(estimated_budget + delivery_fee + risk_fee)
 
     return {
         "estimated_budget": estimated_budget,
         "delivery_fee": delivery_fee,
-        "distance_km": distance_km,
+        "distance_km": round_km(distance_km),
         "risk_type": "fixed",
         "risk_value": risk_fee,
         "risk_fee": risk_fee,

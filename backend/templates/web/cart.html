@@ -74,7 +74,7 @@ let scheduleState = { enabled: false, value: '' };
     }[c]));
   }
 
-  const money = n => '$' + parseFloat(n || 0).toFixed(2);
+  const money = n => money0(n);
 
   async function clearMixedCart() {
     await clearCartNow();
@@ -115,12 +115,12 @@ let scheduleState = { enabled: false, value: '' };
         : '';
       html += `
         <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom:1px solid #eee;">
-          <div><strong>${item.name}</strong>${options}<br><small>$${parseFloat(item.price).toFixed(2)} c/u</small></div>
+          <div><strong>${item.name}</strong>${options}<br><small>${money0(item.price)} c/u</small></div>
           <div class="d-flex align-items-center gap-2">
             <button class="btn btn-sm btn-outline-secondary qty-minus" data-idx="${idx}">−</button>
             <span class="fw-bold">${item.quantity}</span>
             <button class="btn btn-sm btn-outline-secondary qty-plus" data-idx="${idx}">+</button>
-            <span class="fw-bold ms-2">$${st.toFixed(2)}</span>
+            <span class="fw-bold ms-2">${money0(st)}</span>
             <button class="btn btn-sm btn-outline-danger remove-btn" data-idx="${idx}"><i class="bi bi-trash"></i></button>
           </div>
         </div>`;
@@ -611,7 +611,7 @@ let scheduleState = { enabled: false, value: '' };
     const hint = document.getElementById('pointsHint');
     if (hint) {
       hint.textContent = loyaltyPoints > 0
-        ? `Tienes ${loyaltyPoints} puntos. Cada punto descuenta $${loyaltyValue.toFixed(2)}.`
+        ? `Tienes ${loyaltyPoints} puntos. Cada punto descuenta ${money0(loyaltyValue)}.`
         : 'No tienes puntos disponibles por ahora.';
     }
   }
@@ -694,7 +694,7 @@ function updateApprovalUi() {
   card.classList.toggle('d-none', !required);
   if (required) {
     const notice = document.getElementById('approvalNotice');
-    const km = estimateState.distance_km != null ? `${Number(estimateState.distance_km).toFixed(1)} km` : '';
+    const km = estimateState.distance_km != null ? `${km0(estimateState.distance_km)}` : '';
     const mins = Number(estimateState.approval_timeout_min || 0);
     const timeoutText = mins > 0
       ? ` Si ningún repartidor lo acepta en <strong>${mins} minutos</strong>, el pedido se cancelará automáticamente y se te devolverá el dinero${selectedPaymentMethod() === 'transfer' ? ' a la cuenta que captures abajo' : ''}.`
@@ -784,7 +784,7 @@ async function refreshEstimate() {
       totalEl.textContent = money(res.total);
       if (estimateMsg) {
         estimateMsg.textContent = res.distance_km != null
-          ? `Distancia estimada: ${parseFloat(res.distance_km).toFixed(2)} km.`
+          ? `Distancia estimada: ${km0(res.distance_km)}.`
           : '';
         if (res.delivery_mode === 'own') {
           estimateMsg.textContent = (estimateMsg.textContent + ' Entrega propia del restaurante.').trim();

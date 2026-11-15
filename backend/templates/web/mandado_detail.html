@@ -57,7 +57,7 @@
       return '<div class="alert alert-danger py-2">Este mandado fue cancelado.</div>';
     }
     const eta = t.eta_min
-      ? `<div class="alert alert-info py-2 small mb-2">⏱ Llegada estimada: ~${t.eta_min} min${t.distance_km != null ? ` · ${t.distance_km} km` : ''}</div>`
+      ? `<div class="alert alert-info py-2 small mb-2">⏱ Llegada estimada: ~${t.eta_min} min${t.distance_km != null ? ` · ${km0(t.distance_km)}` : ''}</div>`
       : '';
     const steps = t.timeline.map(s => `
       <div class="d-flex align-items-start mb-2">
@@ -92,7 +92,7 @@
             Este mandado no se publica a los repartidores hasta que se confirme la transferencia.
           </p>
           <div class="small mb-2" id="mandadoBankInfo">Consultando cuenta...</div>
-          <div class="small mb-2">Monto del presupuesto: <strong>$${parseFloat(m.estimated_budget).toFixed(2)}</strong></div>
+          <div class="small mb-2">Monto del presupuesto: <strong>${money0(m.estimated_budget)}</strong></div>
           <input type="file" class="form-control form-control-sm mb-2" id="mandadoProof"
                  accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment">
           <button class="btn btn-sm btn-success" id="mandadoProofBtn" onclick="uploadMandadoProof()">Subir comprobante</button>
@@ -102,9 +102,9 @@
         <div class="alert alert-warning">
           <h6 class="alert-heading"><i class="bi bi-signpost-split"></i> Ajuste de envío</h6>
           <p class="small mb-2">
-            El envío estimado era <strong>$${parseFloat(m.delivery_fee_estimated || m.delivery_fee).toFixed(2)}</strong>
-            y el envío real desde la tienda es <strong>$${parseFloat(m.delivery_fee_final || 0).toFixed(2)}</strong>.
-            La diferencia es <strong>$${parseFloat(Math.abs(m.fee_adjustment_amount || 0)).toFixed(2)}</strong>.
+            El envío estimado era <strong>${money0(m.delivery_fee_estimated || m.delivery_fee)}</strong>
+            y el envío real desde la tienda es <strong>${money0(m.delivery_fee_final || 0)}</strong>.
+            La diferencia es <strong>${money0(Math.abs(m.fee_adjustment_amount || 0))}</strong>.
           </p>
           <p class="small mb-2">Para continuar, autoriza el ajuste. Si no, el mandado se cancela.</p>
           <button class="btn btn-sm btn-success" onclick="approveFeeAdjustment()">Autorizar ajuste</button>
@@ -113,19 +113,19 @@
       ${m.fee_adjustment_status === 'refund_pending' ? `
         <div class="alert alert-info small">
           El envío final fue menor. La diferencia de
-          <strong>$${parseFloat(Math.abs(m.fee_adjustment_amount || 0)).toFixed(2)}</strong>
+          <strong>${money0(Math.abs(m.fee_adjustment_amount || 0))}</strong>
           se reembolsará o se ajustará en tu cobro.
         </div>` : ''}
       <div class="card p-3 mb-3">
         <h6>Desglose</h6>
-        <div class="d-flex justify-content-between small"><span>Compra (${m.product_total ? 'real' : 'presupuesto'})</span><span>$${parseFloat(m.product_total || m.estimated_budget).toFixed(2)}</span></div>
-        <div class="d-flex justify-content-between small"><span>Envío</span><span>$${parseFloat(m.delivery_fee).toFixed(2)}</span></div>
+        <div class="d-flex justify-content-between small"><span>Compra (${m.product_total ? 'real' : 'presupuesto'})</span><span>${money0(m.product_total || m.estimated_budget)}</span></div>
+        <div class="d-flex justify-content-between small"><span>Envío</span><span>${money0(m.delivery_fee)}</span></div>
         ${m.delivery_fee_final != null && Math.abs(parseFloat(m.delivery_fee_final) - parseFloat(m.delivery_fee)) > 0.009
-          ? `<div class="small text-muted">Envío real: $${parseFloat(m.delivery_fee_final).toFixed(2)} ${m.fee_adjustment_status === 'absorbed' ? '(diferencia absorbida por la plataforma)' : ''}</div>`
+          ? `<div class="small text-muted">Envío real: ${money0(m.delivery_fee_final)} ${m.fee_adjustment_status === 'absorbed' ? '(diferencia absorbida por la plataforma)' : ''}</div>`
           : ''}
-        <div class="d-flex justify-content-between small"><span>Cargo por riesgo</span><span>$${parseFloat(m.risk_fee).toFixed(2)}</span></div>
+        <div class="d-flex justify-content-between small"><span>Cargo por riesgo</span><span>${money0(m.risk_fee)}</span></div>
         <hr>
-        <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>$${parseFloat(total).toFixed(2)}</span></div>
+        <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>${money0(total)}</span></div>
         <small class="text-muted">Método de pago: ${m.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</small>
         <br><small class="text-muted">Dirección: ${m.delivery_address}</small>
         ${m.pickup_address ? `<br><small class="text-muted">Tienda de compra: ${esc(m.pickup_address)}</small>` : ''}

@@ -10,6 +10,7 @@ from app.models.shipment import Shipment
 from app.schemas.order import TrackPoint
 from app.schemas.shipment import ShipmentTrackingOut, ShipmentTrackingStep
 from app.services.order_service import get_setting_value
+from app.services.rounding import round_half_down, round_km
 from app.services.route_service import route_distance_km, route_info
 
 
@@ -69,18 +70,20 @@ async def calculate_shipment_fees(
             base_fee + (Decimal(str(distance_km - free_radius)) * extra_per_km)
         )
 
-    collect = money(collect_amount)
-    amount_to_collect = money(
+    delivery_fee = round_half_down(delivery_fee)
+    platform_fee = round_half_down(platform_fee)
+    collect = round_half_down(collect_amount)
+    amount_to_collect = round_half_down(
         collect + (delivery_fee if shipping_paid_by == "recipient" else 0)
     )
-    store_charge = money(
+    store_charge = round_half_down(
         platform_fee + (delivery_fee if shipping_paid_by == "store" else 0)
     )
 
     return {
         "delivery_fee": delivery_fee,
         "platform_fee": platform_fee,
-        "distance_km": round(distance_km, 2) if distance_km is not None else None,
+        "distance_km": round_km(distance_km),
         "amount_to_collect": amount_to_collect,
         "store_charge": store_charge,
     }
@@ -124,7 +127,7 @@ async def build_shipment_tracking(
             distance, duration, _source = await route_info(
                 db, courier.lat, courier.lng, destination.lat, destination.lng
             )
-            distance_km = round(distance, 2)
+            distance_km = round_km(distance)
             eta_min = max(1, int(round(duration)))
         except Exception:
             distance_km = None

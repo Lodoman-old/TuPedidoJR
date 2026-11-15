@@ -28,6 +28,7 @@ from app.services.push_service import (
     schedule_mandado_status,
     schedule_new_mandado,
 )
+from app.services.rounding import round_half_down
 from app.services.tracking_service import build_mandado_tracking
 from app.services.trust_service import mandado_payment_policy
 
@@ -49,9 +50,11 @@ async def create_mandado(
 ):
     # Fees are shared with the public estimate endpoint so the preview and the
     # created mandado always match.
+    # Los cálculos del mandado se manejan sin decimales.
+    budget = round_half_down(body.estimated_budget)
     fees = await calculate_mandado_fees(
         db,
-        body.estimated_budget,
+        budget,
         body.delivery_location.lat,
         body.delivery_location.lng,
         pickup_lat=body.pickup_location.lat if body.pickup_location else None,
@@ -80,7 +83,7 @@ async def create_mandado(
     elif payment_method != "cash":
         raise HTTPException(status_code=400, detail="Método de pago no válido")
 
-    policy = await mandado_payment_policy(db, current_user, body.estimated_budget)
+    policy = await mandado_payment_policy(db, current_user, budget)
     if policy["requires_prepayment"] and payment_method == "cash":
         raise HTTPException(
             status_code=400,
@@ -95,7 +98,7 @@ async def create_mandado(
     mandado = Mandado(
         user_id=current_user.id,
         description=body.description,
-        estimated_budget=body.estimated_budget,
+        estimated_budget=budget,
         delivery_fee=delivery_fee,
         delivery_fee_estimated=delivery_fee,
         delivery_fee_final=delivery_fee if body.pickup_location else None,
@@ -279,7 +282,7 @@ async def estimate_mandado(
 ):
     fees = await calculate_mandado_fees(
         db,
-        body.estimated_budget,
+        round_half_down(body.estimated_budget),
         body.delivery_location.lat,
         body.delivery_location.lng,
         pickup_lat=body.pickup_location.lat if body.pickup_location else None,
@@ -294,7 +297,7 @@ async def payment_policy(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await mandado_payment_policy(db, current_user, body.estimated_budget)
+    return await mandado_payment_policy(db, current_user, round_half_down(body.estimated_budget))
 
 
 @router.get("", response_model=list[MandadoOut])
@@ -441,15 +444,15 @@ async def purchase_mandado(
         )
 
     from datetime import datetime, timezone
-    mandado.product_total = body.product_total
+    mandado.product_total = round_half_down(body.product_total)
     mandado.receipt_photo_url = body.receipt_photo_url
     mandado.status = "purchased"
     mandado.purchased_at = datetime.now(timezone.utc)
     if mandado.prepayment_required:
         mandado.advance_status = "used"
-        mandado.advance_difference = (
-            body.product_total - (mandado.advance_amount or 0)
-        ).quantize(Decimal("0.01"))
+        mandado.advance_difference = round_half_down(
+            mandado.product_total - (mandado.advance_amount or 0)
+        )
     await db.commit()
     await db.refresh(mandado)
     schedule_mandado_status(str(mandado.id), "purchased")
@@ -484,8 +487,10 @@ async def deliver_mandado(
     mandado.delivered_at = datetime.now(timezone.utc)
 
     # Final total uses actual product_total if available, else estimated_budget
-    actual_products = mandado.product_total or mandado.estimated_budget
-    mandado.final_total = actual_products + mandado.delivery_fee + mandado.risk_fee + mandado.platform_fee
+    actual_products = round_half_down(mandado.product_total or mandado.estimated_budget)
+    mandado.final_total = round_half_down(
+        actual_products + mandado.delivery_fee + mandado.risk_fee + mandado.platform_fee
+    )
     if (
         mandado.prepayment_required
         and mandado.advance_status == "used"

@@ -17,6 +17,7 @@ from app.models.order_item import OrderItem
 from app.models.order_item_option import OrderItemOption
 from app.models.restaurant import Restaurant
 from app.models.user import User
+from app.services.rounding import round_half_down
 from app.schemas.order import (
     CancelOrderRequest,
     CancellationPolicyOut,
@@ -211,7 +212,7 @@ async def estimate_price(
     subtotal, delivery_fee, discount, total, coupon, platform_commission, flat_usage_fee, delivery_earnings, distance_km = await calculate_order_totals(
         db, restaurant, items_data, body.coupon_code,
         delivery_lat=lat, delivery_lng=lng,
-        tip_amount=Decimal("0") if pickup else body.tip_amount,
+        tip_amount=Decimal("0") if pickup else round_half_down(body.tip_amount),
         pickup=pickup,
     )
     await _check_max_distance(db, distance_km, pickup)
@@ -305,7 +306,7 @@ async def create_order(
         raise HTTPException(status_code=400, detail="Este restaurante no permite recoger pedidos")
     if not pickup and (not body.delivery_address or body.delivery_location is None):
         raise HTTPException(status_code=400, detail="Falta la dirección o ubicación de entrega")
-    tip_amount = Decimal("0") if pickup else (body.tip_amount or Decimal("0"))
+    tip_amount = Decimal("0") if pickup else round_half_down(body.tip_amount or Decimal("0"))
     if pickup:
         pickup_lat, pickup_lng = await _restaurant_coords(db, restaurant)
         delivery_address = f"{restaurant.name} — {restaurant.address}"

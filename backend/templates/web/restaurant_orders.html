@@ -121,7 +121,7 @@
         html += `<div class="card p-3 mb-2">
           <div class="d-flex justify-content-between flex-wrap gap-2">
             <h6 class="mb-1">#${o.id.slice(0, 8)} <span class="badge bg-${color}">${STATUS_LABELS[status] || status.toUpperCase()}</span></h6>
-            <small>$${parseFloat(o.total || 0).toFixed(2)}</small>
+            <small>${money0(o.total || 0)}</small>
           </div>
           <small class="text-muted">${(o.items || []).length} artículo(s)</small>
           ${(o.items || []).map(i => `<small class="text-muted d-block">${i.quantity}x ${i.name}${(i.options || []).length ? ` — ${i.options.map(opt => `${opt.name}${portionLabel(opt.portion) ? ` (${portionLabel(opt.portion)})` : ''}`).join(', ')}` : ''}</small>`).join('')}
@@ -203,8 +203,8 @@
           </div>
           <div class="modal-body">
             <p class="mb-2">Pedido <strong>#${order.id.slice(0, 8)}</strong></p>
-            <div class="d-flex justify-content-between fs-5 mb-1"><span>Total</span><strong>$${total.toFixed(2)}</strong></div>
-            ${parseFloat(order.tip_amount || 0) > 0 ? `<div class="d-flex justify-content-between small text-muted mb-1"><span>Propina incluida</span><span>$${parseFloat(order.tip_amount).toFixed(2)}</span></div>` : ''}
+            <div class="d-flex justify-content-between fs-5 mb-1"><span>Total</span><strong>${money0(total)}</strong></div>
+            ${parseFloat(order.tip_amount || 0) > 0 ? `<div class="d-flex justify-content-between small text-muted mb-1"><span>Propina incluida</span><span>${money0(order.tip_amount)}</span></div>` : ''}
             ${payMessage}
             ${isCash ? `
               <div class="mb-2">
@@ -239,7 +239,7 @@
           return;
         }
         const change = received - total;
-        changeEl.textContent = change >= 0 ? `$${change.toFixed(2)}` : `Faltan $${Math.abs(change).toFixed(2)}`;
+        changeEl.textContent = change >= 0 ? `${money0(change)}` : `Faltan ${money0(Math.abs(change))}`;
         changeEl.className = change >= 0 ? 'text-success' : 'text-danger';
       });
       input.focus();
@@ -250,7 +250,7 @@
       if (isCash) {
         received = parseFloat(modal.querySelector('#restCashReceived').value);
         if (Number.isNaN(received) || received < total) {
-          errorEl.textContent = `El dinero recibido debe ser al menos $${total.toFixed(2)}.`;
+          errorEl.textContent = `El dinero recibido debe ser al menos ${money0(total)}.`;
           return;
         }
       }
@@ -260,7 +260,7 @@
         await updateRestaurantOrderStatus(RID, order.id, 'delivered');
         bsModal.hide();
         if (isCash) {
-          showToast(`Pedido ${isPickup ? 'recogido' : 'entregado'}. Cambio: $${(received - total).toFixed(2)}`);
+          showToast(`Pedido ${isPickup ? 'recogido' : 'entregado'}. Cambio: ${money0(received - total)}`);
         } else if (isTransfer) {
           showToast(order.payment_status === 'approved'
             ? `Pedido ${isPickup ? 'recogido' : 'entregado'}. Transferencia ya validada.`

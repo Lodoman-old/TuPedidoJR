@@ -250,6 +250,17 @@ async function apiRequest(method, path, body = null) {
   if (!r.ok) throw new Error(data.detail || `Error ${r.status}`);
   return data;
 }
+function roundHalfDown(value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return 0;
+  return Math.ceil(n - 0.5);
+}
+function money0(value) {
+  return '$' + roundHalfDown(value).toLocaleString('es-MX');
+}
+function km0(value) {
+  return `${roundHalfDown(value)} km`;
+}
 async function login(email, password) {
   const res = await apiRequest('POST', '/auth/login', { email, password });
   sessionStorage.setItem('token', res.access_token);

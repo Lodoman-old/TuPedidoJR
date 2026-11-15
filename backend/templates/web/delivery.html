@@ -55,7 +55,6 @@
   <div class="d-flex gap-1 mb-3" id="deliveryTabs" role="tablist">
     <button class="dp-tab-btn active text-center" data-tab="available" onclick="switchTab('available')">Disponibles
       <span id="availableBadge" class="badge bg-warning text-dark d-none" title="Pendientes por aceptar">0</span>
-      <span id="availableActiveBadge" class="badge bg-primary d-none" title="En proceso">0</span>
     </button>
     <button class="dp-tab-btn text-center" data-tab="mandados" onclick="switchTab('mandados')">Mandados
       <span id="mandadosAvailableBadge" class="badge bg-warning text-dark d-none" title="Pendientes por aceptar">0</span>
@@ -65,7 +64,9 @@
       <span id="shipmentsAvailableBadge" class="badge bg-warning text-dark d-none" title="Pendientes por aceptar">0</span>
       <span id="shipmentsActiveBadge" class="badge bg-primary d-none" title="En proceso">0</span>
     </button>
-    <button class="dp-tab-btn text-center" data-tab="myorders" onclick="switchTab('myorders')">Mis repartos</button>
+    <button class="dp-tab-btn text-center" data-tab="myorders" onclick="switchTab('myorders')">Mis repartos
+      <span id="myordersActiveBadge" class="badge bg-primary d-none" title="En proceso">0</span>
+    </button>
     <button class="dp-tab-btn text-center" data-tab="payouts" onclick="switchTab('payouts')">Ganancias</button>
     <button class="dp-tab-btn text-center" data-tab="settings" onclick="switchTab('settings')">Ajustes</button>
   </div>
@@ -141,12 +142,6 @@ function playBeep() {
 }
 
 function notifyNewAvailable(count) {
-  const badge = document.getElementById('availableBadge');
-  const current = badge && !badge.classList.contains('d-none') ? Number(badge.textContent) || 0 : 0;
-  if (badge) {
-    badge.textContent = String(current + count);
-    badge.classList.remove('d-none');
-  }
   playBeep();
   showToast(`🔔 ${count} pedido(s) nuevo(s) disponible(s)`, 'warning');
   if ('Notification' in window && Notification.permission === 'granted') {
@@ -215,7 +210,7 @@ async function refreshTabBadges() {
     );
 
     setTabBadge('availableBadge', availableOrders.length);
-    setTabBadge('availableActiveBadge', activeOrders.length);
+    setTabBadge('myordersActiveBadge', activeOrders.length);
     setTabBadge('mandadosAvailableBadge', mandadoAvailable.length);
     setTabBadge('mandadosActiveBadge', mandadoActive.length);
     setTabBadge('shipmentsAvailableBadge', shipmentAvailable.length);
@@ -318,6 +313,7 @@ async function loadAvailable(silent = false) {
   try {
     const orders = await listAvailableDeliveryOrders(gpsCoords?.lat, gpsCoords?.lng);
     const ids = orders.map(o => o.id);
+    setTabBadge('availableBadge', ids.length);
     if (!firstAvailableLoad) {
       const newCount = ids.filter(id => !knownAvailableIds.has(id)).length;
       if (newCount > 0 && dpProfile?.is_available) notifyNewAvailable(newCount);
@@ -367,7 +363,12 @@ async function acceptOrder(oid) {
     await acceptDeliveryOrder(oid);
     showToast('Pedido aceptado — ve a Mis repartos');
     if (gpsWatchId == null) startGps();
-    loadAvailable();
+    const availBadge = document.getElementById('availableBadge');
+    const pending = Math.max(0, (Number(availBadge?.textContent) || 0) - 1);
+    setTabBadge('availableBadge', pending);
+    const mineBadge = document.getElementById('myordersActiveBadge');
+    setTabBadge('myordersActiveBadge', (Number(mineBadge?.textContent) || 0) + 1);
+    loadAvailable(true);
     loadMyOrders();
     refreshTabBadges();
     switchTab('myorders');
@@ -381,6 +382,10 @@ async function loadMyOrders() {
   try {
     const orders = await listMyDeliveryOrders();
     myDeliveryOrdersCache = orders;
+    setTabBadge(
+      'myordersActiveBadge',
+      orders.filter(o => !['delivered', 'cancelled'].includes(o.status)).length
+    );
     if (!orders.length) { el.innerHTML = '<p class="text-muted text-center py-4">No tienes repartos activos</p>'; return; }
     let html = '';
     for (const o of orders) {

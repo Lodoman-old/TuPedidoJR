@@ -165,7 +165,7 @@ function switchTab(name) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.querySelector(`[data-tab="${name}"]`)?.classList.add('active');
   document.getElementById(`tab-${name}`)?.classList.add('active');
-  if (!dpProfile) { document.getElementById('tabContent').innerHTML = '<p class="text-muted text-center py-4">Cargando...</p>'; return; }
+  if (!dpProfile) { showToast('Cargando tu perfil, espera un momento...', 'warning'); return; }
   if (name === 'available') loadAvailable(true);
   else if (name === 'myorders') loadMyOrders();
   else if (name === 'payouts') loadPayouts();

@@ -53,9 +53,18 @@
   </div>
 
   <div class="d-flex gap-1 mb-3" id="deliveryTabs" role="tablist">
-    <button class="dp-tab-btn active text-center" data-tab="available" onclick="switchTab('available')">Disponibles <span id="availableBadge" class="badge bg-warning text-dark d-none">0</span></button>
-    <button class="dp-tab-btn text-center" data-tab="mandados" onclick="switchTab('mandados')">Mandados</button>
-    <button class="dp-tab-btn text-center" data-tab="shipments" onclick="switchTab('shipments')">Envíos</button>
+    <button class="dp-tab-btn active text-center" data-tab="available" onclick="switchTab('available')">Disponibles
+      <span id="availableBadge" class="badge bg-warning text-dark d-none" title="Pendientes por aceptar">0</span>
+      <span id="availableActiveBadge" class="badge bg-primary d-none" title="En proceso">0</span>
+    </button>
+    <button class="dp-tab-btn text-center" data-tab="mandados" onclick="switchTab('mandados')">Mandados
+      <span id="mandadosAvailableBadge" class="badge bg-warning text-dark d-none" title="Pendientes por aceptar">0</span>
+      <span id="mandadosActiveBadge" class="badge bg-primary d-none" title="En proceso">0</span>
+    </button>
+    <button class="dp-tab-btn text-center" data-tab="shipments" onclick="switchTab('shipments')">Envíos
+      <span id="shipmentsAvailableBadge" class="badge bg-warning text-dark d-none" title="Pendientes por aceptar">0</span>
+      <span id="shipmentsActiveBadge" class="badge bg-primary d-none" title="En proceso">0</span>
+    </button>
     <button class="dp-tab-btn text-center" data-tab="myorders" onclick="switchTab('myorders')">Mis repartos</button>
     <button class="dp-tab-btn text-center" data-tab="payouts" onclick="switchTab('payouts')">Ganancias</button>
     <button class="dp-tab-btn text-center" data-tab="settings" onclick="switchTab('settings')">Ajustes</button>
@@ -85,11 +94,12 @@ let audioCtx = null;
 let myDeliveryOrdersCache = [];
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadDeliveryData();
+  loadDeliveryData().then(() => refreshTabBadges());
   if (gpsWatchId == null) startGps();
   document.getElementById('availSwitch')?.addEventListener('change', toggleAvailability);
   startAvailablePolling();
   setInterval(() => {
+    if (!document.hidden) refreshTabBadges();
     if (!document.hidden && document.getElementById('tab-shipments')?.classList.contains('active')) {
       loadShipmentsWeb();
     }
@@ -159,7 +169,6 @@ function switchTab(name) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.querySelector(`[data-tab="${name}"]`)?.classList.add('active');
   document.getElementById(`tab-${name}`)?.classList.add('active');
-  if (name === 'available') clearAvailableBadge();
   if (!dpProfile) { document.getElementById('tabContent').innerHTML = '<p class="text-muted text-center py-4">Cargando...</p>'; return; }
   if (name === 'available') loadAvailable(true);
   else if (name === 'myorders') loadMyOrders();
@@ -167,6 +176,51 @@ function switchTab(name) {
   else if (name === 'settings') loadSettings();
   else if (name === 'mandados') loadMandadosWeb();
   else if (name === 'shipments') loadShipmentsWeb();
+}
+
+function setTabBadge(id, count) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = String(count || 0);
+  el.classList.toggle('d-none', !count);
+}
+
+async function refreshTabBadges() {
+  if (!dpProfile) return;
+  try {
+    const [available, mine, mandados, shipments] = await Promise.all([
+      listAvailableDeliveryOrders(gpsCoords?.lat, gpsCoords?.lng).catch(() => []),
+      listMyDeliveryOrders().catch(() => []),
+      listMandados().catch(() => []),
+      apiRequest('GET', '/delivery/shipments').catch(() => []),
+    ]);
+    const availableOrders = Array.isArray(available) ? available : [];
+    const myOrders = Array.isArray(mine) ? mine : [];
+    const mandadoRows = Array.isArray(mandados) ? mandados : [];
+    const shipmentRows = Array.isArray(shipments) ? shipments : [];
+
+    const activeOrders = myOrders.filter(o => !['delivered', 'cancelled'].includes(o.status));
+    const mandadoAvailable = mandadoRows.filter(
+      m => m.status === 'pending' && !m.delivery_person_id
+    );
+    const mandadoActive = mandadoRows.filter(
+      m => m.delivery_person_id &&
+        ['accepted', 'buying', 'purchased', 'in_delivery'].includes(m.status)
+    );
+    const shipmentAvailable = shipmentRows.filter(
+      s => s.status === 'pending' && !s.delivery_person_id
+    );
+    const shipmentActive = shipmentRows.filter(
+      s => s.delivery_person_id && ['accepted', 'picked_up'].includes(s.status)
+    );
+
+    setTabBadge('availableBadge', availableOrders.length);
+    setTabBadge('availableActiveBadge', activeOrders.length);
+    setTabBadge('mandadosAvailableBadge', mandadoAvailable.length);
+    setTabBadge('mandadosActiveBadge', mandadoActive.length);
+    setTabBadge('shipmentsAvailableBadge', shipmentAvailable.length);
+    setTabBadge('shipmentsActiveBadge', shipmentActive.length);
+  } catch (e) { /* actualización silenciosa */ }
 }
 
 async function loadDeliveryData() {
@@ -315,6 +369,7 @@ async function acceptOrder(oid) {
     if (gpsWatchId == null) startGps();
     loadAvailable();
     loadMyOrders();
+    refreshTabBadges();
     switchTab('myorders');
   } catch (e) { showToast('Error: ' + e.message, 'danger'); }
 }
@@ -364,6 +419,7 @@ async function pickupOrder(oid) {
     await pickupDeliveryOrder(oid);
     showToast('Pedido recogido');
     loadMyOrders();
+    refreshTabBadges();
   } catch (e) { showToast('Error: ' + e.message, 'danger'); }
 }
 
@@ -473,6 +529,7 @@ function deliverOrder(oid) {
         showToast('Pedido entregado');
       }
       loadMyOrders();
+      refreshTabBadges();
     } catch (e) {
       errorEl.textContent = e.message;
       btn.disabled = false;
@@ -668,6 +725,7 @@ async function acceptMandadoWeb(mid) {
     await acceptMandado(mid);
     showToast('Mandado aceptado');
     loadMandadosWeb();
+    refreshTabBadges();
   } catch (e) { showToast('Error: ' + e.message, 'danger'); }
 }
 
@@ -736,6 +794,7 @@ async function submitPickup(mid) {
       showToast('Tienda confirmada y envío calculado');
     }
     loadMandadosWeb();
+    refreshTabBadges();
   } catch (e) {
     document.getElementById('pickupStatus').innerHTML =
       `<div class="alert alert-danger py-2">${e.message}</div>`;
@@ -774,6 +833,7 @@ async function submitPurchase(mid) {
     await purchaseMandado(mid, total, photoUrl);
     showToast('¡Compra registrada!');
     loadMandadosWeb();
+    refreshTabBadges();
   } catch (e) { document.getElementById('purchaseStatus').innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
 }
 
@@ -782,6 +842,7 @@ async function deliverMandadoWeb(mid) {
     await deliverMandado(mid);
     showToast('Mandado entregado');
     loadMandadosWeb();
+    refreshTabBadges();
   } catch (e) { showToast('Error: ' + e.message, 'danger'); }
 }
 
@@ -847,6 +908,7 @@ async function acceptShipmentWeb(id) {
     await apiRequest('PATCH', `/delivery/shipments/${id}/accept`);
     showToast('Envío aceptado');
     loadShipmentsWeb();
+    refreshTabBadges();
   } catch (e) { showToast('Error: ' + e.message, 'danger'); }
 }
 
@@ -888,6 +950,7 @@ async function submitShipmentPickup(id) {
     });
     showToast('Paquete recogido');
     loadShipmentsWeb();
+    refreshTabBadges();
   } catch (e) {
     status.innerHTML = `<div class="alert alert-danger py-2">${escShip(e.message)}</div>`;
   }
@@ -940,6 +1003,7 @@ async function submitShipmentDeliver(id, amount) {
     });
     showToast('Envío entregado');
     loadShipmentsWeb();
+    refreshTabBadges();
   } catch (e) {
     status.innerHTML = `<div class="alert alert-danger py-2">${escShip(e.message)}</div>`;
   }
@@ -952,6 +1016,7 @@ async function failShipmentWeb(id) {
     await apiRequest('PATCH', `/delivery/shipments/${id}/fail`, { reason });
     showToast('Envío marcado como no entregado');
     loadShipmentsWeb();
+    refreshTabBadges();
   } catch (e) { showToast('Error: ' + e.message, 'danger'); }
 }
 </script>

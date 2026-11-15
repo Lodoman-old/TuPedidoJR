@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.order_service import get_setting_value
-from app.services.rounding import round_half_down, round_km
+from app.services.rounding import round_half_down
 from app.services.route_service import route_distance_km
 
 
@@ -56,7 +56,7 @@ async def calculate_mandado_fees(
     return {
         "estimated_budget": estimated_budget,
         "delivery_fee": delivery_fee,
-        "distance_km": round_km(distance_km),
+        "distance_km": distance_km,
         "risk_type": "fixed",
         "risk_value": risk_fee,
         "risk_fee": risk_fee,

@@ -288,7 +288,7 @@ async function loadAvailable(silent = false) {
     }
     for (const o of orders) {
       const badgeColor = statusBadgeColors[o.status] || 'secondary';
-      const distance = o.distance_km != null ? km0(o.distance_km) : '—';
+      const distance = o.distance_km != null ? `${o.distance_km} km` : '—';
       const eta = o.eta_min != null ? `~${o.eta_min} min` : '—';
       html += `<div class="dp-card">
         <div class="d-flex justify-content-between">

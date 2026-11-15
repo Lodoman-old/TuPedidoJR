@@ -694,7 +694,7 @@ function updateApprovalUi() {
   card.classList.toggle('d-none', !required);
   if (required) {
     const notice = document.getElementById('approvalNotice');
-    const km = estimateState.distance_km != null ? `${km0(estimateState.distance_km)}` : '';
+    const km = estimateState.distance_km != null ? `${Number(estimateState.distance_km).toFixed(1)} km` : '';
     const mins = Number(estimateState.approval_timeout_min || 0);
     const timeoutText = mins > 0
       ? ` Si ningún repartidor lo acepta en <strong>${mins} minutos</strong>, el pedido se cancelará automáticamente y se te devolverá el dinero${selectedPaymentMethod() === 'transfer' ? ' a la cuenta que captures abajo' : ''}.`
@@ -784,7 +784,7 @@ async function refreshEstimate() {
       totalEl.textContent = money(res.total);
       if (estimateMsg) {
         estimateMsg.textContent = res.distance_km != null
-          ? `Distancia estimada: ${km0(res.distance_km)}.`
+          ? `Distancia estimada: ${parseFloat(res.distance_km).toFixed(2)} km.`
           : '';
         if (res.delivery_mode === 'own') {
           estimateMsg.textContent = (estimateMsg.textContent + ' Entrega propia del restaurante.').trim();

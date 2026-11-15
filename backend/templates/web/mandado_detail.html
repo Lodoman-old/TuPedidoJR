@@ -57,7 +57,7 @@
       return '<div class="alert alert-danger py-2">Este mandado fue cancelado.</div>';
     }
     const eta = t.eta_min
-      ? `<div class="alert alert-info py-2 small mb-2">⏱ Llegada estimada: ~${t.eta_min} min${t.distance_km != null ? ` · ${km0(t.distance_km)}` : ''}</div>`
+      ? `<div class="alert alert-info py-2 small mb-2">⏱ Llegada estimada: ~${t.eta_min} min${t.distance_km != null ? ` · ${t.distance_km} km` : ''}</div>`
       : '';
     const steps = t.timeline.map(s => `
       <div class="d-flex align-items-start mb-2">

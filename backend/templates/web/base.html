@@ -258,9 +258,6 @@ function roundHalfDown(value) {
 function money0(value) {
   return '$' + roundHalfDown(value).toLocaleString('es-MX');
 }
-function km0(value) {
-  return `${roundHalfDown(value)} km`;
-}
 async function login(email, password) {
   const res = await apiRequest('POST', '/auth/login', { email, password });
   sessionStorage.setItem('token', res.access_token);

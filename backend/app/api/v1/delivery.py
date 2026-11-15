@@ -28,7 +28,7 @@ from app.schemas.delivery import (
     LocationUpdate,
     PayoutRequest,
 )
-from app.schemas.order import AvailableOrderOut, OrderOut
+from app.schemas.order import AvailableOrderOut, OrderFail, OrderOut
 from app.schemas.cash_advance import CashAdvanceCreate, CashAdvanceOut
 from app.services.cash_advance_service import create_advance_request
 from app.services.courier_limits import active_service_count, ensure_can_accept, service_limits
@@ -346,6 +346,41 @@ async def deliver_order(
     await _get_ws_manager().notify_order_status(str(order.id), "delivered")
     schedule_order_status(str(order.id), "delivered")
     return order
+
+
+@router.post("/orders/{order_id}/fail", response_model=OrderOut)
+async def fail_order(
+    order_id: str,
+    body: OrderFail,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    dp = await _get_dp(current_user, db)
+    result = await db.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.items))
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if order.delivery_person_id != dp.id:
+        raise HTTPException(status_code=403, detail="Este pedido no te pertenece")
+    if order.status not in ("in_delivery", "picked_up"):
+        raise HTTPException(status_code=400, detail="El pedido ya no se puede reportar")
+
+    from app.services.incident_service import report_order_failure
+
+    await report_order_failure(
+        db, order, dp,
+        reason_code=body.reason_code,
+        notes=body.notes,
+        photo_url=body.photo_url,
+        lat=body.lat,
+        lng=body.lng,
+    )
+    await db.commit()
+    await db.refresh(order)
+    schedule_order_status(str(order.id), "delivery_failed")
+    return order_out(order, can_see_refund=False)
 
 
 @router.patch("/location", status_code=status.HTTP_204_NO_CONTENT)

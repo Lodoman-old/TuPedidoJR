@@ -116,6 +116,24 @@ async def restaurant_balance(db: AsyncSession, restaurant_id) -> dict:
     earned += shipment_credit
     cash_debt += shipment_charge
 
+    from app.models.restaurant_adjustment import RestaurantAdjustment
+
+    adjustments_result = await db.execute(
+        select(RestaurantAdjustment).where(
+            RestaurantAdjustment.restaurant_id == restaurant_id,
+            RestaurantAdjustment.settled.is_(False),
+        )
+    )
+    adjustments = list(adjustments_result.scalars().all())
+    adjustment_credit = sum(
+        (a.amount or Decimal("0")) for a in adjustments if a.kind == "credit"
+    )
+    adjustment_charge = sum(
+        (a.amount or Decimal("0")) for a in adjustments if a.kind == "charge"
+    )
+    earned += adjustment_credit
+    cash_debt += adjustment_charge
+
     pending = max(earned - requested - cash_debt, Decimal("0"))
 
     return {
@@ -127,6 +145,9 @@ async def restaurant_balance(db: AsyncSession, restaurant_id) -> dict:
         "cash_debt": cash_debt,
         "shipment_credit": shipment_credit,
         "shipment_charge": shipment_charge,
+        "adjustments": adjustments,
+        "adjustment_credit": adjustment_credit,
+        "adjustment_charge": adjustment_charge,
         "loyalty_credit": loyalty_credit,
         "pending": pending,
         "last_payout": max(
@@ -241,6 +262,8 @@ async def create_restaurant_payout(db: AsyncSession, restaurant_id) -> Restauran
             settled_shipments += 1
         if not shipment.store_charge_settled:
             shipment.store_charge_settled = True
+    for adjustment in balance.get("adjustments", []):
+        adjustment.settled = True
     payout = RestaurantPayout(
         restaurant_id=restaurant_id,
         period_start=period_start,

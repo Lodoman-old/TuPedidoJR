@@ -14,7 +14,7 @@
   const RID = '{{ restaurant_id }}';
   const STATUS_ORDER = ["pending", "confirmed", "preparing", "ready"];
   const STATUS_ORDER_FAR = ["pending", "confirmed", "awaiting_courier", "preparing", "ready"];
-  const STATUS_LABELS = { pending: "Pendiente", confirmed: "Confirmado", awaiting_courier: "Esperando repartidor", preparing: "Preparando", ready: "Listo", in_delivery: "En reparto", picked_up: "Recogido", delivered: "Entregado", cancelled: "Cancelado" };
+  const STATUS_LABELS = { pending: "Pendiente", confirmed: "Confirmado", awaiting_courier: "Esperando repartidor", preparing: "Preparando", ready: "Listo", in_delivery: "En reparto", picked_up: "Recogido", delivered: "Entregado", cancelled: "Cancelado", delivery_failed: "No entregado" };
   function portionLabel(value) {
     const p = parseFloat(value || 0);
     if (!p || p >= 0.99) return '';

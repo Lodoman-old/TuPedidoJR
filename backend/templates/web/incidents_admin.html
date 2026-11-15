@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Incidencias de entrega</h5>
+    <small class="text-muted">La plataforma paga al negocio y al repartidor. Aquí decides reentrega, resguardo o devolución.</small>
+  </div>
+  <button class="btn btn-sm btn-outline-secondary" onclick="loadIncidents()">
+    <i class="bi bi-arrow-clockwise"></i> Actualizar
+  </button>
+</div>
+
+<div class="alert alert-info py-2 small">
+  <strong>Regla:</strong> producto recuperado = no se paga producto. Producto perdido, dañado o desechado = se paga al negocio.
+  El repartidor cobra su viaje completo salvo que la falla sea su culpa comprobada.
+</div>
+
+<div class="d-flex gap-2 mb-3 flex-wrap" id="incidentFilters">
+  <button class="btn btn-sm btn-outline-secondary active" data-filter="all" onclick="setFilter('all')">Todas</button>
+  <button class="btn btn-sm btn-outline-danger" data-filter="reported" onclick="setFilter('reported')">Reportadas</button>
+  <button class="btn btn-sm btn-outline-primary" data-filter="in_custody" onclick="setFilter('in_custody')">En resguardo</button>
+  <button class="btn btn-sm btn-outline-success" data-filter="redelivery" onclick="setFilter('redelivery')">Reentrega</button>
+  <button class="btn btn-sm btn-outline-secondary" data-filter="returned" onclick="setFilter('returned')">Devueltas</button>
+  <button class="btn btn-sm btn-outline-warning" data-filter="discarded" onclick="setFilter('discarded')">Desechadas</button>
+  <button class="btn btn-sm btn-outline-danger" data-filter="authorization" onclick="setFilter('authorization')">Por autorizar</button>
+</div>
+
+<div id="incidentsError" class="alert alert-danger d-none"></div>
+<div id="incidentsLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+<div id="incidentsList"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let incidents = [];
+  let currentFilter = 'all';
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, c => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  function money(value) {
+    return '$' + (Number(value || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function statusBadge(status, label) {
+    const colors = {
+      reported: 'danger', in_custody: 'primary', redelivery: 'success',
+      returned: 'secondary', discarded: 'warning text-dark', authorization: 'danger', resolved: 'dark',
+    };
+    return `<span class="badge bg-${colors[status] || 'secondary'}">${esc(label || status)}</span>`;
+  }
+
+  function setFilter(value) {
+    currentFilter = value;
+    document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b.dataset.filter === value));
+    render();
+  }
+
+  function visibleRows() {
+    if (currentFilter === 'all') return incidents;
+    return incidents.filter(i => i.status === currentFilter);
+  }
+
+  async function loadIncidents() {
+    const loading = document.getElementById('incidentsLoading');
+    const error = document.getElementById('incidentsError');
+    loading.classList.remove('d-none');
+    error.classList.add('d-none');
+    try {
+      const data = await apiRequest('GET', '/admin/incidents');
+      incidents = data.incidents || [];
+      render();
+    } catch (e) {
+      error.textContent = e.message;
+      error.classList.remove('d-none');
+    } finally {
+      loading.classList.add('d-none');
+    }
+  }
+
+  function render() {
+    const box = document.getElementById('incidentsList');
+    const rows = visibleRows();
+    if (!rows.length) {
+      box.innerHTML = '<p class="text-muted text-center py-4">No hay incidencias con este filtro.</p>';
+      return;
+    }
+    box.innerHTML = rows.map(i => {
+      const canAct = ['reported', 'in_custody', 'authorization'].includes(i.status);
+      const actions = [];
+      if (['reported', 'authorization'].includes(i.status)) {
+        actions.push(`<button class="btn btn-sm btn-outline-primary" onclick="custody('${i.id}')">Recibir en oficina</button>`);
+      }
+      if (canAct) {
+        actions.push(`<button class="btn btn-sm btn-success" onclick="redeliver('${i.id}')">Reenviar</button>`);
+        actions.push(`<button class="btn btn-sm btn-outline-secondary" onclick="returnToBusiness('${i.id}')">Devolver al negocio</button>`);
+        actions.push(`<button class="btn btn-sm btn-outline-danger" onclick="discard('${i.id}')">Desechar</button>`);
+      }
+      if (i.status === 'authorization') {
+        actions.push(`<button class="btn btn-sm btn-dark" onclick="authorizeIncident('${i.id}', true)">Absorber</button>`);
+        actions.push(`<button class="btn btn-sm btn-outline-dark" onclick="authorizeIncident('${i.id}', false)">Cargar al repartidor</button>`);
+      }
+      if (!['resolved', 'redelivery'].includes(i.status)) {
+        actions.push(`<button class="btn btn-sm btn-outline-dark" onclick="resolveIncident('${i.id}')">Cerrar</button>`);
+      }
+      return `<div class="card mb-2">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+              <strong>${esc(i.entity_label || i.entity_id.slice(0, 8))}</strong>
+              ${statusBadge(i.status, i.status_label)}
+              <div class="small text-muted mt-1">
+                ${esc(i.reason)} · ${new Date(i.created_at).toLocaleString('es-MX')}
+                ${i.custody_code ? ` · Código de resguardo: <strong>${esc(i.custody_code)}</strong>` : ''}
+                ${i.holding_until ? ` · Hasta ${new Date(i.holding_until).toLocaleString('es-MX')}` : ''}
+              </div>
+            </div>
+            <div class="text-end small">
+              <div>Producto: <strong>${money(i.product_amount)}</strong></div>
+              <div>Envío: <strong>${money(i.delivery_amount)}</strong></div>
+              <div>Repartidor: <strong>${money(i.courier_pay)}</strong></div>
+              <div>Negocio: <strong>${money(i.business_pay)}</strong></div>
+              ${i.customer_debt ? `<div class="text-danger">Deuda cliente: <strong>${money(i.customer_debt)}</strong></div>` : ''}
+              ${i.customer_refund ? `<div class="text-info">Reembolso: <strong>${money(i.customer_refund)}</strong></div>` : ''}
+            </div>
+          </div>
+          ${i.notes ? `<div class="small mt-2"><i class="bi bi-chat-left-text"></i> ${esc(i.notes)}</div>` : ''}
+          ${i.photo_url ? `<div class="mt-2"><a href="${esc(i.photo_url)}" target="_blank" rel="noopener">Ver evidencia</a></div>` : ''}
+          ${i.resolution_notes ? `<div class="small text-muted mt-1">Resolución: ${esc(i.resolution_notes)}</div>` : ''}
+          <div class="d-flex gap-2 flex-wrap mt-3">${actions.join('')}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function act(id, action, body) {
+    try {
+      await apiRequest('POST', `/admin/incidents/${id}/${action}`, body || {});
+      await loadIncidents();
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  function custody(id) { act(id, 'custody', {}); }
+
+  function redeliver(id) {
+    const value = prompt('Costo de reentrega para el cliente:', '15');
+    if (value === null) return;
+    act(id, 'redeliver', { fee: Number(value || 0) });
+  }
+
+  function returnToBusiness(id) {
+    const notes = prompt('Notas de la devolución (opcional):', '');
+    if (notes === null) return;
+    act(id, 'return', { notes: notes || null });
+  }
+
+  function discard(id) {
+    const notes = prompt('Describe qué se desechó y por qué:', '');
+    if (notes === null) return;
+    const fault = confirm('¿La falla es culpa comprobada del repartidor? Aceptar = sí, Cancelar = no');
+    act(id, 'discard', { notes: notes || null, courier_fault: fault });
+  }
+
+  function authorizeIncident(id, absorb) {
+    const notes = prompt(absorb ? 'Notas de la autorización (la empresa absorbe):' : 'Notas del cargo al repartidor:', '');
+    if (notes === null) return;
+    act(id, 'authorize', { absorb, notes: notes || null });
+  }
+
+  function resolveIncident(id) {
+    const notes = prompt('Notas de cierre (opcional):', '');
+    if (notes === null) return;
+    act(id, 'resolve', { notes: notes || null });
+  }
+
+  loadIncidents();
+</script>
+{% endblock %}

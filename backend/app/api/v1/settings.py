@@ -231,6 +231,51 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Al llegar a esta cantidad se le advierte al repartidor antes de aceptar otro servicio.",
         "type": "int", "default": "4",
     },
+    "FAILED_FOOD_RETRY_MIN": {
+        "group": "Incidencias", "label": "Minutos de reentrega (comida)",
+        "description": "Tiempo máximo para reintentar entregar comida antes de desecharla.",
+        "type": "int", "default": "60",
+    },
+    "CUSTODY_HOURS": {
+        "group": "Incidencias", "label": "Horas de resguardo (no perecederos)",
+        "description": "Tiempo que un producto no perecedero puede estar en la oficina antes de devolverse.",
+        "type": "int", "default": "48",
+    },
+    "REDELIVERY_FEE": {
+        "group": "Incidencias", "label": "Costo de reentrega",
+        "description": "Monto que paga el cliente por una segunda entrega.",
+        "type": "money", "default": "15.0",
+    },
+    "INCIDENT_AUTHORIZATION_LIMIT": {
+        "group": "Incidencias", "label": "Tope de autorización por culpa del repartidor",
+        "description": "Arriba de este monto, el admin decide si la empresa absorbe el producto.",
+        "type": "money", "default": "500.0",
+    },
+    "OFFICE_ADDRESS": {
+        "group": "Incidencias", "label": "Dirección de la oficina",
+        "description": "Lugar donde se resguardan los productos no perecederos.",
+        "type": "text", "default": "",
+    },
+    "OFFICE_LAT": {
+        "group": "Incidencias", "label": "Latitud de la oficina",
+        "description": "Coordenada para el mapa de resguardo.",
+        "type": "text", "default": "",
+    },
+    "OFFICE_LNG": {
+        "group": "Incidencias", "label": "Longitud de la oficina",
+        "description": "Coordenada para el mapa de resguardo.",
+        "type": "text", "default": "",
+    },
+    "INSTALLMENT_MAX_COUNT": {
+        "group": "Clientes", "label": "Abonos máximos",
+        "description": "En cuántos pedidos se puede dividir una deuda pendiente.",
+        "type": "int", "default": "5",
+    },
+    "INSTALLMENT_MIN_AMOUNT": {
+        "group": "Clientes", "label": "Abono mínimo",
+        "description": "Monto mínimo por abono al dividir una deuda.",
+        "type": "money", "default": "50.0",
+    },
     "LOYALTY_ENABLED": {
         "group": "Lealtad", "label": "Programa de puntos",
         "description": "Activa los puntos por compra y los referidos.",

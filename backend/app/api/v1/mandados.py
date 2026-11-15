@@ -15,6 +15,7 @@ from app.schemas.mandado import (
     MandadoCreate,
     MandadoEstimateOut,
     MandadoEstimateRequest,
+    MandadoFail,
     MandadoOut,
     MandadoPaymentPolicyOut,
     MandadoPaymentPolicyRequest,
@@ -476,6 +477,44 @@ async def purchase_mandado(
         datetime.now(timezone.utc),
     )
     schedule_mandado_status(str(mandado.id), "purchased")
+    return mandado
+
+
+@router.patch("/{mandado_id}/fail", response_model=MandadoOut)
+async def fail_mandado(
+    mandado_id: str,
+    body: MandadoFail,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    dp_result = await db.execute(
+        select(DeliveryPerson).where(DeliveryPerson.user_id == current_user.id)
+    )
+    dp = dp_result.scalar_one_or_none()
+    if not dp:
+        raise HTTPException(status_code=403, detail="Solo repartidores pueden reportar")
+    result = await db.execute(select(Mandado).where(Mandado.id == mandado_id))
+    mandado = result.scalar_one_or_none()
+    if not mandado:
+        raise HTTPException(status_code=404, detail="Mandado no encontrado")
+    if mandado.delivery_person_id != dp.id:
+        raise HTTPException(status_code=403, detail="No eres el repartidor asignado")
+    if mandado.status not in ("accepted", "buying", "purchased"):
+        raise HTTPException(status_code=400, detail="El mandado ya no se puede reportar")
+
+    from app.services.incident_service import report_mandado_failure
+
+    await report_mandado_failure(
+        db, mandado, dp,
+        reason_code=body.reason_code,
+        notes=body.notes,
+        photo_url=body.photo_url,
+        lat=body.lat,
+        lng=body.lng,
+    )
+    await db.commit()
+    await db.refresh(mandado)
+    schedule_mandado_status(str(mandado.id), "delivery_failed")
     return mandado
 
 

@@ -29,6 +29,7 @@ class OrderCreate(BaseModel):
     refund_account_holder: str | None = Field(default=None, max_length=150)
     refund_bank: str | None = Field(default=None, max_length=100)
     refund_clabe: str | None = Field(default=None, max_length=18)
+    debt_payment_mode: str | None = Field(default=None, pattern="^(full|installments)$")
 
 
 class OrderItemOptionOut(BaseModel):
@@ -107,6 +108,14 @@ class OrderOut(BaseModel):
 
 class CancelOrderRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=300)
+
+
+class OrderFail(BaseModel):
+    reason_code: str = Field(..., max_length=30)
+    notes: str | None = Field(default=None, max_length=500)
+    photo_url: str = Field(..., min_length=5, max_length=500)
+    lat: float | None = None
+    lng: float | None = None
 
 
 class RefundAccountUpdate(BaseModel):

@@ -328,10 +328,10 @@ function startGps() {
 }
 
 // ===== TAB: Disponibles =====
-const statusLabels = { pending: 'Pendiente', confirmed: 'Confirmado', awaiting_courier: 'Esperando repartidor', preparing: 'Preparando', ready: 'Listo', in_delivery: 'En reparto', picked_up: 'Recogido', delivered: 'Entregado', cancelled: 'Cancelado' };
+const statusLabels = { pending: 'Pendiente', confirmed: 'Confirmado', awaiting_courier: 'Esperando repartidor', preparing: 'Preparando', ready: 'Listo', in_delivery: 'En reparto', picked_up: 'Recogido', delivered: 'Entregado', cancelled: 'Cancelado', delivery_failed: 'No entregado' };
 const payoutStatusLabels = { pending: 'Pendiente', paid: 'Pagada', confirmed: 'Confirmada', cancelled: 'Cancelada' };
-const mandadoStatusLabels = { pending: 'Pendiente', accepted: 'Aceptado', buying: 'Comprando', purchased: 'Comprado', completed: 'Completado', cancelled: 'Cancelado' };
-const statusColors = { confirmed: 'primary', awaiting_courier: 'warning', preparing: 'warning', ready: 'success', in_delivery: 'info', picked_up: 'teal', delivered: 'secondary', cancelled: 'danger' };
+const mandadoStatusLabels = { pending: 'Pendiente', accepted: 'Aceptado', buying: 'Comprando', purchased: 'Comprado', completed: 'Completado', cancelled: 'Cancelado', delivery_failed: 'No entregado' };
+const statusColors = { confirmed: 'primary', awaiting_courier: 'warning', preparing: 'warning', ready: 'success', in_delivery: 'info', picked_up: 'teal', delivered: 'secondary', cancelled: 'danger', delivery_failed: 'danger' };
 const statusBadgeColors = { ready: 'success', preparing: 'warning', awaiting_courier: 'warning' };
 
 async function loadAvailable(silent = false) {
@@ -435,10 +435,12 @@ async function loadMyOrders() {
         html += `<div class="mt-2 d-flex gap-2 flex-wrap">
           <button class="btn btn-sm btn-primary" onclick="pickupOrder('${o.id}')">Recoger pedido</button>
           <button class="btn btn-sm btn-outline-secondary" onclick="requestAdvance('${o.id}')">Pedir avance para restaurante</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="failOrder('${o.id}')">No se pudo entregar</button>
         </div>`;
       } else if (o.status === 'picked_up') {
-        html += `<div class="mt-2">
+        html += `<div class="mt-2 d-flex gap-2 flex-wrap">
           <button class="btn btn-sm btn-success" onclick="deliverOrder('${o.id}')">Entregar pedido</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="failOrder('${o.id}')">No se pudo entregar</button>
         </div>`;
       }
       html += `</div>`;
@@ -793,6 +795,9 @@ async function loadMandadosWeb() {
         } else if (m.status === 'purchased') {
           html += `<button class="btn btn-sm btn-success mt-2" onclick="deliverMandadoWeb('${m.id}')">Entregar mandado</button>`;
         }
+        if (['accepted', 'buying', 'purchased'].includes(m.status)) {
+          html += `<button class="btn btn-sm btn-outline-danger mt-2" onclick="failMandadoWeb('${m.id}')">No se pudo entregar</button>`;
+        }
         html += `</div>`;
       }
     } else { html += '<p class="text-muted">No tienes mandados activos</p>'; }
@@ -1101,6 +1106,84 @@ async function failShipmentWeb(id) {
     loadShipmentsWeb();
     refreshTabBadges();
   } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+}
+
+// ===== Reportar falla de pedido o mandado =====
+function failOrder(oid) { showFailDialog('order', oid, 'POST'); }
+function failMandadoWeb(mid) { showFailDialog('mandado', mid, 'PATCH'); }
+
+function showFailDialog(kind, id, method) {
+  const modal = document.createElement('div');
+  modal.className = 'modal fade';
+  modal.innerHTML = `
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">No se pudo entregar</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info py-2 small">
+            La plataforma se hace cargo. Tu viaje se paga completo y el negocio también.
+            Solo sube la evidencia para poder resolver la incidencia.
+          </div>
+          <label class="form-label" for="failReason">Motivo</label>
+          <select class="form-select mb-2" id="failReason">
+            <option value="customer_unreachable">Cliente no contesta</option>
+            <option value="wrong_address">Dirección incorrecta</option>
+            <option value="customer_refused">Cliente rechazó el pedido</option>
+            <option value="business_closed">Negocio cerrado</option>
+            <option value="damaged">Producto dañado</option>
+            <option value="other">Otro</option>
+          </select>
+          <label class="form-label" for="failNotes">Detalle (opcional)</label>
+          <textarea class="form-control mb-2" id="failNotes" rows="2" maxlength="500"></textarea>
+          <label class="form-label" for="failPhoto">Foto de evidencia</label>
+          <input class="form-control" type="file" id="failPhoto" accept="image/*" capture="environment">
+          <div id="failStatus" class="mt-2"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-danger" id="confirmFailBtn">Reportar incidencia</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  const bsModal = new bootstrap.Modal(modal);
+  bsModal.show();
+  modal.addEventListener('hidden.bs.modal', () => modal.remove());
+
+  modal.querySelector('#confirmFailBtn').addEventListener('click', async () => {
+    const reason = modal.querySelector('#failReason').value;
+    const notes = modal.querySelector('#failNotes').value.trim();
+    const file = modal.querySelector('#failPhoto').files[0];
+    const status = modal.querySelector('#failStatus');
+    if (!file) {
+      status.innerHTML = '<div class="alert alert-warning py-2 mb-0">Sube una foto como evidencia.</div>';
+      return;
+    }
+    status.textContent = 'Subiendo foto...';
+    try {
+      const uploaded = await uploadDocument(file);
+      const path = kind === 'order'
+        ? `/delivery/orders/${id}/fail`
+        : `/mandados/${id}/fail`;
+      await apiRequest(method, path, {
+        reason_code: reason,
+        notes: notes || null,
+        photo_url: uploaded.url,
+        lat: gpsCoords?.lat ?? null,
+        lng: gpsCoords?.lng ?? null,
+      });
+      bsModal.hide();
+      showToast('Incidencia reportada. El administrador la revisará.', 'success');
+      if (kind === 'order') loadMyOrders(); else loadMandadosWeb();
+      refreshTabBadges();
+      refreshProfileBadges();
+    } catch (e) {
+      status.innerHTML = `<div class="alert alert-danger py-2 mb-0">${e.message}</div>`;
+    }
+  });
 }
 </script>
 {% endblock %}

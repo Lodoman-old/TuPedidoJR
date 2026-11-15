@@ -53,6 +53,8 @@ async def setup_db():
 async def clean_db():
     async with engine.begin() as conn:
         await conn.execute(text("DELETE FROM delivery_locations"))
+        await conn.execute(text("DELETE FROM restaurant_adjustments"))
+        await conn.execute(text("DELETE FROM delivery_incidents"))
         await conn.execute(text("DELETE FROM cash_advances"))
         await conn.execute(text("DELETE FROM store_requests"))
         await conn.execute(text("DELETE FROM reviews"))

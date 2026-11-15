@@ -18,14 +18,14 @@
     pending_payment: 'Pendiente de pago',
     pending: 'Pendiente', accepted: 'Aceptado', buying: 'Comprando',
     purchased: 'Comprado', in_delivery: 'En camino', completed: 'Entregado',
-    delivered: 'Entregado', cancelled: 'Cancelado'
+    delivered: 'Entregado', cancelled: 'Cancelado', delivery_failed: 'No entregado'
   };
   const STATUS_COLORS = {
     pending_payment: 'bg-warning text-dark',
     pending: 'bg-warning text-dark', accepted: 'bg-info text-dark', buying: 'bg-primary text-white',
     purchased: 'bg-primary text-white', in_delivery: 'bg-success text-white',
     completed: 'bg-secondary text-white', delivered: 'bg-secondary text-white',
-    cancelled: 'bg-danger text-white'
+    cancelled: 'bg-danger text-white', delivery_failed: 'bg-danger text-white'
   };
   const ACTIVE = ['pending_payment', 'pending', 'accepted', 'buying', 'purchased', 'in_delivery'];
   let map = null;

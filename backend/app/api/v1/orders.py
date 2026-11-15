@@ -417,6 +417,31 @@ async def create_order(
     if loyalty_discount:
         total = max(total - loyalty_discount, Decimal("0"))
 
+    debt_charged = Decimal("0")
+    pending_balance = Decimal(str(current_user.pending_balance or 0))
+    if pending_balance > 0:
+        mode = body.debt_payment_mode or "full"
+        if payment_method == "cash" and mode == "installments":
+            try:
+                max_count = int(await get_setting_value(db, "INSTALLMENT_MAX_COUNT", "5"))
+            except (TypeError, ValueError):
+                max_count = 5
+            max_count = max(max_count, 2)
+            if (current_user.pending_installments or 0) <= 0:
+                current_user.pending_installments = max_count
+                current_user.installment_amount = round_half_down(pending_balance / max_count)
+            amount = current_user.installment_amount or round_half_down(pending_balance / max_count)
+            amount = min(amount, pending_balance)
+            current_user.pending_installments = max((current_user.pending_installments or 1) - 1, 0)
+        else:
+            amount = pending_balance
+            current_user.pending_installments = 0
+            current_user.installment_amount = Decimal("0")
+        if amount > 0:
+            debt_charged = round_half_down(amount)
+            total = round_half_down(total + debt_charged)
+            current_user.pending_balance = round_half_down(pending_balance - debt_charged)
+
     if coupon and body.coupon_code:
         coupon.current_uses += 1
 
@@ -437,6 +462,7 @@ async def create_order(
         subtotal=subtotal,
         delivery_fee=delivery_fee,
         total=total,
+        debt_charged=debt_charged,
         delivery_address=delivery_address,
         delivery_location=delivery_location,
         notes=body.notes,

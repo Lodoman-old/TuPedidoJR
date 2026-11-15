@@ -314,7 +314,7 @@ class TestShipmentCourier:
         assert both.status_code == 200, both.text
         assert both.json()["status"] == "delivered"
 
-    async def test_failed_delivery_charges_half_shipping(
+    async def test_failed_delivery_creates_incident_without_charge(
         self, client, owner_token, store, courier
     ):
         token, _dp = courier
@@ -328,11 +328,11 @@ class TestShipmentCourier:
         assert failed.status_code == 200, failed.text
         s = failed.json()
         assert s["status"] == "failed"
-        expected_return = round_half_down(
-            Decimal(s["delivery_fee"]) * Decimal("0.50")
-        )
-        assert Decimal(s["return_fee"]) == expected_return
-        assert Decimal(s["courier_earnings"]) == Decimal(s["return_fee"])
+        # La política de certeza elimina la tarifa de retorno. El viaje se paga
+        # al resolver la incidencia y el negocio no recibe cargos automáticos.
+        assert Decimal(s["return_fee"]) == Decimal("0")
+        assert Decimal(s["courier_earnings"]) == Decimal("0")
+        assert s["failure_reason"]
 
     async def test_non_courier_cannot_accept(self, client, owner_token, other_token, store):
         created = (await _create(client, owner_token, store)).json()

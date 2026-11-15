@@ -449,21 +449,16 @@ async def fail_shipment(
     if shipment.status not in ("accepted", "picked_up"):
         raise HTTPException(status_code=400, detail="El envío ya no se puede reportar")
 
-    try:
-        percent = Decimal(await get_setting_value(db, "SHIPMENT_RETURN_PERCENT", "50"))
-    except Exception:
-        percent = Decimal("50")
-    return_fee = round_half_down((shipment.delivery_fee or 0) * percent / Decimal("100"))
-    shipment.status = "failed"
-    shipment.failure_reason = body.reason.strip()
-    shipment.return_fee = return_fee
-    shipment.courier_earnings = return_fee
-    shipment.store_charge = round_half_down((shipment.platform_fee or 0) + return_fee)
-    shipment.cod_status = "not_required"
-    if return_fee > 0:
-        dp.pending_platform_credit = round_half_down(
-            (dp.pending_platform_credit or 0) + return_fee
-        )
+    from app.services.incident_service import report_shipment_failure
+
+    await report_shipment_failure(
+        db, shipment, dp,
+        reason_code=body.reason_code or "other",
+        notes=body.reason,
+        photo_url=body.photo_url,
+        lat=body.lat,
+        lng=body.lng,
+    )
     await db.commit()
     await db.refresh(shipment)
     schedule_shipment_status(str(shipment.id), "failed")

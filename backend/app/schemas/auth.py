@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
@@ -42,6 +43,9 @@ class UserOut(BaseModel):
     is_active: bool
     is_superuser: bool = False
     loyalty_points: int = 0
+    pending_balance: Decimal = Decimal("0")
+    pending_installments: int = 0
+    installment_amount: Decimal = Decimal("0")
     referral_code: str | None = None
 
     class Config:

@@ -259,6 +259,19 @@ let scheduleState = { enabled: false, value: '' };
       <div id="discountRow" class="d-none d-flex justify-content-between text-success"><span>Descuento</span><span id="discountAmount">-$0.00</span></div>
       <hr>
       <div class="d-flex justify-content-between fw-bold fs-5"><span>Total</span><span id="totalAmount">${money(subtotal)}</span></div>
+      <div id="debtCard" class="d-none mt-2 border-top pt-2">
+        <div class="small fw-bold mb-1"><i class="bi bi-exclamation-circle"></i> Saldo pendiente</div>
+        <div class="small text-muted mb-2" id="debtHint"></div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="debtMode" id="debtFull" value="full" checked>
+          <label class="form-check-label small" for="debtFull" id="debtFullLabel">Pagar todo</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="debtMode" id="debtInstallments" value="installments">
+          <label class="form-check-label small" for="debtInstallments" id="debtInstallmentsLabel">Pagar en abonos</label>
+        </div>
+        <div class="form-text">En transferencia se cobra el saldo completo. Los abonos aplican al pagar en efectivo.</div>
+      </div>
       <div id="estimateMsg" class="small text-muted mt-1"></div>
       <div id="distanceWarning" class="alert alert-warning small mt-2 mb-0 d-none"></div>
     </div>`;
@@ -275,6 +288,7 @@ let scheduleState = { enabled: false, value: '' };
       setTimeout(useMyLocation, 500);
     }
     refreshEstimate();
+    loadDebtInfo();
   }
 
   function renderAddressSection() {
@@ -709,6 +723,24 @@ function updateApprovalUi() {
   if (refund) refund.classList.toggle('d-none', !(required && selectedPaymentMethod() === 'transfer'));
 }
 
+async function loadDebtInfo() {
+  try {
+    const profile = await getProfile();
+    const balance = Number(profile.pending_balance || 0);
+    if (!balance || balance <= 0) return;
+    const card = document.getElementById('debtCard');
+    if (!card) return;
+    card.classList.remove('d-none');
+    document.getElementById('debtHint').textContent =
+      `Tienes ${money(balance)} pendientes de un pedido no entregado. Se sumará a este pedido.`;
+    document.getElementById('debtFullLabel').textContent = `Pagar todo: ${money(balance)}`;
+    const count = Math.max(2, Number(profile.pending_installments) || 5);
+    const amount = Number(profile.installment_amount || 0) || Math.ceil(balance / count);
+    document.getElementById('debtInstallmentsLabel').textContent =
+      `Pagar en abonos: ${money(Math.min(amount, balance))} en este pedido`;
+  } catch (e) { /* sin sesión o sin deuda */ }
+}
+
 async function refreshEstimate() {
     const cart = getCart();
     const feeEl = document.getElementById('deliveryFee');
@@ -1003,6 +1035,7 @@ async function refreshEstimate() {
       const scheduledInput = scheduleState.enabled ? scheduleState.value : '';
       const scheduledFor = scheduledInput ? new Date(scheduledInput).toISOString() : null;
       const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked')?.value || 'cash';
+      const debtMode = document.querySelector('input[name="debtMode"]:checked')?.value || null;
       let refundAccount = null;
       if (estimateState.requires_courier_approval && paymentMethod === 'transfer') {
         const holder = (document.getElementById('refundHolder')?.value || '').trim();
@@ -1022,7 +1055,7 @@ async function refreshEstimate() {
           pickup ? null : lat, pickup ? null : lng,
           notes || null, appliedCoupon, paymentMethod,
           pickup ? 0 : tipAmount, scheduledFor, pointsToRedeem, pickup ? 'pickup' : 'delivery',
-          refundAccount,
+          refundAccount, debtMode,
         );
         await clearCartNow();
         if (paymentMethod === 'cash') showToast(pickup ? 'Pedido creado — pagarás al recoger' : 'Pedido creado — pagarás en efectivo al recibir');

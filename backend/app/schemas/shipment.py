@@ -127,6 +127,10 @@ class ShipmentDeliver(BaseModel):
 
 class ShipmentFail(BaseModel):
     reason: str = Field(..., min_length=3, max_length=500)
+    reason_code: str | None = Field(default=None, max_length=30)
+    photo_url: str | None = None
+    lat: float | None = None
+    lng: float | None = None
 
 
 class ShipmentCancel(BaseModel):

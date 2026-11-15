@@ -179,6 +179,14 @@ async def apply_cancellation(
             courier.current_order_id = None
             courier.is_available = True
 
+    if order.debt_charged:
+        from app.models.user import User
+
+        result = await db.execute(select(User).where(User.id == order.user_id))
+        customer = result.scalar_one_or_none()
+        if customer:
+            customer.pending_balance = (customer.pending_balance or Decimal("0")) + order.debt_charged
+
     return {
         "refund_amount": refund_amount,
         "refund_status": refund_status,

@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DECIMAL, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from geoalchemy2 import Geography
 
@@ -18,6 +18,9 @@ class User(TimestampMixin, Base):
     is_superuser = Column(Boolean, default=False, nullable=False)
     trusted_customer = Column(Boolean, default=False, nullable=False)
     loyalty_points = Column(Integer, default=0, nullable=False)
+    pending_balance = Column(DECIMAL(10, 2), default=0, nullable=False)
+    pending_installments = Column(Integer, default=0, nullable=False)
+    installment_amount = Column(DECIMAL(10, 2), default=0, nullable=False)
     referral_code = Column(String(20), unique=True, nullable=True, index=True)
     referred_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     referral_bonus_awarded = Column(Boolean, default=False, nullable=False)

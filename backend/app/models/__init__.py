@@ -27,6 +27,8 @@ from app.models.reservation import Reservation
 from app.models.store_request import StoreRequest
 from app.models.shipment import Shipment
 from app.models.receipt_validation import ReceiptValidation
+from app.models.delivery_incident import DeliveryIncident
+from app.models.restaurant_adjustment import RestaurantAdjustment
 
 __all__ = [
     "User",
@@ -60,4 +62,6 @@ __all__ = [
     "StoreRequest",
     "Shipment",
     "ReceiptValidation",
+    "DeliveryIncident",
+    "RestaurantAdjustment",
 ]

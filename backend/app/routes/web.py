@@ -247,6 +247,11 @@ async def web_admin_receipts(request: Request):
     return templates.TemplateResponse(request, "receipts_admin.html")
 
 
+@router.get("/admin/incidents")
+async def web_admin_incidents(request: Request):
+    return templates.TemplateResponse(request, "incidents_admin.html")
+
+
 @router.get("/admin/dashboard")
 async def web_admin_dashboard(request: Request):
     return templates.TemplateResponse(request, "dashboard_admin.html")

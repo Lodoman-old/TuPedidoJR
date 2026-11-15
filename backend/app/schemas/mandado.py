@@ -109,6 +109,14 @@ class MandadoPickupUpdate(BaseModel):
     pickup_location: GeoPoint
 
 
+class MandadoFail(BaseModel):
+    reason_code: str = Field(..., max_length=30)
+    notes: str | None = Field(default=None, max_length=500)
+    photo_url: str = Field(..., min_length=5, max_length=500)
+    lat: float | None = None
+    lng: float | None = None
+
+
 class MandadoTrackingStep(BaseModel):
     key: str
     label: str

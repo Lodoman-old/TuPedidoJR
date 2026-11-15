@@ -211,7 +211,7 @@ async function refreshTabBadges() {
     const mandadoRows = Array.isArray(mandados) ? mandados : [];
     const shipmentRows = Array.isArray(shipments) ? shipments : [];
 
-    const activeOrders = myOrders.filter(o => !['delivered', 'cancelled'].includes(o.status));
+    const activeOrders = myOrders.filter(o => !['delivered', 'cancelled', 'delivery_failed'].includes(o.status));
     const mandadoAvailable = mandadoRows.filter(
       m => m.status === 'pending' && !m.delivery_person_id
     );
@@ -412,7 +412,7 @@ async function loadMyOrders() {
     myDeliveryOrdersCache = orders;
     setTabBadge(
       'myordersActiveBadge',
-      orders.filter(o => !['delivered', 'cancelled'].includes(o.status)).length
+      orders.filter(o => !['delivered', 'cancelled', 'delivery_failed'].includes(o.status)).length
     );
     if (!orders.length) { el.innerHTML = '<p class="text-muted text-center py-4">No tienes repartos activos</p>'; return; }
     let html = '';

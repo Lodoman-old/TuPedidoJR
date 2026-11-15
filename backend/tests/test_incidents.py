@@ -148,6 +148,10 @@ class TestIncidentPolicy:
         assert incident is not None
         assert incident.status == "reported"
 
+        limits = await client.get("/api/v1/delivery/limits", headers=_headers(token))
+        assert limits.status_code == 200
+        assert limits.json()["active"] == 0
+
         resp = await client.post(
             f"/api/v1/admin/incidents/{incident.id}/discard",
             json={"notes": "Se desechó", "courier_fault": False},

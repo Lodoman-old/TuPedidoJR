@@ -38,7 +38,7 @@ async def active_service_count(db: AsyncSession, delivery_person_id) -> int:
         .select_from(Order)
         .where(
             Order.delivery_person_id == delivery_person_id,
-            Order.status.notin_(("delivered", "cancelled")),
+            Order.status.notin_(("delivered", "cancelled", "delivery_failed")),
         )
     )
     mandados = await db.scalar(
@@ -46,7 +46,7 @@ async def active_service_count(db: AsyncSession, delivery_person_id) -> int:
         .select_from(Mandado)
         .where(
             Mandado.delivery_person_id == delivery_person_id,
-            Mandado.status.notin_(("completed", "cancelled")),
+            Mandado.status.notin_(("completed", "cancelled", "delivery_failed")),
         )
     )
     shipments = await db.scalar(

@@ -87,7 +87,7 @@ async def courier_locations(
     result = await db.execute(
         text("""
             SELECT
-                dp.id, u.name, u.email, u.phone, u.is_active,
+                dp.id, u.name, u.email, u.phone, u.is_active, u.created_at AS registered_at,
                 dp.is_available, dp.current_order_id,
                 dp.vehicle_type, dp.payout_method,
                 dp.bank_name, dp.bank_account_holder, dp.bank_clabe,
@@ -117,6 +117,7 @@ async def courier_locations(
             "email": row["email"],
             "phone": row["phone"],
             "is_active": bool(row["is_active"]),
+            "registered_at": row["registered_at"].isoformat() if row["registered_at"] else None,
             "is_available": bool(row["is_available"]),
             "current_order_id": str(row["current_order_id"]) if row["current_order_id"] else None,
             "vehicle_type": row["vehicle_type"],

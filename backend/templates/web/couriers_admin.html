@@ -18,24 +18,17 @@
     <button class="btn btn-success btn-sm" onclick="openCourierModal()">
       <i class="bi bi-person-plus"></i> Alta de repartidor
     </button>
+    <a class="btn btn-outline-primary btn-sm" href="/web/admin/couriers/list">
+      <i class="bi bi-list-ul"></i> Listado de repartidores
+    </a>
     <button class="btn btn-outline-secondary btn-sm" onclick="loadCouriers()">
       <i class="bi bi-arrow-clockwise"></i> Actualizar
     </button>
   </div>
 </div>
 <div id="couriersError" class="alert alert-danger d-none"></div>
-<div class="row g-3">
-  <div class="col-lg-7">
-    <div class="card p-2">
-      <div id="couriersMap" style="height:560px;border-radius:10px;"></div>
-    </div>
-  </div>
-  <div class="col-lg-5">
-    <div class="card p-3">
-      <h6>Registro de repartidores</h6>
-      <div id="couriersList" class="small" style="max-height:520px;overflow-y:auto;"></div>
-    </div>
-  </div>
+<div class="card p-2">
+  <div id="couriersMap" style="height:calc(100vh - 250px);min-height:540px;border-radius:10px;"></div>
 </div>
 
 <div class="modal fade" id="courierModal" tabindex="-1" aria-hidden="true">
@@ -222,7 +215,6 @@
 
   function setCourierFilter(value) {
     courierFilter = value;
-    renderList(visibleCouriers());
     renderMarkers(visibleCouriers());
   }
 
@@ -232,44 +224,6 @@
         ? true
         : (courierFilter === 'active' ? c.is_active !== false : c.is_active === false)
     ));
-  }
-
-  function renderList(couriers) {
-    const box = document.getElementById('couriersList');
-    if (!couriers.length) {
-      box.innerHTML = '<p class="text-muted mb-0">No hay repartidores con este filtro.</p>';
-      return;
-    }
-    box.innerHTML = couriers.map(c => {
-      const info = statusInfo(c);
-      const vehicle = { bike: 'Bicicleta', motorcycle: 'Motocicleta', car: 'Automóvil' }[c.vehicle_type] || c.vehicle_type || '';
-      const active = c.is_active !== false;
-      return `<div class="border-bottom py-2 ${active ? '' : 'opacity-75'}">
-        <div class="d-flex justify-content-between gap-2">
-          <strong>${esc(c.name)}</strong>
-          <span class="badge" style="background:${info.color}">${info.label}</span>
-        </div>
-        <div class="text-muted text-break"><i class="bi bi-envelope"></i> ${esc(c.email || 'Sin correo')}</div>
-        <div class="text-muted"><i class="bi bi-telephone"></i> ${esc(c.phone || 'Sin teléfono')}</div>
-        <div class="text-muted">${esc(vehicle)} · ${esc(c.payout_method === 'transfer' ? 'Pago por transferencia' : 'Pago en efectivo')}</div>
-        ${c.current_order_id ? `<div class="text-muted">Pedido: ${esc(c.current_order_id.slice(0, 8))}</div>` : ''}
-        <div class="d-flex gap-1 flex-wrap mt-1">
-          <button class="btn btn-sm btn-outline-primary" onclick="showCourierDetails('${c.id}')">
-            <i class="bi bi-person-vcard"></i> Ver datos
-          </button>
-          <button class="btn btn-sm btn-outline-dark" onclick="openCourierModal('${c.id}')">
-            <i class="bi bi-pencil"></i> Editar
-          </button>
-          <button class="btn btn-sm ${active ? 'btn-outline-warning' : 'btn-outline-success'}"
-                  onclick="setCourierActive('${c.id}', ${active ? 'false' : 'true'})">
-            ${active ? 'Dar de baja' : 'Reactivar'}
-          </button>
-          ${c.history_count === 0 ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteCourier('${c.id}')">
-            <i class="bi bi-trash"></i> Eliminar
-          </button>` : ''}
-        </div>
-      </div>`;
-    }).join('');
   }
 
   function renderMarkers(couriers) {
@@ -312,7 +266,6 @@
       couriersData = couriers;
       couriersCache = {};
       couriers.forEach(c => { couriersCache[c.id] = c; });
-      renderList(visibleCouriers());
       renderMarkers(visibleCouriers());
       document.getElementById('lastRefresh').textContent =
         'Actualización automática cada 5 s · ' + new Date().toLocaleTimeString();

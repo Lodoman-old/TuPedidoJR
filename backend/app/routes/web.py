@@ -272,6 +272,11 @@ async def web_admin_couriers(request: Request):
     return templates.TemplateResponse(request, "couriers_admin.html")
 
 
+@router.get("/admin/couriers/list")
+async def web_admin_couriers_list(request: Request):
+    return templates.TemplateResponse(request, "couriers_list_admin.html")
+
+
 @router.get("/manifest.json")
 async def web_manifest():
     return JSONResponse({

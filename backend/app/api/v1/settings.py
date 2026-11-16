@@ -76,6 +76,16 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Si un pedido retenido no recibe repartidor en este tiempo, se cancela solo y se devuelve el dinero cuando aplica. Vacío o 0 desactiva la cancelación automática.",
         "type": "int", "default": "30",
     },
+    "COVERAGE_ENFORCE": {
+        "group": "Envíos", "label": "Limitar entregas a Juventino Rosas",
+        "description": "Rechaza pedidos a domicilio y envíos de negocio fuera del municipio. Recoger en el negocio no se limita y los mandados tampoco.",
+        "type": "bool", "default": "true",
+    },
+    "COVERAGE_MARGIN_M": {
+        "group": "Envíos", "label": "Margen de la frontera municipal (m)",
+        "description": "Colchón alrededor del límite del municipio para no cortar domicilios en la orilla. 0 usa el polígono exacto; máximo 5000.",
+        "type": "int", "default": "500",
+    },
     "MANDADO_ACTIVE": {
         "group": "Mandados", "label": "Permitir mandados",
         "description": "Activa o desactiva el servicio de mandados.",

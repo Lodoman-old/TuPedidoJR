@@ -25,6 +25,7 @@ from app.schemas.shipment import (
     ShipmentTrackingOut,
 )
 from app.services.order_service import get_setting_value
+from app.services.coverage_service import ensure_coverage
 from app.services.courier_limits import ensure_can_accept
 from app.services.push_service import schedule_new_shipment, schedule_shipment_status
 from app.services.restaurant_access import ORDER_ROLES, have_role
@@ -145,6 +146,7 @@ async def quote_shipment(
             status_code=400,
             detail=f"La dirección está fuera de la cobertura (máximo {max_km:g} km).",
         )
+    await ensure_coverage(db, body.delivery_location.lat, body.delivery_location.lng)
     return ShipmentQuoteOut(**fees)
 
 
@@ -187,6 +189,7 @@ async def create_shipment(
             status_code=400,
             detail=f"La dirección está fuera de la cobertura (máximo {max_km:g} km).",
         )
+    await ensure_coverage(db, body.delivery_location.lat, body.delivery_location.lng)
 
     amount_to_collect = round_half_down(fees["amount_to_collect"])
     shipment = Shipment(

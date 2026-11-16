@@ -66,6 +66,7 @@
   let loyaltyValue = 1;
   let restaurantInfo = null;
   let fulfillment = 'delivery';
+  let coverageInside = null;
 let scheduleState = { enabled: false, value: '' };
 
   function esc(value) {
@@ -322,6 +323,38 @@ let scheduleState = { enabled: false, value: '' };
     }
   }
 
+  async function checkCoverage(lat, lng) {
+    if (lat == null || lng == null) {
+      coverageInside = null;
+      updateCoverageUi();
+      return null;
+    }
+    try {
+      const res = await apiRequest(
+        'GET',
+        `/geocode/coverage?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`
+      );
+      coverageInside = res.inside;
+    } catch (e) {
+      coverageInside = null;
+    }
+    const msg = document.getElementById('geocodeMsg');
+    if (coverageInside === false && msg) {
+      msg.className = 'small mt-2 text-danger';
+      msg.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Esa ubicación está fuera de nuestra zona de entrega. Por ahora solo entregamos dentro de Juventino Rosas; puedes recoger tu pedido en el negocio.';
+    }
+    updateCoverageUi();
+    return coverageInside;
+  }
+
+  function updateCoverageUi() {
+    const btn = document.getElementById('placeOrderBtn');
+    if (!btn) return;
+    const blocked = fulfillment !== 'pickup' && coverageInside === false;
+    btn.disabled = blocked;
+    btn.textContent = blocked ? 'Fuera de la zona de entrega' : 'Confirmar pedido';
+  }
+
   function selectSavedAddress(address) {
     selectedAddressId = address.id;
     addressState.street = address.address || '';
@@ -344,9 +377,11 @@ let scheduleState = { enabled: false, value: '' };
     addressState.source = '';
     colonias = [];
     cpCenter = null;
+    coverageInside = null;
+    updateCoverageUi();
   }
 
-  function onSavedAddressChange(event) {
+  async function onSavedAddressChange(event) {
     const value = event.target.value;
     if (value === 'manual') {
       selectManualAddress();
@@ -365,6 +400,7 @@ let scheduleState = { enabled: false, value: '' };
     if (address) {
       selectSavedAddress(address);
       renderAddressSection();
+      await checkCoverage(addressState.lat, addressState.lng);
       refreshEstimate();
     }
   }
@@ -416,7 +452,7 @@ let scheduleState = { enabled: false, value: '' };
     }
   }
 
-  function applyGeoResult(r, source) {
+  async function applyGeoResult(r, source) {
     addressState.lat = r.lat;
     addressState.lng = r.lng;
     addressState.source = source;
@@ -424,6 +460,11 @@ let scheduleState = { enabled: false, value: '' };
     if (msg) {
       msg.className = 'small mt-2 text-success';
       msg.textContent = `Ubicación seleccionada: ${r.display_name}`;
+    }
+    await checkCoverage(r.lat, r.lng);
+    if (coverageInside === false && msg) {
+      msg.className = 'small mt-2 text-danger';
+      msg.textContent = `Ubicación fuera de la zona de entrega: ${r.display_name}. Solo entregamos dentro de Juventino Rosas.`;
     }
     refreshEstimate();
   }
@@ -582,6 +623,7 @@ let scheduleState = { enabled: false, value: '' };
             msg.textContent = 'Ubicación aplicada, pero no se pudo leer la dirección. Corrige C.P., colonia y calle manualmente.';
           }
         }
+        await checkCoverage(addressState.lat, addressState.lng);
         await refreshEstimate();
       },
       () => {
@@ -694,6 +736,7 @@ let scheduleState = { enabled: false, value: '' };
       if (custom) custom.value = '';
       updateTipButtons();
     }
+    updateCoverageUi();
     refreshEstimate();
   }
 
@@ -764,6 +807,17 @@ async function refreshEstimate() {
       if (loyaltyRow) loyaltyRow.classList.add('d-none');
       updateTipButtons();
       if (estimateMsg) estimateMsg.textContent = 'Ingresa tu dirección y pulsa “Buscar dirección” para calcular el envío.';
+      return;
+    }
+    if (fulfillment !== 'pickup' && coverageInside === false) {
+      feeEl.textContent = '—';
+      flatEl.textContent = '—';
+      totalEl.textContent = money(subtotal + tipAmount);
+      if (loyaltyRow) loyaltyRow.classList.add('d-none');
+      updateCoverageUi();
+      if (estimateMsg) {
+        estimateMsg.textContent = 'La dirección está fuera de Juventino Rosas: no podemos entregar ahí. Si quieres, puedes recoger tu pedido en el negocio.';
+      }
       return;
     }
     try {
@@ -1031,6 +1085,19 @@ async function refreshEstimate() {
         return;
       }
 
+      if (!pickup) {
+        const inside = await checkCoverage(lat, lng);
+        if (inside === false) {
+          const err = document.getElementById('cartError');
+          if (err) {
+            err.textContent = 'Esa dirección está fuera de nuestra zona de entrega. Por ahora solo entregamos dentro de Juventino Rosas; puedes recoger tu pedido en el negocio.';
+            err.classList.remove('d-none');
+          }
+          showToast('Esa dirección está fuera de Juventino Rosas', 'danger');
+          return;
+        }
+      }
+
       const notes = document.getElementById('orderNotes').value.trim();
       const scheduledInput = scheduleState.enabled ? scheduleState.value : '';
       const scheduledFor = scheduledInput ? new Date(scheduledInput).toISOString() : null;
@@ -1079,6 +1146,7 @@ async function refreshEstimate() {
     if (savedAddresses.length) {
       const defaultAddress = savedAddresses.find(a => a.is_default) || savedAddresses[0];
       selectSavedAddress(defaultAddress);
+      await checkCoverage(addressState.lat, addressState.lng);
     } else {
       selectManualAddress();
     }

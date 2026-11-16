@@ -20,6 +20,7 @@ from app.schemas.store_request import (
     StoreRequestRespond,
 )
 from app.services.order_service import calculate_order_totals, get_setting_value
+from app.services.coverage_service import ensure_coverage
 from app.services.push_service import (
     schedule_new_order,
     schedule_new_store_request,
@@ -99,6 +100,7 @@ async def create_store_request(
         raise HTTPException(status_code=409, detail="La tienda no está disponible")
 
     await _validate_payment_method(db, body.payment_method)
+    await ensure_coverage(db, body.delivery_location.lat, body.delivery_location.lng)
 
     request = StoreRequest(
         store_id=store.id,

@@ -28,6 +28,7 @@ from app.schemas.order import (
     TrackingOut,
 )
 from app.services.cancellation_service import apply_cancellation, can_cancel, get_policy
+from app.services.coverage_service import ensure_coverage
 from app.services.restaurant_access import ORDER_ROLES, have_role
 from app.services.estimation_service import calculate_estimated_time
 from app.services.order_service import calculate_order_totals, get_approval_timeout_min, get_setting_value, resolve_item_options
@@ -109,6 +110,8 @@ async def estimate_time(
     lat, lng = await _restaurant_coords(db, restaurant) if pickup else (
         body.delivery_location.lat, body.delivery_location.lng,
     )
+    if not pickup:
+        await ensure_coverage(db, lat, lng)
     estimated_min = await calculate_estimated_time(
         db, restaurant, items_data, lng, lat, pickup=pickup,
     )
@@ -209,6 +212,8 @@ async def estimate_price(
     lat, lng = await _restaurant_coords(db, restaurant) if pickup else (
         body.delivery_location.lat, body.delivery_location.lng,
     )
+    if not pickup:
+        await ensure_coverage(db, lat, lng)
     subtotal, delivery_fee, discount, total, coupon, platform_commission, flat_usage_fee, delivery_earnings, distance_km = await calculate_order_totals(
         db, restaurant, items_data, body.coupon_code,
         delivery_lat=lat, delivery_lng=lng,
@@ -318,6 +323,9 @@ async def create_order(
             f"SRID=4326;POINT({body.delivery_location.lng} {body.delivery_location.lat})"
         )
         total_lat, total_lng = body.delivery_location.lat, body.delivery_location.lng
+
+    if not pickup:
+        await ensure_coverage(db, total_lat, total_lng)
 
     payment_method = body.payment_method
     if payment_method == "mp":

@@ -75,6 +75,7 @@ async def clean_db():
         await conn.execute(text("DELETE FROM restaurants"))
         await conn.execute(text("DELETE FROM settings"))
         await conn.execute(text("DELETE FROM users"))
+        await conn.execute(text("DELETE FROM postal_code_areas"))
 
 
 async def override_get_db() -> AsyncGenerator[AsyncSession, None]:

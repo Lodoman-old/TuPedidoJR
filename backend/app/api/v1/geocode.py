@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.coverage_service import is_inside_coverage
 from app.services.geocode_service import geocode_address, geocode_structured, reverse_geocode
 
 router = APIRouter()
@@ -122,6 +123,17 @@ async def location_context(
         **context,
         "source": "postgis",
     }
+
+
+@router.get("/coverage")
+async def coverage_check(
+    lat: float = Query(...),
+    lng: float = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Zona de entrega: True dentro de Juventino Rosas, False fuera."""
+    inside = await is_inside_coverage(db, lat, lng)
+    return {"inside": inside, "checked": inside is not None}
 
 
 async def _location_context(db: AsyncSession, lat: float, lng: float) -> dict | None:

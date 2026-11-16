@@ -165,6 +165,15 @@ async def root_redirect():
     return RedirectResponse(url="/web/inicio")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    from pathlib import Path
+
+    from fastapi.responses import FileResponse
+
+    return FileResponse(Path(__file__).parent.parent / "static" / "favicon.ico")
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "app": settings.APP_NAME}

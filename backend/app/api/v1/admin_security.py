@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.services.audit_service import log_action
 from app.services.security_service import (
+    client_ip,
     is_valid_ip,
     list_security_overview,
     security_guard,
@@ -31,6 +32,7 @@ class UnblockRequest(BaseModel):
 
 @router.get("/security/overview")
 async def security_overview(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_superuser),
 ):
@@ -38,6 +40,7 @@ async def security_overview(
     settings = await security_guard.refresh_settings(force=True)
     return {
         **data,
+        "client_ip": client_ip(request),
         "settings": {
             "enabled": str(settings.get("enabled")).lower() in {"1", "true", "yes", "si", "sí", "on"},
             "auto_block": str(settings.get("auto_block")).lower() in {"1", "true", "yes", "si", "sí", "on"},

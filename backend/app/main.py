@@ -44,6 +44,7 @@ async def lifespan(app: FastAPI):
     await bootstrap_push_settings()
     security_guard.configure(async_session)
     await security_guard.load_blocks()
+    await security_guard.cleanup()
     task = asyncio.create_task(ws_manager.start_persist_background_task())
     affiliation_task = asyncio.create_task(affiliation_reminder_loop())
     courier_timeout_task = asyncio.create_task(courier_timeout_loop())
@@ -55,7 +56,15 @@ async def lifespan(app: FastAPI):
     logger.info("Servidor detenido")
 
 
-app = FastAPI(title=settings.APP_NAME, version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title=settings.APP_NAME,
+    version="0.1.0",
+    lifespan=lifespan,
+    # La documentación automática revela todos los endpoints: solo en desarrollo.
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
+    openapi_url="/openapi.json" if settings.DEBUG else None,
+)
 
 
 @app.exception_handler(Exception)
@@ -102,6 +111,9 @@ async def security_headers(request: Request, call_next):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault(
+        "Permissions-Policy", "geolocation=(self), camera=(), microphone=(), payment=()"
+    )
     if settings.NOINDEX:
         response.headers["X-Robots-Tag"] = "noindex, nofollow"
     if request.url.scheme == "https":

@@ -64,6 +64,10 @@
         <input type="text" class="form-control form-control-sm" id="secWhitelist"
                placeholder="Ej. 187.190.10.5, 10.0.0.0/8">
         <div class="form-text">Nunca se bloquean. Sepáralas con coma. Agrega aquí tu IP de oficina o casa.</div>
+        <div class="d-flex align-items-center justify-content-between gap-2 mt-2">
+          <span class="small text-muted">Tu IP: <code id="secMyIp">—</code></span>
+          <button class="btn btn-outline-secondary btn-sm" type="button" onclick="trustMyIp()">Agregar a confianza</button>
+        </div>
         <button class="btn btn-primary btn-sm mt-2 w-100" onclick="saveSecurity()">
           <i class="bi bi-save"></i> Guardar configuración
         </button>
@@ -160,6 +164,7 @@
       secEl('secRateLimit').value = s.rate_limit ?? 400;
       secEl('secBlockMinutes').value = s.block_minutes ?? 60;
       secEl('secWhitelist').value = s.whitelist ?? '';
+      secEl('secMyIp').textContent = data.client_ip || '—';
 
       const blocks = data.blocks || [];
       secEl('secBlocksBody').innerHTML = blocks.length
@@ -215,6 +220,15 @@
     } catch (e) {
       secMsg('secError', 'No se pudo guardar: ' + e.message);
     }
+  }
+
+  function trustMyIp() {
+    const ip = (secEl('secMyIp').textContent || '').trim();
+    if (!ip || ip === '—') return;
+    const current = secEl('secWhitelist').value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!current.includes(ip)) current.push(ip);
+    secEl('secWhitelist').value = current.join(', ');
+    saveSecurity();
   }
 
   async function blockIp() {

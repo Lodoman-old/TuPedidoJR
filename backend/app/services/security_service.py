@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Request
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import async_session
@@ -65,16 +65,22 @@ class Decision:
 
 
 def client_ip(request: Request) -> str:
-    """IP real detrás de Traefik/Coolify (la última del X-Forwarded-For)."""
+    """IP real detrás de Traefik/Coolify.
+
+    Solo se confía en ``X-Forwarded-For`` cuando quien conecta es el proxy
+    (dirección privada). Si el backend quedara expuesto directo, se usa la
+    conexión real para que nadie pueda falsificar su IP.
+    """
+    peer = request.client.host if request.client else ""
     forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
+    if forwarded and (not is_valid_ip(peer) or _is_local(peer)):
         parts = [part.strip() for part in forwarded.split(",") if part.strip()]
         if parts:
             return parts[-1]
     real = request.headers.get("x-real-ip")
-    if real and real.strip():
+    if real and real.strip() and (not is_valid_ip(peer) or _is_local(peer)):
         return real.strip()
-    return request.client.host if request.client else "desconocida"
+    return peer or "desconocida"
 
 
 def is_valid_ip(value: str) -> bool:
@@ -195,6 +201,25 @@ class SecurityGuard:
                         if row.expires_at is not None
                         else now.timestamp() + 365 * 86400
                     )
+        except Exception:
+            pass
+
+    async def cleanup(self, days: int = 30) -> None:
+        """Borra eventos viejos y bloqueos ya vencidos."""
+        try:
+            now = datetime.now(timezone.utc)
+            cutoff = now - timedelta(days=max(1, days))
+            async with self._session() as db:
+                await db.execute(
+                    delete(SecurityEvent).where(SecurityEvent.created_at < cutoff)
+                )
+                await db.execute(
+                    delete(BlockedIP).where(
+                        BlockedIP.expires_at.is_not(None),
+                        BlockedIP.expires_at < now,
+                    )
+                )
+                await db.commit()
         except Exception:
             pass
 

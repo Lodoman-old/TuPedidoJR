@@ -824,7 +824,7 @@ add_text(slide, 7.05, 4.75, 5.2, 0.8,
          "Capital y alianzas para adquisición de negocios,\nmateriales y expansión regional.",
          size=11, color=WHITE, spacing=1.1)
 add_text(slide, 0.85, 6.2, 11.0, 0.3,
-         "WhatsApp 412 134 0765  ·  old.lodoman@gmail.com  ·  Juventino Rosas, Guanajuato",
+         "WhatsApp 412 134 0765  ·  tupedidojr@gmail.com  ·  Juventino Rosas, Guanajuato",
          size=10.5, color=RGBColor(0xC9,0xD2,0xE3))
 add_text(slide, 0.85, 6.65, 11.0, 0.3,
          "Gracias.", size=18, color=ORANGE, bold=True)

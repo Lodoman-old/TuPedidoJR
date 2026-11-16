@@ -111,6 +111,44 @@
     .section-head { max-width: 720px; margin-bottom: 34px; }
     .section-head h2 { font-size: clamp(27px, 3vw, 38px); line-height: 1.15; letter-spacing: -.8px; margin: 12px 0 10px; }
     .section-head p { color: var(--muted); font-size: 16px; margin: 0; }
+    .photo-strip { padding: 26px 0 4px; }
+    .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .photo-grid figure {
+      position: relative; margin: 0; border-radius: 20px; overflow: hidden;
+      box-shadow: 0 16px 40px rgba(13,27,42,.14); background: #fff;
+    }
+    .photo-grid img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; transition: transform .55s ease; }
+    .photo-grid figure:hover img { transform: scale(1.04); }
+    .photo-grid figcaption {
+      position: absolute; left: 0; right: 0; bottom: 0; padding: 34px 16px 14px;
+      color: #fff; font-weight: 700; font-size: 15px;
+      background: linear-gradient(transparent, rgba(13,27,42,.82));
+    }
+    .business-collage { position: relative; padding-bottom: 34px; }
+    .business-collage .photo {
+      width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 22px;
+      box-shadow: var(--shadow);
+    }
+    .business-collage .shot {
+      position: absolute; right: -6px; bottom: 0; width: 58%; border-radius: 14px;
+      border: 1px solid var(--line); background: #fff;
+      box-shadow: 0 18px 44px rgba(13,27,42,.24);
+    }
+    .pricing {
+      margin-top: 34px; display: grid; grid-template-columns: 1fr 1.2fr; gap: 32px;
+      background: linear-gradient(135deg, #fff8f1, #fff 58%, #eef4ff);
+      border: 1px solid #ffd9b3; border-radius: 24px; padding: 34px;
+    }
+    .pricing .price {
+      font-size: clamp(38px, 4vw, 50px); font-weight: 800; letter-spacing: -1.8px;
+      line-height: 1; margin: 12px 0 10px; color: var(--ink);
+    }
+    .pricing .price small { font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+    .pricing h3 { margin: 0 0 10px; }
+    .pricing .checks { margin-top: 0; }
+    .pricing .checks li { font-size: 14.5px; }
+    .pricing .btn { margin-top: 16px; }
+    .pricing .fine { color: var(--muted); font-size: 12.5px; margin-top: 12px; }
     .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
     .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
     .card {
@@ -186,7 +224,9 @@
     details[open] summary::after { content: "−"; }
     details p { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
     .cta-final {
-      text-align: center; background: linear-gradient(135deg, #f58220, #ff9d4d);
+      text-align: center; background:
+        linear-gradient(135deg, rgba(245,130,32,.94), rgba(255,157,77,.88)),
+        url('/static/landing/restaurante.jpg') center / cover;
       color: #fff; border-radius: 24px; padding: 48px 26px;
     }
     .cta-final h2 { font-size: clamp(26px, 3vw, 36px); margin: 0 0 10px; letter-spacing: -.6px; }
@@ -212,7 +252,9 @@
       .hero-visual { min-height: 420px; max-width: 520px; margin: 0 auto; width: 100%; }
       .grid-4 { grid-template-columns: repeat(2, 1fr); }
       .grid-3 { grid-template-columns: 1fr; }
-      .split, .coverage, .download { grid-template-columns: 1fr; }
+      .photo-grid { grid-template-columns: 1fr; }
+      .split, .coverage, .download, .pricing { grid-template-columns: 1fr; }
+      .business-collage .shot { width: 62%; }
       .steps { grid-template-columns: 1fr; }
       .footer-grid { grid-template-columns: 1fr 1fr; }
     }
@@ -288,6 +330,23 @@
     </div>
   </section>
 
+  <section class="photo-strip" aria-label="Entregas y productos locales">
+    <div class="wrap photo-grid">
+      <figure class="reveal">
+        <img src="/static/landing/repartidor.jpg" alt="Repartidor local con mochila de entrega" loading="lazy">
+        <figcaption>Repartidores de tu comunidad</figcaption>
+      </figure>
+      <figure class="reveal">
+        <img src="/static/landing/platillos.jpg" alt="Platillos locales recién preparados" loading="lazy">
+        <figcaption>Comida local, recién hecha</figcaption>
+      </figure>
+      <figure class="reveal">
+        <img src="/static/landing/mandado.jpg" alt="Productos frescos para un mandado" loading="lazy">
+        <figcaption>Mandados y compras del día</figcaption>
+      </figure>
+    </div>
+  </section>
+
   <main>
     <section class="section" id="clientes">
       <div class="wrap">
@@ -344,7 +403,10 @@
           <p>Menú o catálogo digital, pedidos, reparto y liquidaciones. Tú te enfocas en vender; nosotros en la entrega.</p>
         </div>
         <div class="split">
-          <div class="image-frame reveal"><img src="/static/manuals/negocio-ganancias.png" alt="Panel de ganancias del negocio" loading="lazy"></div>
+          <div class="business-collage reveal">
+            <img class="photo" src="/static/landing/negocio.jpg" alt="Dueño de un negocio local atendiendo a una clienta" loading="lazy">
+            <img class="shot" src="/static/manuals/negocio-ganancias.png" alt="Panel de ganancias del negocio" loading="lazy">
+          </div>
           <div class="reveal">
             <div class="grid-4" style="grid-template-columns:1fr 1fr;gap:14px">
               <div class="card" style="padding:18px"><div class="icon"><i class="bi bi-menu-button-wide"></i></div><h3>Menú/catálogo</h3><p>Fotos, precios, categorías, opciones y horarios.</p></div>
@@ -359,6 +421,33 @@
               <li><i class="bi bi-check-circle-fill"></i> Soporte y capacitación local.</li>
             </ul>
             <div style="margin-top:22px"><a class="btn btn-primary" href="/web/register-restaurant"><i class="bi bi-shop"></i> Quiero registrar mi negocio</a></div>
+          </div>
+        </div>
+
+        <div class="pricing reveal">
+          <div>
+            <span class="eyebrow">Afiliación anual</span>
+            <div class="price">${{ '%.0f'|format(affiliation_fee|float) }} <small>MXN / año</small></div>
+            <p style="color:var(--muted);margin:0 0 8px">
+              Un solo pago anual para mantener tu negocio activo en TuPedidoJR,
+              con presencia digital y respaldo de reparto.
+            </p>
+            <p class="fine">
+              Además se aplican las cuotas por pedido configuradas. Te mostramos todo
+              antes de activar tu negocio.
+            </p>
+          </div>
+          <div>
+            <h3>Qué incluye tu afiliación</h3>
+            <ul class="checks">
+              <li><i class="bi bi-check-circle-fill"></i> Menú o catálogo digital con fotos, precios y categorías.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Página propia, enlace y QR para mostrador y volantes.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Materiales y capacitación inicial para tu equipo.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Panel de pedidos, envíos, ganancias y liquidaciones.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Red de repartidores locales y seguimiento de entrega.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Soporte y acompañamiento para vender en línea.</li>
+            </ul>
+            <a class="btn btn-primary" href="/web/register-restaurant"><i class="bi bi-shop"></i> Afiliar mi negocio</a>
           </div>
         </div>
       </div>
@@ -501,13 +590,13 @@
         <div>
           <h4>Contacto</h4>
           {% if whatsapp %}<a href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> {{ whatsapp }}</a>{% endif %}
-          <a href="mailto:old.lodoman@gmail.com"><i class="bi bi-envelope"></i> old.lodoman@gmail.com</a>
+          <a href="mailto:{{ contact_email }}"><i class="bi bi-envelope"></i> {{ contact_email }}</a>
           <p style="font-size:13px;margin:10px 0 0;color:#8fa4ba">Juventino Rosas, Guanajuato, México.</p>
         </div>
       </div>
       <div class="footer-bottom">
         <span>© <span id="year"></span> TuPedidoJR. Todos los derechos reservados.</span>
-        <span>Hecho con orgullo en Juventino Rosas, Gto.</span>
+        <span>Hecho con orgullo en Juventino Rosas, Gto. · Fotografías: <a href="https://unsplash.com" target="_blank" rel="noopener" style="display:inline;color:#b9cbe0">Unsplash</a></span>
       </div>
     </div>
   </footer>

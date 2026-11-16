@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.restaurant import Restaurant
 from app.services import push_service
@@ -27,7 +28,23 @@ async def web_index():
 async def web_landing(request: Request, db: AsyncSession = Depends(get_db)):
     raw_whatsapp = (await get_setting_value(db, "WHATSAPP_SUPPORT", "")).strip()
     whatsapp = "".join(ch for ch in raw_whatsapp if ch.isdigit())
-    return templates.TemplateResponse(request, "landing.html", {"whatsapp": whatsapp})
+    raw_fee = await get_setting_value(db, "AFFILIATION_ANNUAL_FEE", "500.0")
+    try:
+        affiliation_fee = float(raw_fee)
+    except (TypeError, ValueError):
+        affiliation_fee = 500.0
+    contact_email = (
+        await get_setting_value(db, "CONTACT_EMAIL", "tupedidojr@gmail.com")
+    ).strip()
+    return templates.TemplateResponse(
+        request,
+        "landing.html",
+        {
+            "whatsapp": whatsapp,
+            "affiliation_fee": affiliation_fee,
+            "contact_email": contact_email,
+        },
+    )
 
 
 @router.get("/login")
@@ -41,8 +58,20 @@ async def web_register(request: Request):
 
 
 @router.get("/register-restaurant")
-async def web_register_restaurant(request: Request):
-    return templates.TemplateResponse(request, "register_restaurant.html")
+async def web_register_restaurant(request: Request, db: AsyncSession = Depends(get_db)):
+    raw_fee = await get_setting_value(db, "AFFILIATION_ANNUAL_FEE", "500.0")
+    try:
+        affiliation_fee = float(raw_fee)
+    except (TypeError, ValueError):
+        affiliation_fee = 500.0
+    contact_email = (
+        await get_setting_value(db, "CONTACT_EMAIL", "tupedidojr@gmail.com")
+    ).strip()
+    return templates.TemplateResponse(
+        request,
+        "register_restaurant.html",
+        {"affiliation_fee": affiliation_fee, "contact_email": contact_email},
+    )
 
 
 @router.get("/forgot-password")
@@ -212,8 +241,13 @@ async def web_recharges(request: Request):
 
 
 @router.get("/app")
-async def web_app_download(request: Request):
-    return templates.TemplateResponse(request, "app_download.html")
+async def web_app_download(request: Request, db: AsyncSession = Depends(get_db)):
+    public_url = (
+        await get_setting_value(db, "APP_PUBLIC_URL", settings.APP_URL)
+    ).rstrip("/")
+    return templates.TemplateResponse(
+        request, "app_download.html", {"public_url": public_url}
+    )
 
 
 @router.get("/app/apk")

@@ -426,7 +426,7 @@ for i, (q, a) in enumerate(faqs):
     add_text(slide, cx + 0.25, cy + 0.52, 5.4, 0.6, a, size=9.5, color=GRAY, spacing=1.05)
 add_card(slide, 0.62, 6.2, 12.1, 0.55, fill=RGBColor(0xFF, 0xF2, 0xE8))
 add_text(slide, 0.9, 6.32, 11.5, 0.3,
-         "¿Otra duda? WhatsApp 412 134 0765  ·  old.lodoman@gmail.com",
+         "¿Otra duda? WhatsApp 412 134 0765  ·  tupedidojr@gmail.com",
          size=10.5, color=ORANGE_DARK, bold=True)
 
 # ---------------------------------------------------------------- 12 CTA
@@ -449,7 +449,7 @@ add_text(slide, 1.1, 4.78, 5.2, 0.7,
 add_card(slide, 6.8, 4.25, 5.7, 1.45, fill=RGBColor(0x22, 0x35, 0x6E))
 add_text(slide, 7.05, 4.42, 5.2, 0.3, "Contacto", size=12, color=ORANGE, bold=True)
 add_text(slide, 7.05, 4.78, 5.2, 0.7,
-         "WhatsApp 412 134 0765\nold.lodoman@gmail.com",
+         "WhatsApp 412 134 0765\ntupedidojr@gmail.com",
          size=11, color=WHITE, spacing=1.1)
 add_text(slide, 0.85, 6.2, 11.0, 0.3,
          "Juventino Rosas, Guanajuato  ·  TuPedidoJR",

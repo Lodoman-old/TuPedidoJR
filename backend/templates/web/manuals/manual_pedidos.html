@@ -99,6 +99,7 @@
 <p>El modelo puede combinar una comisión porcentual configurable con cuotas fijas por pedido.</p>
 <table>
   <tr><th>Concepto</th><th>Monto actual</th></tr>
+  <tr><td>Afiliación anual del negocio</td><td>${{ '%.0f'|format(affiliation_fee|float) }} MXN / año</td></tr>
   <tr><td>Comisión de la plataforma</td><td>Según configuración (se descuenta al negocio)</td></tr>
   <tr><td>Cuota del negocio por pedido</td><td>${{ '%.2f'|format(business_fee|float) }}</td></tr>
   <tr><td>Cuota de servicio del cliente</td><td>${{ '%.2f'|format(flat_fee|float) }}</td></tr>

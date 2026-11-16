@@ -9,6 +9,22 @@
     <div class="card p-4">
       <h4 class="mb-1">Registra tu negocio</h4>
       <p class="text-muted small mb-4">Registra tu restaurante, tienda, farmacia, abarrotes o ferretería. Envía tu solicitud y el equipo de TuPedidoJR la revisará.</p>
+      <div class="alert alert-light border mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <strong><i class="bi bi-patch-check"></i> Afiliación anual</strong>
+          <span class="badge bg-primary fs-6">${{ '%.0f'|format(affiliation_fee|float) }} MXN / año</span>
+        </div>
+        <p class="small text-muted mb-2 mt-2">Incluye:</p>
+        <ul class="small mb-0">
+          <li>Menú o catálogo digital con fotos, precios y categorías.</li>
+          <li>Página propia, enlace y QR para tu negocio.</li>
+          <li>Materiales y capacitación inicial.</li>
+          <li>Panel de pedidos, envíos, ganancias y liquidaciones.</li>
+          <li>Red de repartidores locales, seguimiento y soporte.</li>
+        </ul>
+        <div class="small text-muted mt-2">La afiliación se activa al aprobar tu solicitud. Además se aplican las cuotas por pedido configuradas.</div>
+        <div class="small text-muted mt-2">¿Dudas? Escríbenos a <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</div>
+      </div>
       <div id="regRestError" class="alert alert-danger d-none"></div>
       <div id="regRestSuccess" class="alert alert-success d-none"></div>
       <form id="regRestForm">

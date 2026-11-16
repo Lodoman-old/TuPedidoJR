@@ -415,7 +415,7 @@ add_text(slide, 1.1, 4.78, 5.2, 0.7,
 add_card(slide, 6.8, 4.25, 5.7, 1.45, fill=RGBColor(0x22, 0x35, 0x6E))
 add_text(slide, 7.05, 4.42, 5.2, 0.3, "Contacto", size=12, color=ORANGE, bold=True)
 add_text(slide, 7.05, 4.78, 5.2, 0.7,
-         "WhatsApp 412 134 0765\nold.lodoman@gmail.com",
+         "WhatsApp 412 134 0765\ntupedidojr@gmail.com",
          size=11, color=WHITE, spacing=1.1)
 add_text(slide, 0.85, 6.2, 11.0, 0.3,
          "Proyecto en operación · Apoyo para acelerar adopción, materiales y red de repartidores.",

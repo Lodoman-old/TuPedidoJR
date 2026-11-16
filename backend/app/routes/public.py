@@ -36,6 +36,8 @@ async def _manual_values(db: AsyncSession) -> dict:
     shipment_fee = await number("SHIPMENT_PLATFORM_FEE", "10.0")
     shipment_cod_max = await number("SHIPMENT_COD_MAX", "1500.0")
     shipment_return_percent = await number("SHIPMENT_RETURN_PERCENT", "50")
+    affiliation_fee = await number("AFFILIATION_ANNUAL_FEE", "500.0")
+    contact_email = (await get_setting_value(db, "CONTACT_EMAIL", "tupedidojr@gmail.com")).strip()
     peak_enabled = (await get_setting_value(db, "PEAK_BONUS_ENABLED", "false")).lower() == "true"
     peak_amount = await number("PEAK_BONUS_AMOUNT", "5.0")
     example_base = Decimal("100.00")
@@ -50,6 +52,8 @@ async def _manual_values(db: AsyncSession) -> dict:
         "shipment_fee": shipment_fee,
         "shipment_cod_max": shipment_cod_max,
         "shipment_return_percent": shipment_return_percent,
+        "affiliation_fee": affiliation_fee,
+        "contact_email": contact_email,
         "peak_enabled": peak_enabled,
         "peak_amount": peak_amount,
         "example_base": example_base,

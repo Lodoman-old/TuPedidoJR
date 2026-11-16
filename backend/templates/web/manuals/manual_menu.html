@@ -27,12 +27,13 @@
 <p>El modelo puede combinar una comisión porcentual configurable con cuotas fijas por pedido:</p>
 <table>
   <tr><th>Concepto</th><th>Monto actual</th></tr>
+  <tr><td>Afiliación anual del negocio</td><td>${{ '%.0f'|format(affiliation_fee|float) }} MXN / año</td></tr>
   <tr><td>Comisión de la plataforma</td><td>Según configuración (se descuenta del precio del negocio)</td></tr>
   <tr><td>Cuota del negocio por pedido</td><td>${{ '%.2f'|format(business_fee|float) }}</td></tr>
   <tr><td>Cuota de servicio del cliente</td><td>${{ '%.2f'|format(flat_fee|float) }}</td></tr>
   <tr><td>Envío</td><td>Lo paga el cliente y va completo al repartidor</td></tr>
 </table>
-<div class="note">El precio que configuras es tu precio base. La comisión se descuenta de ese precio, no se suma al cliente. La cuota de servicio se suma al cliente. Esta página se actualiza cuando el administrador cambia las cuotas o la comisión.</div>
+<div class="note">La afiliación anual incluye menú/catálogo digital, fotos, página propia y QR, materiales, capacitación, panel de pedidos, reparto, liquidaciones y soporte. El precio que configuras es tu precio base: la comisión se descuenta de ahí y la cuota de servicio se suma al cliente.</div>
 
 <h3>4. Opciones y modificadores</h3>
 <p>Puedes crear grupos para tamaño, extras, salsas, ingredientes, colores o presentaciones.</p>

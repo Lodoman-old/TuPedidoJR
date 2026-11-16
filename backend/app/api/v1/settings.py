@@ -36,6 +36,11 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Monto fijo por pedido que se descuenta al restaurante cuando trabaja con cuota fija.",
         "type": "money", "default": "5.0",
     },
+    "AFFILIATION_ANNUAL_FEE": {
+        "group": "Afiliación", "label": "Afiliación anual por negocio",
+        "description": "Costo anual para mantener el negocio activo. Incluye menú/catálogo digital, fotos, QR, materiales, capacitación, panel de pedidos, reparto, liquidaciones y soporte.",
+        "type": "money", "default": "500.0",
+    },
     "DELIVERY_BASE_FEE": {
         "group": "Envíos", "label": "Tarifa base de envío",
         "description": "Costo de envío para distancias dentro del radio incluido.",
@@ -200,6 +205,11 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "group": "Soporte", "label": "WhatsApp de soporte",
         "description": "Número con lada país, sin espacios. Ej. 524121234567.",
         "type": "text", "default": "",
+    },
+    "CONTACT_EMAIL": {
+        "group": "Soporte", "label": "Correo de contacto",
+        "description": "Correo público de la plataforma para soporte, dudas y avisos.",
+        "type": "text", "default": "tupedidojr@gmail.com",
     },
     "PEAK_BONUS_ENABLED": {
         "group": "Repartidores", "label": "Bono por hora pico",

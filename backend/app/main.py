@@ -26,6 +26,7 @@ from app.services.file_service import ensure_upload_dir
 from app.services.affiliation_service import affiliation_reminder_loop
 from app.services.courier_timeout_service import courier_timeout_loop
 from app.services.push_service import bootstrap_push_settings
+from app.services.security_service import security_guard
 from app.ws.delivery_ws import router as delivery_ws_router
 from app.ws.manager import ConnectionManager
 from app.ws.tracking_ws import router as tracking_ws_router
@@ -41,6 +42,8 @@ async def lifespan(app: FastAPI):
     logger.info("Iniciando %s ...", settings.APP_NAME)
     ensure_upload_dir()
     await bootstrap_push_settings()
+    security_guard.configure(async_session)
+    await security_guard.load_blocks()
     task = asyncio.create_task(ws_manager.start_persist_background_task())
     affiliation_task = asyncio.create_task(affiliation_reminder_loop())
     courier_timeout_task = asyncio.create_task(courier_timeout_loop())
@@ -105,6 +108,41 @@ async def security_headers(request: Request, call_next):
         response.headers.setdefault(
             "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
         )
+    return response
+
+
+@app.middleware("http")
+async def security_guard_middleware(request: Request, call_next):
+    decision = await security_guard.inspect(request)
+    if decision.blocked:
+        if request.url.path.startswith("/api/"):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Acceso bloqueado temporalmente por seguridad."},
+            )
+        html = (
+            "<!DOCTYPE html><html lang='es'><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+            "<title>Acceso bloqueado | TuPedidoJR</title>"
+            "<style>body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;"
+            "background:#f6f8fb;color:#17212b;display:grid;place-items:center;min-height:100vh;padding:24px}"
+            ".card{max-width:520px;background:#fff;border:1px solid #e3e9f0;border-radius:16px;"
+            "padding:28px;box-shadow:0 18px 50px rgba(13,27,42,.12)}h1{font-size:22px;margin:0 0 10px}"
+            "p{font-size:14px;color:#5d6b7a;line-height:1.6}a{color:#0d6efd}</style></head><body>"
+            "<div class='card'><h1>Acceso bloqueado temporalmente</h1>"
+            "<p>Detectamos actividad inusual desde tu conexión y la bloqueamos por seguridad. "
+            "Si crees que es un error, escríbenos y lo revisamos.</p>"
+            "<p>Correo: <a href='mailto:tupedidojr@gmail.com'>tupedidojr@gmail.com</a></p></div>"
+            "</body></html>"
+        )
+        from fastapi.responses import HTMLResponse
+
+        return HTMLResponse(html, status_code=403)
+    response = await call_next(request)
+    try:
+        await security_guard.observe_response(request, response.status_code)
+    except Exception:
+        pass
     return response
 
 

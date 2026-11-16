@@ -29,6 +29,7 @@ from app.models.shipment import Shipment
 from app.models.receipt_validation import ReceiptValidation
 from app.models.delivery_incident import DeliveryIncident
 from app.models.restaurant_adjustment import RestaurantAdjustment
+from app.models.security import BlockedIP, SecurityEvent
 
 __all__ = [
     "User",
@@ -64,4 +65,6 @@ __all__ = [
     "ReceiptValidation",
     "DeliveryIncident",
     "RestaurantAdjustment",
+    "SecurityEvent",
+    "BlockedIP",
 ]

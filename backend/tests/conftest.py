@@ -76,6 +76,22 @@ async def clean_db():
         await conn.execute(text("DELETE FROM settings"))
         await conn.execute(text("DELETE FROM users"))
         await conn.execute(text("DELETE FROM postal_code_areas"))
+        await conn.execute(text("DELETE FROM security_events"))
+        await conn.execute(text("DELETE FROM blocked_ips"))
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def reset_security_guard():
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    from app.services.security_service import security_guard
+
+    security_guard.configure(
+        async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    )
+    security_guard.reset()
+    yield
+    security_guard.reset()
 
 
 async def override_get_db() -> AsyncGenerator[AsyncSession, None]:

@@ -86,6 +86,31 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Colchón alrededor del límite del municipio para no cortar domicilios en la orilla. 0 usa el polígono exacto; máximo 5000.",
         "type": "int", "default": "500",
     },
+    "SECURITY_ENABLED": {
+        "group": "Seguridad", "label": "Activar protección del sitio",
+        "description": "Detecta escaneos, inyecciones, scraping y fuerza bruta, y bloquea IPs automáticamente.",
+        "type": "bool", "default": "true",
+    },
+    "SECURITY_AUTO_BLOCK": {
+        "group": "Seguridad", "label": "Bloqueo automático de IPs",
+        "description": "Bloquea la IP cuando acumula intentos sospechosos. Los bloqueos manuales funcionan aunque esté desactivado.",
+        "type": "bool", "default": "true",
+    },
+    "SECURITY_RATE_LIMIT_PER_MIN": {
+        "group": "Seguridad", "label": "Solicitudes por minuto por IP",
+        "description": "Máximo de solicitudes en un minuto antes de considerarlo abuso. 0 desactiva el límite.",
+        "type": "int", "default": "400",
+    },
+    "SECURITY_BLOCK_MINUTES": {
+        "group": "Seguridad", "label": "Minutos de bloqueo automático",
+        "description": "Duración del bloqueo cuando se detecta abuso. Máximo 10080 (7 días).",
+        "type": "int", "default": "60",
+    },
+    "SECURITY_WHITELIST": {
+        "group": "Seguridad", "label": "IPs de confianza",
+        "description": "IPs o rangos (ej. 187.190.10.5, 10.0.0.0/8) que nunca se bloquean. Sepáralos con coma.",
+        "type": "text", "default": "",
+    },
     "MANDADO_ACTIVE": {
         "group": "Mandados", "label": "Permitir mandados",
         "description": "Activa o desactiva el servicio de mandados.",

@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-2 gap-2 flex-wrap">
+  <div>
+    <h4 class="m-0"><i class="bi bi-shield-check"></i> Seguridad y bloqueos</h4>
+    <p class="small text-muted mb-0 mt-1">
+      Detectamos escaneos, inyecciones, scraping y fuerza bruta. Aquí ves la actividad de las
+      últimas 24 horas y puedes bloquear o desbloquear direcciones IP.
+    </p>
+  </div>
+  <button class="btn btn-outline-secondary btn-sm" onclick="loadSecurity()">
+    <i class="bi bi-arrow-clockwise"></i> Actualizar
+  </button>
+</div>
+<div id="secError" class="alert alert-danger d-none"></div>
+<div id="secOk" class="alert alert-success d-none"></div>
+<div id="secLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="secContent" class="d-none">
+
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-2">
+      <div class="card p-3 h-100"><small class="text-muted">Eventos 24 h</small><strong class="fs-4" id="secEvents">0</strong></div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card p-3 h-100"><small class="text-muted">Escaneos</small><strong class="fs-4 text-warning" id="secScans">0</strong></div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card p-3 h-100"><small class="text-muted">Exceso de tráfico</small><strong class="fs-4 text-warning" id="secRate">0</strong></div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card p-3 h-100"><small class="text-muted">Fuerza bruta</small><strong class="fs-4 text-danger" id="secBrute">0</strong></div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card p-3 h-100"><small class="text-muted">Intentos bloqueados</small><strong class="fs-4 text-danger" id="secBlockedHits">0</strong></div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card p-3 h-100"><small class="text-muted">IPs bloqueadas</small><strong class="fs-4" id="secActive">0</strong></div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-5">
+      <div class="card p-3 mb-3">
+        <h6 class="mb-2"><i class="bi bi-sliders"></i> Protección automática</h6>
+        <div class="form-check form-switch mb-2">
+          <input class="form-check-input" type="checkbox" id="secEnabled">
+          <label class="form-check-label small" for="secEnabled">Activar protección del sitio</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="secAuto">
+          <label class="form-check-label small" for="secAuto">Bloquear IPs automáticamente</label>
+        </div>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small mb-1">Solicitudes por minuto</label>
+            <input type="number" min="0" class="form-control form-control-sm" id="secRateLimit">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">Minutos de bloqueo</label>
+            <input type="number" min="1" max="10080" class="form-control form-control-sm" id="secBlockMinutes">
+          </div>
+        </div>
+        <label class="form-label small mb-1 mt-2">IPs de confianza</label>
+        <input type="text" class="form-control form-control-sm" id="secWhitelist"
+               placeholder="Ej. 187.190.10.5, 10.0.0.0/8">
+        <div class="form-text">Nunca se bloquean. Sepáralas con coma. Agrega aquí tu IP de oficina o casa.</div>
+        <button class="btn btn-primary btn-sm mt-2 w-100" onclick="saveSecurity()">
+          <i class="bi bi-save"></i> Guardar configuración
+        </button>
+      </div>
+
+      <div class="card p-3">
+        <h6 class="mb-2"><i class="bi bi-slash-circle"></i> Bloquear una IP</h6>
+        <div class="row g-2">
+          <div class="col-7">
+            <input type="text" class="form-control form-control-sm" id="secBlockIp" placeholder="Ej. 203.0.113.10">
+          </div>
+          <div class="col-5">
+            <input type="number" class="form-control form-control-sm" id="secBlockMins" value="60" min="1" max="10080">
+          </div>
+        </div>
+        <input type="text" class="form-control form-control-sm mt-2" id="secBlockReason" placeholder="Motivo (opcional)">
+        <button class="btn btn-outline-danger btn-sm mt-2 w-100" onclick="blockIp()">
+          <i class="bi bi-ban"></i> Bloquear IP
+        </button>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+      <div class="card p-3">
+        <h6 class="mb-2"><i class="bi bi-ban"></i> IPs bloqueadas ahora</h6>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>IP</th><th>Motivo</th><th>Expira</th><th></th></tr></thead>
+            <tbody id="secBlocksBody"><tr><td colspan="4" class="text-muted small">Sin bloqueos activos.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-3 mt-3">
+    <h6 class="mb-2"><i class="bi bi-list-ul"></i> Actividad reciente</h6>
+    <div class="table-responsive" style="max-height:420px;overflow:auto">
+      <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Fecha</th><th>IP</th><th>Tipo</th><th>Ruta</th><th>Detalle</th></tr></thead>
+        <tbody id="secEventsBody"><tr><td colspan="5" class="text-muted small">Sin eventos.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card p-3 mt-3">
+    <h6 class="mb-2"><i class="bi bi-bar-chart"></i> IPs con más eventos (24 h)</h6>
+    <div id="secTopIps" class="small text-muted">Sin actividad.</div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const SEC_KINDS = {
+    scan: 'Escaneo',
+    rate: 'Exceso de tráfico',
+    brute_force: 'Fuerza bruta',
+    block: 'Bloqueo',
+    unblock: 'Desbloqueo',
+    blocked_hit: 'Intento bloqueado',
+  };
+
+  const secEl = (id) => document.getElementById(id);
+  const secDate = (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return isNaN(d) ? iso : d.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+  };
+  const secMsg = (id, text) => {
+    const el = secEl(id);
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('d-none');
+    setTimeout(() => el.classList.add('d-none'), 4000);
+  };
+
+  async function loadSecurity() {
+    secEl('secError').classList.add('d-none');
+    try {
+      const data = await apiRequest('GET', '/admin/security/overview');
+      const c = data.counters || {};
+      secEl('secEvents').textContent = c.events_24h ?? 0;
+      secEl('secScans').textContent = c.scan_24h ?? 0;
+      secEl('secRate').textContent = c.rate_24h ?? 0;
+      secEl('secBrute').textContent = c.brute_force_24h ?? 0;
+      secEl('secBlockedHits').textContent = c.blocked_hits_24h ?? 0;
+      secEl('secActive').textContent = c.active_blocks ?? 0;
+
+      const s = data.settings || {};
+      secEl('secEnabled').checked = Boolean(s.enabled);
+      secEl('secAuto').checked = Boolean(s.auto_block);
+      secEl('secRateLimit').value = s.rate_limit ?? 400;
+      secEl('secBlockMinutes').value = s.block_minutes ?? 60;
+      secEl('secWhitelist').value = s.whitelist ?? '';
+
+      const blocks = data.blocks || [];
+      secEl('secBlocksBody').innerHTML = blocks.length
+        ? blocks.map(b => `
+            <tr>
+              <td><code>${b.ip}</code></td>
+              <td>${b.reason || ''}${b.auto ? ' <span class="badge bg-secondary">auto</span>' : ' <span class="badge bg-dark">manual</span>'}</td>
+              <td class="small">${secDate(b.expires_at)}</td>
+              <td class="text-end"><button class="btn btn-sm btn-outline-secondary" onclick="unblockIp('${b.ip}')">Desbloquear</button></td>
+            </tr>`).join('')
+        : '<tr><td colspan="4" class="text-muted small">Sin bloqueos activos.</td></tr>';
+
+      const events = data.events || [];
+      secEl('secEventsBody').innerHTML = events.length
+        ? events.map(e => `
+            <tr>
+              <td class="small text-nowrap">${secDate(e.created_at)}</td>
+              <td><code>${e.ip}</code></td>
+              <td class="small">${SEC_KINDS[e.kind] || e.kind}</td>
+              <td class="small text-truncate" style="max-width:220px">${e.path || '—'}</td>
+              <td class="small text-muted">${e.detail || ''}</td>
+            </tr>`).join('')
+        : '<tr><td colspan="5" class="text-muted small">Sin eventos.</td></tr>';
+
+      const top = data.top_ips || [];
+      secEl('secTopIps').innerHTML = top.length
+        ? top.map(t => `<div class="d-flex justify-content-between border-bottom py-1"><code>${t.ip}</code><span>${t.count}</span></div>`).join('')
+        : 'Sin actividad.';
+
+      secEl('secLoading').classList.add('d-none');
+      secEl('secContent').classList.remove('d-none');
+    } catch (e) {
+      secEl('secLoading').classList.add('d-none');
+      secEl('secError').textContent = 'No se pudo cargar el panel: ' + e.message;
+      secEl('secError').classList.remove('d-none');
+    }
+  }
+
+  async function saveSecurity() {
+    try {
+      await apiRequest('PATCH', '/settings', {
+        values: {
+          SECURITY_ENABLED: secEl('secEnabled').checked,
+          SECURITY_AUTO_BLOCK: secEl('secAuto').checked,
+          SECURITY_RATE_LIMIT_PER_MIN: String(secEl('secRateLimit').value || 400),
+          SECURITY_BLOCK_MINUTES: String(secEl('secBlockMinutes').value || 60),
+          SECURITY_WHITELIST: secEl('secWhitelist').value.trim(),
+        },
+      });
+      await apiRequest('POST', '/admin/security/refresh', {});
+      secMsg('secOk', 'Configuración guardada.');
+      loadSecurity();
+    } catch (e) {
+      secMsg('secError', 'No se pudo guardar: ' + e.message);
+    }
+  }
+
+  async function blockIp() {
+    const ip = secEl('secBlockIp').value.trim();
+    if (!ip) { secMsg('secError', 'Escribe una IP.'); return; }
+    try {
+      await apiRequest('POST', '/admin/security/block', {
+        ip,
+        minutes: Number(secEl('secBlockMins').value || 60),
+        reason: secEl('secBlockReason').value.trim() || null,
+      });
+      secEl('secBlockIp').value = '';
+      secEl('secBlockReason').value = '';
+      secMsg('secOk', 'IP bloqueada.');
+      loadSecurity();
+    } catch (e) {
+      secMsg('secError', 'No se pudo bloquear: ' + e.message);
+    }
+  }
+
+  async function unblockIp(ip) {
+    try {
+      await apiRequest('POST', '/admin/security/unblock', { ip });
+      secMsg('secOk', 'IP desbloqueada.');
+      loadSecurity();
+    } catch (e) {
+      secMsg('secError', 'No se pudo desbloquear: ' + e.message);
+    }
+  }
+
+  loadSecurity();
+  setInterval(loadSecurity, 30000);
+</script>
+{% endblock %}

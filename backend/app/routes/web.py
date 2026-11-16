@@ -327,6 +327,11 @@ async def web_admin_audit(request: Request):
     return templates.TemplateResponse(request, "audit_admin.html")
 
 
+@router.get("/admin/security")
+async def web_admin_security(request: Request):
+    return templates.TemplateResponse(request, "security_admin.html")
+
+
 @router.get("/admin/restaurants")
 async def web_admin_restaurants(request: Request):
     return templates.TemplateResponse(request, "restaurant_registrations_admin.html")

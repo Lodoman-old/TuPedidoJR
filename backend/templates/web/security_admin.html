@@ -22,7 +22,7 @@
       <div class="card p-3 h-100"><small class="text-muted">Eventos 24 h</small><strong class="fs-4" id="secEvents">0</strong></div>
     </div>
     <div class="col-6 col-md-2">
-      <div class="card p-3 h-100"><small class="text-muted">Escaneos</small><strong class="fs-4 text-warning" id="secScans">0</strong></div>
+      <div class="card p-3 h-100"><small class="text-muted">Escaneos</small><strong class="fs-4 text-warning" id="secScans">0</strong><div class="small text-muted" id="secScraping">0 copias</div></div>
     </div>
     <div class="col-6 col-md-2">
       <div class="card p-3 h-100"><small class="text-muted">Exceso de tráfico</small><strong class="fs-4 text-warning" id="secRate">0</strong></div>
@@ -121,6 +121,7 @@
     scan: 'Escaneo',
     rate: 'Exceso de tráfico',
     brute_force: 'Fuerza bruta',
+    scraping: 'Copia masiva',
     block: 'Bloqueo',
     unblock: 'Desbloqueo',
     blocked_hit: 'Intento bloqueado',
@@ -147,6 +148,7 @@
       const c = data.counters || {};
       secEl('secEvents').textContent = c.events_24h ?? 0;
       secEl('secScans').textContent = c.scan_24h ?? 0;
+      secEl('secScraping').textContent = (c.scraping_24h ?? 0) + ' copia(s)';
       secEl('secRate').textContent = c.rate_24h ?? 0;
       secEl('secBrute').textContent = c.brute_force_24h ?? 0;
       secEl('secBlockedHits').textContent = c.blocked_hits_24h ?? 0;

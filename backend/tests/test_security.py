@@ -83,6 +83,19 @@ class TestAutoBlock:
         ok = await client.get("/web/inicio", headers=_from_ip("198.51.100.9"))
         assert ok.status_code == 200
 
+    async def test_content_flood_blocks_the_ip(self, client: AsyncClient):
+        from collections import deque
+        import time as clock
+
+        ip = "198.51.100.33"
+        security_guard._content[ip] = deque([clock.time()] * 200)
+
+        first = await client.get("/api/v1/restaurants", headers=_from_ip(ip))
+        assert first.status_code == 200
+        blocked = await client.get("/web/inicio", headers=_from_ip(ip))
+        assert blocked.status_code == 403
+        assert security_guard.is_blocked(ip)
+
     async def test_normal_navigation_is_not_blocked(self, client: AsyncClient):
         resp = await client.get("/web/inicio")
         assert resp.status_code == 200

@@ -54,6 +54,8 @@ INJECTION_PATTERNS = re.compile(
 
 SKIP_COUNT_PREFIXES = ("/static/", "/tiles/", "/health", "/favicon.ico", "/robots.txt")
 NEVER_AUTO_BLOCK_PREFIXES = ("/web/admin",)
+CONTENT_PREFIXES = ("/r/", "/api/v1/restaurants", "/web/restaurants", "/manuales")
+CONTENT_LIMIT_5MIN = 200
 
 
 @dataclass
@@ -109,6 +111,7 @@ class SecurityGuard:
         self._hits: dict[str, deque[float]] = {}
         self._score: dict[str, deque[tuple[float, int, str]]] = {}
         self._not_found: dict[str, deque[float]] = {}
+        self._content: dict[str, deque[float]] = {}
         self._blocked: dict[str, float] = {}
         self._last_hit_log: dict[str, float] = {}
         self._session_factory = None
@@ -169,6 +172,7 @@ class SecurityGuard:
         self._hits.clear()
         self._score.clear()
         self._not_found.clear()
+        self._content.clear()
         self._blocked.clear()
         self._last_hit_log.clear()
         self._settings.clear()
@@ -345,6 +349,29 @@ class SecurityGuard:
             if self._too_many_404(ip):
                 await self.record(ip, "scan", path, request.method, detail="Ráfaga de rutas inexistentes")
                 await self._auto_block(ip, "scan", path, "Ráfaga de rutas inexistentes (escaneo)")
+            return
+        if (
+            request.method == "GET"
+            and status_code == 200
+            and path.startswith(CONTENT_PREFIXES)
+        ):
+            now = time.time()
+            hits = self._content.setdefault(ip, deque())
+            hits.append(now)
+            while hits and now - hits[0] > 300:
+                hits.popleft()
+            if len(hits) > CONTENT_LIMIT_5MIN:
+                await self.record(
+                    ip,
+                    "scraping",
+                    path,
+                    request.method,
+                    detail=f"{len(hits)} páginas o catálogos en 5 minutos",
+                )
+                self._content.pop(ip, None)
+                await self._auto_block(
+                    ip, "scraping", path, "Posible copia masiva del sitio"
+                )
 
     async def _auto_block(self, ip: str, reason: str, path: str, detail: str) -> None:
         settings = await self._refresh_settings()
@@ -445,6 +472,7 @@ async def list_security_overview(db: AsyncSession) -> dict:
         "counters": {
             "events_24h": int(total or 0),
             "scan_24h": int(counters.get("scan", 0)),
+            "scraping_24h": int(counters.get("scraping", 0)),
             "rate_24h": int(counters.get("rate", 0)),
             "brute_force_24h": int(counters.get("brute_force", 0)),
             "blocked_hits_24h": int(counters.get("blocked_hit", 0)),

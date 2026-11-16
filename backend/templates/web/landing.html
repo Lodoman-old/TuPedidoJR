@@ -112,7 +112,7 @@
     .section-head h2 { font-size: clamp(27px, 3vw, 38px); line-height: 1.15; letter-spacing: -.8px; margin: 12px 0 10px; }
     .section-head p { color: var(--muted); font-size: 16px; margin: 0; }
     .photo-strip { padding: 26px 0 4px; }
-    .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .photo-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
     .photo-grid figure {
       position: relative; margin: 0; border-radius: 20px; overflow: hidden;
       box-shadow: 0 16px 40px rgba(13,27,42,.14); background: #fff;
@@ -251,7 +251,7 @@
       .hero-visual { min-height: 420px; max-width: 520px; margin: 0 auto; width: 100%; }
       .grid-4 { grid-template-columns: repeat(2, 1fr); }
       .grid-3 { grid-template-columns: 1fr; }
-      .photo-grid { grid-template-columns: 1fr; }
+      .photo-grid { grid-template-columns: repeat(2, 1fr); }
       .split, .coverage, .download, .pricing { grid-template-columns: 1fr; }
       .business-collage .shot { width: 62%; }
       .steps { grid-template-columns: 1fr; }
@@ -272,6 +272,7 @@
       .shot-card.three { top: 210px; width: 170px; }
       .hero-visual { min-height: 380px; }
       .grid-4 { grid-template-columns: 1fr; }
+      .photo-grid { grid-template-columns: 1fr; }
       .download, .coverage { padding: 26px; }
       .cta-final { padding: 34px 20px; }
       .footer-grid { grid-template-columns: 1fr; }
@@ -334,6 +335,10 @@
       <figure class="reveal">
         <img src="/static/landing/restaurante.jpg" alt="Negocio local con ambiente cálido" loading="lazy">
         <figcaption>Negocios de tu comunidad</figcaption>
+      </figure>
+      <figure class="reveal">
+        <img src="/static/landing/cargo_bike.jpg" alt="Repartidor con bicicleta de carga TuPedidoJR" loading="lazy">
+        <figcaption>Reparto en bici, patín o moto</figcaption>
       </figure>
       <figure class="reveal">
         <img src="/static/landing/platillos.jpg" alt="Platillos locales recién preparados" loading="lazy">
@@ -576,7 +581,31 @@
           </details>
           <details class="reveal">
             <summary>¿Cómo se paga y cuánto cuesta?</summary>
-            <p>Puedes pagar en efectivo, por transferencia o en línea cuando esté disponible. Los costos y comisiones se muestran de forma clara en el panel del negocio.</p>
+            <p>
+              <strong>Negocios:</strong> la afiliación anual es de
+              <strong>${{ '%.0f'|format(affiliation_fee|float) }} MXN</strong>
+              (≈ <strong>${{ '%.2f'|format(affiliation_daily|float) }} al día</strong>)
+              y mantiene tu negocio en línea con menú/catálogo, QR, panel de pedidos,
+              reparto, liquidaciones y soporte. Además, por cada pedido se aplica una
+              cuota de <strong>${{ '%.2f'|format(business_fee|float) }}</strong>
+              {%- if commission_rate|float > 0 %} y una comisión de
+              <strong>{{ '%.2f'|format(commission_rate|float) }}%</strong> sobre el producto
+              {%- endif %}.
+            </p>
+            <p>
+              <strong>Clientes:</strong> pagas productos + envío + cuota de servicio.
+              El envío se calcula por distancia: <strong>${{ '%.2f'|format(delivery_base|float) }} base</strong>
+              hasta <strong>{{ '%.1f'|format(free_radius|float) }} km</strong> y
+              <strong>${{ '%.2f'|format(extra_km|float) }} por km adicional</strong>.
+              La cuota de servicio es de <strong>${{ '%.2f'|format(flat_fee|float) }}</strong>.
+              Un pedido de $200 con envío base y cuota de servicio queda alrededor de
+              <strong>${{ '%.0f'|format(client_example_total|float) }}</strong> + propina opcional.
+            </p>
+            <p>
+              Puedes pagar en efectivo, por transferencia o en línea cuando esté disponible.
+              No hay comisión sobre el producto para el cliente: la comisión, si aplica,
+              la paga el negocio.
+            </p>
           </details>
           <details class="reveal">
             <summary>¿Qué pasa si mi pedido no se entrega?</summary>

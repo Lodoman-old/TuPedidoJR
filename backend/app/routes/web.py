@@ -26,6 +26,13 @@ async def web_index():
 
 @router.get("/inicio")
 async def web_landing(request: Request, db: AsyncSession = Depends(get_db)):
+    async def setting_float(key: str, default: str) -> float:
+        raw = await get_setting_value(db, key, default)
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return float(default)
+
     raw_whatsapp = (await get_setting_value(db, "WHATSAPP_SUPPORT", "")).strip()
     whatsapp = "".join(ch for ch in raw_whatsapp if ch.isdigit())
     raw_fee = await get_setting_value(db, "AFFILIATION_ANNUAL_FEE", "500.0")
@@ -33,6 +40,12 @@ async def web_landing(request: Request, db: AsyncSession = Depends(get_db)):
         affiliation_fee = float(raw_fee)
     except (TypeError, ValueError):
         affiliation_fee = 500.0
+    delivery_base = await setting_float("DELIVERY_BASE_FEE", "25.0")
+    free_radius = await setting_float("DELIVERY_FREE_RADIUS_KM", "6.0")
+    extra_km = await setting_float("DELIVERY_EXTRA_FEE_PER_KM", "5.0")
+    flat_fee = await setting_float("APP_FLAT_USAGE_FEE", "5.0")
+    business_fee = await setting_float("APP_FIXED_RESTAURANT_FEE", "5.0")
+    commission_rate = await setting_float("APP_COMMISSION_PERCENTAGE", "0.0")
     contact_email = (
         await get_setting_value(db, "CONTACT_EMAIL", "tupedidojr@gmail.com")
     ).strip()
@@ -44,6 +57,13 @@ async def web_landing(request: Request, db: AsyncSession = Depends(get_db)):
             "affiliation_fee": affiliation_fee,
             "affiliation_daily": affiliation_fee / 365,
             "contact_email": contact_email,
+            "delivery_base": delivery_base,
+            "free_radius": free_radius,
+            "extra_km": extra_km,
+            "flat_fee": flat_fee,
+            "business_fee": business_fee,
+            "commission_rate": commission_rate,
+            "client_example_total": 200 + delivery_base + flat_fee,
         },
     )
 

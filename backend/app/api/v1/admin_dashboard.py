@@ -17,6 +17,7 @@ from app.models.order import Order
 from app.models.restaurant import Restaurant
 from app.models.user import User
 from app.services.audit_service import log_action
+from app.services.email_service import send_courier_welcome
 from app.services.schedule_service import get_timezone, open_state_map
 
 router = APIRouter()
@@ -348,6 +349,10 @@ async def create_courier(
     )
     await db.commit()
     await db.refresh(courier)
+    try:
+        await send_courier_welcome(db, user.email, user.name)
+    except Exception:
+        pass
     return {
         "id": str(courier.id),
         "user_id": str(user.id),

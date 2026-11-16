@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TuPedidoJR · El primer servicio de entrega en línea de Juventino Rosas</title>
+  <meta name="description" content="Pide comida, productos y mandados en Juventino Rosas. Menús y catálogos en línea, seguimiento y reparto local. Registra tu negocio o descarga la app.">
+  <meta property="og:title" content="TuPedidoJR · Entrega local en Juventino Rosas">
+  <meta property="og:description" content="Restaurantes, tiendas y mandados en una sola app. Menús y catálogos en línea, pedidos y reparto local.">
+  <meta property="og:image" content="/static/logo-bg.png">
+  <link rel="icon" href="/static/logo.png">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    :root {
+      --ink: #0d1b2a;
+      --ink-2: #172a3f;
+      --orange: #f58220;
+      --orange-dark: #d96b0c;
+      --blue: #1d4ed8;
+      --muted: #5f6f80;
+      --line: #e3e9f0;
+      --bg: #f6f8fb;
+      --white: #fff;
+      --radius: 18px;
+      --shadow: 0 18px 50px rgba(13, 27, 42, .12);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+    .wrap { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+      padding: 13px 22px; border-radius: 12px; font-weight: 700; font-size: 15px;
+      border: 1px solid transparent; cursor: pointer; transition: .2s ease;
+      white-space: nowrap;
+    }
+    .btn-primary { background: var(--orange); color: #fff; box-shadow: 0 8px 22px rgba(245,130,32,.32); }
+    .btn-primary:hover { background: var(--orange-dark); transform: translateY(-1px); }
+    .btn-dark { background: var(--ink); color: #fff; }
+    .btn-dark:hover { background: var(--ink-2); transform: translateY(-1px); }
+    .btn-ghost { background: rgba(255,255,255,.10); color: #fff; border-color: rgba(255,255,255,.35); }
+    .btn-ghost:hover { background: rgba(255,255,255,.18); }
+    .btn-outline { background: #fff; color: var(--ink); border-color: var(--line); }
+    .btn-outline:hover { border-color: #b9c6d4; transform: translateY(-1px); }
+    .btn-sm { padding: 9px 14px; font-size: 13px; border-radius: 10px; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 800; letter-spacing: .10em; text-transform: uppercase;
+      color: var(--orange-dark); background: #fff3e6; border: 1px solid #ffd9b3;
+      padding: 7px 12px; border-radius: 999px;
+    }
+    header.site {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(255,255,255,.92);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid rgba(227,233,240,.9);
+    }
+    .nav { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 12px 0; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; }
+    .brand img { height: 42px; width: auto; }
+    .nav-links { display: flex; align-items: center; gap: 22px; font-size: 14px; font-weight: 600; color: #33465a; }
+    .nav-links a:hover { color: var(--orange-dark); }
+    .nav-actions { display: flex; align-items: center; gap: 9px; }
+    .nav-toggle { display: none; border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px 11px; font-size: 18px; }
+    .hero {
+      position: relative; overflow: hidden; color: #fff;
+      background: radial-gradient(900px 420px at 78% 18%, rgba(245,130,32,.28), transparent 62%),
+                  radial-gradient(700px 380px at 12% 90%, rgba(29,78,216,.22), transparent 65%),
+                  linear-gradient(135deg, #0b1725 0%, #10253a 55%, #0d1b2a 100%);
+    }
+    .hero::after {
+      content: ""; position: absolute; inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px);
+      background-size: 22px 22px; opacity: .5; pointer-events: none;
+    }
+    .hero-grid {
+      position: relative; z-index: 2;
+      display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px;
+      padding: 74px 0 86px; align-items: center;
+    }
+    .hero h1 { font-size: clamp(34px, 4.4vw, 58px); line-height: 1.08; letter-spacing: -1.5px; margin: 18px 0 16px; }
+    .hero h1 span { color: #ffb066; }
+    .hero p.lead { font-size: clamp(16px, 1.4vw, 19px); color: #c7d6e6; max-width: 560px; margin: 0 0 26px; }
+    .hero-cta { display: flex; flex-wrap: wrap; gap: 11px; margin-bottom: 22px; }
+    .trust { display: flex; flex-wrap: wrap; gap: 8px 18px; color: #b9cbe0; font-size: 13px; }
+    .trust span { display: inline-flex; align-items: center; gap: 7px; }
+    .hero-visual { position: relative; min-height: 480px; }
+    .shot-card {
+      position: absolute; width: 235px; border-radius: 18px; overflow: hidden;
+      background: #fff; border: 1px solid rgba(255,255,255,.4);
+      box-shadow: 0 26px 60px rgba(0,0,0,.38);
+      transition: transform .5s ease;
+    }
+    .shot-card img { width: 100%; height: auto; }
+    .shot-card.one { top: 0; right: 58px; transform: rotate(-4deg); z-index: 3; }
+    .shot-card.two { top: 108px; left: 0; transform: rotate(4deg); z-index: 2; }
+    .shot-card.three { top: 238px; right: 0; transform: rotate(-2deg); z-index: 4; width: 215px; }
+    .hero-visual:hover .shot-card.one { transform: rotate(-2deg) translateY(-6px); }
+    .hero-visual:hover .shot-card.two { transform: rotate(2deg) translateY(-6px); }
+    .hero-visual:hover .shot-card.three { transform: rotate(-1deg) translateY(-6px); }
+    .section { padding: 74px 0; }
+    .section-head { max-width: 720px; margin-bottom: 34px; }
+    .section-head h2 { font-size: clamp(27px, 3vw, 38px); line-height: 1.15; letter-spacing: -.8px; margin: 12px 0 10px; }
+    .section-head p { color: var(--muted); font-size: 16px; margin: 0; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 24px; box-shadow: 0 8px 24px rgba(13,27,42,.04);
+      transition: .22s ease;
+    }
+    .card:hover { transform: translateY(-4px); box-shadow: var(--shadow); border-color: #d2deea; }
+    .icon {
+      width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center;
+      background: #fff3e6; color: var(--orange-dark); font-size: 21px; margin-bottom: 14px;
+    }
+    .card h3 { font-size: 17px; margin: 0 0 7px; }
+    .card p { color: var(--muted); font-size: 14px; margin: 0; }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 44px; align-items: center; }
+    .image-frame { border-radius: 22px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: #fff; }
+    .image-frame img { width: 100%; }
+    .image-frame.small { max-width: 420px; margin-left: auto; }
+    .checks { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 11px; }
+    .checks li { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; color: #33465a; }
+    .checks i { color: #198754; font-size: 18px; margin-top: 2px; }
+    .steps { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+    .steps-col { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; }
+    .steps-col h3 { margin: 0 0 18px; display: flex; align-items: center; gap: 10px; }
+    .step { display: flex; gap: 14px; padding: 12px 0; border-bottom: 1px dashed var(--line); }
+    .step:last-child { border-bottom: 0; padding-bottom: 0; }
+    .step .num {
+      flex: 0 0 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+      background: var(--ink); color: #fff; font-weight: 800; font-size: 14px;
+    }
+    .step strong { display: block; font-size: 15px; }
+    .step span { color: var(--muted); font-size: 13.5px; }
+    .coverage {
+      background: linear-gradient(135deg, #0d1b2a, #17314a); color: #fff;
+      border-radius: 24px; padding: 40px; display: grid; grid-template-columns: 1.1fr .9fr; gap: 34px;
+      position: relative; overflow: hidden;
+    }
+    .coverage::after {
+      content: ""; position: absolute; width: 380px; height: 380px; right: -120px; top: -140px;
+      border-radius: 50%; border: 1px dashed rgba(255,255,255,.25);
+      box-shadow: 0 0 0 60px rgba(255,255,255,.03), 0 0 0 120px rgba(255,255,255,.02);
+    }
+    .coverage h2 { margin: 0 0 10px; font-size: 30px; letter-spacing: -.6px; }
+    .coverage p { color: #c7d6e6; margin: 0 0 16px; }
+    .coverage .tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .coverage .tags span { background: rgba(255,255,255,.11); border: 1px solid rgba(255,255,255,.18); padding: 7px 11px; border-radius: 999px; font-size: 13px; }
+    .coverage .badge-big {
+      position: relative; z-index: 2; align-self: center; background: rgba(245,130,32,.14);
+      border: 1px solid rgba(245,130,32,.45); border-radius: 20px; padding: 26px; text-align: center;
+    }
+    .coverage .badge-big i { font-size: 40px; color: #ffb066; }
+    .coverage .badge-big strong { display: block; font-size: 20px; margin-top: 8px; }
+    .coverage .badge-big span { color: #c7d6e6; font-size: 13px; }
+    .download {
+      background: linear-gradient(120deg, #fff3e6, #ffffff 55%, #eef4ff);
+      border: 1px solid #ffd9b3; border-radius: 24px; padding: 38px;
+      display: grid; grid-template-columns: 1.1fr .9fr; gap: 30px; align-items: center;
+    }
+    .download h2 { margin: 0 0 8px; font-size: 30px; letter-spacing: -.6px; }
+    .download p { color: var(--muted); margin: 0 0 20px; }
+    .download .phone {
+      justify-self: center; width: 210px; border-radius: 26px; border: 8px solid #0d1b2a;
+      overflow: hidden; box-shadow: 0 24px 50px rgba(13,27,42,.28); background: #fff;
+    }
+    .faq { display: grid; gap: 12px; }
+    details {
+      background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px;
+    }
+    details[open] { border-color: #ffd9b3; box-shadow: 0 8px 24px rgba(13,27,42,.05); }
+    summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; color: var(--orange-dark); font-size: 20px; line-height: 1; }
+    details[open] summary::after { content: "−"; }
+    details p { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
+    .cta-final {
+      text-align: center; background: linear-gradient(135deg, #f58220, #ff9d4d);
+      color: #fff; border-radius: 24px; padding: 48px 26px;
+    }
+    .cta-final h2 { font-size: clamp(26px, 3vw, 36px); margin: 0 0 10px; letter-spacing: -.6px; }
+    .cta-final p { margin: 0 auto 22px; max-width: 640px; color: #fff7ef; }
+    .cta-final .btn-outline { border-color: transparent; }
+    footer { background: #0b1725; color: #b9cbe0; padding: 46px 0 26px; margin-top: 70px; }
+    .footer-grid { display: grid; grid-template-columns: 1.3fr .7fr .7fr .9fr; gap: 28px; }
+    footer h4 { color: #fff; font-size: 14px; text-transform: uppercase; letter-spacing: .09em; margin: 0 0 12px; }
+    footer a { display: block; font-size: 14px; margin-bottom: 8px; color: #b9cbe0; }
+    footer a:hover { color: #ffb066; }
+    footer .brand img { height: 40px; background: #fff; border-radius: 9px; padding: 5px 8px; }
+    .footer-bottom { border-top: 1px solid rgba(255,255,255,.10); margin-top: 28px; padding-top: 18px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: #8fa4ba; }
+    .whatsapp-float {
+      position: fixed; right: 18px; bottom: 18px; z-index: 60;
+      width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center;
+      background: #25d366; color: #fff; font-size: 28px; box-shadow: 0 12px 28px rgba(37,211,102,.4);
+    }
+    .whatsapp-float:hover { transform: scale(1.06); }
+    .reveal { opacity: 0; transform: translateY(18px); transition: .6s ease; }
+    .reveal.in { opacity: 1; transform: none; }
+    @media (max-width: 980px) {
+      .hero-grid { grid-template-columns: 1fr; gap: 30px; padding: 54px 0 64px; }
+      .hero-visual { min-height: 420px; max-width: 520px; margin: 0 auto; width: 100%; }
+      .grid-4 { grid-template-columns: repeat(2, 1fr); }
+      .grid-3 { grid-template-columns: 1fr; }
+      .split, .coverage, .download { grid-template-columns: 1fr; }
+      .steps { grid-template-columns: 1fr; }
+      .footer-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 720px) {
+      .nav-links, .nav-actions .btn-outline { display: none; }
+      .nav-toggle { display: inline-block; }
+      .nav.open .nav-links {
+        display: flex; position: absolute; left: 0; right: 0; top: 68px;
+        background: #fff; border-bottom: 1px solid var(--line);
+        flex-direction: column; align-items: flex-start; padding: 16px 20px; gap: 14px;
+      }
+      .hero h1 { letter-spacing: -1px; }
+      .shot-card { width: 180px; }
+      .shot-card.one { right: 8px; }
+      .shot-card.two { top: 100px; }
+      .shot-card.three { top: 210px; width: 170px; }
+      .hero-visual { min-height: 380px; }
+      .grid-4 { grid-template-columns: 1fr; }
+      .download, .coverage { padding: 26px; }
+      .cta-final { padding: 34px 20px; }
+      .footer-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site">
+    <div class="wrap nav" id="siteNav">
+      <a class="brand" href="/web/inicio" aria-label="TuPedidoJR inicio">
+        <img src="/static/logo.png" alt="TuPedidoJR">
+      </a>
+      <nav class="nav-links" aria-label="Secciones">
+        <a href="#clientes">Para clientes</a>
+        <a href="#negocios">Para negocios</a>
+        <a href="#como-funciona">Cómo funciona</a>
+        <a href="#cobertura">Cobertura</a>
+        <a href="/manuales">Manuales</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="btn btn-outline btn-sm" href="/web/app">Descargar APK</a>
+        <a class="btn btn-primary btn-sm" id="loginTop" href="/web/login"><i class="bi bi-box-arrow-in-right"></i> Iniciar sesión</a>
+        <button class="nav-toggle" type="button" aria-label="Abrir menú" onclick="document.getElementById('siteNav').classList.toggle('open')">
+          <i class="bi bi-list"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow"><i class="bi bi-geo-alt-fill"></i> El primer servicio de entrega en línea de Juventino Rosas</span>
+        <h1>Lo que necesitas,<br><span>de tu negocio local</span><br>a tu puerta.</h1>
+        <p class="lead">
+          Restaurantes, tiendas, mandados y envíos en una sola app. Menús y catálogos en línea,
+          pedidos con seguimiento y repartidores de tu comunidad.
+        </p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="/web/restaurants"><i class="bi bi-bag-check"></i> Pedir ahora</a>
+          <a class="btn btn-ghost" href="/web/register-restaurant"><i class="bi bi-shop"></i> Registrar mi negocio</a>
+          <a class="btn btn-ghost" href="/web/app/apk"><i class="bi bi-android2"></i> Descargar APK</a>
+        </div>
+        <div class="trust">
+          <span><i class="bi bi-check-circle-fill" style="color:#7bd88f"></i> 100% local</span>
+          <span><i class="bi bi-check-circle-fill" style="color:#7bd88f"></i> Seguimiento del pedido</span>
+          <span><i class="bi bi-check-circle-fill" style="color:#7bd88f"></i> Pagos claros</span>
+        </div>
+      </div>
+      <div class="hero-visual" aria-label="Capturas de la plataforma">
+        <div class="shot-card one"><img src="/static/manuals/cliente-catalogo.png" alt="Catálogo en línea de un negocio"></div>
+        <div class="shot-card two"><img src="/static/manuals/repartidor-disponibles.png" alt="Panel del repartidor con pedidos disponibles"></div>
+        <div class="shot-card three"><img src="/static/manuals/negocio-pedidos.png" alt="Panel del negocio con pedidos"></div>
+      </div>
+    </div>
+  </section>
+
+  <main>
+    <section class="section" id="clientes">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">Para clientes</span>
+          <h2>Pide fácil, local y con seguimiento.</h2>
+          <p>Todo lo que ya conoces de tu municipio, ahora a un toque y con reparto respaldado.</p>
+        </div>
+        <div class="grid-4">
+          <div class="card reveal">
+            <div class="icon"><i class="bi bi-shop"></i></div>
+            <h3>Restaurantes y tiendas</h3>
+            <p>Comida preparada, abarrotes, farmacia, ferretería y más en un mismo lugar.</p>
+          </div>
+          <div class="card reveal">
+            <div class="icon"><i class="bi bi-geo-alt"></i></div>
+            <h3>Sigue tu pedido</h3>
+            <p>Consulta el estado, el repartidor y el tiempo estimado de llegada.</p>
+          </div>
+          <div class="card reveal">
+            <div class="icon"><i class="bi bi-credit-card"></i></div>
+            <h3>Paga como prefieras</h3>
+            <p>Efectivo al recibir, transferencia o pago en línea cuando esté disponible.</p>
+          </div>
+          <div class="card reveal">
+            <div class="icon"><i class="bi bi-headset"></i></div>
+            <h3>Respaldo local</h3>
+            <p>Si algo no se entrega, la plataforma responde y te da seguimiento.</p>
+          </div>
+        </div>
+
+        <div class="split" style="margin-top:44px">
+          <div class="reveal">
+            <h3 style="font-size:25px;letter-spacing:-.5px;margin:0 0 10px">Tu historial y tus puntos, en un solo lugar</h3>
+            <p style="color:var(--muted);margin:0 0 8px">Repite pedidos, revisa entregas anteriores, consulta saldos pendientes y canjea puntos.</p>
+            <ul class="checks">
+              <li><i class="bi bi-check-circle-fill"></i> Pedidos activos, entregados y no entregados.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Direcciones guardadas para pedir más rápido.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Puntos y referidos por invitar a tus conocidos.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Opción de pagar una deuda en abonos.</li>
+            </ul>
+            <div style="margin-top:22px"><a class="btn btn-dark" href="/web/restaurants">Ver negocios disponibles</a></div>
+          </div>
+          <div class="image-frame reveal"><img src="/static/manuals/cliente-pedidos.png" alt="Historial de pedidos del cliente" loading="lazy"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="negocios" style="background:#fff;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">Para negocios</span>
+          <h2>Tu negocio en línea, sin flota propia.</h2>
+          <p>Menú o catálogo digital, pedidos, reparto y liquidaciones. Tú te enfocas en vender; nosotros en la entrega.</p>
+        </div>
+        <div class="split">
+          <div class="image-frame reveal"><img src="/static/manuals/negocio-ganancias.png" alt="Panel de ganancias del negocio" loading="lazy"></div>
+          <div class="reveal">
+            <div class="grid-4" style="grid-template-columns:1fr 1fr;gap:14px">
+              <div class="card" style="padding:18px"><div class="icon"><i class="bi bi-menu-button-wide"></i></div><h3>Menú/catálogo</h3><p>Fotos, precios, categorías, opciones y horarios.</p></div>
+              <div class="card" style="padding:18px"><div class="icon"><i class="bi bi-receipt"></i></div><h3>Pedidos</h3><p>Confirma, prepara y marca listo desde el panel.</p></div>
+              <div class="card" style="padding:18px"><div class="icon"><i class="bi bi-bicycle"></i></div><h3>Reparto</h3><p>Repartidores locales con código y foto de entrega.</p></div>
+              <div class="card" style="padding:18px"><div class="icon"><i class="bi bi-cash-stack"></i></div><h3>Liquidaciones</h3><p>Ventas, comisiones y pagos claros en tu panel.</p></div>
+            </div>
+            <ul class="checks" style="margin-top:18px">
+              <li><i class="bi bi-check-circle-fill"></i> Página propia con enlace y QR para tu mostrador.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Pedidos especiales y solicitudes fuera de catálogo.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Envíos de negocio para ventas cerradas por WhatsApp.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Soporte y capacitación local.</li>
+            </ul>
+            <div style="margin-top:22px"><a class="btn btn-primary" href="/web/register-restaurant"><i class="bi bi-shop"></i> Quiero registrar mi negocio</a></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="como-funciona">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">Cómo funciona</span>
+          <h2>Así de simple.</h2>
+          <p>Un mismo ecosistema para pedir, vender y repartir en tu municipio.</p>
+        </div>
+        <div class="steps">
+          <div class="steps-col reveal">
+            <h3><i class="bi bi-person-circle"></i> Si eres cliente</h3>
+            <div class="step"><div class="num">1</div><div><strong>Elige tu negocio</strong><span>Restaurante, tienda o mandado.</span></div></div>
+            <div class="step"><div class="num">2</div><div><strong>Arma tu pedido</strong><span>Agrega productos y confirma tu dirección.</span></div></div>
+            <div class="step"><div class="num">3</div><div><strong>Paga y sigue el pedido</strong><span>Efectivo, transferencia o en línea.</span></div></div>
+            <div class="step"><div class="num">4</div><div><strong>Recibe y califica</strong><span>Tu repartidor te lleva el pedido a la puerta.</span></div></div>
+          </div>
+          <div class="steps-col reveal">
+            <h3><i class="bi bi-shop-window"></i> Si eres negocio</h3>
+            <div class="step"><div class="num">1</div><div><strong>Registra tu negocio</strong><span>Comparte tus datos y ubicación.</span></div></div>
+            <div class="step"><div class="num">2</div><div><strong>Publica tu menú/catálogo</strong><span>Fotos, precios y horarios.</span></div></div>
+            <div class="step"><div class="num">3</div><div><strong>Recibe pedidos</strong><span>El cliente pide desde la app o tu QR.</span></div></div>
+            <div class="step"><div class="num">4</div><div><strong>Prepara y entrega</strong><span>Nosotros ponemos al repartidor y el seguimiento.</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="cobertura" style="padding-top:0">
+      <div class="wrap">
+        <div class="coverage reveal">
+          <div>
+            <span class="eyebrow" style="background:rgba(245,130,32,.16);border-color:rgba(245,130,32,.4);color:#ffb066">Cobertura local</span>
+            <h2 style="margin-top:14px">Nacimos en Juventino Rosas.</h2>
+            <p>Conectamos negocios y repartidores de la zona para que el dinero y el servicio se queden en la comunidad.</p>
+            <div class="tags">
+              <span><i class="bi bi-geo-alt"></i> Juventino Rosas</span>
+              <span>Santa Cruz de Juventino Rosas</span>
+              <span>Comunidades cercanas</span>
+              <span>Entrega a domicilio</span>
+              <span>Recoger en negocio</span>
+            </div>
+          </div>
+          <div class="badge-big">
+            <i class="bi bi-geo-fill"></i>
+            <strong>Primer servicio de entrega en línea del municipio</strong>
+            <span>Hecho aquí, para nuestra gente.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0">
+      <div class="wrap">
+        <div class="download reveal">
+          <div>
+            <span class="eyebrow">Lleva TuPedidoJR contigo</span>
+            <h2 style="margin-top:14px">Descarga la app o pide desde la web.</h2>
+            <p>La misma cuenta funciona en Android, iPhone y navegador. Recibe notificaciones y sigue tus pedidos.</p>
+            <div class="hero-cta" style="margin-bottom:0">
+              <a class="btn btn-primary" href="/web/app/apk"><i class="bi bi-android2"></i> Descargar APK</a>
+              <a class="btn btn-outline" href="/web/app"><i class="bi bi-phone"></i> Ver instrucciones</a>
+              <a class="btn btn-outline" href="/web/restaurants"><i class="bi bi-globe"></i> Usar la web</a>
+            </div>
+          </div>
+          <div class="phone"><img src="/static/manuals/repartidor-disponibles.png" alt="App de TuPedidoJR en el celular" loading="lazy"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">Preguntas frecuentes</span>
+          <h2>Lo que suelen preguntarnos.</h2>
+        </div>
+        <div class="faq">
+          <details class="reveal">
+            <summary>¿TuPedidoJR es solo de comida?</summary>
+            <p>No. También puedes pedir en tiendas, mandados y envíos de negocio. La misma app conecta restaurantes, comercios y repartidores.</p>
+          </details>
+          <details class="reveal">
+            <summary>¿Necesito descargar la app para pedir?</summary>
+            <p>No. Puedes pedir desde la versión web. La app es útil para recibir notificaciones y tener tus pedidos a la mano.</p>
+          </details>
+          <details class="reveal">
+            <summary>¿Cómo registro mi negocio?</summary>
+            <p>Entra a “Registrar mi negocio”, captura tus datos y ubicación. El equipo revisa la solicitud y te acompaña para publicar tu menú o catálogo.</p>
+          </details>
+          <details class="reveal">
+            <summary>¿Cómo se paga y cuánto cuesta?</summary>
+            <p>Puedes pagar en efectivo, por transferencia o en línea cuando esté disponible. Los costos y comisiones se muestran de forma clara en el panel del negocio.</p>
+          </details>
+          <details class="reveal">
+            <summary>¿Qué pasa si mi pedido no se entrega?</summary>
+            <p>La plataforma revisa la incidencia con evidencia y responde. Si aplica, se ofrece reentrega o se resuelve según la política de certeza.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0">
+      <div class="wrap">
+        <div class="cta-final reveal">
+          <h2>Hagamos que lo local se mueva.</h2>
+          <p>Pide en tus negocios de confianza o súmate como negocio y llega a más clientes en Juventino Rosas.</p>
+          <div class="hero-cta" style="justify-content:center;margin-bottom:0">
+            <a class="btn btn-dark" href="/web/restaurants"><i class="bi bi-bag-check"></i> Pedir ahora</a>
+            <a class="btn btn-outline" href="/web/register-restaurant"><i class="bi bi-shop"></i> Registrar mi negocio</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="footer-grid">
+        <div>
+          <a class="brand" href="/web/inicio"><img src="/static/logo.png" alt="TuPedidoJR"></a>
+          <p style="font-size:14px;margin:12px 0 0;color:#b9cbe0">Tecnología local que conecta negocios, clientes y repartidores en Juventino Rosas.</p>
+        </div>
+        <div>
+          <h4>Servicio</h4>
+          <a href="/web/restaurants">Pedir ahora</a>
+          <a href="/web/register-restaurant">Registrar negocio</a>
+          <a href="/web/app">Descargar app</a>
+          <a href="/web/login">Iniciar sesión</a>
+        </div>
+        <div>
+          <h4>Ayuda</h4>
+          <a href="/manuales">Manuales</a>
+          <a href="/manuales/cliente">Manual del cliente</a>
+          <a href="/manuales/restaurante">Manual del negocio</a>
+          {% if whatsapp %}<a href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener">WhatsApp de soporte</a>{% endif %}
+        </div>
+        <div>
+          <h4>Contacto</h4>
+          {% if whatsapp %}<a href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> {{ whatsapp }}</a>{% endif %}
+          <a href="mailto:old.lodoman@gmail.com"><i class="bi bi-envelope"></i> old.lodoman@gmail.com</a>
+          <p style="font-size:13px;margin:10px 0 0;color:#8fa4ba">Juventino Rosas, Guanajuato, México.</p>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© <span id="year"></span> TuPedidoJR. Todos los derechos reservados.</span>
+        <span>Hecho con orgullo en Juventino Rosas, Gto.</span>
+      </div>
+    </div>
+  </footer>
+
+  {% if whatsapp %}
+  <a class="whatsapp-float" href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener" aria-label="WhatsApp de soporte">
+    <i class="bi bi-whatsapp"></i>
+  </a>
+  {% endif %}
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // Si ya hay sesión, el botón principal lleva a la app.
+    try {
+      if (sessionStorage.getItem('token')) {
+        const login = document.getElementById('loginTop');
+        login.href = '/web/restaurants';
+        login.innerHTML = '<i class="bi bi-grid"></i> Ir a la app';
+      }
+    } catch (e) { /* sin sesión */ }
+
+    // Animación suave al hacer scroll.
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+  </script>
+</body>
+</html>

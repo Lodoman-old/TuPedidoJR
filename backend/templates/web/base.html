@@ -170,6 +170,18 @@
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/reservations"><i class="bi bi-calendar-check"></i> Reservaciones</a></li>
           <li class="nav-item d-none" id="deliveryNav"><a class="nav-link" href="/web/delivery"><i class="bi bi-bicycle"></i> Repartidor</a></li>
           <li class="nav-item" id="downloadAppNav"><a class="nav-link" href="/web/app"><i class="bi bi-phone"></i> Descargar app</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-book"></i> Manuales
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="/manuales"><i class="bi bi-grid"></i> Todos los manuales</a></li>
+              <li><a class="dropdown-item" href="/manuales/cliente"><i class="bi bi-person"></i> Manual del cliente</a></li>
+              <li><a class="dropdown-item" href="/manuales/restaurante"><i class="bi bi-shop"></i> Manual del negocio</a></li>
+              <li data-manual-role="courier" class="d-none"><a class="dropdown-item" href="/manuales/repartidor"><i class="bi bi-bicycle"></i> Manual del repartidor</a></li>
+              <li data-manual-role="admin" class="d-none"><a class="dropdown-item" href="/manuales/admin"><i class="bi bi-shield-lock"></i> Manual del administrador</a></li>
+            </ul>
+          </li>
           <li class="nav-item dropdown d-none" id="adminNav">
             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
                aria-expanded="false" title="Administración" aria-label="Administración">
@@ -191,6 +203,7 @@
               <li><a class="dropdown-item" href="/web/admin/settings"><i class="bi bi-sliders"></i> Comisiones y ajustes</a></li>
               <li><a class="dropdown-item" href="/web/admin/push"><i class="bi bi-bell"></i> Notificaciones push</a></li>
               <li><a class="dropdown-item" href="/web/admin/audit"><i class="bi bi-journal-text"></i> Auditoría</a></li>
+              <li><a class="dropdown-item" href="/manuales/admin"><i class="bi bi-book"></i> Manual del administrador</a></li>
             </ul>
           </li>
           <li class="nav-item nav-delivery-hide nav-customer-hide d-none d-lg-block">
@@ -671,6 +684,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         } catch (e) { /* customer or restaurant account */ }
         sessionStorage.setItem('is_delivery', isDelivery ? 'true' : 'false');
         applyDeliveryNav(isDelivery);
+        applyManualNav();
         if (isDelivery) hideDeliveryIrrelevantNav();
         else document.querySelectorAll('.nav-delivery-hide').forEach(el => el.style.display = '');
         if (enforceDeliveryGuard(isDelivery)) return;
@@ -717,6 +731,17 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
 
     function applyDeliveryNav(isDelivery) {
       document.getElementById('deliveryNav')?.classList.toggle('d-none', !isDelivery);
+    }
+
+    function applyManualNav() {
+      const isAdmin = sessionStorage.getItem('is_superuser') === 'true';
+      const isCourier = sessionStorage.getItem('is_delivery') === 'true';
+      document.querySelectorAll('[data-manual-role="admin"]').forEach((el) => {
+        el.classList.toggle('d-none', !isAdmin);
+      });
+      document.querySelectorAll('[data-manual-role="courier"]').forEach((el) => {
+        el.classList.toggle('d-none', !isCourier);
+      });
     }
 
     // Un repartidor solo puede navegar en su panel. Si cambia la URL a mano

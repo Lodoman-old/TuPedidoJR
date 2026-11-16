@@ -162,7 +162,7 @@ admin.add_view(CashAdvanceAdmin)
 async def root_redirect():
     from fastapi.responses import RedirectResponse
 
-    return RedirectResponse(url="/web/login")
+    return RedirectResponse(url="/web/inicio")
 
 
 @app.get("/health")

@@ -92,13 +92,18 @@ async def send_email(
         return False, str(exc)
 
 
-def _email_shell(title: str, intro: str, body: str) -> str:
+def _email_shell(title: str, intro: str, body: str, logo_url: str | None = None) -> str:
+    logo = (
+        f'<img src="{logo_url}" alt="TuPedidoJR" '
+        'style="height:46px;display:block;background:#fff;border-radius:10px;padding:6px 10px">'
+        if logo_url else '<h1 style="margin:0;font-size:22px">TuPedidoJR</h1>'
+    )
     return f"""
     <div style="font-family:Arial,sans-serif;background:#f4f7fb;padding:24px">
       <div style="max-width:620px;margin:auto;background:#fff;border-radius:14px;overflow:hidden">
-        <div style="background:#0d1b2a;color:#fff;padding:22px 26px">
-          <h1 style="margin:0;font-size:22px">TuPedidoJR</h1>
-          <p style="margin:6px 0 0;opacity:.8">{title}</p>
+        <div style="background:#0d1b2a;color:#fff;padding:20px 26px">
+          {logo}
+          <p style="margin:12px 0 0;opacity:.85;font-size:14px">{title}</p>
         </div>
         <div style="padding:26px;color:#243447;line-height:1.55">
           <p>{intro}</p>
@@ -112,11 +117,17 @@ def _email_shell(title: str, intro: str, body: str) -> str:
     """
 
 
-def manuals_html(public_url: str) -> str:
+def manuals_html(public_url: str, role: str = "business") -> str:
+    items = (
+        [("Manual del repartidor", "/manuales/repartidor")]
+        if role == "courier"
+        else MANUALS
+    )
+    items = items + [("Todos los manuales", "/manuales")]
     links = "".join(
         f'<li style="margin-bottom:8px"><a href="{public_url}{path}" '
         f'style="color:#0d6efd">{label}</a></li>'
-        for label, path in MANUALS
+        for label, path in items
     )
     return f"""
       <div style="background:#eef4ff;border-radius:10px;padding:16px 18px;margin:18px 0">
@@ -153,7 +164,10 @@ async def send_restaurant_welcome(
           <p><a href="{public_url}/web/login" style="color:#0d6efd">{public_url}/web/login</a></p>
           <p>Configura tu menú o catálogo, horarios y datos bancarios antes de abrir.</p>
         """
-    html = _email_shell(title, intro, body + manuals_html(public_url))
+    html = _email_shell(
+        title, intro, body + manuals_html(public_url),
+        logo_url=f"{public_url}/static/logo.png",
+    )
     return await send_email(db, to, f"{title} — TuPedidoJR", html)
 
 
@@ -171,6 +185,7 @@ async def send_restaurant_rejected(
         f"<p>Por el momento no fue aprobada.</p>"
         f"{f'<p><strong>Motivo:</strong> {reason}</p>' if reason else ''}"
         f"<p>Puedes responder a este correo para solicitar una revisión.</p>",
+        logo_url=f"{config['public_url']}/static/logo.png",
     )
     return await send_email(db, to, "Solicitud de negocio — TuPedidoJR", html)
 
@@ -181,6 +196,7 @@ async def send_password_reset(
     name: str,
     reset_url: str,
 ) -> tuple[bool, str]:
+    config = await email_config(db)
     html = _email_shell(
         "Restablece tu contraseña",
         f"Hola {name}, recibimos una solicitud para restablecer tu contraseña.",
@@ -191,6 +207,7 @@ async def send_password_reset(
         </p>
         <p>El enlace vence en 24 horas. Si no solicitaste este cambio, ignora este correo.</p>
         """,
+        logo_url=f"{config['public_url']}/static/logo.png",
     )
     return await send_email(db, to, "Restablece tu contraseña — TuPedidoJR", html)
 
@@ -216,5 +233,29 @@ async def send_team_welcome(
         <p><a href="{config['public_url']}/web/login" style="color:#0d6efd">Iniciar sesión</a></p>
         <p>Por seguridad, cambia tu contraseña desde el perfil.</p>
         """ + manuals_html(config["public_url"]),
+        logo_url=f"{config['public_url']}/static/logo.png",
     )
     return await send_email(db, to, f"Acceso al equipo de {restaurant_name} — TuPedidoJR", html)
+
+
+async def send_courier_welcome(
+    db: AsyncSession,
+    to: str,
+    name: str,
+) -> tuple[bool, str]:
+    config = await email_config(db)
+    public_url = config["public_url"]
+    html = _email_shell(
+        "Bienvenido a TuPedidoJR",
+        f"Hola {name}, ya tienes acceso como repartidor.",
+        f"""
+        <p>Entra al panel del repartidor con tu correo y contraseña:</p>
+        <p><a href="{public_url}/web/login" style="color:#0d6efd">{public_url}/web/login</a></p>
+        <p>Antes de empezar, revisa tu manual: disponibilidad, contadores, límite de
+        servicios, incidencias y corte de cuentas.</p>
+        """ + manuals_html(public_url, "courier"),
+        logo_url=f"{public_url}/static/logo.png",
+    )
+    return await send_email(
+        db, to, "Bienvenido a TuPedidoJR — Manual del repartidor", html
+    )

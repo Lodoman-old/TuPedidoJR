@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.db.session import get_db
 from app.models.restaurant import Restaurant
 from app.services import push_service
+from app.services.order_service import get_setting_value
 from app.services.schedule_service import restaurant_open_state
 
 router = APIRouter(prefix="/web")
@@ -20,6 +21,13 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent.parent.parent / 
 @router.get("")
 async def web_index():
     return RedirectResponse(url="/web/restaurants")
+
+
+@router.get("/inicio")
+async def web_landing(request: Request, db: AsyncSession = Depends(get_db)):
+    raw_whatsapp = (await get_setting_value(db, "WHATSAPP_SUPPORT", "")).strip()
+    whatsapp = "".join(ch for ch in raw_whatsapp if ch.isdigit())
+    return templates.TemplateResponse(request, "landing.html", {"whatsapp": whatsapp})
 
 
 @router.get("/login")

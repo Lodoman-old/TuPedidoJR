@@ -9,6 +9,7 @@ from app.models.order import Order
 from app.models.restaurant import Restaurant
 from app.models.user import User
 from app.services.tracking_service import build_tracking
+from app.services.security_service import check_websocket
 from app.ws.manager import ConnectionManager
 
 router = APIRouter()
@@ -41,10 +42,11 @@ async def order_track_ws(
     token: str | None = Query(None),
     manager: ConnectionManager = Depends(get_ws_manager),
 ):
+    if await check_websocket(websocket):
+        return
     if not token:
         await websocket.close(code=4001, reason="Token requerido")
         return
-
     payload = decode_access_token(token)
     if not payload:
         await websocket.close(code=4001, reason="Token inválido")

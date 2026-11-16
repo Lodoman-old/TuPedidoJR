@@ -24,3 +24,6 @@ class User(TimestampMixin, Base):
     referral_code = Column(String(20), unique=True, nullable=True, index=True)
     referred_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     referral_bonus_awarded = Column(Boolean, default=False, nullable=False)
+    totp_secret = Column(String(64), nullable=True)
+    totp_enabled = Column(Boolean, default=False, nullable=False)
+    totp_recovery_codes = Column(Text, nullable=True)

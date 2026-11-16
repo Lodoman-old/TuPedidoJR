@@ -18,6 +18,16 @@
         </a>
       </div>
       <div class="small text-muted mt-3">APK para Android · En iPhone se instala como app web (PWA)</div>
+      {% if apk and apk.available %}
+      <div class="small text-muted mt-2">
+        APK oficial · {{ apk.size_mb }} MB<br>
+        SHA-256: <code id="apkHash" style="word-break:break-all">{{ apk.sha256 }}</code>
+        <button class="btn btn-outline-secondary btn-sm ms-1" type="button" onclick="copyApkHash()">Copiar</button>
+      </div>
+      <div class="small text-muted mt-1">
+        Si descargas la app por otro medio, compara este código. Si no coincide, no la instales.
+      </div>
+      {% endif %}
     </div>
 
     <div class="row g-3">
@@ -73,6 +83,11 @@
 {% endblock %}
 {% block scripts %}
 <script>
+  function copyApkHash() {
+    const hash = document.getElementById('apkHash');
+    if (!hash || !navigator.clipboard) return;
+    navigator.clipboard.writeText(hash.textContent.trim());
+  }
   if (!sessionStorage.getItem('token')) {
     document.getElementById('enablePushBtn').disabled = true;
     document.getElementById('pushMsg').className = 'small text-muted';

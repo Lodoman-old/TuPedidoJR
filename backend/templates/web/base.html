@@ -267,8 +267,20 @@ function money0(value) {
 }
 async function login(email, password) {
   const res = await apiRequest('POST', '/auth/login', { email, password });
+  if (res && res.requires_2fa) return res;
+  saveSession(res);
+  return res;
+}
+function saveSession(res) {
   sessionStorage.setItem('token', res.access_token);
   sessionStorage.setItem('is_superuser', res.is_superuser ? 'true' : 'false');
+}
+async function verifyTwoFactor(tempToken, code) {
+  const res = await apiRequest('POST', '/auth/2fa/verify', {
+    temp_token: tempToken,
+    code,
+  });
+  saveSession(res);
   return res;
 }
 async function register(name, email, password, phone, referralCode) {

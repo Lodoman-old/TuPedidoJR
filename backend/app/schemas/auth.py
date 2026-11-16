@@ -34,6 +34,31 @@ class TokenResponse(BaseModel):
     is_superuser: bool = False
 
 
+class TwoFactorRequired(BaseModel):
+    requires_2fa: bool = True
+    temp_token: str
+
+
+class TwoFactorVerifyRequest(BaseModel):
+    temp_token: str = Field(..., min_length=10)
+    code: str = Field(..., min_length=4, max_length=20)
+
+
+class TwoFactorSetupOut(BaseModel):
+    secret: str
+    otpauth_uri: str
+    recovery_codes: list[str] = []
+
+
+class TwoFactorCodeRequest(BaseModel):
+    code: str = Field(..., min_length=4, max_length=20)
+
+
+class TwoFactorDisableRequest(BaseModel):
+    password: str
+    code: str | None = Field(default=None, max_length=20)
+
+
 class UserOut(BaseModel):
     id: UUID
     name: str

@@ -21,6 +21,16 @@
         </div>
         <button type="submit" class="btn btn-primary w-100">Entrar</button>
       </form>
+      <div id="twoFactorBox" class="d-none">
+        <p class="small text-muted mb-2">
+          Escribe el código de 6 dígitos de tu app autenticadora. También puedes usar un código de recuperación.
+        </p>
+        <label class="form-label">Código de verificación</label>
+        <input type="text" class="form-control" id="twoFactorCode" inputmode="numeric"
+               autocomplete="one-time-code" placeholder="123456" maxlength="20">
+        <button class="btn btn-primary w-100 mt-2" id="twoFactorBtn" type="button">Verificar</button>
+        <button class="btn btn-link w-100 mt-1" id="twoFactorBack" type="button">Volver</button>
+      </div>
       <div class="text-center mt-3 small d-flex flex-column gap-1">
         <a href="/web/register" id="registerLink">¿No tienes cuenta? Regístrate</a>
         <a href="/web/forgot-password">Olvidé mi contraseña</a>
@@ -35,6 +45,18 @@
 {% endblock %}
 {% block scripts %}
 <script>
+  let pendingTwoFactor = null;
+
+  function afterLogin() {
+    if (safeNext) {
+      window.location.href = safeNext;
+      return;
+    }
+    getDeliveryProfile()
+      .then(() => { window.location.href = '/web/delivery'; })
+      .catch(() => { window.location.href = '/web/restaurants'; });
+  }
+
   document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('email').value;
@@ -42,21 +64,40 @@
     const errEl = document.getElementById('loginError');
     errEl.classList.add('d-none');
     try {
-      await login(email, password);
-      if (safeNext) {
-        window.location.href = safeNext;
+      const res = await login(email, password);
+      if (res && res.requires_2fa) {
+        pendingTwoFactor = res.temp_token;
+        document.getElementById('loginForm').classList.add('d-none');
+        document.getElementById('twoFactorBox').classList.remove('d-none');
+        document.getElementById('twoFactorCode').focus();
         return;
       }
-      try {
-        await getDeliveryProfile();
-        window.location.href = '/web/delivery';
-      } catch (e) {
-        window.location.href = '/web/restaurants';
-      }
+      afterLogin();
     } catch (ex) {
       errEl.textContent = ex.message;
       errEl.classList.remove('d-none');
     }
+  });
+
+  document.getElementById('twoFactorBtn').addEventListener('click', async () => {
+    const errEl = document.getElementById('loginError');
+    const code = document.getElementById('twoFactorCode').value.trim();
+    if (!code) return;
+    errEl.classList.add('d-none');
+    try {
+      await verifyTwoFactor(pendingTwoFactor, code);
+      afterLogin();
+    } catch (ex) {
+      errEl.textContent = ex.message;
+      errEl.classList.remove('d-none');
+    }
+  });
+
+  document.getElementById('twoFactorBack').addEventListener('click', () => {
+    pendingTwoFactor = null;
+    document.getElementById('twoFactorBox').classList.add('d-none');
+    document.getElementById('loginForm').classList.remove('d-none');
+    document.getElementById('twoFactorCode').value = '';
   });
 
   const nextParam = new URLSearchParams(window.location.search).get('next');

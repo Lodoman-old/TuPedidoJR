@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
+from starlette.datastructures import Address
 
 from app.core.security import decode_access_token
 from app.models.setting import Setting
@@ -126,6 +127,34 @@ class TestAutoBlock:
     async def test_normal_navigation_is_not_blocked(self, client: AsyncClient):
         resp = await client.get("/web/inicio")
         assert resp.status_code == 200
+
+
+class TestWebSocketGuard:
+    class FakeWS:
+        headers = {}
+        client = Address("203.0.113.9", 1234)
+
+        def __init__(self):
+            self.closed = None
+
+        async def close(self, code=1000, reason=None):
+            self.closed = code
+
+    async def test_blocked_ip_is_rejected(self, db_session):
+        from app.services.security_service import check_websocket
+
+        await security_guard.block("203.0.113.9", 5, "test", auto=False)
+        ws = self.FakeWS()
+        assert await check_websocket(ws) is True
+        assert ws.closed == 4403
+
+    async def test_allowed_ip_passes(self, db_session):
+        from app.services.security_service import check_websocket
+
+        ws = self.FakeWS()
+        ws.client = Address("203.0.113.10", 1234)
+        assert await check_websocket(ws) is False
+        assert ws.closed is None
 
 
 class TestAdminSecurity:

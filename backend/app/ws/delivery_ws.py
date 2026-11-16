@@ -2,6 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 
 from app.api.deps import get_current_user
 from app.models.user import User
+from app.services.security_service import check_websocket
 from app.ws.manager import ConnectionManager
 
 router = APIRouter()
@@ -18,6 +19,8 @@ async def delivery_location_ws(
     order_id: str,
     manager: ConnectionManager = Depends(get_ws_manager),
 ):
+    if await check_websocket(websocket):
+        return
     await websocket.accept()
 
     try:

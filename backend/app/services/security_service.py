@@ -7,6 +7,7 @@ y solo escribe en la base cuando detecta un evento o bloquea una IP.
 from __future__ import annotations
 
 import ipaddress
+import asyncio
 import re
 import time
 from collections import deque
@@ -24,6 +25,9 @@ from app.services.order_service import get_setting_value
 WINDOW_SECONDS = 60
 SCORE_WINDOW_SECONDS = 600
 MAX_TRACKED_IPS = 5000
+ACCOUNT_WINDOW_SECONDS = 900
+ACCOUNT_FAILURE_LIMIT = 5
+ALERT_THROTTLE_SECONDS = 600
 
 SUSPICIOUS_PATHS = re.compile(
     r"("
@@ -129,6 +133,9 @@ class SecurityGuard:
         self._score: dict[str, deque[tuple[float, int, str]]] = {}
         self._not_found: dict[str, deque[float]] = {}
         self._content: dict[str, deque[float]] = {}
+        self._account_failures: dict[str, deque[float]] = {}
+        self._ws_hits: dict[str, deque[float]] = {}
+        self._last_alert = 0.0
         self._blocked: dict[str, float] = {}
         self._last_hit_log: dict[str, float] = {}
         self._session_factory = None
@@ -194,6 +201,9 @@ class SecurityGuard:
         self._score.clear()
         self._not_found.clear()
         self._content.clear()
+        self._account_failures.clear()
+        self._ws_hits.clear()
+        self._last_alert = 0.0
         self._blocked.clear()
         self._last_hit_log.clear()
         self._settings.clear()
@@ -237,6 +247,40 @@ class SecurityGuard:
                 await db.commit()
         except Exception:
             pass
+
+    def register_account_failure(self, email: str) -> None:
+        key = (email or "").strip().lower()
+        if not key:
+            return
+        now = time.time()
+        queue = self._account_failures.setdefault(key, deque())
+        queue.append(now)
+        while queue and now - queue[0] > ACCOUNT_WINDOW_SECONDS:
+            queue.popleft()
+
+    def account_locked_for(self, email: str) -> int:
+        """Segundos que faltan para poder reintentar (0 si no está bloqueada)."""
+        key = (email or "").strip().lower()
+        queue = self._account_failures.get(key)
+        if not queue:
+            return 0
+        now = time.time()
+        while queue and now - queue[0] > ACCOUNT_WINDOW_SECONDS:
+            queue.popleft()
+        if len(queue) < ACCOUNT_FAILURE_LIMIT:
+            return 0
+        return int(ACCOUNT_WINDOW_SECONDS - (now - queue[0])) + 1
+
+    def reset_account_failures(self, email: str) -> None:
+        self._account_failures.pop((email or "").strip().lower(), None)
+
+    def ws_rate_exceeded(self, ip: str, limit: int = 60) -> bool:
+        now = time.time()
+        hits = self._ws_hits.setdefault(ip, deque())
+        hits.append(now)
+        while hits and now - hits[0] > WINDOW_SECONDS:
+            hits.popleft()
+        return len(hits) > limit
 
     def is_blocked(self, ip: str) -> bool:
         expires = self._blocked.get(ip)
@@ -293,6 +337,51 @@ class SecurityGuard:
                     )
                 )
                 await db.commit()
+        except Exception:
+            pass
+        if auto:
+            self._schedule_alert(ip, reason, detail, minutes)
+
+    def _schedule_alert(self, ip: str, reason: str, detail: str | None, minutes: float) -> None:
+        now = time.time()
+        if now - self._last_alert < ALERT_THROTTLE_SECONDS:
+            return
+        self._last_alert = now
+        try:
+            asyncio.create_task(self._send_alert(ip, reason, detail, minutes))
+        except RuntimeError:
+            pass
+
+    async def _send_alert(
+        self, ip: str, reason: str, detail: str | None, minutes: float
+    ) -> None:
+        try:
+            async with self._session() as db:
+                if not truthy(await get_setting_value(db, "SECURITY_ALERTS_ENABLED", "true")):
+                    return
+                to = (await get_setting_value(db, "SECURITY_ALERT_EMAIL", "")).strip()
+                if not to:
+                    to = (await get_setting_value(db, "CONTACT_EMAIL", "tupedidojr@gmail.com")).strip()
+                if not to:
+                    return
+                base = (await get_setting_value(db, "APP_PUBLIC_URL", "")).rstrip("/")
+                panel = f"{base}/web/admin/security" if base else "/web/admin/security"
+                html = (
+                    "<div style='font-family:Arial,sans-serif;color:#17212b'>"
+                    "<h2 style='color:#b02a37'>IP bloqueada automáticamente</h2>"
+                    f"<p><strong>IP:</strong> {ip}<br>"
+                    f"<strong>Motivo:</strong> {reason}<br>"
+                    f"<strong>Detalle:</strong> {(detail or 'Sin detalle')}<br>"
+                    f"<strong>Duración:</strong> {int(minutes)} minutos</p>"
+                    f"<p><a href='{panel}' style='background:#0d6efd;color:#fff;"
+                    "padding:10px 16px;border-radius:8px;text-decoration:none'>"
+                    "Ver panel de seguridad</a></p>"
+                    "<p style='color:#5d6b7a;font-size:13px'>Si fue un error, puedes "
+                    "desbloquearla desde el panel o esperar a que expire.</p></div>"
+                )
+                from app.services.email_service import send_email
+
+                await send_email(db, to, f"TuPedidoJR: IP bloqueada ({reason})", html)
         except Exception:
             pass
 
@@ -476,6 +565,19 @@ class SecurityGuard:
 
 
 security_guard = SecurityGuard()
+
+
+async def check_websocket(websocket) -> bool:
+    """Devuelve True si la conexión debe rechazarse (IP bloqueada o abuso)."""
+    settings = await security_guard.refresh_settings()
+    ip = client_ip(websocket, trust_cf=truthy(settings.get("trust_cf")))
+    if security_guard.is_blocked(ip):
+        await websocket.close(code=4403, reason="Acceso bloqueado")
+        return True
+    if security_guard.ws_rate_exceeded(ip):
+        await websocket.close(code=4429, reason="Demasiadas conexiones")
+        return True
+    return False
 
 
 async def list_security_overview(db: AsyncSession) -> dict:

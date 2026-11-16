@@ -122,6 +122,40 @@
     <h6 class="mb-2"><i class="bi bi-bar-chart"></i> IPs con más eventos (24 h)</h6>
     <div id="secTopIps" class="small text-muted">Sin actividad.</div>
   </div>
+
+  <div class="card p-3 mt-3">
+    <h6 class="mb-2"><i class="bi bi-shield-lock"></i> Mi cuenta: doble factor (2FA)</h6>
+    <p class="small text-muted mb-2">
+      Protege el panel con una app autenticadora (Google Authenticator, Authy, Microsoft Authenticator).
+    </p>
+    <div id="otpStatus" class="small mb-2">Cargando…</div>
+    <div id="otpSetupBox" class="d-none border rounded p-2 mb-2">
+      <ol class="small ps-3 mb-2">
+        <li>Abre tu app y agrega una cuenta con esta clave: <code id="otpSecret"></code></li>
+        <li>O copia este enlace: <code id="otpUri" style="word-break:break-all"></code></li>
+        <li><strong>Guarda ahora tus códigos de recuperación:</strong> <code id="otpRecovery"></code></li>
+      </ol>
+      <div class="d-flex gap-2 align-items-center">
+        <input type="text" class="form-control form-control-sm" id="otpCode" placeholder="123456" style="max-width:140px">
+        <button class="btn btn-primary btn-sm" type="button" onclick="enableOtp()">Activar</button>
+      </div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-outline-primary btn-sm" id="otpStartBtn" type="button" onclick="startOtp()">Activar doble factor</button>
+      <button class="btn btn-outline-danger btn-sm d-none" id="otpDisableBtn" type="button" onclick="toggleOtpDisable()">Desactivar</button>
+    </div>
+    <div class="row g-2 mt-2 d-none" id="otpDisableBox">
+      <div class="col-12 col-md-4">
+        <input type="password" class="form-control form-control-sm" id="otpPassword" placeholder="Contraseña">
+      </div>
+      <div class="col-12 col-md-4">
+        <input type="text" class="form-control form-control-sm" id="otpDisableCode" placeholder="Código actual">
+      </div>
+      <div class="col-12 col-md-4">
+        <button class="btn btn-outline-danger btn-sm w-100" type="button" onclick="confirmDisableOtp()">Confirmar desactivación</button>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 {% block scripts %}
@@ -150,8 +184,7 @@
     setTimeout(() => el.classList.add('d-none'), 4000);
   };
 
-  async function loadSecurity() {
-    secEl('secError').classList.add('d-none');
+  async function loadSecurity() {    secEl('secError').classList.add('d-none');
     try {
       const data = await apiRequest('GET', '/admin/security/overview');
       const c = data.counters || {};
@@ -266,7 +299,71 @@
     }
   }
 
+  async function loadOtpStatus() {
+    try {
+      const s = await apiRequest('GET', '/auth/2fa/status');
+      const enabled = Boolean(s.enabled);
+      secEl('otpStatus').innerHTML = enabled
+        ? '<span class="badge bg-success">Activo</span> El panel pedirá el código al iniciar sesión.'
+        : '<span class="badge bg-secondary">Inactivo</span> Te recomendamos activarlo.';
+      secEl('otpStartBtn').classList.toggle('d-none', enabled);
+      secEl('otpDisableBtn').classList.toggle('d-none', !enabled);
+      if (enabled) secEl('otpDisableBox').classList.add('d-none');
+    } catch (e) {
+      secEl('otpStatus').textContent = 'No se pudo consultar el estado.';
+    }
+  }
+
+  async function startOtp() {
+    try {
+      const r = await apiRequest('POST', '/auth/2fa/setup', {});
+      secEl('otpSecret').textContent = r.secret;
+      secEl('otpUri').textContent = r.otpauth_uri;
+      secEl('otpRecovery').textContent = (r.recovery_codes || []).join('   ');
+      secEl('otpSetupBox').classList.remove('d-none');
+      secEl('otpStartBtn').classList.add('d-none');
+      secEl('otpCode').focus();
+    } catch (e) {
+      secMsg('secError', 'No se pudo iniciar: ' + e.message);
+    }
+  }
+
+  async function enableOtp() {
+    const code = secEl('otpCode').value.trim();
+    if (!code) return;
+    try {
+      await apiRequest('POST', '/auth/2fa/enable', { code });
+      secEl('otpSetupBox').classList.add('d-none');
+      secEl('otpCode').value = '';
+      secMsg('secOk', 'Doble factor activado.');
+      loadOtpStatus();
+    } catch (e) {
+      secMsg('secError', 'Código incorrecto o expirado: ' + e.message);
+    }
+  }
+
+  function toggleOtpDisable() {
+    secEl('otpDisableBox').classList.toggle('d-none');
+  }
+
+  async function confirmDisableOtp() {
+    try {
+      await apiRequest('POST', '/auth/2fa/disable', {
+        password: secEl('otpPassword').value,
+        code: secEl('otpDisableCode').value.trim() || null,
+      });
+      secEl('otpPassword').value = '';
+      secEl('otpDisableCode').value = '';
+      secEl('otpDisableBox').classList.add('d-none');
+      secMsg('secOk', 'Doble factor desactivado.');
+      loadOtpStatus();
+    } catch (e) {
+      secMsg('secError', 'No se pudo desactivar: ' + e.message);
+    }
+  }
+
   loadSecurity();
+  loadOtpStatus();
   setInterval(loadSecurity, 30000);
 </script>
 {% endblock %}

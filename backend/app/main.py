@@ -114,6 +114,20 @@ async def security_headers(request: Request, call_next):
     response.headers.setdefault(
         "Permissions-Policy", "geolocation=(self), camera=(), microphone=(), payment=()"
     )
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com "
+        "https://www.gstatic.com https://www.google.com; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com "
+        "https://fonts.googleapis.com; "
+        "img-src 'self' data: blob: https:; "
+        "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com; "
+        "connect-src 'self' https: wss:; "
+        "worker-src 'self' blob:; "
+        "frame-src 'self' https://www.google.com https://console.firebase.google.com; "
+        "frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'",
+    )
     if settings.NOINDEX:
         response.headers["X-Robots-Tag"] = "noindex, nofollow"
     if request.url.scheme == "https":

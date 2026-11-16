@@ -1,4 +1,5 @@
 import json
+import hashlib
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -17,6 +18,29 @@ from app.services.schedule_service import restaurant_open_state
 
 router = APIRouter(prefix="/web")
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent.parent / "templates" / "web"))
+
+_APK_INFO_CACHE: dict[str, tuple[float, int, str]] = {}
+
+
+def _apk_info(apk: Path) -> dict:
+    """Tamaño y SHA-256 de la APK, calculados una sola vez por versión."""
+    stat = apk.stat()
+    key = str(apk)
+    cached = _APK_INFO_CACHE.get(key)
+    if cached and cached[0] == stat.st_mtime and cached[1] == stat.st_size:
+        digest = cached[2]
+    else:
+        hasher = hashlib.sha256()
+        with apk.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(2 * 1024 * 1024), b""):
+                hasher.update(chunk)
+        digest = hasher.hexdigest()
+        _APK_INFO_CACHE[key] = (stat.st_mtime, stat.st_size, digest)
+    return {
+        "available": True,
+        "size_mb": round(stat.st_size / (1024 * 1024), 1),
+        "sha256": digest,
+    }
 
 
 @router.get("")
@@ -268,8 +292,12 @@ async def web_app_download(request: Request, db: AsyncSession = Depends(get_db))
     public_url = (
         await get_setting_value(db, "APP_PUBLIC_URL", settings.APP_URL)
     ).rstrip("/")
+    apk = Path(__file__).parent.parent.parent / "static" / "downloads" / "TuPedidoJR.apk"
+    apk_info = (
+        _apk_info(apk) if apk.is_file() else {"available": False, "size_mb": 0, "sha256": ""}
+    )
     return templates.TemplateResponse(
-        request, "app_download.html", {"public_url": public_url}
+        request, "app_download.html", {"public_url": public_url, "apk": apk_info}
     )
 
 

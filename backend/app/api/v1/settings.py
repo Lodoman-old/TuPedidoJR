@@ -111,6 +111,11 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "IPs o rangos (ej. 187.190.10.5, 10.0.0.0/8) que nunca se bloquean. Sepáralos con coma.",
         "type": "text", "default": "",
     },
+    "SECURITY_TRUST_CF": {
+        "group": "Seguridad", "label": "Confiar en Cloudflare (CF-Connecting-IP)",
+        "description": "Actívalo solo cuando el sitio esté detrás de Cloudflare. Así se usa la IP real del visitante y no la del proxy.",
+        "type": "bool", "default": "false",
+    },
     "MANDADO_ACTIVE": {
         "group": "Mandados", "label": "Permitir mandados",
         "description": "Activa o desactiva el servicio de mandados.",

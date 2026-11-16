@@ -8,7 +8,11 @@ from httpx import AsyncClient
 from app.core.security import decode_access_token
 from app.models.setting import Setting
 from app.models.user import User
-from app.services.security_service import is_suspicious_path, security_guard
+from app.services.security_service import (
+    client_ip,
+    is_suspicious_path,
+    security_guard,
+)
 
 
 @pytest.fixture
@@ -34,6 +38,29 @@ def _from_ip(ip: str) -> dict:
 
 
 class TestPathDetection:
+    def test_client_ip_ignores_cloudflare_by_default(self):
+        from starlette.requests import Request
+
+        scope = {
+            "type": "http",
+            "headers": [(b"cf-connecting-ip", b"203.0.113.5")],
+            "client": ("127.0.0.1", 1234),
+        }
+        request = Request(scope)
+        assert client_ip(request) == "127.0.0.1"
+        assert client_ip(request, trust_cf=True) == "203.0.113.5"
+
+    def test_client_ip_uses_peer_when_public(self):
+        from starlette.requests import Request
+
+        scope = {
+            "type": "http",
+            "headers": [(b"cf-connecting-ip", b"203.0.113.5")],
+            "client": ("8.8.8.8", 1234),
+        }
+        request = Request(scope)
+        assert client_ip(request, trust_cf=True) == "8.8.8.8"
+
     def test_detects_scan_paths(self):
         paths = [
             "/.env",

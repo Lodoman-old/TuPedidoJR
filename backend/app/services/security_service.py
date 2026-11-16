@@ -64,22 +64,29 @@ class Decision:
     reason: str = ""
 
 
-def client_ip(request: Request) -> str:
-    """IP real detrás de Traefik/Coolify.
+def client_ip(request: Request, trust_cf: bool = False) -> str:
+    """IP real del visitante detrás del proxy.
 
-    Solo se confía en ``X-Forwarded-For`` cuando quien conecta es el proxy
-    (dirección privada). Si el backend quedara expuesto directo, se usa la
-    conexión real para que nadie pueda falsificar su IP.
+    Solo se confía en las cabeceras cuando quien conecta es el proxy (IP
+    privada). ``CF-Connecting-IP`` se usa únicamente con ``trust_cf`` activo,
+    para no abrir un hueco de suplantación mientras el sitio no esté en
+    Cloudflare.
     """
     peer = request.client.host if request.client else ""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded and (not is_valid_ip(peer) or _is_local(peer)):
-        parts = [part.strip() for part in forwarded.split(",") if part.strip()]
-        if parts:
-            return parts[-1]
-    real = request.headers.get("x-real-ip")
-    if real and real.strip() and (not is_valid_ip(peer) or _is_local(peer)):
-        return real.strip()
+    peer_is_proxy = (not is_valid_ip(peer)) or _is_local(peer)
+    if peer_is_proxy:
+        if trust_cf:
+            cf_ip = (request.headers.get("cf-connecting-ip") or "").strip()
+            if is_valid_ip(cf_ip):
+                return cf_ip
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            parts = [part.strip() for part in forwarded.split(",") if part.strip()]
+            if parts:
+                return parts[-1]
+        real = (request.headers.get("x-real-ip") or "").strip()
+        if is_valid_ip(real):
+            return real
     return peer or "desconocida"
 
 
@@ -89,6 +96,10 @@ def is_valid_ip(value: str) -> bool:
         return True
     except ValueError:
         return False
+
+
+def truthy(value) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "si", "sí", "on"}
 
 
 def _is_local(ip: str) -> bool:
@@ -146,6 +157,7 @@ class SecurityGuard:
             "rate_limit": "400",
             "block_minutes": "60",
             "whitelist": "",
+            "trust_cf": "false",
         }
         try:
             async with self._session() as db:
@@ -158,6 +170,9 @@ class SecurityGuard:
                     db, "SECURITY_BLOCK_MINUTES", "60"
                 )
                 values["whitelist"] = await get_setting_value(db, "SECURITY_WHITELIST", "")
+                values["trust_cf"] = await get_setting_value(
+                    db, "SECURITY_TRUST_CF", "false"
+                )
         except Exception:
             pass
         self._settings = values
@@ -357,11 +372,11 @@ class SecurityGuard:
         path = request.url.path
         if path.startswith(SKIP_COUNT_PREFIXES):
             return
-        ip = client_ip(request)
+        settings = await self._refresh_settings()
+        ip = client_ip(request, trust_cf=truthy(settings.get("trust_cf")))
         if _is_local(ip) and not request.headers.get("x-forwarded-for"):
             return
-        settings = await self._refresh_settings()
-        if str(settings.get("enabled")).lower() not in {"1", "true", "yes", "si", "sí", "on"}:
+        if not truthy(settings.get("enabled")):
             return
         if path.startswith("/api/v1/auth/login") and status_code in (400, 401, 403):
             points = self._add_score(ip, 30, "brute_force")
@@ -400,7 +415,7 @@ class SecurityGuard:
 
     async def _auto_block(self, ip: str, reason: str, path: str, detail: str) -> None:
         settings = await self._refresh_settings()
-        if str(settings.get("auto_block")).lower() not in {"1", "true", "yes", "si", "sí", "on"}:
+        if not truthy(settings.get("auto_block")):
             return
         if path.startswith(NEVER_AUTO_BLOCK_PREFIXES):
             return
@@ -415,7 +430,8 @@ class SecurityGuard:
     # Inspección
     # ------------------------------------------------------------------
     async def inspect(self, request: Request) -> Decision:
-        ip = client_ip(request)
+        settings = await self._refresh_settings()
+        ip = client_ip(request, trust_cf=truthy(settings.get("trust_cf")))
         path = request.url.path
         query = request.url.query
         full = f"{path}?{query}" if query else path
@@ -426,9 +442,7 @@ class SecurityGuard:
         if _is_local(ip) and not request.headers.get("x-forwarded-for"):
             return Decision(False)
 
-        settings = await self._refresh_settings()
-        enabled = str(settings.get("enabled")).lower() in {"1", "true", "yes", "si", "sí", "on"}
-        if not enabled:
+        if not truthy(settings.get("enabled")):
             return Decision(False)
 
         if self._whitelist and any(matches_network(ip, item) for item in self._whitelist):

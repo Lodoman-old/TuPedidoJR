@@ -15,6 +15,7 @@ from app.services.security_service import (
     is_valid_ip,
     list_security_overview,
     security_guard,
+    truthy,
 )
 
 router = APIRouter()
@@ -40,13 +41,14 @@ async def security_overview(
     settings = await security_guard.refresh_settings(force=True)
     return {
         **data,
-        "client_ip": client_ip(request),
+        "client_ip": client_ip(request, trust_cf=truthy(settings.get("trust_cf"))),
         "settings": {
-            "enabled": str(settings.get("enabled")).lower() in {"1", "true", "yes", "si", "sí", "on"},
-            "auto_block": str(settings.get("auto_block")).lower() in {"1", "true", "yes", "si", "sí", "on"},
+            "enabled": truthy(settings.get("enabled")),
+            "auto_block": truthy(settings.get("auto_block")),
             "rate_limit": settings.get("rate_limit") or "400",
             "block_minutes": settings.get("block_minutes") or "60",
             "whitelist": settings.get("whitelist") or "",
+            "trust_cf": truthy(settings.get("trust_cf")),
         },
         "server_time": datetime.now(timezone.utc).isoformat(),
     }

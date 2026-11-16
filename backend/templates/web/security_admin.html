@@ -50,6 +50,11 @@
           <input class="form-check-input" type="checkbox" id="secAuto">
           <label class="form-check-label small" for="secAuto">Bloquear IPs automáticamente</label>
         </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="secTrustCf">
+          <label class="form-check-label small" for="secTrustCf">Confiar en Cloudflare (CF-Connecting-IP)</label>
+          <div class="form-text">Actívalo solo si el dominio pasa por Cloudflare.</div>
+        </div>
         <div class="row g-2">
           <div class="col-6">
             <label class="form-label small mb-1">Solicitudes por minuto</label>
@@ -161,6 +166,7 @@
       const s = data.settings || {};
       secEl('secEnabled').checked = Boolean(s.enabled);
       secEl('secAuto').checked = Boolean(s.auto_block);
+      secEl('secTrustCf').checked = Boolean(s.trust_cf);
       secEl('secRateLimit').value = s.rate_limit ?? 400;
       secEl('secBlockMinutes').value = s.block_minutes ?? 60;
       secEl('secWhitelist').value = s.whitelist ?? '';
@@ -212,6 +218,7 @@
           SECURITY_RATE_LIMIT_PER_MIN: String(secEl('secRateLimit').value || 400),
           SECURITY_BLOCK_MINUTES: String(secEl('secBlockMinutes').value || 60),
           SECURITY_WHITELIST: secEl('secWhitelist').value.trim(),
+          SECURITY_TRUST_CF: secEl('secTrustCf').checked,
         },
       });
       await apiRequest('POST', '/admin/security/refresh', {});

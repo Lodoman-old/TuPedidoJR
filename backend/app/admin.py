@@ -381,6 +381,7 @@ class DeliveryPersonAdmin(ModelView, model=DeliveryPerson):
     form_choices = {
         DeliveryPerson.vehicle_type: [
             ("bike", "Bicicleta"),
+            ("scooter", "Patineta"),
             ("motorcycle", "Motocicleta"),
             ("car", "Automóvil"),
         ],

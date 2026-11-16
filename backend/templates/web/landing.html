@@ -287,9 +287,9 @@
       <nav class="nav-links" aria-label="Secciones">
         <a href="#clientes">Para clientes</a>
         <a href="#negocios">Para negocios</a>
+        <a href="#repartidores">Para repartidores</a>
         <a href="#como-funciona">Cómo funciona</a>
         <a href="#cobertura">Cobertura</a>
-        <a href="/manuales">Manuales</a>
       </nav>
       <div class="nav-actions">
         <a class="btn btn-outline btn-sm" href="/web/app">Descargar APK</a>
@@ -332,8 +332,8 @@
   <section class="photo-strip" aria-label="Entregas y productos locales">
     <div class="wrap photo-grid">
       <figure class="reveal">
-        <img src="/static/landing/repartidor.jpg" alt="Repartidor local con mochila de entrega" loading="lazy">
-        <figcaption>Repartidores de tu comunidad</figcaption>
+        <img src="/static/landing/restaurante.jpg" alt="Negocio local con ambiente cálido" loading="lazy">
+        <figcaption>Negocios de tu comunidad</figcaption>
       </figure>
       <figure class="reveal">
         <img src="/static/landing/platillos.jpg" alt="Platillos locales recién preparados" loading="lazy">
@@ -427,6 +427,7 @@
           <div>
             <span class="eyebrow">Afiliación anual</span>
             <div class="price">${{ '%.0f'|format(affiliation_fee|float) }} <small>MXN / año</small></div>
+            <p class="small text-muted mb-2">Equivale a <strong>${{ '%.2f'|format(affiliation_daily|float) }}</strong> al día. Menos que un café, con presencia en línea todo el año.</p>
             <p style="color:var(--muted);margin:0 0 8px">
               Un solo pago anual para mantener tu negocio activo en TuPedidoJR,
               con presencia digital y respaldo de reparto.
@@ -441,7 +442,7 @@
             <ul class="checks">
               <li><i class="bi bi-check-circle-fill"></i> Menú o catálogo digital con fotos, precios y categorías.</li>
               <li><i class="bi bi-check-circle-fill"></i> Página propia, enlace y QR para mostrador y volantes.</li>
-              <li><i class="bi bi-check-circle-fill"></i> Materiales y capacitación inicial para tu equipo.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Capacitación inicial para tu equipo.</li>
               <li><i class="bi bi-check-circle-fill"></i> Panel de pedidos, envíos, ganancias y liquidaciones.</li>
               <li><i class="bi bi-check-circle-fill"></i> Red de repartidores locales y seguimiento de entrega.</li>
               <li><i class="bi bi-check-circle-fill"></i> Soporte y acompañamiento para vender en línea.</li>
@@ -473,6 +474,40 @@
             <div class="step"><div class="num">2</div><div><strong>Publica tu menú/catálogo</strong><span>Fotos, precios y horarios.</span></div></div>
             <div class="step"><div class="num">3</div><div><strong>Recibe pedidos</strong><span>El cliente pide desde la app o tu QR.</span></div></div>
             <div class="step"><div class="num">4</div><div><strong>Prepara y entrega</strong><span>Nosotros ponemos al repartidor y el seguimiento.</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="repartidores" style="padding-top:0">
+      <div class="wrap">
+        <div class="split">
+          <div class="image-frame reveal">
+            <img src="/static/landing/repartidor.jpg" alt="Repartidor de TuPedidoJR con mochila de entrega" loading="lazy">
+          </div>
+          <div class="reveal">
+            <span class="eyebrow">Para repartidores</span>
+            <h2 style="font-size:clamp(27px,3vw,38px);letter-spacing:-.8px;margin:12px 0 10px">Reparte como quieras. Nosotros te apoyamos.</h2>
+            <p style="color:var(--muted);margin:0 0 10px">
+              Puedes repartir en <strong>bici, patín, moto o auto</strong>. Tú decides cuándo conectarte,
+              qué servicios tomar y cómo organizar tu día.
+            </p>
+            <ul class="checks">
+              <li><i class="bi bi-check-circle-fill"></i> Ganas el <strong>100% del envío</strong> y el <strong>100% de la propina</strong>.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Puedes llevar hasta <strong>5 servicios activos</strong>; te avisamos al llegar a 4.</li>
+              <li><i class="bi bi-check-circle-fill"></i> <strong>Inicio del día sin invertir tu dinero:</strong> la plataforma te apoya con el efectivo para pagar los pedidos a los negocios.</li>
+              <li><i class="bi bi-check-circle-fill"></i> <strong>Avances para cumplir tus entregas</strong> y no detenerte por falta de capital; se descuentan de tus liquidaciones.</li>
+              <li><i class="bi bi-check-circle-fill"></i> Corte de cuentas claro desde la app y manual de bienvenida por correo.</li>
+            </ul>
+            <div class="hero-cta" style="margin-top:22px;margin-bottom:0">
+              {% if whatsapp %}
+              <a class="btn btn-primary" href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> Quiero repartir</a>
+              {% else %}
+              <a class="btn btn-primary" href="/web/app"><i class="bi bi-phone"></i> Descargar la app</a>
+              {% endif %}
+              <a class="btn btn-outline" href="/web/app"><i class="bi bi-android2"></i> Ver la app</a>
+            </div>
+            <p class="small text-muted" style="margin:12px 0 0">Te acompañamos en el alta y te enviamos tu manual por correo.</p>
           </div>
         </div>
       </div>

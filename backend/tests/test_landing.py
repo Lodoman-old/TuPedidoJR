@@ -13,6 +13,8 @@ async def test_landing_public(client: AsyncClient):
     assert "/web/register-restaurant" in text
     assert "afiliación anual" in text
     assert "500" in text
+    assert "al día" in text
+    assert 'href="/manuales"' not in text
     assert "tupedidojr@gmail.com" in text
 
 

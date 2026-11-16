@@ -232,7 +232,7 @@ slide = add_slide_base(
 reqs = [
     ("Mayor de edad", "Con identificación oficial vigente."),
     ("Teléfono inteligente", "Con GPS, datos e internet."),
-    ("Vehículo", "Bicicleta, motocicleta o automóvil."),
+    ("Vehículo", "Bicicleta, patín, motocicleta o automóvil."),
     ("Cuenta bancaria", "CLABE si prefieres pago por transferencia."),
     ("Actitud de servicio", "Trato amable con restaurantes y clientes."),
     ("Disponibilidad", "Tú decides cuándo conectarte."),

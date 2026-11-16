@@ -42,6 +42,7 @@ async def web_landing(request: Request, db: AsyncSession = Depends(get_db)):
         {
             "whatsapp": whatsapp,
             "affiliation_fee": affiliation_fee,
+            "affiliation_daily": affiliation_fee / 365,
             "contact_email": contact_email,
         },
     )
@@ -70,7 +71,11 @@ async def web_register_restaurant(request: Request, db: AsyncSession = Depends(g
     return templates.TemplateResponse(
         request,
         "register_restaurant.html",
-        {"affiliation_fee": affiliation_fee, "contact_email": contact_email},
+        {
+            "affiliation_fee": affiliation_fee,
+            "affiliation_daily": affiliation_fee / 365,
+            "contact_email": contact_email,
+        },
     )
 
 

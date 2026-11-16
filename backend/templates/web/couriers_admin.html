@@ -67,6 +67,7 @@
             <select class="form-select" id="courierVehicle">
               <option value="motorcycle">Motocicleta</option>
               <option value="bike">Bicicleta</option>
+              <option value="scooter">Patineta</option>
               <option value="car">Automóvil</option>
             </select>
           </div>
@@ -410,7 +411,7 @@
   function showCourierDetails(id) {
     const c = couriersCache[id];
     if (!c) return;
-    const vehicle = { bike: 'Bicicleta', motorcycle: 'Motocicleta', car: 'Automóvil' }[c.vehicle_type] || c.vehicle_type || '—';
+    const vehicle = { bike: 'Bicicleta', scooter: 'Patineta', motorcycle: 'Motocicleta', car: 'Automóvil' }[c.vehicle_type] || c.vehicle_type || '—';
     const method = c.payout_method === 'transfer' ? 'Transferencia' : 'Efectivo';
     const status = statusInfo(c).label;
     const seen = c.updated_at ? new Date(c.updated_at).toLocaleString() : 'Sin dato';

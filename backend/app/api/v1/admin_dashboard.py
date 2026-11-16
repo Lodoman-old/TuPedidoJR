@@ -289,7 +289,7 @@ class CourierCreate(BaseModel):
     email: EmailStr
     phone: str | None = Field(default=None, max_length=20)
     password: str = Field(..., min_length=6, max_length=128)
-    vehicle_type: str = Field(default="motorcycle", pattern="^(bike|motorcycle|car)$")
+    vehicle_type: str = Field(default="motorcycle", pattern="^(bike|scooter|motorcycle|car)$")
     payout_method: str = Field(default="cash", pattern="^(cash|transfer)$")
     bank_name: str | None = Field(default=None, max_length=100)
     bank_account_holder: str | None = Field(default=None, max_length=150)
@@ -368,7 +368,7 @@ class CourierUpdate(BaseModel):
     email: EmailStr | None = None
     phone: str | None = Field(default=None, max_length=20)
     password: str | None = Field(default=None, min_length=6, max_length=128)
-    vehicle_type: str | None = Field(default=None, pattern="^(bike|motorcycle|car)$")
+    vehicle_type: str | None = Field(default=None, pattern="^(bike|scooter|motorcycle|car)$")
     payout_method: str | None = Field(default=None, pattern="^(cash|transfer)$")
     bank_name: str | None = Field(default=None, max_length=100)
     bank_account_holder: str | None = Field(default=None, max_length=150)

@@ -292,6 +292,11 @@
       .cta-final { padding: 34px 20px; }
       .footer-grid { grid-template-columns: 1fr; }
     }
+    @media (max-width: 340px) {
+      /* Teléfonos muy angostos: el logo baja un poco para no comprimirse. */
+      .brand img { height: 30px; }
+      .nav-actions .btn-primary { width: 34px; }
+    }
   </style>
 </head>
 <body>

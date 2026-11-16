@@ -127,11 +127,13 @@
     <h6 class="mb-2"><i class="bi bi-shield-lock"></i> Mi cuenta: doble factor (2FA)</h6>
     <p class="small text-muted mb-2">
       Protege el panel con una app autenticadora (Google Authenticator, Authy, Microsoft Authenticator).
+      No es la app de TuPedidoJR: es una app aparte que genera códigos de 6 dígitos.
     </p>
     <div id="otpStatus" class="small mb-2">Cargando…</div>
     <div id="otpSetupBox" class="d-none border rounded p-2 mb-2">
       <ol class="small ps-3 mb-2">
-        <li>Abre tu app y agrega una cuenta con esta clave: <code id="otpSecret"></code></li>
+        <li>Abre tu <strong>app autenticadora</strong> (Google Authenticator, Authy o Microsoft Authenticator)
+            y agrega una cuenta con esta clave: <code id="otpSecret"></code></li>
         <li>O copia este enlace: <code id="otpUri" style="word-break:break-all"></code></li>
         <li><strong>Guarda ahora tus códigos de recuperación:</strong> <code id="otpRecovery"></code></li>
       </ol>

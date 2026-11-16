@@ -131,8 +131,12 @@
     </p>
     <div id="otpStatus" class="small mb-2">Cargando…</div>
     <div id="otpSetupBox" class="d-none border rounded p-2 mb-2">
+      <div id="otpQrWrap" class="text-center mb-2">
+        <div id="otpQr" style="max-width:220px;margin:0 auto"></div>
+        <div class="small text-muted">Escanea este código con tu <strong>app autenticadora</strong>.</div>
+      </div>
       <ol class="small ps-3 mb-2">
-        <li>Abre tu <strong>app autenticadora</strong> (Google Authenticator, Authy o Microsoft Authenticator)
+        <li>Si no puedes escanear, abre tu <strong>app autenticadora</strong> (Google Authenticator, Authy o Microsoft Authenticator)
             y agrega una cuenta con esta clave: <code id="otpSecret"></code></li>
         <li>O copia este enlace: <code id="otpUri" style="word-break:break-all"></code></li>
         <li><strong>Guarda ahora tus códigos de recuperación:</strong> <code id="otpRecovery"></code></li>
@@ -319,6 +323,13 @@
   async function startOtp() {
     try {
       const r = await apiRequest('POST', '/auth/2fa/setup', {});
+      if (r.qr_svg) {
+        secEl('otpQr').innerHTML = r.qr_svg;
+        secEl('otpQrWrap').classList.remove('d-none');
+      } else {
+        secEl('otpQr').innerHTML = '';
+        secEl('otpQrWrap').classList.add('d-none');
+      }
       secEl('otpSecret').textContent = r.secret;
       secEl('otpUri').textContent = r.otpauth_uri;
       secEl('otpRecovery').textContent = (r.recovery_codes || []).join('   ');

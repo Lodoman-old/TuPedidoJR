@@ -64,6 +64,7 @@ class TestTwoFactorFlow:
         data = setup.json()
         assert data["secret"]
         assert data["otpauth_uri"].startswith("otpauth://totp/")
+        assert data["qr_svg"].startswith("<svg")
         assert len(data["recovery_codes"]) == 8
 
     async def test_login_requires_code_after_enabling(self, client: AsyncClient, admin):

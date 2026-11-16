@@ -230,9 +230,20 @@ async def twofa_setup(
     current_user.totp_recovery_codes = json.dumps([totp_service.hash_code(code) for code in codes])
     current_user.totp_enabled = False
     await db.commit()
+    uri = totp_service.provisioning_uri(secret, current_user.email)
+    qr_svg = ""
+    try:
+        import segno
+
+        qr_svg = segno.make(uri, error="m").svg_inline(
+            scale=5, border=2, dark="#0d1b2a", light="#ffffff"
+        )
+    except Exception:
+        qr_svg = ""
     return TwoFactorSetupOut(
         secret=secret,
-        otpauth_uri=totp_service.provisioning_uri(secret, current_user.email),
+        otpauth_uri=uri,
+        qr_svg=qr_svg,
         recovery_codes=codes,
     )
 

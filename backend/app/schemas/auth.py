@@ -47,6 +47,7 @@ class TwoFactorVerifyRequest(BaseModel):
 class TwoFactorSetupOut(BaseModel):
     secret: str
     otpauth_uri: str
+    qr_svg: str = ""
     recovery_codes: list[str] = []
 
 

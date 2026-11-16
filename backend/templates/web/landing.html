@@ -416,7 +416,7 @@
               <div class="card" style="padding:18px"><div class="icon"><i class="bi bi-menu-button-wide"></i></div><h3>Menú/catálogo</h3><p>Fotos, precios, categorías, opciones y horarios.</p></div>
               <div class="card" style="padding:18px"><div class="icon"><i class="bi bi-receipt"></i></div><h3>Pedidos</h3><p>Confirma, prepara y marca listo desde el panel.</p></div>
               <div class="card" style="padding:18px"><div class="icon"><i class="bi bi-bicycle"></i></div><h3>Reparto</h3><p>Repartidores locales con código y foto de entrega.</p></div>
-              <div class="card" style="padding:18px"><div class="icon"><i class="bi bi-cash-stack"></i></div><h3>Liquidaciones</h3><p>Ventas, comisiones y pagos claros en tu panel.</p></div>
+              <div class="card" style="padding:18px"><div class="icon"><i class="bi bi-cash-stack"></i></div><h3>Liquidaciones</h3><p>Ventas, cuotas y pagos claros en tu panel.</p></div>
             </div>
             <ul class="checks" style="margin-top:18px">
               <li><i class="bi bi-check-circle-fill"></i> Página propia con enlace y QR para tu mostrador.</li>
@@ -587,10 +587,7 @@
               (≈ <strong>${{ '%.2f'|format(affiliation_daily|float) }} al día</strong>)
               y mantiene tu negocio en línea con menú/catálogo, QR, panel de pedidos,
               reparto, liquidaciones y soporte. Además, por cada pedido se aplica una
-              cuota de <strong>${{ '%.2f'|format(business_fee|float) }}</strong>
-              {%- if commission_rate|float > 0 %} y una comisión de
-              <strong>{{ '%.2f'|format(commission_rate|float) }}%</strong> sobre el producto
-              {%- endif %}.
+              cuota de <strong>${{ '%.2f'|format(business_fee|float) }}</strong>.
             </p>
             <p>
               <strong>Clientes:</strong> pagas productos + envío + cuota de servicio.
@@ -603,8 +600,6 @@
             </p>
             <p>
               Puedes pagar en efectivo, por transferencia o en línea cuando esté disponible.
-              No hay comisión sobre el producto para el cliente: la comisión, si aplica,
-              la paga el negocio.
             </p>
           </details>
           <details class="reveal">

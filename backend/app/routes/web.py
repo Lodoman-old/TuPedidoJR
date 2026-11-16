@@ -45,7 +45,6 @@ async def web_landing(request: Request, db: AsyncSession = Depends(get_db)):
     extra_km = await setting_float("DELIVERY_EXTRA_FEE_PER_KM", "5.0")
     flat_fee = await setting_float("APP_FLAT_USAGE_FEE", "5.0")
     business_fee = await setting_float("APP_FIXED_RESTAURANT_FEE", "5.0")
-    commission_rate = await setting_float("APP_COMMISSION_PERCENTAGE", "0.0")
     contact_email = (
         await get_setting_value(db, "CONTACT_EMAIL", "tupedidojr@gmail.com")
     ).strip()
@@ -62,7 +61,6 @@ async def web_landing(request: Request, db: AsyncSession = Depends(get_db)):
             "extra_km": extra_km,
             "flat_fee": flat_fee,
             "business_fee": business_fee,
-            "commission_rate": commission_rate,
             "client_example_total": 200 + delivery_base + flat_fee,
         },
     )

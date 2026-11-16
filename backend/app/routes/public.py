@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
+from app.core.security import decode_access_token
 from app.models.restaurant import Restaurant
+from app.models.user import User
 from app.services.schedule_service import restaurant_open_state
 from app.services.order_service import get_commission_rate, get_setting_value
 from app.services.rounding import round_half_down
@@ -97,7 +99,30 @@ async def public_manual(
             request, "manuals/manual_index.html",
             {"page": "index", **values}, status_code=404,
         )
+    if name == "admin" and not await _is_superuser_token(
+        db, request.query_params.get("token")
+    ):
+        # El manual del administrador no queda abierto al público: solo se
+        # sirve con el token de un superusuario.
+        return templates.TemplateResponse(
+            request, "manuals/manual_denied.html",
+            {"page": "admin", **values}, status_code=403,
+        )
     return templates.TemplateResponse(request, template, {"page": name, **values})
+
+
+async def _is_superuser_token(db: AsyncSession, token: str | None) -> bool:
+    if not token:
+        return False
+    payload = decode_access_token(token)
+    if not payload:
+        return False
+    user_id = payload.get("sub")
+    if not user_id:
+        return False
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    return bool(user and user.is_active and user.is_superuser)
 
 
 @router.get("/r/{slug}")

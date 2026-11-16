@@ -193,7 +193,7 @@
               <li><a class="dropdown-item" href="/web/admin/settings"><i class="bi bi-sliders"></i> Comisiones y ajustes</a></li>
               <li><a class="dropdown-item" href="/web/admin/push"><i class="bi bi-bell"></i> Notificaciones push</a></li>
               <li><a class="dropdown-item" href="/web/admin/audit"><i class="bi bi-journal-text"></i> Auditoría</a></li>
-              <li><a class="dropdown-item" href="/manuales/admin"><i class="bi bi-book"></i> Manual del administrador</a></li>
+              <li><a class="dropdown-item" href="/manuales/admin" data-admin-manual><i class="bi bi-book"></i> Manual del administrador</a></li>
             </ul>
           </li>
           <li class="nav-item nav-delivery-hide nav-customer-hide d-none d-lg-block">
@@ -731,6 +731,14 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
       });
       document.querySelectorAll('[data-manual-role="courier"]').forEach((el) => {
         el.classList.toggle('d-none', !isCourier);
+      });
+      // El manual del administrador solo se sirve con el token de un
+      // superusuario, así no queda abierto para cualquiera.
+      const token = sessionStorage.getItem('token');
+      document.querySelectorAll('a[data-admin-manual]').forEach((el) => {
+        el.href = token
+          ? '/manuales/admin?token=' + encodeURIComponent(token)
+          : '/manuales/admin';
       });
     }
 

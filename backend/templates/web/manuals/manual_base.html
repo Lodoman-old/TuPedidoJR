@@ -12,11 +12,14 @@
     * { box-sizing: border-box; }
     body { margin:0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; color:var(--ink); background:#f3f7fb; line-height:1.65; }
     header { background:#0d1b2a; color:#fff; padding:26px 0; }
-    header .wrap { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    header .wrap { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
     header h1 { margin:0; font-size:24px; }
     header p { margin:4px 0 0; color:#c9d6e4; font-size:13px; }
     .wrap { max-width:1040px; margin:auto; padding:0 20px; }
-    .layout { display:grid; grid-template-columns:250px 1fr; gap:24px; padding:26px 0 60px; }
+    header .brand-logo { display:block; }
+    header .brand-logo img { height:46px; background:#fff; border-radius:10px; padding:6px 10px; display:block; }
+    .layout { display:grid; grid-template-columns:250px 1fr; gap:24px; padding:26px 0 60px; align-items:start; }
+    .layout.single { grid-template-columns:minmax(0,1fr); }
     nav { position:sticky; top:18px; align-self:start; background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; }
     nav a { display:block; padding:7px 8px; border-radius:7px; color:#334; text-decoration:none; font-size:14px; }
     nav a:hover, nav a.active { background:#eef4ff; color:var(--blue); }
@@ -52,35 +55,35 @@
     }
   </style>
 </head>
-<body {% block body_attrs %}{% endblock %}>
+<body>
   <header>
     <div class="wrap">
-      <div class="d-flex align-items-center gap-3">
-        <img src="/static/logo.png" alt="TuPedidoJR" style="height:46px;background:#fff;border-radius:10px;padding:6px 10px;">
+      <div>
+        <a class="brand-logo" href="/web/inicio" aria-label="TuPedidoJR">
+          <img src="/static/logo.png" alt="TuPedidoJR">
+        </a>
         <div>
           <h1>{% block heading %}Manual del negocio{% endblock %}</h1>
           <p>TuPedidoJR · Guías oficiales por rol</p>
         </div>
       </div>
-      <button class="btn print noprint" onclick="window.print()">Imprimir / Guardar PDF</button>
+      <div class="noprint" style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn print" href="/manuales">Cambiar de manual</a>
+        <button class="btn print" onclick="window.print()">Imprimir / Guardar PDF</button>
+      </div>
     </div>
   </header>
-  <div class="wrap layout">
+  {% set business_pages = ['restaurante', 'negocio', 'menu', 'pedidos', 'envios'] %}
+  <div class="wrap layout{% if page not in business_pages %} single{% endif %}">
+    {% if page in business_pages %}
     <nav class="noprint">
-      <div class="group">Manuales por rol</div>
-      <a href="/manuales" class="{% if page == 'index' %}active{% endif %}">Todos los manuales</a>
-      <a href="/manuales/cliente" class="{% if page == 'cliente' %}active{% endif %}">Cliente</a>
-      <a href="/manuales/restaurante" class="{% if page in ['restaurante','negocio'] %}active{% endif %}">Negocio</a>
-      <a href="/manuales/repartidor" data-manual-role="courier" class="d-none {% if page == 'repartidor' %}active{% endif %}">Repartidor</a>
-      <a href="/manuales/admin" data-manual-role="admin" class="d-none {% if page == 'admin' %}active{% endif %}">Administrador</a>
       <div class="group">Manual del negocio</div>
+      <a href="/manuales/restaurante" class="{% if page in ['restaurante', 'negocio'] %}active{% endif %}">Manual general</a>
       <a href="/manuales/menu" class="{% if page == 'menu' %}active{% endif %}">Menú/catálogo y precios</a>
       <a href="/manuales/pedidos" class="{% if page == 'pedidos' %}active{% endif %}">Pedidos y cobros</a>
       <a href="/manuales/envios" class="{% if page == 'envios' %}active{% endif %}">Envíos de negocio</a>
-      <div class="group">Accesos</div>
-      <a href="/web/login">Iniciar sesión</a>
-      <a href="/web/register-restaurant">Registrar negocio</a>
     </nav>
+    {% endif %}
     <main>
       {% block content %}{% endblock %}
     </main>
@@ -88,36 +91,5 @@
   <div class="wrap" style="padding:0 0 30px;font-size:12.5px;color:#5d6b7a">
     Soporte y contacto: <a href="mailto:{{ contact_email }}" style="color:#0d6efd">{{ contact_email }}</a>
   </div>
-  <script>
-    (function () {
-      const isAdmin = sessionStorage.getItem('is_superuser') === 'true';
-      const isCourier = sessionStorage.getItem('is_delivery') === 'true';
-      const loggedIn = Boolean(sessionStorage.getItem('token'));
-      document.querySelectorAll('[data-manual-role="admin"]').forEach((el) => {
-        el.classList.toggle('d-none', !isAdmin);
-      });
-      document.querySelectorAll('[data-manual-role="courier"]').forEach((el) => {
-        el.classList.toggle('d-none', !isCourier);
-      });
-      const required = document.body.dataset.manualRole;
-      const blocked =
-        (required === 'admin' && loggedIn && !isAdmin) ||
-        (required === 'courier' && loggedIn && !isCourier);
-      if (blocked) {
-        const main = document.querySelector('main');
-        if (main) {
-          main.innerHTML = `
-            <div class="warn">
-              <strong>Este manual es para ${required === 'admin' ? 'administradores' : 'repartidores'}.</strong><br>
-              Inicia sesión con una cuenta autorizada para verlo.
-              <div class="mt-2">
-                <a class="btn" href="/web/login">Iniciar sesión</a>
-                <a class="btn print" href="/manuales">Volver a manuales</a>
-              </div>
-            </div>`;
-        }
-      }
-    })();
-  </script>
 </body>
 </html>

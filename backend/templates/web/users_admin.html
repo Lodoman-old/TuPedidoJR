@@ -184,7 +184,7 @@
           return `<tr>
             <td>
               <strong>${esc(row.name)}</strong>
-              <div class="small text-muted text-break">${esc(row.email)}</div>
+              <div class="small text-muted user-email" title="${esc(row.email)}">${esc(row.email)}</div>
             </td>
             <td>${badges(row.roles)}</td>
             <td class="d-none d-lg-table-cell">${business ? esc(business.name) : '—'}</td>

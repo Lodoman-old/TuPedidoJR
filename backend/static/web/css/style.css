@@ -127,3 +127,42 @@ img { max-width: 100%; height: auto; }
   .logo-wrapper { width: 118px; }
   .logo-wrapper img { max-width: 108px; }
 }
+
+/* --- Ajustes del panel en pantallas de app --- */
+@media (max-width: 575.98px) {
+  .restaurant-head .d-flex { align-items: flex-start !important; }
+  .restaurant-head h4 { text-align: left; font-size: 1.2rem; }
+  .restaurant-head .badge { font-size: .68rem; }
+  .restaurant-head p { font-size: .95rem; }
+  #ownerPanel .d-flex.gap-2.flex-wrap {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .5rem !important;
+  }
+  #ownerPanel .d-flex.gap-2.flex-wrap > .btn {
+    width: 100%;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .35rem;
+    padding: .45rem .5rem;
+    font-size: .82rem;
+    line-height: 1.15;
+    white-space: normal;
+    text-align: center;
+  }
+  .menu-owner-actions { gap: .35rem !important; }
+  .menu-owner-actions .btn { min-height: 40px; }
+  .user-email {
+    max-width: 165px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 399.98px) {
+  #userNameTop { display: none; }
+  .user-email { max-width: 135px; }
+}

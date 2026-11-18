@@ -76,6 +76,7 @@
         return;
       }
       await rememberDeviceToken(res.access_token);
+      resetLocalCart();
       afterLogin();
     } catch (ex) {
       errEl.textContent = ex.message;
@@ -91,6 +92,7 @@
     try {
       const res = await verifyTwoFactor(pendingTwoFactor, code);
       await rememberDeviceToken(res.access_token);
+      resetLocalCart();
       afterLogin();
     } catch (ex) {
       errEl.textContent = ex.message;

@@ -596,6 +596,12 @@ async function clearCartNow() {
   } catch (e) { /* limpieza local ya aplicada */ }
 }
 let cartSyncTimer = null;
+function resetLocalCart() {
+  clearTimeout(cartSyncTimer);
+  sessionStorage.removeItem('cart');
+  sessionStorage.removeItem('cartRestaurantId');
+  updateCartBadge();
+}
 function scheduleCartSync() {
   clearTimeout(cartSyncTimer);
   cartSyncTimer = setTimeout(() => {
@@ -1153,6 +1159,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
       updateCartBadge();
       document.getElementById('logoutBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
+        resetLocalCart();
         sessionStorage.removeItem('token');
         sessionStorage.removeItem('is_superuser');
         sessionStorage.removeItem('user_name');

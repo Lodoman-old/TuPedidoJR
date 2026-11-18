@@ -1196,9 +1196,6 @@ async function refreshEstimate() {
     }
     await loadLoyalty();
     await loadSavedAddresses();
-    if (restaurantInfo?.pickup_enabled && !savedAddresses.length) {
-      fulfillment = 'pickup';
-    }
     renderCart();
   })();
 </script>

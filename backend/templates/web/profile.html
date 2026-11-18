@@ -114,6 +114,10 @@
             <label class="form-check-label" for="bioToggle">Entrar con huella o rostro</label>
           </div>
           <div id="bioMsg" class="small text-muted mt-2"></div>
+          <button class="btn btn-sm btn-outline-danger mt-3" id="forgetDeviceBtn" type="button">
+            <i class="bi bi-phone"></i> Quitar este teléfono
+          </button>
+          <div class="form-text">Borra la cuenta guardada. Tendrás que escribir tu correo y contraseña otra vez.</div>
         </div>` : ''}`;
       content.innerHTML = html;
       attachAddressEvents(addresses);
@@ -144,6 +148,18 @@
         msg.textContent = e.message || 'No se pudo activar la huella.';
       }
     });
+    const forget = document.getElementById('forgetDeviceBtn');
+    if (forget) {
+      forget.addEventListener('click', () => {
+        if (!confirm('Se borrará la cuenta guardada en este teléfono. ¿Continuar?')) return;
+        localStorage.removeItem('tupedidojr_token');
+        localStorage.removeItem('tupedidojr_device');
+        localStorage.removeItem('tupedidojr_email');
+        localStorage.removeItem('tupedidojr_last_path');
+        sessionStorage.clear();
+        window.location.href = '/web/login';
+      });
+    }
   }
 
   function attachAddressEvents(addresses) {

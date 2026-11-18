@@ -153,6 +153,26 @@ async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+@router.post("/device-token")
+async def create_device_token(current_user: User = Depends(get_current_user)):
+    """Token de larga duración para el teléfono del usuario.
+
+    La app lo guarda tras el primer inicio de sesión y lo desbloquea con la
+    huella. Se invalida si la contraseña cambia.
+    """
+    minutes = 60 * 24 * 365
+    token = create_access_token(
+        subject=str(current_user.id),
+        expires_delta=minutes,
+        extra={"dev": True, "fp": _fingerprint(current_user.password_hash)},
+    )
+    return {
+        "access_token": token,
+        "expires_in": minutes * 60,
+        "is_superuser": current_user.is_superuser,
+    }
+
+
 @router.post("/forgot-password")
 async def forgot_password(
     body: ForgotPasswordRequest,

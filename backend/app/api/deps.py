@@ -28,6 +28,12 @@ async def get_current_user(
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado o inactivo")
 
+    if payload.get("dev") and payload.get("fp") != (user.password_hash or "")[-16:]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="La contraseña cambió. Vuelve a iniciar sesión",
+        )
+
     return user
 
 

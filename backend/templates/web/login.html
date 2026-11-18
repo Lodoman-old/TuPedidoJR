@@ -75,6 +75,7 @@
         document.getElementById('twoFactorCode').focus();
         return;
       }
+      await rememberDeviceToken(res.access_token);
       afterLogin();
     } catch (ex) {
       errEl.textContent = ex.message;
@@ -88,7 +89,8 @@
     if (!code) return;
     errEl.classList.add('d-none');
     try {
-      await verifyTwoFactor(pendingTwoFactor, code);
+      const res = await verifyTwoFactor(pendingTwoFactor, code);
+      await rememberDeviceToken(res.access_token);
       afterLogin();
     } catch (ex) {
       errEl.textContent = ex.message;

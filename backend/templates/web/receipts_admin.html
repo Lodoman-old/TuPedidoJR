@@ -31,34 +31,6 @@
 <script>
   let validations = [];
   let currentFilter = 'all';
-  let demoMode = false;
-
-  const DEMO_VALIDATIONS = [
-    {
-      id: null, entity_label: 'Pedido #A1B2C3 · Transferencia', expected_kind_label: 'Transferencia',
-      expected_amount: 250, confidence: 92, status: 'high', status_label: 'Se puede aprobar',
-      provider: 'Gemini', model: 'ejemplo', created_at: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
-      extracted: { total: 250, date: '16/11/2026', time: '14:32', merchant: 'BBVA', reference: 'Autorización 482193' },
-      summary: 'Comprobante legible, monto y referencia coinciden con el pedido.',
-      issues: [], error: null, file_url: null,
-    },
-    {
-      id: null, entity_label: 'Pedido #D4E5F6 · Efectivo', expected_kind_label: 'Comprobante de compra',
-      expected_amount: 300, confidence: 68, status: 'review', status_label: 'Revisar',
-      provider: 'Gemini', model: 'ejemplo', created_at: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
-      extracted: { total: 285, date: '15/11/2026', time: '20:10', merchant: 'Abarrotes La Esquina', reference: 'Ticket 0912' },
-      summary: 'El monto leído es un poco menor al esperado; revisa si hubo ajuste.',
-      issues: ['El monto no coincide exactamente con el esperado.'], error: null, file_url: null,
-    },
-    {
-      id: null, entity_label: 'Mandado #M9N8B7 · Transferencia', expected_kind_label: 'Transferencia',
-      expected_amount: 480, confidence: 35, status: 'low', status_label: 'Revisar a fondo',
-      provider: 'Gemini', model: 'ejemplo', created_at: new Date(Date.now() - 28 * 3600 * 1000).toISOString(),
-      extracted: { total: 480, date: '14/11/2026', time: '09:05', merchant: '—', reference: 'Sin referencia' },
-      summary: 'La imagen parece editada y no se distingue la referencia.',
-      issues: ['Posible edición del comprobante.', 'No se pudo leer la referencia.'], error: null, file_url: null,
-    },
-  ];
 
   function esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, c => (
@@ -79,23 +51,18 @@
   }
 
   function visibleRows() {
-    const base = validations.length ? validations : DEMO_VALIDATIONS;
-    demoMode = !validations.length;
-    if (currentFilter === 'all') return base;
-    return base.filter(v => v.status === currentFilter);
+    if (currentFilter === 'all') return validations;
+    return validations.filter(v => v.status === currentFilter);
   }
 
   function render() {
     const box = document.getElementById('receiptsList');
     const rows = visibleRows();
-    const banner = demoMode
-      ? '<div class="alert alert-warning py-2 small"><i class="bi bi-info-circle"></i> Datos de ejemplo para que veas cómo se llena esta sección. <strong>No son comprobantes reales.</strong></div>'
-      : '';
     if (!rows.length) {
-      box.innerHTML = banner + '<div class="card p-4 text-center text-muted">No hay comprobantes en esta vista.</div>';
+      box.innerHTML = '<div class="card p-4 text-center text-muted">No hay comprobantes en esta vista.</div>';
       return;
     }
-    box.innerHTML = banner + rows.map(v => {
+    box.innerHTML = rows.map(v => {
       const ex = v.extracted || {};
       const total = ex.total != null ? money0(ex.total) : '—';
       const date = [ex.date, ex.time].filter(Boolean).join(' ') || '—';
@@ -112,7 +79,6 @@
             <div class="text-end">
               <span class="badge bg-${badgeFor(v)} fs-6">${v.confidence}%</span>
               <div class="small text-muted">${esc(v.status_label)}</div>
-              ${demoMode ? '<div class="small mt-1"><span class="badge bg-secondary">Ejemplo</span></div>' : ''}
             </div>
           </div>
 
@@ -131,14 +97,12 @@
           ${v.error ? `<div class="alert alert-danger py-2 small mt-2">${esc(v.error)}</div>` : ''}
 
           <div class="d-flex gap-2 mt-3 flex-wrap">
-            ${demoMode
-              ? '<span class="small text-muted">Con comprobantes reales aquí aparecen “Ver comprobante” y “Validar de nuevo”.</span>'
-              : `<button class="btn btn-sm btn-outline-primary" onclick="openDocumentPreview('${esc(v.file_url)}','Comprobante')">
-                   <i class="bi bi-file-earmark-text"></i> Ver comprobante
-                 </button>
-                 <button class="btn btn-sm btn-outline-secondary" onclick="revalidate('${v.id}')">
-                   <i class="bi bi-arrow-repeat"></i> Validar de nuevo
-                 </button>`}
+            <button class="btn btn-sm btn-outline-primary" onclick="openDocumentPreview('${esc(v.file_url)}','Comprobante')">
+              <i class="bi bi-file-earmark-text"></i> Ver comprobante
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="revalidate('${v.id}')">
+              <i class="bi bi-arrow-repeat"></i> Validar de nuevo
+            </button>
             <span class="small text-muted align-self-center">${esc(v.provider)} · ${esc(v.model || '')}</span>
           </div>
         </div>

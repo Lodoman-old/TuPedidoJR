@@ -5,7 +5,7 @@ manual ``Restaurant.is_open`` switch is used (backwards compatible). If the
 manual switch is off, the restaurant is always considered closed.
 """
 import logging
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -126,6 +126,16 @@ async def get_timezone(db: AsyncSession) -> ZoneInfo:
     except Exception:
         logger.warning("Zona horaria inválida %r, usando %s", name, DEFAULT_TIMEZONE)
         return ZoneInfo(DEFAULT_TIMEZONE)
+
+
+async def local_now(db: AsyncSession) -> datetime:
+    """Hora actual en la zona configurada (México por defecto)."""
+    return datetime.now(await get_timezone(db))
+
+
+async def local_today(db: AsyncSession) -> date:
+    """Fecha de hoy en la zona configurada, no en UTC."""
+    return (await local_now(db)).date()
 
 
 def _today_hours(schedules: list[RestaurantSchedule], now: datetime) -> list[dict]:

@@ -1,0 +1,41 @@
+sequenceDiagram
+    autonumber
+    participant U as Cliente (web/APK)
+    participant API as TuPedidoJR API
+    participant DB as PostgreSQL
+    participant MP as Mercado Pago
+    participant P as Proveedor de recargas
+
+    U->>API: GET /recharges/catalog
+    API-->>U: compañías, montos y comisión
+
+    U->>API: POST /recharges/quote
+    API-->>U: total = monto + comisión
+
+    U->>API: POST /recharges (Idempotency-Key)
+    API->>DB: orden en "created"
+    API->>MP: crear preferencia de pago
+    API-->>U: status "awaiting_payment" + link de pago
+
+    U->>MP: paga
+    MP-->>API: webhook pago aprobado (firma verificada)
+    API->>DB: orden "paid"
+    API->>P: enviar recarga (referencia única)
+
+    alt Proveedor confirma
+        P-->>API: completado + folio
+        API->>DB: orden "completed" + folio
+        API-->>U: comprobante (app y correo)
+    else Proveedor rechaza o expira
+        P-->>API: error / sin respuesta
+        API->>P: consultar estado por referencia
+        alt No se aplicó
+            API->>DB: orden "failed"
+            API->>MP: reembolso
+            API->>DB: orden "refunded"
+            API-->>U: aviso y reembolso
+        else Sí se aplicó
+            API->>DB: orden "completed"
+            API-->>U: comprobante
+        end
+    end

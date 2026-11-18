@@ -22,7 +22,7 @@ from app.models.order import Order
 from app.models.restaurant import Restaurant
 from app.models.restaurant_payout import RestaurantPayout
 from app.models.user import User
-from app.services.schedule_service import get_timezone
+from app.services.schedule_service import get_timezone, local_today
 
 router = APIRouter()
 
@@ -98,7 +98,7 @@ async def _date_range(
     date_from: date | None,
     date_to: date | None,
 ) -> tuple[datetime, datetime, date, date]:
-    today = date.today()
+    today = await local_today(db)
     date_to = date_to or today
     date_from = date_from or (date_to - timedelta(days=29))
     if date_from > date_to:

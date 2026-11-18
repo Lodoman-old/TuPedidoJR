@@ -21,6 +21,7 @@ from app.schemas.store_request import (
 )
 from app.services.order_service import calculate_order_totals, get_setting_value
 from app.services.coverage_service import ensure_coverage
+from app.services.schedule_service import local_today
 from app.services.push_service import (
     schedule_new_order,
     schedule_new_store_request,
@@ -95,7 +96,7 @@ async def create_store_request(
         raise HTTPException(status_code=404, detail="Tienda no encontrada")
     if not store.accepts_custom_requests:
         raise HTTPException(status_code=409, detail="Esta tienda no acepta solicitudes por ahora")
-    today = datetime.now(timezone.utc).date()
+    today = await local_today(db)
     if not store.affiliation_expires_at or store.affiliation_expires_at < today:
         raise HTTPException(status_code=409, detail="La tienda no está disponible")
 

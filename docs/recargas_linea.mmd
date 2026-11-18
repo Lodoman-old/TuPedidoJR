@@ -1,0 +1,7 @@
+flowchart TD
+    A[Cliente abre Recargas] --> B[Elige compañía, número y monto]
+    B --> C[Paga con Mercado Pago o transferencia]
+    C --> D[TuPedidoJR envía la recarga a Taecel]
+    D --> E{Taecel confirma?}
+    E -- Sí --> F[Muestra folio y comprobante]
+    E -- No --> G[Reembolso automático]

@@ -16,6 +16,7 @@ from app.models.restaurant_user import RestaurantUser
 from app.models.user import User
 from app.schemas.restaurant import RestaurantApprovalRequest, RestaurantRegistrationOut
 from app.services.audit_service import log_action
+from app.services.schedule_service import local_today
 from app.services.email_service import send_email, send_restaurant_rejected, send_restaurant_welcome
 
 router = APIRouter()
@@ -92,8 +93,8 @@ class BusinessTypeUpdate(BaseModel):
     )
 
 
-def _affiliation_row(restaurant: Restaurant) -> dict:
-    today = date.today()
+def _affiliation_row(restaurant: Restaurant, today: date | None = None) -> dict:
+    today = today or date.today()
     expires = restaurant.affiliation_expires_at
     days_left = (expires - today).days if expires else None
     return {
@@ -144,7 +145,7 @@ async def list_affiliations(
         .where(Restaurant.status == "active")
         .order_by(Restaurant.name)
     )
-    return [_affiliation_row(row) for row in result.scalars().all()]
+    return [_affiliation_row(row, today=await local_today(db)) for row in result.scalars().all()]
 
 
 @router.patch("/affiliations/{restaurant_id}")
@@ -160,7 +161,7 @@ async def update_affiliation(
         raise HTTPException(status_code=404, detail="Restaurante no encontrado")
 
     if body.paid is True:
-        base = date.today()
+        base = await local_today(db)
         current = restaurant.affiliation_expires_at
         if current and current >= base:
             base = current
@@ -179,7 +180,7 @@ async def update_affiliation(
     )
     await db.commit()
     await db.refresh(restaurant)
-    return _affiliation_row(restaurant)
+    return _affiliation_row(restaurant, today=await local_today(db))
 
 
 @router.post("/restaurant-registrations/{restaurant_id}/approve")

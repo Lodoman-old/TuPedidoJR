@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import async_session
 from app.models.restaurant import Restaurant
 from app.services.push_service import send_to_user
+from app.services.schedule_service import local_today
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ REMINDER_DAYS = 10
 
 
 async def _send_reminders(db: AsyncSession) -> int:
-    today = date.today()
+    today = await local_today(db)
     limit = today + timedelta(days=REMINDER_DAYS)
     sent = 0
     result = await db.execute(

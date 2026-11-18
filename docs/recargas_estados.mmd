@@ -1,0 +1,14 @@
+stateDiagram-v2
+    [*] --> created: cliente confirma
+    created --> awaiting_payment: se genera el pago
+    awaiting_payment --> paid: webhook pago aprobado
+    awaiting_payment --> expired: 15 min sin pago
+    paid --> sending: se envía al proveedor
+    sending --> completed: folio del proveedor
+    sending --> failed: rechazo del proveedor
+    sending --> sending: sin respuesta (conciliación cada 5 min)
+    failed --> refunded: reembolso automático
+    failed --> sending: reintento manual (si no se aplicó)
+    completed --> [*]
+    refunded --> [*]
+    expired --> [*]

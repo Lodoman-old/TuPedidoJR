@@ -24,6 +24,7 @@ from app.services.cash_advance_service import (
     settle_advance,
 )
 from app.services.order_service import get_setting_value
+from app.services.schedule_service import local_today
 from app.services.push_service import schedule_new_reservation
 from app.services.payout_service import (
     courier_balance,
@@ -273,7 +274,7 @@ async def admin_payouts(
             if restaurant.commission_percentage is not None
             else global_commission
         )
-        cutoff = date.today() - timedelta(days=30)
+        cutoff = await local_today(db) - timedelta(days=30)
         monthly_sales = sum(
             (o.subtotal or 0)
             for o in balance["orders"]
@@ -356,7 +357,7 @@ async def admin_payouts(
         "restaurants": restaurants,
         "couriers": couriers,
         "pending_transfers": pending_transfers,
-        "today": date.today().isoformat(),
+        "today": (await local_today(db)).isoformat(),
     }
 
 
@@ -367,7 +368,7 @@ async def payout_reconciliation(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_superuser),
 ):
-    today = date.today()
+    today = await local_today(db)
     start_date = start_date or today.replace(day=1)
     end_date = end_date or today
     if end_date < start_date:

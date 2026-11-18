@@ -36,6 +36,7 @@ from app.services.push_service import schedule_available_order, schedule_courier
 from app.services.schedule_service import (
     get_schedules,
     get_timezone,
+    local_today,
     open_state_map,
     restaurant_open_state,
 )
@@ -139,7 +140,7 @@ async def list_restaurants(
     stmt = select(Restaurant).where(
         Restaurant.status == "active",
         Restaurant.affiliation_expires_at.is_not(None),
-        Restaurant.affiliation_expires_at >= date.today(),
+        Restaurant.affiliation_expires_at >= await local_today(db),
     )
     if business_type and business_type != "all":
         stmt = stmt.where(Restaurant.business_type == business_type)
@@ -259,6 +260,7 @@ async def get_my_restaurant(
 
 @router.get("/public/{slug}", response_model=RestaurantOut)
 async def get_public_restaurant(slug: str, db: AsyncSession = Depends(get_db)):
+    today_local = await local_today(db)
     result = await db.execute(
         select(Restaurant)
         .where(
@@ -266,7 +268,7 @@ async def get_public_restaurant(slug: str, db: AsyncSession = Depends(get_db)):
             Restaurant.public_page_enabled.is_(True),
             Restaurant.status == "active",
             Restaurant.affiliation_expires_at.is_not(None),
-            Restaurant.affiliation_expires_at >= date.today(),
+            Restaurant.affiliation_expires_at >= today_local,
         )
         .options(selectinload(Restaurant.categories), selectinload(Restaurant.menu))
     )
@@ -299,9 +301,10 @@ async def get_restaurant(
     if restaurant.status != "active" and role is None:
         raise HTTPException(status_code=404, detail="Restaurante no encontrado")
     is_admin = bool(current_user and current_user.is_superuser)
+    today_local = await local_today(db)
     expired = (
         restaurant.affiliation_expires_at is None
-        or restaurant.affiliation_expires_at < date.today()
+        or restaurant.affiliation_expires_at < today_local
     )
     if expired and role is None and not is_admin:
         raise HTTPException(status_code=404, detail="Restaurante no disponible")
@@ -313,7 +316,7 @@ async def get_restaurant(
     restaurant.affiliated = not expired
     if restaurant.affiliation_expires_at is not None:
         restaurant.affiliation_days_left = (
-            restaurant.affiliation_expires_at - date.today()
+            restaurant.affiliation_expires_at - today_local
         ).days
     return await _set_effective_commission(db, restaurant)
 

@@ -69,6 +69,15 @@
   </div>
 
   <script>
+    const APP_TZ = 'America/Mexico_City';
+    (function forceMexicoTime() {
+      const wrap = (original) => function (locales, options) {
+        return original.call(this, locales || 'es-MX', Object.assign({ timeZone: APP_TZ }, options || {}));
+      };
+      Date.prototype.toLocaleString = wrap(Date.prototype.toLocaleString);
+      Date.prototype.toLocaleDateString = wrap(Date.prototype.toLocaleDateString);
+      Date.prototype.toLocaleTimeString = wrap(Date.prototype.toLocaleTimeString);
+    })();
     const TOKEN = '{{ token }}';
     const LABELS = {
       pending: 'Buscando repartidor', accepted: 'Repartidor asignado',

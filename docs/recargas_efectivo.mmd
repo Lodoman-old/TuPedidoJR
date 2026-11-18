@@ -1,0 +1,11 @@
+flowchart TD
+    A[Cliente pide recarga al repartidor] --> B[Repartidor captura compañía, número y monto]
+    B --> C[La app muestra: cobra $105 / deberás $100]
+    C --> D[Repartidor cobra en efectivo]
+    D --> E[Confirma en la app]
+    E --> F[TuPedidoJR envía la recarga a Taecel]
+    F --> G{Taecel confirma?}
+    G -- Sí --> H[Muestra folio al cliente]
+    H --> I[Deuda de $100 al repartidor]
+    I --> J[Se descuenta en su corte]
+    G -- No --> K[No se cobra o se devuelve el efectivo]

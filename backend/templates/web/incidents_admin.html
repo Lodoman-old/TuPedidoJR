@@ -34,6 +34,33 @@
 <script>
   let incidents = [];
   let currentFilter = 'all';
+  let demoMode = false;
+
+  const DEMO_INCIDENTS = [
+    {
+      id: null, entity_id: 'demo-1', entity_label: 'Pedido #A1B2C3 · Torta de Bisteck',
+      status: 'reported', status_label: 'Reportada', reason: 'Cliente no recibió el pedido',
+      created_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+      product_amount: 120, delivery_amount: 25, courier_pay: 25, business_pay: 120,
+      customer_debt: 145, notes: 'El cliente no contestó y el domicilio estaba cerrado.',
+    },
+    {
+      id: null, entity_id: 'demo-2', entity_label: 'Pedido #D4E5F6 · Abarrotes',
+      status: 'in_custody', status_label: 'En resguardo', reason: 'Domicilio incorrecto',
+      created_at: new Date(Date.now() - 26 * 3600 * 1000).toISOString(),
+      product_amount: 180, delivery_amount: 25, courier_pay: 25, business_pay: 0,
+      custody_code: '4821',
+      holding_until: new Date(Date.now() + 42 * 3600 * 1000).toISOString(),
+      notes: 'Producto no perecedero resguardado en la oficina.',
+    },
+    {
+      id: null, entity_id: 'demo-3', entity_label: 'Pedido #G7H8I9 · Combo familiar',
+      status: 'authorization', status_label: 'Por autorizar', reason: 'Producto dañado',
+      created_at: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
+      product_amount: 250, delivery_amount: 30, courier_pay: 30, business_pay: 250,
+      customer_refund: 250, notes: 'La bebida se derramó en el camino.',
+    },
+  ];
 
   function esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, c => (
@@ -60,8 +87,10 @@
   }
 
   function visibleRows() {
-    if (currentFilter === 'all') return incidents;
-    return incidents.filter(i => i.status === currentFilter);
+    const base = incidents.length ? incidents : DEMO_INCIDENTS;
+    demoMode = !incidents.length;
+    if (currentFilter === 'all') return base;
+    return base.filter(i => i.status === currentFilter);
   }
 
   async function loadIncidents() {
@@ -84,12 +113,15 @@
   function render() {
     const box = document.getElementById('incidentsList');
     const rows = visibleRows();
+    const banner = demoMode
+      ? '<div class="alert alert-warning py-2 small"><i class="bi bi-info-circle"></i> Datos de ejemplo para que veas cómo se llena esta sección. <strong>No son incidencias reales.</strong></div>'
+      : '';
     if (!rows.length) {
-      box.innerHTML = '<p class="text-muted text-center py-4">No hay incidencias con este filtro.</p>';
+      box.innerHTML = banner + '<p class="text-muted text-center py-4">No hay incidencias con este filtro.</p>';
       return;
     }
-    box.innerHTML = rows.map(i => {
-      const canAct = ['reported', 'in_custody', 'authorization'].includes(i.status);
+    box.innerHTML = banner + rows.map(i => {
+      const canAct = !demoMode && ['reported', 'in_custody', 'authorization'].includes(i.status);
       const actions = [];
       if (['reported', 'authorization'].includes(i.status)) {
         actions.push(`<button class="btn btn-sm btn-outline-primary" onclick="custody('${i.id}')">Recibir en oficina</button>`);
@@ -106,12 +138,13 @@
       if (!['resolved', 'redelivery'].includes(i.status)) {
         actions.push(`<button class="btn btn-sm btn-outline-dark" onclick="resolveIncident('${i.id}')">Cerrar</button>`);
       }
+      if (demoMode) actions.length = 0;
       return `<div class="card mb-2">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
             <div>
               <strong>${esc(i.entity_label || i.entity_id.slice(0, 8))}</strong>
-              ${statusBadge(i.status, i.status_label)}
+              ${statusBadge(i.status, i.status_label)}${demoMode ? ' <span class="badge bg-secondary">Ejemplo</span>' : ''}
               <div class="small text-muted mt-1">
                 ${esc(i.reason)} · ${new Date(i.created_at).toLocaleString('es-MX')}
                 ${i.custody_code ? ` · Código de resguardo: <strong>${esc(i.custody_code)}</strong>` : ''}
@@ -130,7 +163,7 @@
           ${i.notes ? `<div class="small mt-2"><i class="bi bi-chat-left-text"></i> ${esc(i.notes)}</div>` : ''}
           ${i.photo_url ? `<div class="mt-2"><a href="${esc(i.photo_url)}" target="_blank" rel="noopener">Ver evidencia</a></div>` : ''}
           ${i.resolution_notes ? `<div class="small text-muted mt-1">Resolución: ${esc(i.resolution_notes)}</div>` : ''}
-          <div class="d-flex gap-2 flex-wrap mt-3">${actions.join('')}</div>
+          <div class="d-flex gap-2 flex-wrap mt-3">${demoMode ? '<span class="small text-muted">Con incidencias reales aquí aparecen los botones de acción.</span>' : actions.join('')}</div>
         </div>
       </div>`;
     }).join('');

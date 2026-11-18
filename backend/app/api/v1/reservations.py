@@ -18,6 +18,7 @@ from app.schemas.reservation import (
     ReservationStatusUpdate,
 )
 from app.services.order_service import get_setting_value, resolve_item_options
+from app.services.schedule_service import local_today
 from app.services.receipt_validation_service import schedule_receipt_validation
 from app.services.push_service import (
     schedule_new_reservation,
@@ -207,7 +208,7 @@ async def create_restaurant_reservation(
         raise HTTPException(status_code=404, detail="Restaurante no encontrado")
     if not restaurant.reservations_enabled:
         raise HTTPException(status_code=409, detail="Este restaurante no acepta reservaciones")
-    if restaurant.affiliation_expires_at is None or restaurant.affiliation_expires_at < datetime.now(timezone.utc).date():
+    if restaurant.affiliation_expires_at is None or restaurant.affiliation_expires_at < await local_today(db):
         raise HTTPException(status_code=409, detail="El restaurante no está disponible")
 
     now = datetime.now(timezone.utc)

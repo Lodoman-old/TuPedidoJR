@@ -12,7 +12,7 @@ from app.db.session import get_db
 from app.core.security import decode_access_token
 from app.models.restaurant import Restaurant
 from app.models.user import User
-from app.services.schedule_service import restaurant_open_state
+from app.services.schedule_service import local_today, restaurant_open_state
 from app.services.order_service import get_commission_rate, get_setting_value
 from app.services.rounding import round_half_down
 
@@ -131,6 +131,7 @@ async def public_restaurant(
     slug: str,
     db: AsyncSession = Depends(get_db),
 ):
+    today_local = await local_today(db)
     result = await db.execute(
         select(Restaurant)
         .where(
@@ -138,7 +139,7 @@ async def public_restaurant(
             Restaurant.public_page_enabled.is_(True),
             Restaurant.status == "active",
             Restaurant.affiliation_expires_at.is_not(None),
-            Restaurant.affiliation_expires_at >= date.today(),
+            Restaurant.affiliation_expires_at >= today_local,
         )
         .options(selectinload(Restaurant.categories), selectinload(Restaurant.menu))
     )

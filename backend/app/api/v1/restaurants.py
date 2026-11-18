@@ -20,6 +20,7 @@ from app.models.order import Order
 from app.schemas.common import GeoPoint, PaginationParams
 from app.schemas.restaurant import (CategoryCreate, EarningsOrderItem, EarningsOut, MenuCategoryOut,
                                     MenuItemCreate, MenuItemOut, MenuItemAvailabilityUpdate,
+                                    MenuItemUpdate,
                                     MenuItemOptionsUpdate, MenuOptionGroupOut,
                                     RestaurantListItem, RestaurantOut,
                                     RestaurantPayoutOut, RestaurantLocationUpdate,
@@ -532,6 +533,45 @@ async def update_menu_item_availability(
     if not item:
         raise HTTPException(status_code=404, detail="Platillo no encontrado")
     item.is_available = body.is_available
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+@router.patch("/{restaurant_id}/menu/{item_id}", response_model=MenuItemOut)
+async def update_menu_item(
+    restaurant_id: str,
+    item_id: str,
+    body: MenuItemUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
+    restaurant = result.scalar_one_or_none()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurante no encontrado")
+    if not await have_role(db, restaurant.id, current_user, MANAGE_ROLES):
+        raise HTTPException(status_code=403, detail="No eres dueño de este restaurante")
+
+    item_result = await db.execute(
+        select(MenuItem).where(MenuItem.id == item_id, MenuItem.restaurant_id == restaurant_id)
+    )
+    item = item_result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Platillo no encontrado")
+
+    data = body.model_dump(exclude_unset=True)
+    if "category_id" in data:
+        category_id = data["category_id"]
+        if category_id:
+            category = await db.get(MenuCategory, category_id)
+            if not category or str(category.restaurant_id) != str(restaurant.id):
+                raise HTTPException(status_code=400, detail="Categoría inválida")
+        else:
+            data["category_id"] = None
+
+    for key, value in data.items():
+        setattr(item, key, value)
     await db.commit()
     await db.refresh(item)
     return item

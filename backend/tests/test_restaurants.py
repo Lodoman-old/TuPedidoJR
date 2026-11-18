@@ -182,6 +182,59 @@ class TestCreateMenuItem:
         assert resp.status_code == 404
 
 
+class TestUpdateMenuItem:
+    async def _first_item(self, client, restaurant):
+        data = (await client.get(f"/api/v1/restaurants/{restaurant.id}")).json()
+        return data["menu"][0]
+
+    async def test_update_name_and_price(
+        self, client: AsyncClient, seeded_restaurant, owner_token,
+    ):
+        item = await self._first_item(client, seeded_restaurant)
+        resp = await client.patch(
+            f"/api/v1/restaurants/{seeded_restaurant.id}/menu/{item['id']}",
+            json={"name": "Taco al Pastor grande", "price": 32.50},
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["name"] == "Taco al Pastor grande"
+        assert float(data["price"]) == 32.5
+        assert data["description"] == item["description"]
+
+    async def test_update_as_non_owner(
+        self, client: AsyncClient, seeded_restaurant, other_token,
+    ):
+        item = await self._first_item(client, seeded_restaurant)
+        resp = await client.patch(
+            f"/api/v1/restaurants/{seeded_restaurant.id}/menu/{item['id']}",
+            json={"price": 99},
+            headers={"Authorization": f"Bearer {other_token}"},
+        )
+        assert resp.status_code == 403
+
+    async def test_update_unknown_item(
+        self, client: AsyncClient, seeded_restaurant, owner_token,
+    ):
+        resp = await client.patch(
+            f"/api/v1/restaurants/{seeded_restaurant.id}/menu/00000000-0000-0000-0000-000000000000",
+            json={"price": 99},
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert resp.status_code == 404
+
+    async def test_update_invalid_price(
+        self, client: AsyncClient, seeded_restaurant, owner_token,
+    ):
+        item = await self._first_item(client, seeded_restaurant)
+        resp = await client.patch(
+            f"/api/v1/restaurants/{seeded_restaurant.id}/menu/{item['id']}",
+            json={"price": 0},
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert resp.status_code == 422
+
+
 class TestRestaurantLocation:
     async def test_update_and_get_location(
         self, client: AsyncClient, seeded_restaurant, owner_token, other_token,

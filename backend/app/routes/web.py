@@ -380,6 +380,11 @@ async def web_admin_couriers_list(request: Request):
     return templates.TemplateResponse(request, "couriers_list_admin.html")
 
 
+@router.get("/admin/users")
+async def web_admin_users(request: Request):
+    return templates.TemplateResponse(request, "users_admin.html")
+
+
 @router.get("/manifest.json")
 async def web_manifest():
     return JSONResponse({

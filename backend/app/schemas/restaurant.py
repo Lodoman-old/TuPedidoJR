@@ -92,6 +92,15 @@ class MenuItemAvailabilityUpdate(BaseModel):
     is_available: bool
 
 
+class MenuItemUpdate(BaseModel):
+    category_id: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=150)
+    description: str | None = None
+    price: Decimal | None = Field(default=None, gt=0)
+    preparation_time_min: int | None = None
+    is_available: bool | None = None
+
+
 class CategoryCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
 

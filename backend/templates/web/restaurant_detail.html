@@ -96,13 +96,19 @@
     const hasOptions = (item.option_groups || []).length > 0;
     const staffReadOnly = viewerIsStaff && !isOwner;
     const ownerActions = isOwner
-      ? `<div class="d-flex align-items-center gap-1 flex-wrap justify-content-end">
-           <span class="badge bg-secondary">Dueño</span>
-           <button type="button" class="btn btn-sm btn-outline-primary item-image-btn"
+      ? `<div class="d-flex align-items-center gap-1 flex-wrap justify-content-end menu-owner-actions">
+           <button type="button" class="btn btn-sm btn-outline-primary item-edit-btn"
+                   data-id="${item.id}" title="Editar nombre, precio o categoría">
+             <i class="bi bi-pencil"></i><span class="d-none d-sm-inline ms-1">Editar</span>
+           </button>
+           <button type="button" class="btn btn-sm btn-outline-secondary item-image-btn"
                    data-id="${item.id}" title="Cambiar foto">
              <i class="bi bi-camera"></i>
            </button>
-           <button type="button" class="btn btn-sm btn-outline-dark item-options-btn" data-id="${item.id}">Opciones</button>
+           <button type="button" class="btn btn-sm btn-outline-dark item-options-btn" data-id="${item.id}"
+                   title="Opciones y extras">
+             <i class="bi bi-sliders"></i><span class="d-none d-sm-inline ms-1">Opciones</span>
+           </button>
            ${availabilityButton}
          </div>`
       : (staffReadOnly
@@ -512,6 +518,9 @@
     container.querySelectorAll('.item-options-btn').forEach(btn => {
       btn.addEventListener('click', () => openOptionsEditor(btn.dataset.id));
     });
+    container.querySelectorAll('.item-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => showEditItem(btn.dataset.id));
+    });
   }
 
   async function handleLogoUpload(event) {
@@ -704,6 +713,62 @@
         }
         await createMenuItem(RID, name, price, description, categoryId);
         showToast(businessIsStore ? 'Producto creado' : 'Platillo creado');
+        loadMenu();
+      },
+    });
+  }
+
+  function showEditItem(itemId) {
+    const item = (restaurantData?.menu || []).find(i => String(i.id) === String(itemId));
+    if (!item) { showToast('No se encontró el producto', 'danger'); return; }
+    const categories = restaurantData?.categories || [];
+    const options = '<option value="">Sin categoría</option>' +
+      categories.map(c => `<option value="${c.id}" ${String(c.id) === String(item.category_id) ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+    const label = businessIsStore ? 'producto' : 'platillo';
+    openFormModal({
+      title: `Editar ${label}`,
+      body: `
+        <div class="mb-2">
+          <label class="form-label small mb-1">Nombre del ${label}</label>
+          <input type="text" id="itemName" class="form-control" maxlength="150" value="${esc(item.name || '')}">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Descripción</label>
+          <textarea id="itemDesc" class="form-control" rows="2">${esc(item.description || '')}</textarea>
+        </div>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small mb-1" for="itemPrice">Precio</label>
+            <input type="number" id="itemPrice" class="form-control" min="0" step="0.01" value="${Number(item.price || 0).toFixed(2)}">
+            <div class="form-text">Es tu precio base; la comisión se calcula aparte.</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1" for="itemCategory">Categoría</label>
+            <select id="itemCategory" class="form-select">${options}</select>
+          </div>
+        </div>
+        <div class="form-check mt-3">
+          <input class="form-check-input" type="checkbox" id="itemAvailable" ${item.is_available ? 'checked' : ''}>
+          <label class="form-check-label" for="itemAvailable">Disponible para pedir</label>
+        </div>`,
+      saveLabel: 'Guardar cambios',
+      onSave: async (el) => {
+        const name = el.querySelector('#itemName').value.trim();
+        const description = el.querySelector('#itemDesc').value.trim();
+        const price = parseFloat(el.querySelector('#itemPrice').value);
+        const categoryId = el.querySelector('#itemCategory').value || null;
+        if (!name || !price || price <= 0) {
+          showToast('Nombre y precio válido requeridos', 'warning');
+          return false;
+        }
+        await updateMenuItem(RID, item.id, {
+          name,
+          description: description || null,
+          price,
+          category_id: categoryId,
+          is_available: el.querySelector('#itemAvailable').checked,
+        });
+        showToast('Cambios guardados');
         loadMenu();
       },
     });

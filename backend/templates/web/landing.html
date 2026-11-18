@@ -4,6 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TuPedidoJR · El primer servicio de entrega en línea de Juventino Rosas</title>
+  <script>
+    (function () {
+      function maybeUnlock() {
+        try {
+          var cap = window.Capacitor;
+          var native = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
+          if (native && localStorage.getItem('tupedidojr_token')) {
+            location.replace('/web/unlock');
+            return true;
+          }
+        } catch (e) {}
+        return false;
+      }
+      if (!maybeUnlock()) {
+        document.addEventListener('DOMContentLoaded', maybeUnlock);
+      }
+    })();
+  </script>
   <meta name="description" content="Pide comida, productos y mandados en Juventino Rosas. Menús y catálogos en línea, seguimiento y reparto local. Registra tu negocio o descarga la app.">
   <meta property="og:title" content="TuPedidoJR · Entrega local en Juventino Rosas">
   <meta property="og:description" content="Restaurantes, tiendas y mandados en una sola app. Menús y catálogos en línea, pedidos y reparto local.">

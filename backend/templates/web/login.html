@@ -9,6 +9,7 @@
         <h4 class="mt-2">Iniciar sesión</h4>
         <a href="/web/inicio" class="small text-muted">← Conoce TuPedidoJR</a>
       </div>
+      <div id="loginNotice" class="alert alert-warning d-none"></div>
       <div id="loginError" class="alert alert-danger d-none"></div>
       <form id="loginForm">
         <div class="mb-3">
@@ -65,6 +66,7 @@
     const errEl = document.getElementById('loginError');
     errEl.classList.add('d-none');
     try {
+      localStorage.setItem('tupedidojr_email', email);
       const res = await login(email, password);
       if (res && res.requires_2fa) {
         pendingTwoFactor = res.temp_token;
@@ -105,6 +107,17 @@
   const safeNext = nextParam && nextParam.startsWith('/web/') && !nextParam.startsWith('/web/login')
     ? nextParam
     : null;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('expired') === '1') {
+    const notice = document.getElementById('loginNotice');
+    notice.textContent = 'Tu sesión expiró. Vuelve a entrar con tu contraseña.';
+    notice.classList.remove('d-none');
+  }
+  const savedEmail = localStorage.getItem('tupedidojr_email');
+  if (savedEmail) {
+    const emailInput = document.getElementById('email');
+    if (emailInput && !emailInput.value) emailInput.value = savedEmail;
+  }
   if (safeNext) {
     const registerLink = document.getElementById('registerLink');
     if (registerLink) registerLink.href = `/web/register?next=${encodeURIComponent(safeNext)}`;

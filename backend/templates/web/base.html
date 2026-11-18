@@ -12,8 +12,12 @@
     (function () {
       try {
         var ua = navigator.userAgent || '';
+        var native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
         if (/;\s*wv\)/i.test(ua) || (window.Capacitor && window.Capacitor.isNativePlatform)) {
           document.documentElement.classList.add('capacitor-app');
+        }
+        if (native && location.pathname.indexOf('/web/login') === 0 && localStorage.getItem('tupedidojr_token')) {
+          location.replace('/web/unlock');
         }
       } catch (e) {}
     })();
@@ -1064,40 +1068,6 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
     }
     window.refreshPendingRegistrations = refreshPendingRegistrations;
 
-    async function capRestoreSession() {
-      if (sessionStorage.getItem('token')) return;
-      const saved = localStorage.getItem('tupedidojr_token');
-      if (!saved) return;
-      let ok = true;
-      const bio = window.Capacitor.Plugins && window.Capacitor.Plugins.NativeBiometric;
-      if (bio) {
-        try {
-          const avail = await bio.isAvailable({ useFallback: true });
-          if (avail && avail.isAvailable) {
-            await bio.verifyIdentity({
-              reason: 'Entra a TuPedidoJR',
-              title: 'TuPedidoJR',
-              subtitle: 'Confirma tu identidad',
-              description: 'Usa tu huella o rostro para entrar',
-            });
-          }
-        } catch (e) {
-          ok = false;
-        }
-      }
-      if (!ok) return;
-      try {
-        const res = await fetch('/api/v1/auth/me', { headers: { Authorization: 'Bearer ' + saved } });
-        if (!res.ok) {
-          localStorage.removeItem('tupedidojr_token');
-          return;
-        }
-      } catch (e) {
-        return;
-      }
-      sessionStorage.setItem('token', saved);
-    }
-
     async function capInit() {
       document.documentElement.classList.add('capacitor-app');
       const plugins = window.Capacitor.Plugins || {};
@@ -1117,14 +1087,15 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
       window.__CAP = CAP;
       if (CAP) {
         await capInit();
-        if (localStorage.getItem('tupedidojr_token')) await capRestoreSession();
-        if (sessionStorage.getItem('token') && window.location.pathname.startsWith('/web/login')) {
-          window.location.href = '/web/restaurants';
-          return;
-        }
       }
       const token = sessionStorage.getItem('token');
-      if (CAP && token) localStorage.setItem('tupedidojr_token', token);
+      if (CAP && token) {
+        localStorage.setItem('tupedidojr_token', token);
+        const path = window.location.pathname + window.location.search;
+        if (!/^\/web\/(login|unlock|register|app|inicio)/.test(window.location.pathname)) {
+          localStorage.setItem('tupedidojr_last_path', path);
+        }
+      }
       const publicPaths = [
         '/web/login',
         '/web/register',
@@ -1166,6 +1137,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         sessionStorage.removeItem('my_restaurant_id');
         sessionStorage.removeItem('my_business_type');
         localStorage.removeItem('tupedidojr_token');
+        localStorage.removeItem('tupedidojr_last_path');
         window.location.href = '/web/login';
       });
 

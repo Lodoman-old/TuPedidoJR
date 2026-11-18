@@ -95,6 +95,11 @@ async def web_login(request: Request):
     return templates.TemplateResponse(request, "login.html")
 
 
+@router.get("/unlock")
+async def web_unlock(request: Request):
+    return templates.TemplateResponse(request, "unlock.html")
+
+
 @router.get("/register")
 async def web_register(request: Request):
     return templates.TemplateResponse(request, "register.html")

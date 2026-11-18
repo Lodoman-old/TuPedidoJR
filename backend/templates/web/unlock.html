@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>Entrar · TuPedidoJR</title>
+  <style>
+    :root { --navy: #12224f; --navy-2: #1b2f6b; --orange: #f58220; --ink: #16233d; --muted: #5b6575; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 50% 0%, #1d3577 0%, var(--navy) 55%, #0c1734 100%);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px calc(20px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+    }
+    .card {
+      width: 100%;
+      max-width: 380px;
+      background: #fff;
+      color: var(--ink);
+      border-radius: 22px;
+      padding: 30px 26px 24px;
+      text-align: center;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, .32);
+    }
+    .logo { height: 54px; margin: 0 auto 18px; display: block; }
+    .hello { color: var(--muted); font-size: 13px; margin: 0 0 4px; word-break: break-all; }
+    h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: -.2px; }
+    .sub { color: var(--muted); font-size: 13.5px; line-height: 1.45; margin: 0 0 20px; }
+    .bio {
+      width: 96px; height: 96px; border-radius: 50%;
+      border: 2px solid rgba(245, 130, 32, .35);
+      background: #fff6ee; color: var(--orange);
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform .12s ease, box-shadow .12s ease;
+      margin-bottom: 6px;
+    }
+    .bio:active { transform: scale(.96); }
+    .bio.busy { animation: pulse 1.1s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(245, 130, 32, .25); } 50% { box-shadow: 0 0 0 14px rgba(245, 130, 32, 0); } }
+    .status { min-height: 20px; font-size: 12.5px; color: var(--muted); margin: 8px 0 12px; line-height: 1.4; }
+    .status.error { color: #b32b2b; }
+    .btn {
+      display: block; width: 100%; border: 0; border-radius: 12px;
+      padding: 13px 16px; font-size: 15px; font-weight: 600; cursor: pointer;
+      background: var(--navy-2); color: #fff; text-decoration: none;
+    }
+    .btn.ghost { background: transparent; color: var(--navy-2); border: 1px solid #d7deea; }
+    .btn + .btn { margin-top: 8px; }
+    .links { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+    .links a { color: var(--navy-2); text-decoration: none; }
+    .links a:hover { text-decoration: underline; }
+    .opt { margin-top: 18px; padding-top: 14px; border-top: 1px solid #edf1f7; font-size: 12px; color: var(--muted); text-align: left; }
+    .opt label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .opt input { width: 16px; height: 16px; accent-color: var(--orange); }
+    .d-none { display: none !important; }
+    .foot { margin-top: 14px; font-size: 10.5px; color: #8a94a5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img src="/static/logo.png" alt="TuPedidoJR" class="logo">
+    <p class="hello" id="hello">Tu cuenta</p>
+    <h1>Entra a TuPedidoJR</h1>
+    <p class="sub" id="sub">Confirma con tu huella o rostro para continuar.</p>
+
+    <button class="bio" id="bioBtn" type="button" aria-label="Entrar con huella o rostro">
+      <svg viewBox="0 0 64 64" width="48" height="48" fill="none" stroke="currentColor"
+           stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M32 7c-9.4 0-17 7.6-17 17v7"/>
+        <path d="M32 7c9.4 0 17 7.6 17 17v12"/>
+        <path d="M23 40v4a9 9 0 0 0 18 0v-7"/>
+        <path d="M18 31v7c0 9 4.9 16 12 18"/>
+        <path d="M46 31v9c0 4.5-1 8.4-3 11.6"/>
+        <path d="M27.5 28.5v11a4.5 4.5 0 0 0 9 0v-11a4.5 4.5 0 0 0-9 0Z"/>
+      </svg>
+    </button>
+
+    <div class="status" id="status"></div>
+
+    <button class="btn d-none" id="retryBtn" type="button">Intentar de nuevo</button>
+    <a class="btn ghost" href="#" id="pwdBtn">Usar mi contraseña</a>
+    <div class="links">
+      <a href="#" id="switchBtn">Usar otra cuenta</a>
+    </div>
+
+    <div class="opt">
+      <label><input type="checkbox" id="bioToggle" checked> Entrar con huella en este teléfono</label>
+    </div>
+    <div class="foot">Tu huella nunca sale de este teléfono.</div>
+  </div>
+
+  <script>
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const CAP = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+      const token = localStorage.getItem('tupedidojr_token') || '';
+      const email = localStorage.getItem('tupedidojr_email') || '';
+      const bioOff = localStorage.getItem('tupedidojr_bio') === '0';
+
+      if (!CAP || !token) {
+        location.replace('/web/login');
+        return;
+      }
+
+      if (email) $('hello').textContent = email;
+
+      function setStatus(text, isError) {
+        const el = $('status');
+        el.textContent = text || '';
+        el.classList.toggle('error', !!isError);
+      }
+
+      function setBusy(busy) {
+        $('bioBtn').classList.toggle('busy', !!busy);
+        $('bioBtn').disabled = !!busy;
+      }
+
+      function showRetry(show) {
+        $('retryBtn').classList.toggle('d-none', !show);
+      }
+
+      function forgetToken() {
+        localStorage.removeItem('tupedidojr_token');
+      }
+
+      let sessionExpired = false;
+
+      function goLogin(query) {
+        forgetToken();
+        location.replace('/web/login' + (query || ''));
+      }
+
+      async function enter() {
+        setBusy(true);
+        setStatus('Entrando…');
+        try {
+          const res = await fetch('/api/v1/auth/me', {
+            headers: { Authorization: 'Bearer ' + token },
+          });
+          if (res.status === 401 || res.status === 403) {
+            forgetToken();
+            sessionExpired = true;
+            setBusy(false);
+            setStatus('Tu sesión expiró. Vuelve a entrar con tu contraseña.', true);
+            showRetry(false);
+            $('pwdBtn').textContent = 'Entrar con contraseña';
+            return;
+          }
+          if (!res.ok) throw new Error('No se pudo validar la sesión.');
+          const me = await res.json();
+          sessionStorage.setItem('token', token);
+          sessionStorage.setItem('is_superuser', me.is_superuser ? 'true' : 'false');
+          sessionStorage.setItem('user_name', me.name || me.email || 'Mi cuenta');
+          if (me.email) localStorage.setItem('tupedidojr_email', me.email);
+          const target = await destination(me);
+          location.replace(target);
+        } catch (e) {
+          setBusy(false);
+          setStatus('No hay conexión. Revisa tu internet e inténtalo de nuevo.', true);
+          showRetry(true);
+        }
+      }
+
+      async function destination(me) {
+        const last = localStorage.getItem('tupedidojr_last_path') || '';
+        const blocked = /^\/web\/(login|unlock|register|app|inicio|forgot-password|reset-password)/;
+        if (last.indexOf('/web/') === 0 && !blocked.test(last)) return last;
+        if (me && me.is_superuser) return '/web/restaurants';
+        try {
+          const r = await fetch('/api/v1/delivery/profile', {
+            headers: { Authorization: 'Bearer ' + token },
+          });
+          if (r.ok) return '/web/delivery';
+        } catch (e) { /* cliente o negocio */ }
+        return '/web/restaurants';
+      }
+
+      async function startBiometric() {
+        const bio = window.Capacitor.Plugins && window.Capacitor.Plugins.NativeBiometric;
+        if (!bio) {
+          setStatus('Este teléfono no tiene lector disponible. Usa tu contraseña.', true);
+          $('pwdBtn').textContent = 'Entrar con contraseña';
+          return;
+        }
+        setBusy(true);
+        showRetry(false);
+        setStatus('Confirma tu huella o rostro…');
+        try {
+          const avail = await bio.isAvailable({ useFallback: true });
+          if (!avail || !avail.isAvailable) {
+            setBusy(false);
+            setStatus('Configura huella o rostro en tu teléfono, o usa tu contraseña.', true);
+            return;
+          }
+          await bio.verifyIdentity({
+            reason: 'Entra a TuPedidoJR',
+            title: 'TuPedidoJR',
+            subtitle: 'Confirma tu identidad',
+            description: 'Usa tu huella o rostro para entrar',
+            negativeButtonText: 'Usar contraseña',
+          });
+          await enter();
+        } catch (e) {
+          setBusy(false);
+          setStatus('Verificación cancelada. Puedes intentarlo de nuevo.', true);
+          showRetry(true);
+        }
+      }
+
+      $('bioBtn').addEventListener('click', startBiometric);
+      $('retryBtn').addEventListener('click', startBiometric);
+
+      $('pwdBtn').addEventListener('click', function (event) {
+        event.preventDefault();
+        goLogin(sessionExpired ? '?expired=1' : '');
+      });
+
+      $('switchBtn').addEventListener('click', function (event) {
+        event.preventDefault();
+        localStorage.removeItem('tupedidojr_email');
+        localStorage.removeItem('tupedidojr_last_path');
+        goLogin('');
+      });
+
+      const toggle = $('bioToggle');
+      toggle.checked = !bioOff;
+      toggle.addEventListener('change', async function () {
+        if (!toggle.checked) {
+          localStorage.setItem('tupedidojr_bio', '0');
+          setStatus('Listo. La próxima vez te pediremos tu contraseña.');
+          return;
+        }
+        const bio = window.Capacitor.Plugins && window.Capacitor.Plugins.NativeBiometric;
+        try {
+          const avail = bio ? await bio.isAvailable({ useFallback: true }) : null;
+          if (!avail || !avail.isAvailable) throw new Error('Este teléfono no tiene huella o rostro configurado.');
+          localStorage.setItem('tupedidojr_bio', '1');
+          setStatus('Listo. Entrarás con tu huella o rostro.');
+        } catch (e) {
+          toggle.checked = false;
+          localStorage.setItem('tupedidojr_bio', '0');
+          setStatus(e.message || 'No se pudo activar la huella.', true);
+        }
+      });
+
+      if (bioOff) {
+        setStatus('La huella está desactivada en este teléfono.');
+        $('pwdBtn').textContent = 'Entrar con contraseña';
+      } else {
+        startBiometric();
+      }
+    })();
+  </script>
+</body>
+</html>

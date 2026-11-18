@@ -10,6 +10,7 @@
 {% endblock %}
 {% block scripts %}
 <script>
+  const IS_APP = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
   const TILE_ATTR = 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors';
 
@@ -103,10 +104,46 @@
           <p class="small text-muted mb-2">Recibe avisos cuando tu pedido cambie de estado o cuando el repartidor vaya en camino.</p>
           <div><button class="btn btn-success btn-sm" onclick="activatePushProfile()"><i class="bi bi-bell"></i> Activar notificaciones</button></div>
           <div id="profilePushMsg" class="small mt-2"></div>
-        </div>`;
+        </div>
+        ${IS_APP ? `
+        <div class="card p-3 mb-3">
+          <h6><i class="bi bi-shield-lock"></i> Seguridad</h6>
+          <p class="small text-muted mb-2">Entra con tu huella o rostro en este teléfono, sin escribir tu contraseña.</p>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="bioToggle">
+            <label class="form-check-label" for="bioToggle">Entrar con huella o rostro</label>
+          </div>
+          <div id="bioMsg" class="small text-muted mt-2"></div>
+        </div>` : ''}`;
       content.innerHTML = html;
       attachAddressEvents(addresses);
+      attachBioToggle();
     } catch (ex) { loading.classList.add('d-none'); showToast(ex.message, 'danger'); }
+  }
+
+  function attachBioToggle() {
+    const el = document.getElementById('bioToggle');
+    if (!el) return;
+    el.checked = localStorage.getItem('tupedidojr_bio') !== '0';
+    el.addEventListener('change', async () => {
+      const msg = document.getElementById('bioMsg');
+      if (!el.checked) {
+        localStorage.setItem('tupedidojr_bio', '0');
+        msg.textContent = 'Listo. La próxima vez te pediremos tu contraseña.';
+        return;
+      }
+      const bio = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.NativeBiometric;
+      try {
+        const avail = bio ? await bio.isAvailable({ useFallback: true }) : null;
+        if (!avail || !avail.isAvailable) throw new Error('Este teléfono no tiene huella o rostro configurado.');
+        localStorage.setItem('tupedidojr_bio', '1');
+        msg.textContent = 'Listo. Entrarás con tu huella o rostro.';
+      } catch (e) {
+        el.checked = false;
+        localStorage.setItem('tupedidojr_bio', '0');
+        msg.textContent = e.message || 'No se pudo activar la huella.';
+      }
+    });
   }
 
   function attachAddressEvents(addresses) {

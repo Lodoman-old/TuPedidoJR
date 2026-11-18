@@ -77,6 +77,22 @@ let scheduleState = { enabled: false, value: '' };
 
   const money = n => money0(n);
 
+  function formatOptionNames(names) {
+    const groups = new Map();
+    (names || []).forEach(raw => {
+      const text = String(raw || '').trim();
+      if (!text) return;
+      const pos = text.indexOf(': ');
+      const group = pos > 0 ? text.slice(0, pos) : '';
+      const label = pos > 0 ? text.slice(pos + 2) : text;
+      if (!groups.has(group)) groups.set(group, []);
+      groups.get(group).push(label);
+    });
+    return [...groups.entries()]
+      .map(([group, labels]) => (group ? `${group}: ${labels.join(', ')}` : labels.join(', ')))
+      .join(' · ');
+  }
+
   async function clearMixedCart() {
     await clearCartNow();
     renderCart();
@@ -111,17 +127,22 @@ let scheduleState = { enabled: false, value: '' };
     cart.forEach((item, idx) => {
       const st = item.price * item.quantity;
       subtotal += st;
-      const options = (item.option_names || []).length
-        ? `<br><small class="text-muted">${item.option_names.join(' · ')}</small>`
+      const optionText = formatOptionNames(item.option_names);
+      const options = optionText
+        ? `<div class="cart-item-options">${esc(optionText)}</div>`
         : '';
       html += `
-        <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom:1px solid #eee;">
-          <div><strong>${item.name}</strong>${options}<br><small>${money0(item.price)} c/u</small></div>
-          <div class="d-flex align-items-center gap-2">
+        <div class="cart-item">
+          <div class="cart-item-main">
+            <strong>${esc(item.name)}</strong>
+            ${options}
+            <small class="text-muted">${money0(item.price)} c/u</small>
+          </div>
+          <div class="cart-item-side">
             <button class="btn btn-sm btn-outline-secondary qty-minus" data-idx="${idx}">−</button>
             <span class="fw-bold">${item.quantity}</span>
             <button class="btn btn-sm btn-outline-secondary qty-plus" data-idx="${idx}">+</button>
-            <span class="fw-bold ms-2">${money0(st)}</span>
+            <span class="cart-item-total">${money0(st)}</span>
             <button class="btn btn-sm btn-outline-danger remove-btn" data-idx="${idx}"><i class="bi bi-trash"></i></button>
           </div>
         </div>`;

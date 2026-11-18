@@ -1087,8 +1087,6 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
 
     async function capInit() {
       document.documentElement.classList.add('capacitor-app');
-      const out = document.getElementById('logoutBtn');
-      if (out) out.innerHTML = '<i class="bi bi-lock"></i> Bloquear';
       const plugins = window.Capacitor.Plugins || {};
       try { await plugins.StatusBar?.setOverlaysWebView({ overlay: false }); } catch (e) {}
       try { await plugins.StatusBar?.setBackgroundColor({ color: '#1B2F6B' }); } catch (e) {}

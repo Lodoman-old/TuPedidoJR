@@ -12,7 +12,7 @@ from app.models.appointment_debt import AppointmentDebt
 from app.models.business_ledger import BusinessLedger
 from app.models.restaurant import Restaurant
 from app.models.user import User
-from app.services.appointment_settlement_service import settle_restaurant
+from app.services.appointment_settlement_service import business_balance, settle_restaurant
 
 router = APIRouter()
 
@@ -51,6 +51,11 @@ async def agenda_balances(
         item[kind] = str(total)
     for item in balances.values():
         item["net"] = str(Decimal(item["credit"]) - Decimal(item["debit"]))
+        detail = await business_balance(db, item["restaurant_id"])
+        item["by_staff"] = [
+            row for row in detail["by_staff"]
+            if Decimal(row["credit"]) != 0 or Decimal(row["debit"]) != 0
+        ]
 
     debts = await db.execute(
         select(
@@ -82,13 +87,14 @@ async def agenda_balances(
 @router.post("/agenda/restaurants/{restaurant_id}/settle")
 async def settle_business(
     restaurant_id: str,
+    staff_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_superuser),
 ):
     restaurant = await db.get(Restaurant, _uuid(restaurant_id))
     if not restaurant:
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
-    return await settle_restaurant(db, restaurant.id)
+    return await settle_restaurant(db, restaurant.id, staff_id=staff_id)
 
 
 @router.get("/agenda/client-debts")

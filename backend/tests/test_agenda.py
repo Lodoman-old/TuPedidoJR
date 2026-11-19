@@ -547,6 +547,7 @@ async def test_admin_approves_affiliation_and_reject_restores(
     client, superuser_token, business, db_session
 ):
     resto, _ = business
+
     original = resto.affiliation_expires_at
     record = ReceiptValidation(
         entity_type="affiliation_payment",
@@ -577,3 +578,59 @@ async def test_admin_approves_affiliation_and_reject_restores(
 
     await db_session.refresh(resto)
     assert resto.affiliation_expires_at == original
+
+
+@pytest.mark.asyncio
+async def test_public_page_lists_services(
+    client, business, service, staff, db_session
+):
+    resto, _ = business
+    resto.slug = "barberia-agenda-publica"
+    resto.public_page_enabled = True
+    db_session.add(resto)
+    await db_session.commit()
+
+    resp = await client.get("/r/barberia-agenda-publica")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Servicios" in body
+    assert "Corte" in body
+    assert "Agendar cita" in body
+
+
+@pytest.mark.asyncio
+async def test_balance_breaks_down_by_staff(
+    client, owner_token, customer_token, superuser_token, business, service, staff
+):
+    resto, target = business
+    created = await _book(client, resto, service, staff, customer_token, target)
+    appointment_id = created.json()["id"]
+
+    await client.patch(
+        f"/api/v1/agenda/{resto.id}/appointments/{appointment_id}",
+        headers=_headers(owner_token),
+        json={"status": "completed"},
+    )
+    balance = await client.get(
+        f"/api/v1/agenda/{resto.id}/balance", headers=_headers(owner_token)
+    )
+    assert balance.status_code == 200
+    by_staff = balance.json()["by_staff"]
+    ana = next(row for row in by_staff if row["name"] == "Ana")
+    assert float(ana["debit"]) == 10
+
+    settled = await client.post(
+        f"/api/v1/admin/agenda/restaurants/{resto.id}/settle",
+        headers=_headers(superuser_token),
+        params={"staff_id": staff["id"]},
+    )
+    assert settled.status_code == 200
+    assert settled.json()["settled"] == 1
+
+    after = await client.get(
+        f"/api/v1/agenda/{resto.id}/balance", headers=_headers(owner_token)
+    )
+    ana_after = next(
+        (row for row in after.json()["by_staff"] if row["name"] == "Ana"), None
+    )
+    assert ana_after is None or float(ana_after["debit"]) == 0

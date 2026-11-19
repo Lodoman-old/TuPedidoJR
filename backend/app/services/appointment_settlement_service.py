@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.appointment import Appointment
 from app.models.appointment_debt import AppointmentDebt
 from app.models.business_ledger import BusinessLedger
+from app.models.business_staff import BusinessStaff
 
 CENT = Decimal("0.01")
 NO_SHOW_FEE = Decimal("10.00")
@@ -78,13 +79,14 @@ def _ledger(
     kind: str,
     amount,
     note: str,
+    appointment_id=None,
 ) -> None:
     amount = _q(amount)
     if amount <= 0:
         return
     db.add(BusinessLedger(
         restaurant_id=appointment.restaurant_id,
-        appointment_id=appointment.id,
+        appointment_id=appointment_id or appointment.id,
         kind=kind,
         amount=amount,
         status="pending",
@@ -101,6 +103,7 @@ async def complete_appointment(db: AsyncSession, appointment: Appointment) -> No
         _ledger(
             db, appointment, "debit", debt.platform_amount,
             "Parte de la plataforma por cita no asistida cobrada en efectivo",
+            appointment_id=debt.appointment_id,
         )
 
     if appointment.payment_mode == "cash":
@@ -149,29 +152,80 @@ async def cancel_appointment(db: AsyncSession, appointment: Appointment) -> None
 
 
 async def business_balance(db: AsyncSession, restaurant_id) -> dict:
-    result = await db.execute(
-        select(BusinessLedger)
+    rows = (await db.execute(
+        select(BusinessLedger, Appointment.staff_id)
+        .outerjoin(Appointment, Appointment.id == BusinessLedger.appointment_id)
         .where(BusinessLedger.restaurant_id == restaurant_id)
         .order_by(BusinessLedger.created_at.desc())
-        .limit(50)
-    )
-    entries = list(result.scalars().all())
+    )).all()
+    staff_rows = (await db.execute(
+        select(BusinessStaff)
+        .where(BusinessStaff.restaurant_id == restaurant_id)
+        .order_by(BusinessStaff.sort_order, BusinessStaff.name)
+    )).scalars().all()
+    staff_names = {str(s.id): s.name for s in staff_rows}
+
     credit = sum(
-        (e.amount for e in entries if e.status == "pending" and e.kind == "credit"),
+        (e.amount for e, _ in rows if e.status == "pending" and e.kind == "credit"),
         Decimal("0"),
     )
     debit = sum(
-        (e.amount for e in entries if e.status == "pending" and e.kind == "debit"),
+        (e.amount for e, _ in rows if e.status == "pending" and e.kind == "debit"),
         Decimal("0"),
     )
+
+    by_staff: dict[str, dict] = {
+        str(s.id): {
+            "staff_id": str(s.id),
+            "name": s.name,
+            "credit": Decimal("0"),
+            "debit": Decimal("0"),
+        }
+        for s in staff_rows
+    }
+    unassigned = {
+        "staff_id": None,
+        "name": "Sin asignar",
+        "credit": Decimal("0"),
+        "debit": Decimal("0"),
+    }
+    for entry, staff_id in rows:
+        if entry.status != "pending":
+            continue
+        key = str(staff_id) if staff_id else None
+        bucket = by_staff.get(key) if key else unassigned
+        if bucket is None:
+            bucket = unassigned
+        bucket[entry.kind] += entry.amount
+
+    staff_balances = list(by_staff.values())
+    if unassigned["credit"] or unassigned["debit"]:
+        staff_balances.append(unassigned)
+    for item in staff_balances:
+        item["net"] = _q(item["credit"] - item["debit"])
+        item["credit"] = _q(item["credit"])
+        item["debit"] = _q(item["debit"])
+
     return {
         "credit": str(_q(credit)),
         "debit": str(_q(debit)),
         "net": str(_q(credit - debit)),
+        "by_staff": [
+            {
+                "staff_id": item["staff_id"],
+                "name": item["name"],
+                "credit": str(item["credit"]),
+                "debit": str(item["debit"]),
+                "net": str(item["net"]),
+            }
+            for item in staff_balances
+        ],
         "entries": [
             {
                 "id": str(e.id),
                 "appointment_id": str(e.appointment_id) if e.appointment_id else None,
+                "staff_id": str(staff_id) if staff_id else None,
+                "staff_name": staff_names.get(str(staff_id)) if staff_id else None,
                 "kind": e.kind,
                 "amount": str(e.amount),
                 "status": e.status,
@@ -179,22 +233,30 @@ async def business_balance(db: AsyncSession, restaurant_id) -> dict:
                 "settled_at": e.settled_at.isoformat() if e.settled_at else None,
                 "created_at": e.created_at.isoformat() if e.created_at else None,
             }
-            for e in entries
+            for e, staff_id in rows[:100]
         ],
     }
 
 
-async def settle_restaurant(db: AsyncSession, restaurant_id) -> dict:
-    result = await db.execute(
-        select(BusinessLedger).where(
-            BusinessLedger.restaurant_id == restaurant_id,
-            BusinessLedger.status == "pending",
-        )
+async def settle_restaurant(db: AsyncSession, restaurant_id, staff_id=None) -> dict:
+    stmt = select(BusinessLedger).where(
+        BusinessLedger.restaurant_id == restaurant_id,
+        BusinessLedger.status == "pending",
     )
-    entries = list(result.scalars().all())
+    if staff_id:
+        stmt = stmt.join(
+            Appointment, Appointment.id == BusinessLedger.appointment_id
+        ).where(Appointment.staff_id == staff_id)
+    entries = list((await db.execute(stmt)).scalars().all())
     now = datetime.now(timezone.utc)
+    credit = sum((e.amount for e in entries if e.kind == "credit"), Decimal("0"))
+    debit = sum((e.amount for e in entries if e.kind == "debit"), Decimal("0"))
     for entry in entries:
         entry.status = "settled"
         entry.settled_at = now
     await db.commit()
-    return {"settled": len(entries)}
+    return {
+        "settled": len(entries),
+        "credit": str(_q(credit)),
+        "debit": str(_q(debit)),
+    }

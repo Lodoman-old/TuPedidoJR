@@ -75,8 +75,12 @@
   <div class="container py-3">
     <div class="alert alert-light border small py-2 mb-3">
       <i class="bi bi-info-circle"></i>
+      {% if restaurant.appointments_enabled and not restaurant.catalog_enabled %}
+      Los servicios y precios son públicos. Para agendar solo necesitas iniciar sesión o crear una cuenta.
+      {% else %}
       El menú es público y no necesitas cuenta para verlo. Para pedir, inicia sesión o crea una cuenta;
       al terminar regresas automáticamente a este restaurante para completar tu pedido.
+      {% endif %}
     </div>
     <div class="d-flex gap-2 flex-wrap mb-3">
       {% if restaurant.appointments_enabled %}
@@ -84,9 +88,11 @@
         <i class="bi bi-calendar-week"></i> Agendar cita
       </a>
       {% endif %}
+      {% if restaurant.catalog_enabled %}
       <a class="btn btn-dark" href="/web/restaurants/{{ restaurant.id }}">
         <i class="bi bi-bag-check"></i> Pedir a domicilio
       </a>
+      {% endif %}
       <a class="btn btn-outline-primary" href="/web/login?next={{ ('/web/restaurants/' ~ restaurant.id)|urlencode }}">
         <i class="bi bi-box-arrow-in-right"></i> Iniciar sesión
       </a>
@@ -101,6 +107,37 @@
         <i class="bi bi-whatsapp"></i> WhatsApp
       </a>
     </div>
+
+    {% if restaurant.appointments_enabled %}
+      {% if services %}
+      <h2 class="h5 mt-4 mb-2">Servicios</h2>
+      <div class="row g-2">
+        {% for service in services %}
+        <div class="col-md-6">
+          <div class="item d-flex gap-3 align-items-center h-100">
+            <div class="menu-thumb d-flex align-items-center justify-content-center text-muted">
+              <i class="bi bi-scissors"></i>
+            </div>
+            <div class="flex-grow-1">
+              <div class="fw-bold">{{ service.name }}</div>
+              {% if service.description %}<div class="small text-muted">{{ service.description }}</div>{% endif %}
+              <div class="small text-muted">{{ service.duration_min }} min</div>
+              <div class="price">${{ '%.2f'|format(service.price|float) }}</div>
+            </div>
+            <a class="btn btn-sm btn-dark" href="/web/restaurants/{{ restaurant.id }}/agenda/book?s={{ service.id }}">
+              Agendar
+            </a>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="small text-muted mt-2">Precio del servicio. Al agendar se suma $5 de cuota de servicio.</div>
+      {% else %}
+      <div class="card p-4 text-center text-muted mt-3">
+        Este negocio todavía no publicó sus servicios.
+      </div>
+      {% endif %}
+    {% endif %}
 
     {% for cat in restaurant.categories %}
       {% set items = restaurant.menu | selectattr('category_id', 'equalto', cat.id) | list %}

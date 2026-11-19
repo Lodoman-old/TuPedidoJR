@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.db.session import get_db
 from app.core.security import decode_access_token
 from app.models.restaurant import Restaurant
+from app.models.business_service import BusinessService
 from app.models.user import User
 from app.services.schedule_service import local_today, restaurant_open_state
 from app.services.order_service import get_commission_rate, get_setting_value
@@ -151,8 +152,19 @@ async def public_restaurant(
         )
     state = await restaurant_open_state(db, restaurant)
     restaurant.effective_commission_percentage = await get_commission_rate(db, restaurant)
+    services = []
+    if restaurant.appointments_enabled:
+        result = await db.execute(
+            select(BusinessService)
+            .where(
+                BusinessService.restaurant_id == restaurant.id,
+                BusinessService.is_active.is_(True),
+            )
+            .order_by(BusinessService.sort_order, BusinessService.name)
+        )
+        services = list(result.scalars().all())
     return templates.TemplateResponse(
         request,
         "public_restaurant.html",
-        {"restaurant": restaurant, "open_state": state},
+        {"restaurant": restaurant, "open_state": state, "services": services},
     )

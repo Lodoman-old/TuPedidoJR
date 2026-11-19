@@ -68,6 +68,7 @@
       </div>
     </div>
     <div class="mt-2" id="balanceEntries"></div>
+    <div class="mt-2" id="balanceByStaff"></div>
   </div>
 </div>
 
@@ -345,11 +346,24 @@
             const status = e.status === 'settled' ? 'Liquidado' : 'Pendiente';
             const date = e.created_at ? new Date(e.created_at).toLocaleDateString('es-MX') : '';
             return `<div class="d-flex justify-content-between small border-top py-1">
-              <span class="text-muted">${esc(e.notes || label)} · ${date}</span>
+              <span class="text-muted">${esc(e.notes || label)}${e.staff_name ? ' · ' + esc(e.staff_name) : ''} · ${date}</span>
               <span class="${isCredit ? 'text-success' : 'text-danger'} fw-semibold">${isCredit ? '+' : '-'}${money(e.amount)} <span class="text-muted fw-normal">· ${status}</span></span>
             </div>`;
           }).join('')
         : '<div class="small text-muted">Todavía no hay movimientos.</div>';
+
+      const staffRows = (data.by_staff || []).filter((s) => Number(s.credit) !== 0 || Number(s.debit) !== 0);
+      document.getElementById('balanceByStaff').innerHTML = staffRows.length
+        ? `<div class="small text-muted mt-2 mb-1">Saldo por profesional</div>` +
+          staffRows.map((s) => {
+            const net = Number(s.net || 0);
+            const detail = net >= 0 ? `le deben ${money(net)}` : `debe ${money(Math.abs(net))}`;
+            return `<div class="d-flex justify-content-between small border-top py-1">
+              <span>${esc(s.name)}</span>
+              <span class="${net >= 0 ? 'text-success' : 'text-danger'} fw-semibold">${detail}</span>
+            </div>`;
+          }).join('')
+        : '';
     } catch (err) {
       // El saldo es informativo; no bloquea la agenda.
     }

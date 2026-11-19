@@ -55,6 +55,13 @@
     }
     box.innerHTML = businesses.map((b) => {
       const net = Number(b.net || 0);
+      const staffLines = (b.by_staff || []).map((s) => {
+        const staffNet = Number(s.net || 0);
+        return `<div class="small d-flex justify-content-between align-items-center border-top pt-1 mt-1">
+          <span>${esc(s.name)} · ${staffNet >= 0 ? 'le deben' : 'debe'} <strong class="${staffNet >= 0 ? 'text-success' : 'text-danger'}">${money(Math.abs(staffNet))}</strong></span>
+          <button class="btn btn-sm btn-outline-secondary py-0" onclick="settle('${b.restaurant_id}', '${esc(s.name)}', '${s.staff_id || ''}')">Liquidar</button>
+        </div>`;
+      }).join('');
       return `<div class="d-flex flex-wrap align-items-center gap-3 p-3 border-top">
         <div class="flex-grow-1 min-w-0">
           <div class="fw-semibold">${esc(b.name)}</div>
@@ -62,13 +69,14 @@
             Te deben <span class="text-success fw-semibold">${money(b.credit)}</span>
             · Debe <span class="text-danger fw-semibold">${money(b.debit)}</span>
           </div>
+          ${staffLines}
         </div>
         <div class="text-end">
           <div class="small text-muted">Neto</div>
           <div class="fw-bold ${net >= 0 ? 'text-success' : 'text-danger'}">${money(Math.abs(net))}</div>
         </div>
         <button class="btn btn-sm btn-outline-primary" onclick="settle('${b.restaurant_id}', '${esc(b.name)}')">
-          <i class="bi bi-check2-square"></i> Liquidar
+          <i class="bi bi-check2-square"></i> Liquidar todo
         </button>
       </div>`;
     }).join('');
@@ -93,10 +101,13 @@
       </div>`).join('');
   }
 
-  async function settle(restaurantId, name) {
-    if (!confirm(`¿Marcar como liquidados todos los movimientos pendientes de ${name}?`)) return;
+  async function settle(restaurantId, name, staffId) {
+    const target = staffId ? `de ${name}` : `del negocio ${name}`;
+    if (!confirm(`¿Marcar como liquidados todos los movimientos pendientes ${target}?`)) return;
     try {
-      const res = await apiRequest('POST', `/admin/agenda/restaurants/${restaurantId}/settle`, {});
+      let url = `/admin/agenda/restaurants/${restaurantId}/settle`;
+      if (staffId) url += `?staff_id=${encodeURIComponent(staffId)}`;
+      const res = await apiRequest('POST', url, {});
       showToast(`${res.settled} movimiento(s) liquidados`, 'success');
       loadAll();
     } catch (err) {

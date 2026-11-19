@@ -540,7 +540,10 @@
       const today = new Date();
       viewYear = today.getFullYear();
       viewMonth = today.getMonth();
-      serviceId = info.services[0].id;
+      const preselect = new URLSearchParams(location.search).get('s');
+      serviceId = (preselect && info.services.some((s) => s.id === preselect))
+        ? preselect
+        : info.services[0].id;
       staffId = null;
       renderServices();
       renderStaff();

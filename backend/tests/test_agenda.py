@@ -615,6 +615,39 @@ async def test_listing_includes_services_filter(
 
 
 @pytest.mark.asyncio
+async def test_any_professional_is_assigned_automatically(
+    client, owner_token, customer_token, business, service, staff
+):
+    resto, target = business
+    created = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments",
+        headers=_headers(customer_token),
+        json={
+            "service_id": service["id"],
+            "start_at": f"{target.isoformat()}T09:00:00",
+            "client_name": "Cliente Cualquiera",
+            "payment_mode": "cash",
+        },
+    )
+    assert created.status_code == 201, created.text
+    data = created.json()
+    assert data["staff_id"] is not None
+    assert data["staff_name"] == "Ana"
+
+    await client.patch(
+        f"/api/v1/agenda/{resto.id}/appointments/{data['id']}",
+        headers=_headers(owner_token),
+        json={"status": "completed"},
+    )
+    balance = await client.get(
+        f"/api/v1/agenda/{resto.id}/balance", headers=_headers(owner_token)
+    )
+    ana = next(row for row in balance.json()["by_staff"] if row["name"] == "Ana")
+    assert float(ana["client_fee"]) == 5
+    assert ana["cash_count"] == 1
+
+
+@pytest.mark.asyncio
 async def test_balance_breaks_down_by_staff(
     client, owner_token, customer_token, superuser_token, business, service, staff
 ):

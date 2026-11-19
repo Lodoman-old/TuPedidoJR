@@ -48,6 +48,20 @@
   </div>
 </div>
 
+<div class="card mb-3" id="appointmentsCard">
+  <div class="card-header d-flex flex-wrap align-items-center gap-2">
+    <strong>Citas del día</strong>
+    <select id="agendaStaffFilter" class="form-select form-select-sm ms-auto" style="max-width: 200px;" onchange="loadAppointments()">
+      <option value="">Todos los profesionales</option>
+    </select>
+    <input type="date" id="agendaDate" class="form-control form-control-sm" style="max-width: 170px;">
+    <button class="btn btn-sm btn-outline-secondary" onclick="loadAppointments()">
+      <i class="bi bi-arrow-clockwise"></i>
+    </button>
+  </div>
+  <div id="appointmentsList" class="card-body p-0"></div>
+</div>
+
 <div class="card mb-3" id="balanceCard">
   <div class="card-body">
     <div class="d-flex flex-wrap align-items-center gap-3">
@@ -95,17 +109,6 @@
       <div id="staffList" class="card-body p-0"></div>
     </div>
   </div>
-</div>
-
-<div class="card mt-3">
-  <div class="card-header d-flex flex-wrap align-items-center gap-2">
-    <strong>Citas del día</strong>
-    <input type="date" id="agendaDate" class="form-control form-control-sm ms-auto" style="max-width: 170px;">
-    <button class="btn btn-sm btn-outline-secondary" onclick="loadAppointments()">
-      <i class="bi bi-arrow-clockwise"></i>
-    </button>
-  </div>
-  <div id="appointmentsList" class="card-body p-0"></div>
 </div>
 
 <div class="modal fade" id="agendaModal" tabindex="-1" aria-hidden="true">
@@ -221,6 +224,13 @@
 
   async function loadStaff() {
     staff = await apiRequest('GET', `/agenda/${RID}/staff`);
+    const filter = document.getElementById('agendaStaffFilter');
+    if (filter) {
+      const current = filter.value;
+      filter.innerHTML = '<option value="">Todos los profesionales</option>' +
+        staff.filter((s) => s.is_active).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+      filter.value = staff.some((s) => s.id === current) ? current : '';
+    }
     const box = document.getElementById('staffList');
     if (!staff.length) {
       box.innerHTML = '<div class="p-3 text-muted small">Registra al menos un profesional para que se puedan asignar citas.</div>';
@@ -358,8 +368,12 @@
           staffRows.map((s) => {
             const net = Number(s.net || 0);
             const detail = net >= 0 ? `le deben ${money(net)}` : `debe ${money(Math.abs(net))}`;
+            const clientFee = Number(s.client_fee || 0);
+            const feeText = clientFee > 0
+              ? `Cuota del cliente: ${money(clientFee)} (${s.cash_count} cita${s.cash_count === 1 ? '' : 's'} en efectivo)`
+              : '';
             return `<div class="d-flex justify-content-between small border-top py-1">
-              <span>${esc(s.name)}</span>
+              <span>${esc(s.name)}${feeText ? `<span class="text-muted d-block">${feeText}</span>` : ''}</span>
               <span class="${net >= 0 ? 'text-success' : 'text-danger'} fw-semibold">${detail}</span>
             </div>`;
           }).join('')
@@ -375,9 +389,13 @@
     const box = document.getElementById('appointmentsList');
     box.innerHTML = '<div class="p-3 text-center"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
     try {
-      const rows = await apiRequest('GET', `/agenda/${RID}/appointments?date=${date}`);
+      const staffFilter = document.getElementById('agendaStaffFilter')?.value || '';
+      let rows = await apiRequest('GET', `/agenda/${RID}/appointments?date=${date}`);
+      if (staffFilter) rows = rows.filter((a) => a.staff_id === staffFilter);
       if (!rows.length) {
-        box.innerHTML = '<div class="p-3 text-muted small">No hay citas para ese día.</div>';
+        box.innerHTML = staffFilter
+          ? '<div class="p-3 text-muted small">Ese profesional no tiene citas para este día.</div>'
+          : '<div class="p-3 text-muted small">No hay citas para ese día.</div>';
         return;
       }
       const badge = (status) => {
@@ -412,6 +430,12 @@
         }
         return `Pagado en línea: ${money(a.online_amount)}`;
       };
+      const feeLine = (a) => {
+        if (a.payment_mode !== 'cash') return '';
+        const clientFee = Number(a.platform_fee || 0) - Number(a.business_fee || 0);
+        if (clientFee <= 0) return '';
+        return `<div class="small text-muted">Cuota del cliente: ${money(clientFee)}</div>`;
+      };
       box.innerHTML = rows.map((a) => {
         const time = new Date(a.start_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
         const end = new Date(a.end_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
@@ -431,6 +455,7 @@
               <div class="fw-semibold">${esc(a.client_name)} ${badge(a.status)}</div>
               <div class="small text-muted">${esc(a.service_name || 'Servicio')} · ${esc(a.staff_name || 'Sin asignar')} · ${money(a.price)}</div>
               <div class="small">${paymentBadge(a)} <span class="text-muted">${paymentLine(a)}</span></div>
+              ${feeLine(a)}
               ${Number(a.refund_amount || 0) > 0 ? `<div class="small text-info"><i class="bi bi-arrow-counterclockwise"></i> Reembolso pendiente: ${money(a.refund_amount)}</div>` : ''}
               ${a.client_phone ? `<div class="small text-muted"><i class="bi bi-telephone"></i> ${esc(a.client_phone)}</div>` : ''}
               ${a.notes ? `<div class="small text-muted">${esc(a.notes)}</div>` : ''}

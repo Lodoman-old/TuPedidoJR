@@ -116,7 +116,7 @@
         <div class="form-text" id="acceptsRequestsNote"></div>
       </div>
 
-      <div class="card p-3 mb-3">
+      <div class="card p-3 mb-3" id="reservationsCard">
         <h6 class="mb-1">Reservaciones</h6>
         <p class="small text-muted mb-2">
           Los clientes pueden reservar mesa y, si quieren, dejar un pre-pedido. El depósito solo aplica al pre-pedido.
@@ -285,6 +285,13 @@
     }
     el('bizIsOpen').checked = Boolean(r.is_open);
     el('bizPublicPage').checked = Boolean(r.public_page_enabled);
+    const reservationsCard = el('reservationsCard');
+    if (reservationsCard) {
+      reservationsCard.classList.toggle(
+        'd-none',
+        Boolean(r.appointments_enabled) || (r.business_type && r.business_type !== 'restaurant')
+      );
+    }
     el('profileRole').textContent = ROLE_LABELS[r.viewer_role] || r.viewer_role || '';
     const aff = el('affiliationInfo');
     if (aff) {

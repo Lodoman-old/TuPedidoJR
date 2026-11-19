@@ -107,9 +107,10 @@ async def complete_appointment(db: AsyncSession, appointment: Appointment) -> No
         )
 
     if appointment.payment_mode == "cash":
+        client_share = _q((appointment.platform_fee or 0) - (appointment.business_fee or 0))
         _ledger(
             db, appointment, "debit", appointment.platform_fee,
-            "Comisión de cita cobrada en efectivo",
+            f"Comisión de la plataforma por cita en efectivo · cuota del cliente ${client_share}",
         )
     else:
         _ledger(
@@ -153,7 +154,7 @@ async def cancel_appointment(db: AsyncSession, appointment: Appointment) -> None
 
 async def business_balance(db: AsyncSession, restaurant_id) -> dict:
     rows = (await db.execute(
-        select(BusinessLedger, Appointment.staff_id)
+        select(BusinessLedger, Appointment)
         .outerjoin(Appointment, Appointment.id == BusinessLedger.appointment_id)
         .where(BusinessLedger.restaurant_id == restaurant_id)
         .order_by(BusinessLedger.created_at.desc())
@@ -174,29 +175,43 @@ async def business_balance(db: AsyncSession, restaurant_id) -> dict:
         Decimal("0"),
     )
 
-    by_staff: dict[str, dict] = {
-        str(s.id): {
-            "staff_id": str(s.id),
-            "name": s.name,
+    def _bucket(staff_id):
+        return {
+            "staff_id": str(staff_id) if staff_id else None,
+            "name": staff_names.get(str(staff_id)) if staff_id else "Sin asignar",
             "credit": Decimal("0"),
             "debit": Decimal("0"),
+            "client_fee": Decimal("0"),
+            "cash_count": 0,
         }
-        for s in staff_rows
+
+    by_staff: dict[str, dict] = {
+        str(s.id): _bucket(s.id) for s in staff_rows
     }
-    unassigned = {
-        "staff_id": None,
-        "name": "Sin asignar",
-        "credit": Decimal("0"),
-        "debit": Decimal("0"),
-    }
-    for entry, staff_id in rows:
+    unassigned = _bucket(None)
+    for entry, appointment in rows:
         if entry.status != "pending":
             continue
+        staff_id = appointment.staff_id if appointment else None
         key = str(staff_id) if staff_id else None
         bucket = by_staff.get(key) if key else unassigned
         if bucket is None:
             bucket = unassigned
         bucket[entry.kind] += entry.amount
+        if (
+            appointment
+            and entry.kind == "debit"
+            and appointment.payment_mode == "cash"
+            and (
+                "Comisión de la plataforma" in (entry.notes or "")
+                or "Comisión de cita" in (entry.notes or "")
+            )
+        ):
+            bucket["client_fee"] += (
+                (appointment.platform_fee or Decimal("0"))
+                - (appointment.business_fee or Decimal("0"))
+            )
+            bucket["cash_count"] += 1
 
     staff_balances = list(by_staff.values())
     if unassigned["credit"] or unassigned["debit"]:
@@ -205,6 +220,7 @@ async def business_balance(db: AsyncSession, restaurant_id) -> dict:
         item["net"] = _q(item["credit"] - item["debit"])
         item["credit"] = _q(item["credit"])
         item["debit"] = _q(item["debit"])
+        item["client_fee"] = _q(item["client_fee"])
 
     return {
         "credit": str(_q(credit)),
@@ -217,6 +233,8 @@ async def business_balance(db: AsyncSession, restaurant_id) -> dict:
                 "credit": str(item["credit"]),
                 "debit": str(item["debit"]),
                 "net": str(item["net"]),
+                "client_fee": str(item["client_fee"]),
+                "cash_count": item["cash_count"],
             }
             for item in staff_balances
         ],
@@ -224,8 +242,8 @@ async def business_balance(db: AsyncSession, restaurant_id) -> dict:
             {
                 "id": str(e.id),
                 "appointment_id": str(e.appointment_id) if e.appointment_id else None,
-                "staff_id": str(staff_id) if staff_id else None,
-                "staff_name": staff_names.get(str(staff_id)) if staff_id else None,
+                "staff_id": str(a.staff_id) if a and a.staff_id else None,
+                "staff_name": staff_names.get(str(a.staff_id)) if a and a.staff_id else None,
                 "kind": e.kind,
                 "amount": str(e.amount),
                 "status": e.status,
@@ -233,7 +251,7 @@ async def business_balance(db: AsyncSession, restaurant_id) -> dict:
                 "settled_at": e.settled_at.isoformat() if e.settled_at else None,
                 "created_at": e.created_at.isoformat() if e.created_at else None,
             }
-            for e, staff_id in rows[:100]
+            for e, a in rows[:100]
         ],
     }
 

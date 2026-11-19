@@ -59,6 +59,9 @@
     <div class="card-body">
       <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">2</span> Elige a tu profesional</div>
       <div id="staffList" class="d-flex flex-wrap gap-2"></div>
+      <div class="small text-muted mt-2">
+        Si eliges <strong>Cualquiera</strong>, el sistema asigna automáticamente al profesional disponible y la comisión del negocio queda ligada a esa persona.
+      </div>
     </div>
   </div>
 
@@ -469,7 +472,8 @@
         if (plan.cash > 0) paymentLine += `<div>Paga en el negocio: <strong>${money(res.cash_due || plan.cash)}</strong></div>`;
       }
       document.getElementById('successDetails').innerHTML = `
-        <div><strong>${esc(res.service_name || '')}</strong> con ${esc(res.staff_name || 'tu profesional')}</div>
+        <div><strong>${esc(res.service_name || '')}</strong></div>
+        <div>Profesional asignado: <strong>${esc(res.staff_name || 'por confirmar')}</strong></div>
         <div>${dateLabel} a las ${selectedTime}</div>
         ${paymentLine}`;
       document.getElementById('bookingFlow').classList.add('d-none');

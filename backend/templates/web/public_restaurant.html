@@ -77,6 +77,8 @@
       <i class="bi bi-info-circle"></i>
       {% if restaurant.appointments_enabled and not restaurant.catalog_enabled %}
       Los servicios y precios son públicos. Para agendar solo necesitas iniciar sesión o crear una cuenta.
+      {% elif restaurant.appointments_enabled and restaurant.catalog_enabled %}
+      Servicios y productos son públicos. Puedes agendar una cita o pedir productos a domicilio; solo necesitas iniciar sesión.
       {% else %}
       El menú es público y no necesitas cuenta para verlo. Para pedir, inicia sesión o crea una cuenta;
       al terminar regresas automáticamente a este restaurante para completar tu pedido.

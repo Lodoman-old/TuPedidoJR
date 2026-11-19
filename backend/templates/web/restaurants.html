@@ -82,7 +82,7 @@
   }
 
   function restaurantCard(r) {
-    const isAgenda = Boolean(r.appointments_enabled);
+    const isAgenda = Boolean(r.appointments_enabled) && PAGE_TYPE === 'services';
     const cuisine = r.cuisine
       ? `<span class="badge bg-dark ms-1">${r.cuisine}</span>`
       : '';

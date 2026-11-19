@@ -162,7 +162,7 @@
           <li class="nav-item nav-delivery-hide nav-customer-hide" id="publicServicesNav"><a class="nav-link" href="/web/restaurants?type=services"><i class="bi bi-calendar-week"></i> Servicios</a></li>
           <li class="nav-item dropdown d-none" id="myRestaurantNav">
             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="bi bi-shop-window"></i> Mi restaurante
+              <i class="bi bi-shop-window"></i> Mi negocio
             </a>
             <ul class="dropdown-menu dropdown-menu-end">
               <li><a class="dropdown-item" data-rnav="panel" href="#"><i class="bi bi-speedometer2"></i> Panel</a></li>
@@ -801,18 +801,21 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         let isRestaurantManager = false;
         let myBusinessType = 'restaurant';
         let myAcceptsRequests = false;
+        let myAppointmentsEnabled = false;
         if (isRestaurantStaff && myRestaurantId) {
           try {
             const detail = await apiRequest('GET', `/restaurants/${myRestaurantId}`);
             isRestaurantManager = ['owner', 'manager', 'admin'].includes(detail.viewer_role);
             myBusinessType = detail.business_type || 'restaurant';
             myAcceptsRequests = detail.accepts_custom_requests !== false;
+            myAppointmentsEnabled = Boolean(detail.appointments_enabled);
             renderAffiliationBanner(detail);
           } catch (e) { /* sin permiso para editar */ }
         }
         sessionStorage.setItem('is_restaurant_manager', isRestaurantManager ? 'true' : 'false');
         sessionStorage.setItem('my_business_type', myBusinessType);
         sessionStorage.setItem('my_accepts_requests', myAcceptsRequests ? 'true' : 'false');
+        sessionStorage.setItem('my_appointments_enabled', myAppointmentsEnabled ? 'true' : 'false');
         if (myRestaurantId) sessionStorage.setItem('my_restaurant_id', myRestaurantId);
         else sessionStorage.removeItem('my_restaurant_id');
         applyRestaurantNav(isRestaurantStaff, myRestaurantId, isRestaurantManager);
@@ -980,8 +983,9 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
       const publicLink = document.getElementById('publicRestaurantsNav');
       menu?.classList.toggle('d-none', !isStaff);
       const businessType = sessionStorage.getItem('my_business_type') || 'restaurant';
+      const appointmentsEnabled = sessionStorage.getItem('my_appointments_enabled') === 'true';
       menu?.querySelectorAll('.rnav-restaurant-only').forEach(el => {
-        el.classList.toggle('d-none', businessType !== 'restaurant');
+        el.classList.toggle('d-none', businessType !== 'restaurant' || appointmentsEnabled);
       });
       const acceptsRequests = sessionStorage.getItem('my_accepts_requests') === 'true';
       menu?.querySelectorAll('.rnav-requests').forEach(el => {

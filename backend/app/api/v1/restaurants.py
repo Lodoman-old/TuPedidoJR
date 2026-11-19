@@ -4,7 +4,7 @@ import re
 import unicodedata
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from sqlalchemy import or_, select, text
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -148,7 +148,16 @@ async def list_restaurants(
         Restaurant.affiliation_expires_at >= await local_today(db),
     )
     if business_type and business_type != "all":
-        stmt = stmt.where(Restaurant.business_type == business_type)
+        if business_type == "store":
+            stmt = stmt.where(or_(
+                Restaurant.business_type == "store",
+                and_(
+                    Restaurant.appointments_enabled.is_(True),
+                    Restaurant.catalog_enabled.is_(True),
+                ),
+            ))
+        else:
+            stmt = stmt.where(Restaurant.business_type == business_type)
     if services:
         stmt = stmt.where(Restaurant.appointments_enabled.is_(True))
     if q:

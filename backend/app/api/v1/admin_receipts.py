@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,6 +9,7 @@ from app.api.deps import require_superuser
 from app.db.session import get_db
 from app.models.appointment import Appointment
 from app.models.receipt_validation import ReceiptValidation
+from app.models.restaurant import Restaurant
 from app.models.user import User
 from app.services.receipt_validation_service import revalidate_receipt
 
@@ -19,6 +20,7 @@ ENTITY_LABELS = {
     "mandado_purchase": "Ticket de compra de mandado",
     "reservation_deposit": "Depósito de reservación",
     "appointment_payment": "Pago de cita",
+    "affiliation_payment": "Afiliación anual",
 }
 KIND_LABELS = {
     "purchase_receipt": "Ticket de compra",
@@ -92,9 +94,14 @@ async def revalidate(
     return _row(record)
 
 
+async def _settle_entity(db: AsyncSession, record: ReceiptValidation, approved: bool) -> None:
+    if record.entity_type == "appointment_payment":
+        await _settle_appointment(db, record, approved)
+    elif record.entity_type == "affiliation_payment":
+        await _settle_affiliation(db, record, approved)
+
+
 async def _settle_appointment(db: AsyncSession, record: ReceiptValidation, approved: bool) -> None:
-    if record.entity_type != "appointment_payment":
-        return
     appointment = await db.get(Appointment, record.entity_id)
     if not appointment:
         return
@@ -110,6 +117,30 @@ async def _settle_appointment(db: AsyncSession, record: ReceiptValidation, appro
         appointment.paid_at = None
 
 
+async def _settle_affiliation(db: AsyncSession, record: ReceiptValidation, approved: bool) -> None:
+    restaurant = await db.get(Restaurant, record.entity_id)
+    if not restaurant:
+        return
+    extracted = dict(record.extracted or {})
+    if approved:
+        if not extracted.get("applied"):
+            base = date.today()
+            current = restaurant.affiliation_expires_at
+            if current and current >= base:
+                base = current
+            extracted["previous_expires_at"] = current.isoformat() if current else None
+            restaurant.affiliation_expires_at = base + timedelta(days=365)
+            restaurant.affiliation_reminder_on = None
+            extracted["applied"] = True
+    else:
+        if extracted.get("applied"):
+            previous = extracted.get("previous_expires_at")
+            restaurant.affiliation_expires_at = date.fromisoformat(previous) if previous else None
+            restaurant.affiliation_reminder_on = None
+            extracted["applied"] = False
+    record.extracted = extracted
+
+
 @router.post("/receipts/{receipt_id}/approve")
 async def approve_receipt(
     receipt_id: str,
@@ -120,7 +151,7 @@ async def approve_receipt(
     if not record:
         raise HTTPException(status_code=404, detail="Comprobante no encontrado")
     record.status = "approved"
-    await _settle_appointment(db, record, True)
+    await _settle_entity(db, record, True)
     await db.commit()
     await db.refresh(record)
     return _row(record)
@@ -136,7 +167,7 @@ async def reject_receipt(
     if not record:
         raise HTTPException(status_code=404, detail="Comprobante no encontrado")
     record.status = "rejected"
-    await _settle_appointment(db, record, False)
+    await _settle_entity(db, record, False)
     await db.commit()
     await db.refresh(record)
     return _row(record)

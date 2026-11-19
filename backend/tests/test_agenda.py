@@ -9,6 +9,7 @@ from httpx import AsyncClient
 from app.core.security import decode_access_token
 from app.models.appointment import Appointment
 from app.models.appointment_debt import AppointmentDebt
+from app.models.receipt_validation import ReceiptValidation
 from app.models.restaurant import Restaurant
 from app.models.restaurant_schedule import RestaurantSchedule
 from app.models.user import User
@@ -88,6 +89,18 @@ async def staff(client: AsyncClient, owner_token, business):
     )
     assert resp.status_code == 201, resp.text
     return resp.json()
+
+
+@pytest.fixture
+async def superuser_token(client: AsyncClient, db_session):
+    resp = await client.post("/api/v1/auth/register", json={
+        "name": "Admin Agenda", "email": "admin-agenda@test.com", "password": "pass123",
+    })
+    token = resp.json()["access_token"]
+    user = await db_session.get(User, uuid.UUID(decode_access_token(token)["sub"]))
+    user.is_superuser = True
+    await db_session.commit()
+    return token
 
 
 @pytest.mark.asyncio
@@ -502,3 +515,65 @@ async def test_online_no_show_refunds_and_compensates_business(
         f"/api/v1/agenda/{resto.id}/balance", headers=_headers(owner_token)
     )
     assert float(balance.json()["credit"]) == 5
+
+
+@pytest.mark.asyncio
+async def test_affiliation_proof_upload_is_owner_only(
+    client, owner_token, customer_token, business, monkeypatch
+):
+    monkeypatch.setattr(
+        "app.api.v1.restaurants.schedule_affiliation_validation",
+        lambda *a, **k: None,
+    )
+    resto, _ = business
+    denied = await client.post(
+        f"/api/v1/restaurants/{resto.id}/affiliation-proof",
+        headers=_headers(customer_token),
+        json={"proof_url": "/static/uploads/afiliacion.jpg"},
+    )
+    assert denied.status_code == 403
+
+    ok = await client.post(
+        f"/api/v1/restaurants/{resto.id}/affiliation-proof",
+        headers=_headers(owner_token),
+        json={"proof_url": "/static/uploads/afiliacion.jpg"},
+    )
+    assert ok.status_code == 200
+    assert ok.json()["status"] == "review"
+
+
+@pytest.mark.asyncio
+async def test_admin_approves_affiliation_and_reject_restores(
+    client, superuser_token, business, db_session
+):
+    resto, _ = business
+    original = resto.affiliation_expires_at
+    record = ReceiptValidation(
+        entity_type="affiliation_payment",
+        entity_id=resto.id,
+        file_url="/static/uploads/afiliacion.jpg",
+        expected_kind="transfer_receipt",
+        expected_amount=500,
+        status="review",
+    )
+    db_session.add(record)
+    await db_session.commit()
+    await db_session.refresh(record)
+
+    approved = await client.post(
+        f"/api/v1/admin/receipts/{record.id}/approve",
+        headers=_headers(superuser_token),
+    )
+    assert approved.status_code == 200, approved.text
+
+    await db_session.refresh(resto)
+    assert resto.affiliation_expires_at > original
+
+    rejected = await client.post(
+        f"/api/v1/admin/receipts/{record.id}/reject",
+        headers=_headers(superuser_token),
+    )
+    assert rejected.status_code == 200
+
+    await db_session.refresh(resto)
+    assert resto.affiliation_expires_at == original

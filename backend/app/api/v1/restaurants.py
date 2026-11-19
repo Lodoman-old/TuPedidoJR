@@ -26,7 +26,10 @@ from app.schemas.restaurant import (CategoryCreate, EarningsOrderItem, EarningsO
                                     RestaurantPayoutOut, RestaurantLocationUpdate,
                                     RestaurantOpenStatus, RestaurantProfileUpdate,
                                     RestaurantCommissionUpdate,
-                                    RestaurantScheduleUpdate, ScheduleEntry)
+                                    RestaurantScheduleUpdate, ScheduleEntry,
+                                    AffiliationProof)
+from app.models.receipt_validation import ReceiptValidation
+from app.services.affiliation_payment_service import affiliation_fee, schedule_affiliation_validation
 from app.services.geocode_service import geocode_structured
 from app.schemas.order import CancelOrderRequest, OrderOut, OrderStatusUpdate
 from app.services.cancellation_service import apply_cancellation
@@ -1164,6 +1167,60 @@ async def restaurant_earnings(
         loyalty_credit=loyalty_credit,
         orders=items,
     )
+
+
+@router.get("/{restaurant_id}/affiliation-proof")
+async def get_affiliation_proof(
+    restaurant_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
+    restaurant = result.scalar_one_or_none()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurante no encontrado")
+    if not await have_role(db, restaurant.id, current_user, MANAGE_ROLES):
+        raise HTTPException(status_code=403, detail="No puedes ver esta afiliación")
+    latest = await db.execute(
+        select(ReceiptValidation)
+        .where(
+            ReceiptValidation.entity_type == "affiliation_payment",
+            ReceiptValidation.entity_id == restaurant.id,
+        )
+        .order_by(ReceiptValidation.created_at.desc())
+        .limit(1)
+    )
+    record = latest.scalar_one_or_none()
+    return {
+        "fee": str(await affiliation_fee(db)),
+        "expires_at": restaurant.affiliation_expires_at.isoformat() if restaurant.affiliation_expires_at else None,
+        "status": record.status if record else None,
+        "confidence": record.confidence if record else None,
+        "summary": record.summary if record else None,
+        "issues": record.issues if record else [],
+        "file_url": record.file_url if record else None,
+        "created_at": record.created_at.isoformat() if record and record.created_at else None,
+        "bank_name": (await get_setting_value(db, "BANK_NAME", "")).strip(),
+        "bank_holder": (await get_setting_value(db, "BANK_ACCOUNT_HOLDER", "")).strip(),
+        "bank_clabe": (await get_setting_value(db, "BANK_CLABE", "")).strip(),
+    }
+
+
+@router.post("/{restaurant_id}/affiliation-proof")
+async def upload_affiliation_proof(
+    restaurant_id: str,
+    body: AffiliationProof,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
+    restaurant = result.scalar_one_or_none()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurante no encontrado")
+    if not await have_role(db, restaurant.id, current_user, MANAGE_ROLES):
+        raise HTTPException(status_code=403, detail="No puedes editar esta afiliación")
+    schedule_affiliation_validation(str(restaurant.id), body.proof_url.strip())
+    return {"status": "review", "message": "Recibimos tu comprobante. La plataforma lo está validando."}
 
 
 @router.get("/{restaurant_id}/payouts", response_model=list[RestaurantPayoutOut])

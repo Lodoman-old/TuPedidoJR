@@ -105,6 +105,10 @@ class CategoryCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
 
 
+class AffiliationProof(BaseModel):
+    proof_url: str = Field(min_length=1)
+
+
 class RestaurantOut(BaseModel):
     id: UUID
     owner_id: UUID

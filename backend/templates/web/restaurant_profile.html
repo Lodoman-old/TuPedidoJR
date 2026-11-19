@@ -78,6 +78,22 @@
           <div class="col-12">
             <div class="small" id="affiliationInfo"></div>
           </div>
+          <div class="col-12">
+            <div class="border rounded p-3" id="affiliationPayBox">
+              <div class="fw-semibold small mb-1">Pagar afiliación por transferencia</div>
+              <div class="small text-muted mb-2" id="affiliationPayHelp">
+                Transfiere a la cuenta de TuPedidoJR y sube tu comprobante. La plataforma lo valida.
+              </div>
+              <div class="small mb-2" id="affiliationBank"></div>
+              <div class="d-flex gap-2 flex-wrap align-items-center">
+                <input type="file" id="affiliationProofFile" class="form-control form-control-sm" style="max-width:280px" accept="image/*,application/pdf">
+                <button class="btn btn-sm btn-outline-primary" id="affiliationProofBtn" onclick="uploadAffiliationProof()">
+                  <i class="bi bi-upload"></i> Subir comprobante
+                </button>
+              </div>
+              <div class="small mt-2" id="affiliationProofStatus"></div>
+            </div>
+          </div>
         </div>
         <div class="mt-3 d-flex gap-2 flex-wrap">
           <button class="btn btn-primary" id="saveBusinessBtn"><i class="bi bi-check2"></i> Guardar datos</button>
@@ -202,6 +218,14 @@
   const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const ROLE_LABELS = { owner: 'Dueño', manager: 'Encargado', staff: 'Personal', cashier: 'Cajero', kitchen: 'Cocina', admin: 'Administrador' };
 
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function money(value) {
+    return '$' + Number(value || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
   let restaurant = null;
   let scheduleState = [];
   let rmap = null;
@@ -311,6 +335,61 @@
     fillBusinessForm();
     await loadSchedule();
     await loadLocationAndMap();
+    await loadAffiliationPayment();
+  }
+
+  async function loadAffiliationPayment() {
+    try {
+      const data = await apiRequest('GET', `/restaurants/${RID}/affiliation-proof`);
+      const bank = [];
+      if (data.bank_name) bank.push(`<div><strong>Banco:</strong> ${esc(data.bank_name)}</div>`);
+      if (data.bank_holder) bank.push(`<div><strong>Titular:</strong> ${esc(data.bank_holder)}</div>`);
+      if (data.bank_clabe) bank.push(`<div><strong>CLABE:</strong> ${esc(data.bank_clabe)}</div>`);
+      const fee = Number(data.fee || 0);
+      el('affiliationPayHelp').innerHTML = `Transfiere <strong>${money(fee)}</strong> a la cuenta de TuPedidoJR y sube tu comprobante. La plataforma lo valida.`;
+      el('affiliationBank').innerHTML = bank.length
+        ? bank.join('')
+        : '<span class="text-muted">La plataforma todavía no publica sus datos bancarios.</span>';
+      const statusBox = el('affiliationProofStatus');
+      const map = {
+        high: ['text-success', 'Comprobante validado. Tu afiliación se actualizó.'],
+        approved: ['text-success', 'Comprobante aprobado.'],
+        review: ['text-warning', 'Comprobante en revisión por la plataforma.'],
+        low: ['text-danger', 'No pudimos leer bien el comprobante. Sube uno más claro.'],
+        rejected: ['text-danger', 'El comprobante fue rechazado. Sube uno nuevo.'],
+      };
+      if (data.status && map[data.status]) {
+        const [cls, text] = map[data.status];
+        statusBox.className = 'small mt-2 ' + cls;
+        statusBox.textContent = text + (data.confidence ? ` (certeza ${data.confidence}%)` : '');
+      } else {
+        statusBox.className = 'small mt-2 text-muted';
+        statusBox.textContent = 'Aún no has subido comprobante de afiliación.';
+      }
+    } catch (e) {
+      el('affiliationProofStatus').textContent = '';
+    }
+  }
+
+  async function uploadAffiliationProof() {
+    const file = el('affiliationProofFile').files[0];
+    if (!file) { showToast('Elige el comprobante de tu transferencia', 'warning'); return; }
+    const btn = el('affiliationProofBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Subiendo...';
+    try {
+      const uploaded = await uploadDocument(file);
+      const url = uploaded.url || uploaded.file_url || uploaded.path;
+      await apiRequest('POST', `/restaurants/${RID}/affiliation-proof`, { proof_url: url });
+      el('affiliationProofFile').value = '';
+      showToast('Comprobante recibido. La plataforma lo está validando.');
+      await loadAffiliationPayment();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-upload"></i> Subir comprobante';
+    }
   }
 
   // ===== Datos del negocio =====

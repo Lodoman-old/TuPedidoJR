@@ -715,9 +715,19 @@ async def test_reassign_and_cancel_notify_client(
     appointment_id = created.json()["id"]
 
     calls = []
+    requests = []
+    results = []
     monkeypatch.setattr(
         "app.api.v1.agenda.schedule_appointment_status",
         lambda appointment_id, event: calls.append((appointment_id, event)),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.agenda.schedule_reassign_request",
+        lambda appointment_id: requests.append(appointment_id),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.agenda.schedule_reassign_result",
+        lambda appointment_id, accepted: results.append((appointment_id, accepted)),
     )
 
     reassigned = await client.patch(
@@ -727,7 +737,16 @@ async def test_reassign_and_cancel_notify_client(
     )
     assert reassigned.status_code == 200, reassigned.text
     assert reassigned.json()["staff_name"] == "Diego"
-    assert calls[-1] == (appointment_id, "reassigned")
+    assert reassigned.json()["reassign_status"] == "pending"
+    assert requests[-1] == appointment_id
+
+    accepted = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments/{appointment_id}/reassign/accept",
+        headers=_headers(customer_token),
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["reassign_status"] == "accepted"
+    assert results[-1] == (appointment_id, True)
 
     # Diego ya tiene otra cita a las 10:00: no se le puede reasignar otra a la misma hora.
     ana_ten = await client.post(
@@ -769,6 +788,53 @@ async def test_reassign_and_cancel_notify_client(
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
     assert calls[-1] == (appointment_id, "cancelled")
+
+
+@pytest.mark.asyncio
+async def test_client_rejects_reassign_and_cancels(
+    client, owner_token, customer_token, business, service, staff, monkeypatch
+):
+    resto, target = business
+    second = await client.post(
+        f"/api/v1/agenda/{resto.id}/staff",
+        headers=_headers(owner_token),
+        json={"name": "Diego", "role": "Barbero"},
+    )
+    second_id = second.json()["id"]
+    created = await _book(client, resto, service, staff, customer_token, target)
+    appointment_id = created.json()["id"]
+
+    results = []
+    monkeypatch.setattr(
+        "app.api.v1.agenda.schedule_reassign_request", lambda *a: None
+    )
+    monkeypatch.setattr(
+        "app.api.v1.agenda.schedule_reassign_result",
+        lambda appointment_id, accepted: results.append((appointment_id, accepted)),
+    )
+    await client.patch(
+        f"/api/v1/agenda/{resto.id}/appointments/{appointment_id}/staff",
+        headers=_headers(owner_token),
+        json={"staff_id": second_id},
+    )
+
+    rejected = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments/{appointment_id}/reassign/reject",
+        headers=_headers(customer_token),
+    )
+    assert rejected.status_code == 200, rejected.text
+    data = rejected.json()
+    assert data["status"] == "cancelled"
+    assert data["reassign_status"] == "rejected"
+    assert results[-1] == (appointment_id, False)
+
+    mine = await client.get(
+        "/api/v1/agenda/my-appointments", headers=_headers(customer_token)
+    )
+    assert mine.status_code == 200
+    row = next(item for item in mine.json() if item["id"] == appointment_id)
+    assert row["status"] == "cancelled"
+    assert row["restaurant_name"] == "Barbería Agenda"
 
 
 @pytest.mark.asyncio

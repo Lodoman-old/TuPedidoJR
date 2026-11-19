@@ -462,7 +462,9 @@
         const end = new Date(a.end_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
         const actions = [];
         if (a.status === 'confirmed' || a.status === 'pending') {
-          actions.push(`<button class="btn btn-sm btn-outline-primary" onclick="openReassign('${a.id}')">Reasignar</button>`);
+          if (a.reassign_status !== 'pending') {
+            actions.push(`<button class="btn btn-sm btn-outline-primary" onclick="openReassign('${a.id}')">Reasignar</button>`);
+          }
           actions.push(`<button class="btn btn-sm btn-outline-success" onclick="setStatus('${a.id}', 'completed')">Completada</button>`);
           actions.push(`<button class="btn btn-sm btn-outline-danger" onclick="setStatus('${a.id}', 'no_show')">No asistió</button>`);
           actions.push(`<button class="btn btn-sm btn-outline-secondary" onclick="setStatus('${a.id}', 'cancelled')">Cancelar</button>`);
@@ -474,7 +476,9 @@
           <div class="agenda-row">
             <div class="agenda-time">${time}<div class="small text-muted fw-normal">${end}</div></div>
             <div class="flex-grow-1 min-w-0">
-              <div class="fw-semibold">${esc(a.client_name)} ${badge(a.status)}</div>
+              <div class="fw-semibold">${esc(a.client_name)} ${badge(a.status)}
+                ${a.reassign_status === 'pending' ? '<span class="badge agenda-badge-pending">Esperando confirmación del cliente</span>' : ''}
+              </div>
               <div class="small text-muted">${esc(a.service_name || 'Servicio')} · ${esc(a.staff_name || 'Sin asignar')} · ${money(a.price)}</div>
               <div class="small">${paymentBadge(a)} <span class="text-muted">${paymentLine(a)}</span></div>
               ${feeLine(a)}

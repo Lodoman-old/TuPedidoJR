@@ -678,6 +678,77 @@ async def _notify_appointment_status(appointment_id: str, event: str) -> None:
         logger.exception("Push appointment status notification failed for %s", appointment_id)
 
 
+async def _notify_reassign_request(appointment_id: str) -> None:
+    try:
+        async with async_session() as db:
+            ctx = await _appointment_context(db, appointment_id)
+            if not ctx:
+                return
+            appointment, restaurant, service, staff, client = ctx
+            if not appointment.client_user_id:
+                return
+            service_name = service.name if service else "Tu servicio"
+            staff_name = staff.name if staff else "el nuevo profesional"
+            when = _appointment_when(appointment)
+            await send_to_user(
+                db,
+                appointment.client_user_id,
+                "Confirma el cambio de profesional",
+                f"El negocio propone {service_name} con {staff_name} · {when}. Entra a Mis citas para aceptar o cancelar.",
+                {
+                    "type": "appointment_reassign",
+                    "appointment_id": str(appointment.id),
+                    "restaurant_id": str(restaurant.id) if restaurant else None,
+                },
+                "amber",
+            )
+    except Exception:
+        logger.exception("Push reassign request failed for %s", appointment_id)
+
+
+async def _notify_reassign_result(appointment_id: str, accepted: bool) -> None:
+    try:
+        async with async_session() as db:
+            ctx = await _appointment_context(db, appointment_id)
+            if not ctx:
+                return
+            appointment, restaurant, service, staff, client = ctx
+            if not restaurant:
+                return
+            members_result = await db.execute(
+                select(RestaurantUser.user_id).where(
+                    RestaurantUser.restaurant_id == restaurant.id,
+                    RestaurantUser.is_active.is_(True),
+                    RestaurantUser.role.in_(ORDER_ROLES),
+                )
+            )
+            user_ids = {restaurant.owner_id, *members_result.scalars().all()}
+            when = _appointment_when(appointment)
+            name = client.name if client else appointment.client_name
+            service_name = service.name if service else "Servicio"
+            staff_name = staff.name if staff else "el profesional"
+            title = "El cliente aceptó el cambio" if accepted else "El cliente rechazó el cambio"
+            body = f"{name}: {service_name} con {staff_name} · {when}"
+            if not accepted:
+                body += ". La cita se canceló y el horario quedó libre."
+            for user_id in user_ids:
+                await send_to_user(
+                    db,
+                    user_id,
+                    title,
+                    body,
+                    {
+                        "type": "restaurant_appointment_reassign",
+                        "appointment_id": str(appointment.id),
+                        "restaurant_id": str(restaurant.id),
+                        "accepted": accepted,
+                    },
+                    "green" if accepted else "red",
+                )
+    except Exception:
+        logger.exception("Push reassign result failed for %s", appointment_id)
+
+
 def schedule_new_appointment(appointment_id: str) -> None:
     try:
         asyncio.create_task(_notify_new_appointment(str(appointment_id)))
@@ -704,6 +775,20 @@ def schedule_appointment_status(appointment_id: str, event: str) -> None:
         asyncio.create_task(_notify_appointment_status(str(appointment_id), str(event)))
     except RuntimeError:
         logger.debug("No event loop for appointment status notification")
+
+
+def schedule_reassign_request(appointment_id: str) -> None:
+    try:
+        asyncio.create_task(_notify_reassign_request(str(appointment_id)))
+    except RuntimeError:
+        logger.debug("No event loop for reassign request")
+
+
+def schedule_reassign_result(appointment_id: str, accepted: bool) -> None:
+    try:
+        asyncio.create_task(_notify_reassign_result(str(appointment_id), bool(accepted)))
+    except RuntimeError:
+        logger.debug("No event loop for reassign result")
 
 
 def schedule_reservation_status(reservation_id: str) -> None:

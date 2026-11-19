@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-0"><i class="bi bi-calendar2-check"></i> Mis citas</h4>
+    <small class="text-muted">Consulta tus citas y confirma los cambios de profesional.</small>
+  </div>
+  <button class="btn btn-sm btn-outline-secondary" onclick="loadAppointments()">
+    <i class="bi bi-arrow-clockwise"></i> Actualizar
+  </button>
+</div>
+
+<div id="appointmentsError" class="alert alert-danger d-none"></div>
+<div id="appointmentsLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="appointmentsList"></div>
+<div id="appointmentsEmpty" class="text-center py-5 d-none">
+  <i class="bi bi-calendar-x" style="font-size:3rem;color:#ccc;"></i>
+  <p class="text-muted mt-2">Todavía no tienes citas.</p>
+  <a href="/web/restaurants?type=services" class="btn btn-primary">Ver servicios</a>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const money = (v) => '$' + Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function badge(status) {
+    const map = {
+      confirmed: ['bg-primary', 'Confirmada'],
+      completed: ['bg-success', 'Completada'],
+      cancelled: ['bg-secondary', 'Cancelada'],
+      no_show: ['bg-danger', 'No asistió'],
+    };
+    const [cls, label] = map[status] || ['bg-secondary', status];
+    return `<span class="badge ${cls}">${label}</span>`;
+  }
+
+  function paymentText(a) {
+    if (a.payment_mode === 'cash') return `Pago en el negocio: ${money(a.cash_due || (Number(a.price) + 5))}`;
+    if (a.payment_mode === 'deposit') return `Anticipo: ${money(a.online_amount)} · En el negocio: ${money(a.cash_due)}`;
+    return `Pagado en línea: ${money(a.online_amount)}`;
+  }
+
+  async function loadAppointments() {
+    const loading = document.getElementById('appointmentsLoading');
+    const error = document.getElementById('appointmentsError');
+    const list = document.getElementById('appointmentsList');
+    const empty = document.getElementById('appointmentsEmpty');
+    loading.classList.remove('d-none');
+    try {
+      const rows = await apiRequest('GET', '/agenda/my-appointments');
+      error.classList.add('d-none');
+      loading.classList.add('d-none');
+      if (!rows.length) {
+        list.innerHTML = '';
+        empty.classList.remove('d-none');
+        return;
+      }
+      empty.classList.add('d-none');
+      rows.sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
+      list.innerHTML = rows.map((a) => {
+        const when = new Date(a.start_at).toLocaleString('es-MX', {
+          weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+        });
+        const pendingReassign = a.reassign_status === 'pending' && a.status === 'confirmed';
+        const reassignBox = pendingReassign
+          ? `<div class="alert alert-warning py-2 small mt-2">
+               El negocio propone cambiar tu cita con <strong>${esc(a.staff_name || 'otro profesional')}</strong>.
+               ¿Aceptas el cambio?
+               <div class="d-flex gap-2 mt-2 flex-wrap">
+                 <button class="btn btn-sm btn-success" onclick="acceptReassign('${a.id}', '${a.restaurant_id}')">
+                   <i class="bi bi-check2"></i> Aceptar
+                 </button>
+                 <button class="btn btn-sm btn-outline-danger" onclick="rejectReassign('${a.id}', '${a.restaurant_id}')">
+                   <i class="bi bi-x"></i> No aceptar y cancelar
+                 </button>
+               </div>
+             </div>`
+          : '';
+        const refund = Number(a.refund_amount || 0) > 0
+          ? `<div class="small text-info mt-1"><i class="bi bi-arrow-counterclockwise"></i> Reembolso pendiente: ${money(a.refund_amount)}</div>`
+          : '';
+        return `<div class="card mb-3">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+              <div>
+                <div class="fw-bold">${esc(a.service_name || 'Servicio')}</div>
+                <div class="small text-muted">${esc(a.restaurant_name || '')}</div>
+              </div>
+              <div class="text-end">${badge(a.status)}</div>
+            </div>
+            <div class="row g-2 mt-2 small">
+              <div class="col-md-6"><i class="bi bi-calendar-event me-1"></i> ${when}</div>
+              <div class="col-md-6"><i class="bi bi-person-badge me-1"></i> ${esc(a.staff_name || 'Por asignar')}</div>
+              <div class="col-12 text-muted">${paymentText(a)}</div>
+            </div>
+            ${reassignBox}
+            ${refund}
+          </div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      loading.classList.add('d-none');
+      error.textContent = err.message;
+      error.classList.remove('d-none');
+    }
+  }
+
+  async function acceptReassign(appointmentId, restaurantId) {
+    try {
+      await apiRequest('POST', `/agenda/${restaurantId}/appointments/${appointmentId}/reassign/accept`, {});
+      showToast('Cambio aceptado. ¡Te esperamos!');
+      await loadAppointments();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  }
+
+  async function rejectReassign(appointmentId, restaurantId) {
+    if (!confirm('Si no aceptas el cambio, la cita se cancela y el horario se libera. ¿Continuar?')) return;
+    try {
+      const res = await apiRequest('POST', `/agenda/${restaurantId}/appointments/${appointmentId}/reassign/reject`, {});
+      const refund = Number(res.refund_amount || 0);
+      showToast(refund > 0
+        ? `Cita cancelada. Reembolso registrado: ${money(refund)}`
+        : 'Cita cancelada. El horario quedó libre.', 'info');
+      await loadAppointments();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  }
+
+  loadAppointments();
+</script>
+{% endblock %}

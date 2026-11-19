@@ -41,7 +41,12 @@ from app.services.appointment_settlement_service import (
     no_show_appointment,
 )
 from app.services.order_service import get_setting_value
-from app.services.push_service import schedule_new_appointment, schedule_appointment_status
+from app.services.push_service import (
+    schedule_appointment_status,
+    schedule_new_appointment,
+    schedule_reassign_request,
+    schedule_reassign_result,
+)
 from app.services.restaurant_access import MANAGE_ROLES, have_role
 
 router = APIRouter()
@@ -76,13 +81,16 @@ def _staff_out(item: BusinessStaff) -> StaffOut:
 
 
 def _appointment_out(a: Appointment, service_name: str | None = None,
-                     staff_name: str | None = None) -> AppointmentOut:
+                     staff_name: str | None = None,
+                     restaurant_name: str | None = None) -> AppointmentOut:
     return AppointmentOut(
         id=a.id,
+        restaurant_id=a.restaurant_id,
         service_id=a.service_id,
         staff_id=a.staff_id,
         service_name=service_name,
         staff_name=staff_name,
+        restaurant_name=restaurant_name,
         client_name=a.client_name,
         client_phone=a.client_phone,
         start_at=a.start_at,
@@ -104,6 +112,8 @@ def _appointment_out(a: Appointment, service_name: str | None = None,
         proof_url=a.proof_url,
         paid_at=a.paid_at,
         refund_amount=a.refund_amount,
+        reassign_status=a.reassign_status,
+        reassign_requested_at=a.reassign_requested_at,
         notes=a.notes,
     )
 
@@ -591,14 +601,124 @@ async def reassign_appointment(
         )
 
     appointment.staff_id = staff.id
+    appointment.reassign_status = "pending"
+    appointment.reassign_requested_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(appointment)
-    schedule_appointment_status(str(appointment.id), "reassigned")
+    schedule_reassign_request(str(appointment.id))
     services = {str(s.id): s.name for s in await _services(db, restaurant.id)}
     return _appointment_out(
         appointment,
         services.get(str(appointment.service_id)),
         staff.name,
+    )
+
+
+@router.get("/my-appointments", response_model=list[AppointmentOut])
+async def my_appointments(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rows = list((await db.execute(
+        select(Appointment)
+        .where(Appointment.client_user_id == current_user.id)
+        .order_by(Appointment.start_at.desc())
+        .limit(100)
+    )).scalars().all())
+    service_ids = {a.service_id for a in rows if a.service_id}
+    staff_ids = {a.staff_id for a in rows if a.staff_id}
+    restaurant_ids = {a.restaurant_id for a in rows if a.restaurant_id}
+    services = {
+        str(s.id): s.name for s in (await db.execute(
+            select(BusinessService).where(BusinessService.id.in_(service_ids))
+        )).scalars().all()
+    } if service_ids else {}
+    staff = {
+        str(s.id): s.name for s in (await db.execute(
+            select(BusinessStaff).where(BusinessStaff.id.in_(staff_ids))
+        )).scalars().all()
+    } if staff_ids else {}
+    restaurants = {
+        str(r.id): r.name for r in (await db.execute(
+            select(Restaurant).where(Restaurant.id.in_(restaurant_ids))
+        )).scalars().all()
+    } if restaurant_ids else {}
+    return [
+        _appointment_out(
+            a,
+            services.get(str(a.service_id)),
+            staff.get(str(a.staff_id)),
+            restaurants.get(str(a.restaurant_id)),
+        )
+        for a in rows
+    ]
+
+
+@router.post(
+    "/{restaurant_id}/appointments/{appointment_id}/reassign/accept",
+    response_model=AppointmentOut,
+)
+async def accept_reassignment(
+    restaurant_id: str,
+    appointment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    restaurant = await _restaurant(db, restaurant_id)
+    appointment = await db.get(Appointment, appointment_id)
+    if not appointment or appointment.restaurant_id != restaurant.id:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+    if appointment.client_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No puedes editar esta cita")
+    if appointment.reassign_status != "pending":
+        raise HTTPException(status_code=400, detail="No hay un cambio pendiente por confirmar")
+    appointment.reassign_status = "accepted"
+    appointment.reassign_requested_at = None
+    await db.commit()
+    await db.refresh(appointment)
+    schedule_reassign_result(str(appointment.id), True)
+    services = {str(s.id): s.name for s in await _services(db, restaurant.id)}
+    staff = {str(s.id): s.name for s in await _staff(db, restaurant.id)}
+    return _appointment_out(
+        appointment,
+        services.get(str(appointment.service_id)),
+        staff.get(str(appointment.staff_id)),
+        restaurant.name,
+    )
+
+
+@router.post(
+    "/{restaurant_id}/appointments/{appointment_id}/reassign/reject",
+    response_model=AppointmentOut,
+)
+async def reject_reassignment(
+    restaurant_id: str,
+    appointment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    restaurant = await _restaurant(db, restaurant_id)
+    appointment = await db.get(Appointment, appointment_id)
+    if not appointment or appointment.restaurant_id != restaurant.id:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+    if appointment.client_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No puedes editar esta cita")
+    if appointment.reassign_status != "pending":
+        raise HTTPException(status_code=400, detail="No hay un cambio pendiente por confirmar")
+    appointment.reassign_status = "rejected"
+    appointment.reassign_requested_at = None
+    await cancel_appointment(db, appointment)
+    appointment.status = "cancelled"
+    await db.commit()
+    await db.refresh(appointment)
+    schedule_reassign_result(str(appointment.id), False)
+    services = {str(s.id): s.name for s in await _services(db, restaurant.id)}
+    staff = {str(s.id): s.name for s in await _staff(db, restaurant.id)}
+    return _appointment_out(
+        appointment,
+        services.get(str(appointment.service_id)),
+        staff.get(str(appointment.staff_id)),
+        restaurant.name,
     )
 
 

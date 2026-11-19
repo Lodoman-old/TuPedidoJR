@@ -55,5 +55,7 @@ class Appointment(TimestampMixin, Base):
     refund_amount = Column(Numeric(10, 2), default=0, nullable=False)
     client_reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
     business_reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
+    reassign_status = Column(String(20), default="none", nullable=False)
+    reassign_requested_at = Column(DateTime(timezone=True), nullable=True)
     proof_url = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)

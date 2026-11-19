@@ -207,6 +207,11 @@ async def web_my_reservations(request: Request):
     return templates.TemplateResponse(request, "reservations.html")
 
 
+@router.get("/my-appointments")
+async def web_my_appointments(request: Request):
+    return templates.TemplateResponse(request, "my_appointments.html")
+
+
 @router.get("/reservations/{reservation_id}")
 async def web_reservation_detail(request: Request, reservation_id: str):
     return templates.TemplateResponse(

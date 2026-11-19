@@ -86,10 +86,12 @@ class AppointmentStatusUpdate(BaseModel):
 
 class AppointmentOut(BaseModel):
     id: UUID
+    restaurant_id: UUID
     service_id: UUID | None
     staff_id: UUID | None
     service_name: str | None = None
     staff_name: str | None = None
+    restaurant_name: str | None = None
     client_name: str
     client_phone: str | None
     start_at: datetime
@@ -111,4 +113,6 @@ class AppointmentOut(BaseModel):
     proof_url: str | None = None
     paid_at: datetime | None = None
     refund_amount: Decimal = Decimal("0")
+    reassign_status: str = "none"
+    reassign_requested_at: datetime | None = None
     notes: str | None

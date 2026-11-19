@@ -161,6 +161,7 @@ class RestaurantListItem(BaseModel):
     catalog_enabled: bool = True
     accepts_custom_requests: bool = True
     appointments_enabled: bool = False
+    appointments_enabled: bool = False
     pickup_enabled: bool = False
     logo_url: str | None
     is_open: bool

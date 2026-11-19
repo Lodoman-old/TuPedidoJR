@@ -119,10 +119,11 @@ async def list_restaurants(
     free_delivery: bool | None = None,
     sort: str | None = None,
     business_type: str | None = "restaurant",
+    services: bool | None = None,
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    if lat is not None and lng is not None:
+    if lat is not None and lng is not None and not services:
         items = await get_nearby_restaurants(
             db, lat=lat, lng=lng, q=q, skip=pagination.skip, limit=pagination.limit,
             business_type=business_type,
@@ -148,6 +149,8 @@ async def list_restaurants(
     )
     if business_type and business_type != "all":
         stmt = stmt.where(Restaurant.business_type == business_type)
+    if services:
+        stmt = stmt.where(Restaurant.appointments_enabled.is_(True))
     if q:
         like = f"%{q.strip()}%"
         stmt = stmt.where(

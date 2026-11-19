@@ -599,6 +599,22 @@ async def test_public_page_lists_services(
 
 
 @pytest.mark.asyncio
+async def test_listing_includes_services_filter(
+    client, business, service, staff
+):
+    resto, _ = business
+    resp = await client.get(
+        "/api/v1/restaurants",
+        params={"business_type": "all", "services": "true"},
+    )
+    assert resp.status_code == 200
+    rows = resp.json()
+    match = next((r for r in rows if r["id"] == str(resto.id)), None)
+    assert match is not None
+    assert match["appointments_enabled"] is True
+
+
+@pytest.mark.asyncio
 async def test_balance_breaks_down_by_staff(
     client, owner_token, customer_token, superuser_token, business, service, staff
 ):

@@ -1,5 +1,23 @@
 {% extends "base.html" %}
+{% block head_extra %}
+<style>
+  .category-tabs .btn.active {
+    background: #1B2F6B;
+    border-color: #1B2F6B;
+    color: #fff;
+  }
+</style>
+{% endblock %}
 {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h4 class="m-0">Mandados</h4>
+  <div class="d-flex gap-2 flex-wrap category-tabs">
+    <a class="btn btn-sm btn-outline-primary" href="/web/restaurants">Restaurantes</a>
+    <a class="btn btn-sm btn-outline-primary" href="/web/restaurants?type=store">Tiendas</a>
+    <a class="btn btn-sm btn-outline-primary" href="/web/restaurants?type=services">Servicios</a>
+    <a class="btn btn-sm btn-outline-primary active" href="/web/mandados">Mandados</a>
+  </div>
+</div>
 <div class="text-center py-5">
   <h4 class="mb-3">📦 Mandados</h4>
   <p class="text-muted mb-4">Solicita que un repartidor vaya por tus compras a cualquier tienda</p>

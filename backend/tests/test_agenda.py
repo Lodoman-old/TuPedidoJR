@@ -172,6 +172,8 @@ async def test_customer_books_cash_appointment(
         json=payload,
     )
     assert again.status_code == 409
+    detail = again.json()["detail"]
+    assert "libre" in detail or "ocupar" in detail
 
 
 @pytest.mark.asyncio

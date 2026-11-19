@@ -83,6 +83,7 @@
     <div class="card-body">
       <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">4</span> Elige la hora</div>
       <div class="small text-muted mb-2" id="slotHint"></div>
+      <div id="slotNotice" class="alert alert-warning py-2 small d-none"></div>
       <div id="slotList" class="d-flex flex-wrap gap-2">
         <div class="text-muted small">Primero elige un día disponible.</div>
       </div>
@@ -301,6 +302,7 @@
 
   function selectTime(time) {
     selectedTime = time;
+    document.getElementById('slotNotice')?.classList.add('d-none');
     document.querySelectorAll('#slotList .slot-btn').forEach((b) => {
       b.classList.toggle('selected', b.textContent === time);
     });
@@ -491,7 +493,20 @@
     } catch (err) {
       errorBox.textContent = err.message;
       errorBox.classList.remove('d-none');
-      if (/no está disponible|409/.test(err.message)) await loadAvailability();
+      const retryable = /no está disponible|se acaba de ocupar|ya no tiene libre|ya no está dentro|no abre ese día|409/.test(err.message);
+      if (retryable) {
+        errorBox.classList.add('d-none');
+        const notice = document.getElementById('slotNotice');
+        if (notice) {
+          notice.textContent = `${err.message} Te mostramos los horarios actualizados.`;
+          notice.classList.remove('d-none');
+        }
+        selectedTime = null;
+        selectedEnd = null;
+        document.getElementById('confirmCard').classList.add('d-none');
+        if (selectedDate) await selectDay(selectedDate);
+        document.getElementById('slotList')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     } finally {
       button.disabled = false;
       button.innerHTML = '<i class="bi bi-calendar-check"></i> Confirmar cita';

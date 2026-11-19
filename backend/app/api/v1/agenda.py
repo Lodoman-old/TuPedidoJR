@@ -364,7 +364,10 @@ async def create_appointment(
     if body.staff_id:
         staff = next((s for s in staff_list if str(s.id) == str(body.staff_id)), None)
         if not staff:
-            raise HTTPException(status_code=400, detail="Profesional no disponible")
+            raise HTTPException(
+                status_code=400,
+                detail="Ese profesional ya no está disponible. Elige otro profesional.",
+            )
     else:
         staff = None
 
@@ -377,13 +380,19 @@ async def create_appointment(
     schedule = await _schedule(db, restaurant.id)
     rows = [r for r in schedule if r.day_of_week == start_local.weekday() and not r.is_closed]
     if not rows:
-        raise HTTPException(status_code=400, detail="El negocio no abre ese día")
+        raise HTTPException(
+            status_code=400,
+            detail="El negocio no abre ese día. Elige otra fecha.",
+        )
     inside = any(
         start_local.time() >= r.open_time and end_local.time() <= r.close_time
         for r in rows
     )
     if not inside:
-        raise HTTPException(status_code=400, detail="Ese horario está fuera del horario del negocio")
+        raise HTTPException(
+            status_code=400,
+            detail="Ese horario ya no está dentro del horario de atención. Elige otro.",
+        )
 
     # Serializa las reservas del negocio y las deudas del cliente.
     await db.execute(
@@ -412,7 +421,12 @@ async def create_appointment(
         if not busy:
             free_staff.append(person)
     if not free_staff:
-        raise HTTPException(status_code=409, detail="Ese horario ya no está disponible")
+        detail = (
+            "Ese profesional ya no tiene libre ese horario. Elige otra hora u otro profesional."
+            if staff
+            else "Ese horario se acaba de ocupar. Elige otro horario disponible."
+        )
+        raise HTTPException(status_code=409, detail=detail)
     chosen = free_staff[0]
 
     if body.payment_mode in ("deposit", "full") and not (body.proof_url or "").strip():
@@ -457,7 +471,10 @@ async def create_appointment(
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Ese horario ya no está disponible") from exc
+        raise HTTPException(
+            status_code=409,
+            detail="Ese horario se acaba de ocupar. Elige otro horario disponible.",
+        ) from exc
     await db.refresh(appointment)
     schedule_new_appointment(str(appointment.id))
     if appointment.payment_mode != "cash":

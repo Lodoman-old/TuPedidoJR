@@ -35,6 +35,27 @@
     try {
       const profile = await getProfile();
       const addresses = await listAddresses();
+      let isStaff = false;
+      let isCourier = false;
+      if (!profile.is_superuser) {
+        try {
+          const mine = await listMyRestaurants();
+          isStaff = Array.isArray(mine) && mine.length > 0;
+        } catch (e) { /* cliente */ }
+        if (!isStaff) {
+          try {
+            await getDeliveryProfile();
+            isCourier = true;
+          } catch (e) { /* cliente */ }
+        }
+      }
+      const manual = profile.is_superuser
+        ? { href: '/manuales/admin', label: 'Manual del administrador', extra: '' }
+        : (isStaff
+          ? { href: '/manuales/restaurante', label: 'Manual del negocio', extra: '<a class="btn btn-sm btn-outline-secondary" href="/manuales/menu">Menú y precios</a>' }
+          : (isCourier
+            ? { href: '/manuales/repartidor', label: 'Manual del repartidor', extra: '' }
+            : { href: '/manuales/cliente', label: 'Manual del cliente', extra: '' }));
       let loyaltyConfig = { loyalty_visible: false, loyalty_enabled: false, loyalty_value_per_point: '1' };
       try { loyaltyConfig = await apiRequest('GET', '/payments/config'); } catch (e) { /* ignore */ }
       const loyaltyVisible = Boolean(loyaltyConfig.loyalty_enabled && loyaltyConfig.loyalty_visible);
@@ -49,8 +70,9 @@
         </div>
         <div class="card p-3 mb-3">
           <h6><i class="bi bi-book"></i> Manuales</h6>
-          <p class="small text-muted mb-2">Aprende a pedir, pagar y resolver incidencias.</p>
-          <a class="btn btn-sm btn-outline-primary" href="/manuales/cliente">Manual del cliente</a>
+          <p class="small text-muted mb-2">Aprende a usar TuPedidoJR con tu tipo de cuenta.</p>
+          <a class="btn btn-sm btn-outline-primary" href="${manual.href}">${manual.label}</a>
+          ${manual.extra}
           <a class="btn btn-sm btn-outline-secondary" href="/manuales">Todos los manuales</a>
         </div>
         <div class="card p-3 mb-3 ${loyaltyVisible ? '' : 'd-none'}">

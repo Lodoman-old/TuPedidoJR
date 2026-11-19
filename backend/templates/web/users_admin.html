@@ -5,9 +5,14 @@
     <h4 class="m-0"><i class="bi bi-people"></i> Usuarios registrados</h4>
     <small class="text-muted">Negocios, repartidores y clientes de TuPedidoJR.</small>
   </div>
-  <button class="btn btn-outline-secondary btn-sm" onclick="loadUsers()">
-    <i class="bi bi-arrow-clockwise"></i> Actualizar
-  </button>
+  <div class="d-flex gap-2 flex-wrap">
+    <button class="btn btn-success btn-sm" onclick="openNewAdmin()">
+      <i class="bi bi-person-plus"></i> Nuevo administrador
+    </button>
+    <button class="btn btn-outline-secondary btn-sm" onclick="loadUsers()">
+      <i class="bi bi-arrow-clockwise"></i> Actualizar
+    </button>
+  </div>
 </div>
 
 <div class="row g-2 mb-3" id="userSummary"></div>
@@ -89,7 +94,39 @@
       </div>
       <div class="modal-body" id="userDetailBody"></div>
       <div class="modal-footer">
+        <span id="userAdminActions" class="me-auto"></span>
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="newAdminModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-plus"></i> Nuevo administrador</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div id="newAdminError" class="alert alert-danger d-none"></div>
+        <div class="mb-2">
+          <label class="form-label small mb-1" for="newAdminName">Nombre</label>
+          <input class="form-control" id="newAdminName" maxlength="100">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1" for="newAdminEmail">Correo</label>
+          <input type="email" class="form-control" id="newAdminEmail" maxlength="255">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1" for="newAdminPassword">Contraseña</label>
+          <input type="text" class="form-control" id="newAdminPassword" minlength="8" maxlength="128">
+          <div class="form-text">Mínimo 8 caracteres. Compártela por un medio seguro.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="createAdmin()">Crear administrador</button>
       </div>
     </div>
   </div>
@@ -278,7 +315,59 @@
       ${business}
       <h6 class="mt-3">Repartidor</h6>
       ${courier}`;
+    const actions = document.getElementById('userAdminActions');
+    if (actions) {
+      actions.innerHTML = row.is_superuser
+        ? `<button class="btn btn-sm btn-outline-danger" onclick="setAdmin('${row.id}', false)">Quitar administrador</button>`
+        : `<button class="btn btn-sm btn-success" onclick="setAdmin('${row.id}', true)">Hacer administrador</button>`;
+    }
     bootstrap.Modal.getOrCreateInstance(document.getElementById('userDetailModal')).show();
+  }
+
+  function openNewAdmin() {
+    document.getElementById('newAdminError').classList.add('d-none');
+    document.getElementById('newAdminName').value = '';
+    document.getElementById('newAdminEmail').value = '';
+    document.getElementById('newAdminPassword').value = '';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('newAdminModal')).show();
+    setTimeout(() => document.getElementById('newAdminName').focus(), 250);
+  }
+
+  async function createAdmin() {
+    const error = document.getElementById('newAdminError');
+    error.classList.add('d-none');
+    const name = document.getElementById('newAdminName').value.trim();
+    const email = document.getElementById('newAdminEmail').value.trim();
+    const password = document.getElementById('newAdminPassword').value;
+    if (!name || !email || password.length < 8) {
+      error.textContent = 'Escribe nombre, correo y una contraseña de al menos 8 caracteres.';
+      error.classList.remove('d-none');
+      return;
+    }
+    try {
+      await apiRequest('POST', '/admin/users', { name, email, password });
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('newAdminModal')).hide();
+      showToast('Administrador creado');
+      loadUsers();
+    } catch (ex) {
+      error.textContent = ex.message || 'No se pudo crear el administrador.';
+      error.classList.remove('d-none');
+    }
+  }
+
+  async function setAdmin(id, value) {
+    const text = value
+      ? '¿Dar acceso de administrador a este usuario?'
+      : '¿Quitar el acceso de administrador a este usuario?';
+    if (!confirm(text)) return;
+    try {
+      await apiRequest('PATCH', `/admin/users/${id}`, { is_superuser: value });
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('userDetailModal')).hide();
+      showToast(value ? 'Ahora es administrador' : 'Acceso de administrador retirado');
+      loadUsers();
+    } catch (ex) {
+      showToast(ex.message, 'danger');
+    }
   }
 
   document.addEventListener('DOMContentLoaded', loadUsers);

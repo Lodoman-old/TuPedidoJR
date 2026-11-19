@@ -104,3 +104,64 @@ async def test_users_page_renders(client: AsyncClient):
     assert resp.status_code == 200
     assert "Usuarios registrados" in resp.text
     assert "userSummary" in resp.text
+
+
+async def test_create_admin_user(client: AsyncClient, admin_token):
+    resp = await client.post(
+        "/api/v1/admin/users",
+        json={"name": "Nuevo Admin", "email": "nuevo-admin@test.com", "password": "clave12345"},
+        headers=_headers(admin_token),
+    )
+    assert resp.status_code == 201
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "nuevo-admin@test.com", "password": "clave12345"},
+    )
+    assert login.status_code == 200
+    assert login.json()["is_superuser"] is True
+
+    duplicate = await client.post(
+        "/api/v1/admin/users",
+        json={"name": "Repetido", "email": "nuevo-admin@test.com", "password": "clave12345"},
+        headers=_headers(admin_token),
+    )
+    assert duplicate.status_code == 409
+
+
+async def test_promote_and_demote_user(client: AsyncClient, admin_token, people):
+    headers = _headers(admin_token)
+    promote = await client.patch(
+        f"/api/v1/admin/users/{people['client']}",
+        json={"is_superuser": True},
+        headers=headers,
+    )
+    assert promote.status_code == 200
+    assert promote.json()["is_superuser"] is True
+
+    demote = await client.patch(
+        f"/api/v1/admin/users/{people['client']}",
+        json={"is_superuser": False},
+        headers=headers,
+    )
+    assert demote.status_code == 200
+    assert demote.json()["is_superuser"] is False
+
+
+async def test_admin_cannot_demote_self(client: AsyncClient, admin_token):
+    me = await client.get("/api/v1/auth/me", headers=_headers(admin_token))
+    me_id = me.json()["id"]
+    resp = await client.patch(
+        f"/api/v1/admin/users/{me_id}",
+        json={"is_superuser": False},
+        headers=_headers(admin_token),
+    )
+    assert resp.status_code == 400
+
+
+async def test_create_admin_requires_superuser(client: AsyncClient, people):
+    resp = await client.post(
+        "/api/v1/admin/users",
+        json={"name": "Intruso", "email": "intruso@test.com", "password": "clave12345"},
+        headers=_headers(people["client_token"]),
+    )
+    assert resp.status_code == 403

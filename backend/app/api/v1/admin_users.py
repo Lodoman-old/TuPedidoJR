@@ -1,11 +1,13 @@
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_superuser
+from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.delivery_person import DeliveryPerson
 from app.models.order import Order
@@ -18,6 +20,66 @@ router = APIRouter()
 
 def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
+
+
+class AdminUserCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class AdminUserUpdate(BaseModel):
+    is_superuser: bool | None = None
+    is_active: bool | None = None
+
+
+@router.post("", status_code=201)
+async def create_admin_user(
+    body: AdminUserCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_superuser),
+):
+    email = body.email.lower()
+    exists = await db.execute(select(User).where(User.email == email))
+    if exists.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Ese correo ya está registrado")
+    user = User(
+        name=body.name.strip(),
+        email=email,
+        password_hash=hash_password(body.password),
+        is_active=True,
+        is_superuser=True,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return {"id": str(user.id), "name": user.name, "email": user.email}
+
+
+@router.patch("/{user_id}")
+async def update_admin_user(
+    user_id: str,
+    body: AdminUserUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    data = body.model_dump(exclude_unset=True)
+    if str(user.id) == str(current_user.id):
+        if data.get("is_superuser") is False:
+            raise HTTPException(status_code=400, detail="No puedes quitarte permisos de administrador")
+        if data.get("is_active") is False:
+            raise HTTPException(status_code=400, detail="No puedes desactivar tu propia cuenta")
+    for key, value in data.items():
+        setattr(user, key, value)
+    await db.commit()
+    return {
+        "id": str(user.id),
+        "is_superuser": bool(user.is_superuser),
+        "is_active": bool(user.is_active),
+    }
 
 
 @router.get("")

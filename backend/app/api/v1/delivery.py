@@ -214,16 +214,11 @@ async def accept_order(
     await ensure_can_accept(db, dp)
 
     approval_flow = order.status == "awaiting_courier"
-    reserved_flow = order.requires_courier_approval and order.status in (
-        "pending",
-        "confirmed",
-    )
     order.delivery_person_id = dp.id
     if approval_flow:
         order.status = "preparing"
-    elif not reserved_flow:
-        order.status = "in_delivery"
-    # Apply the courier's individual per-delivery bonus, if configured.
+    # En el flujo normal el estado del pedido lo controla el restaurante
+    # (preparando/listo). Aceptar solo asigna al repartidor.
     bonus = dp.delivery_bonus_per_order or Decimal("0")
     if bonus:
         order.delivery_earnings = (order.delivery_earnings or Decimal("0")) + bonus
@@ -251,11 +246,8 @@ async def accept_order(
         await _get_ws_manager().notify_order_status(str(order.id), "preparing")
         schedule_order_status(str(order.id), "preparing")
         schedule_courier_assigned(str(order.id))
-    elif reserved_flow:
-        schedule_courier_assigned(str(order.id))
     else:
-        await _get_ws_manager().notify_order_status(str(order.id), "in_delivery")
-        schedule_order_status(str(order.id), "in_delivery")
+        schedule_courier_assigned(str(order.id))
     return order_out(order, can_see_refund=False)
 
 
@@ -280,8 +272,11 @@ async def pickup_order(
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
     if order.delivery_person_id != dp.id:
         raise HTTPException(status_code=400, detail="Este pedido no te pertenece")
-    if order.status != "in_delivery":
-        raise HTTPException(status_code=400, detail="El pedido no está en reparto")
+    if order.status not in ("ready", "in_delivery"):
+        raise HTTPException(
+            status_code=400,
+            detail="El restaurante todavía no marca el pedido como listo",
+        )
 
     order.status = "picked_up"
     if order.picked_up_at is None:

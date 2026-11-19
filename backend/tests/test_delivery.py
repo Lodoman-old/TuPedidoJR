@@ -129,7 +129,65 @@ class TestAcceptOrder:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "in_delivery"
+        assert data["status"] == "ready"
+
+    async def test_accept_keeps_restaurant_status(
+        self, client: AsyncClient, user_token, delivery_token, delivery_person, seeded_restaurant,
+    ):
+        order_id = await self._create_order(client, user_token, seeded_restaurant)
+        resp = await client.patch(
+            f"/api/v1/orders/{order_id}/status",
+            json={"status": "preparing"},
+            headers={"Authorization": f"Bearer {user_token}"},
+        )
+        assert resp.status_code == 200
+        accepted = await client.post(
+            f"/api/v1/delivery/accept/{order_id}",
+            headers={"Authorization": f"Bearer {delivery_token}"},
+        )
+        assert accepted.status_code == 200
+        assert accepted.json()["status"] == "preparing"
+
+    async def test_pickup_after_ready(
+        self, client: AsyncClient, user_token, delivery_token, delivery_person, seeded_restaurant,
+    ):
+        order_id = await self._create_order(client, user_token, seeded_restaurant)
+        await client.patch(
+            f"/api/v1/orders/{order_id}/status",
+            json={"status": "ready"},
+            headers={"Authorization": f"Bearer {user_token}"},
+        )
+        accepted = await client.post(
+            f"/api/v1/delivery/accept/{order_id}",
+            headers={"Authorization": f"Bearer {delivery_token}"},
+        )
+        assert accepted.status_code == 200
+        pickup = await client.post(
+            f"/api/v1/delivery/pickup/{order_id}",
+            headers={"Authorization": f"Bearer {delivery_token}"},
+        )
+        assert pickup.status_code == 200
+        assert pickup.json()["status"] == "picked_up"
+
+    async def test_pickup_blocked_while_preparing(
+        self, client: AsyncClient, user_token, delivery_token, delivery_person, seeded_restaurant,
+    ):
+        order_id = await self._create_order(client, user_token, seeded_restaurant)
+        await client.patch(
+            f"/api/v1/orders/{order_id}/status",
+            json={"status": "preparing"},
+            headers={"Authorization": f"Bearer {user_token}"},
+        )
+        accepted = await client.post(
+            f"/api/v1/delivery/accept/{order_id}",
+            headers={"Authorization": f"Bearer {delivery_token}"},
+        )
+        assert accepted.status_code == 200
+        pickup = await client.post(
+            f"/api/v1/delivery/pickup/{order_id}",
+            headers={"Authorization": f"Bearer {delivery_token}"},
+        )
+        assert pickup.status_code == 400
 
     async def test_accept_as_normal_user(self, client: AsyncClient, user_token, seeded_restaurant):
         resto = seeded_restaurant

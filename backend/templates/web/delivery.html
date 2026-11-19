@@ -432,12 +432,14 @@ async function loadMyOrders() {
           <small class="text-muted">${o.restaurant_name || ''}</small>
         </div>
         <div class="mt-1"><small class="text-muted"><i class="bi bi-credit-card"></i> ${payLabel}</small></div>`;
-      if (o.status === 'in_delivery') {
+      if (['ready', 'in_delivery'].includes(o.status)) {
         html += `<div class="mt-2 d-flex gap-2 flex-wrap">
           <button class="btn btn-sm btn-primary" onclick="pickupOrder('${o.id}')">Recoger pedido</button>
           <button class="btn btn-sm btn-outline-secondary" onclick="requestAdvance('${o.id}')">Pedir avance para restaurante</button>
           <button class="btn btn-sm btn-outline-danger" onclick="failOrder('${o.id}')">No se pudo entregar</button>
         </div>`;
+      } else if (['preparing', 'confirmed', 'pending', 'awaiting_courier'].includes(o.status)) {
+        html += `<div class="mt-2"><small class="text-muted"><i class="bi bi-hourglass-split"></i> Esperando que el restaurante marque el pedido como listo.</small></div>`;
       } else if (o.status === 'picked_up') {
         html += `<div class="mt-2 d-flex gap-2 flex-wrap">
           <button class="btn btn-sm btn-success" onclick="deliverOrder('${o.id}')">Entregar pedido</button>

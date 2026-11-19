@@ -82,6 +82,7 @@
   <div class="card mb-3">
     <div class="card-body">
       <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">4</span> Elige la hora</div>
+      <div class="small text-muted mb-2" id="slotHint"></div>
       <div id="slotList" class="d-flex flex-wrap gap-2">
         <div class="text-muted small">Primero elige un día disponible.</div>
       </div>
@@ -182,13 +183,21 @@
     return (info.services || []).find((s) => s.id === serviceId) || null;
   }
 
+  function updateSlotHint() {
+    const service = currentService();
+    const hint = document.getElementById('slotHint');
+    if (!hint) return;
+    hint.textContent = service
+      ? `Horarios para ${service.name} · ${service.duration_min} min. No se muestra una hora si el profesional ya tiene otra cita.`
+      : '';
+  }
+
   function renderServices() {
     const box = document.getElementById('serviceList');
     if (!info.services.length) {
       box.innerHTML = '<div class="col-12 text-muted small">Este negocio todavía no publicó servicios.</div>';
       return;
-    }
-    box.innerHTML = info.services.map((s) => `
+    }    box.innerHTML = info.services.map((s) => `
       <div class="col-md-6 col-xl-4">
         <div class="agenda-service ${s.id === serviceId ? 'selected' : ''}" onclick="selectService('${s.id}')">
           <div class="fw-semibold">${esc(s.name)}</div>
@@ -215,6 +224,7 @@
     renderServices();
     await loadAvailability();
     renderCalendar();
+    updateSlotHint();
     document.getElementById('slotList').innerHTML = '<div class="text-muted small">Primero elige un día disponible.</div>';
   }
 
@@ -549,6 +559,7 @@
         ? preselect
         : info.services[0].id;
       staffId = null;
+      updateSlotHint();
       renderServices();
       renderStaff();
       await loadAvailability();

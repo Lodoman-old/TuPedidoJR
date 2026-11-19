@@ -1,7 +1,7 @@
 """Pruebas del módulo de agenda para barberías y salones."""
 
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from httpx import AsyncClient
@@ -14,6 +14,7 @@ from app.models.restaurant import Restaurant
 from app.models.restaurant_schedule import RestaurantSchedule
 from app.models.user import User
 from app.services.appointment_payment_service import payment_plan
+from app.services.appointment_reminder_service import _send_due
 
 
 def _headers(token: str) -> dict:
@@ -615,8 +616,7 @@ async def test_listing_includes_services_filter(
 
 
 @pytest.mark.asyncio
-async def test_any_professional_is_assigned_automatically(
-    client, owner_token, customer_token, business, service, staff
+async def test_any_professional_is_assigned_automatically(    client, owner_token, customer_token, business, service, staff
 ):
     resto, target = business
     created = await client.post(
@@ -683,3 +683,64 @@ async def test_balance_breaks_down_by_staff(
         (row for row in after.json()["by_staff"] if row["name"] == "Ana"), None
     )
     assert ana_after is None or float(ana_after["debit"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_appointment_reminders_are_queued(
+    client, customer_token, business, service, staff, db_session, monkeypatch
+):
+    resto, _ = business
+    customer_id = uuid.UUID(decode_access_token(customer_token)["sub"])
+    now = datetime.now(timezone.utc)
+
+    client_appt = Appointment(
+        restaurant_id=resto.id,
+        service_id=uuid.UUID(service["id"]),
+        staff_id=uuid.UUID(staff["id"]),
+        client_user_id=customer_id,
+        client_name="Cliente Demo",
+        start_at=now + timedelta(minutes=30),
+        end_at=now + timedelta(minutes=60),
+        status="confirmed",
+        price=100,
+        payment_mode="cash",
+        payment_status="cash_pending",
+        platform_fee=10,
+        business_fee=5,
+    )
+    business_appt = Appointment(
+        restaurant_id=resto.id,
+        service_id=uuid.UUID(service["id"]),
+        staff_id=uuid.UUID(staff["id"]),
+        client_user_id=customer_id,
+        client_name="Cliente Demo",
+        start_at=now + timedelta(minutes=2),
+        end_at=now + timedelta(minutes=32),
+        status="confirmed",
+        price=100,
+        payment_mode="cash",
+        payment_status="cash_pending",
+        platform_fee=10,
+        business_fee=5,
+    )
+    db_session.add_all([client_appt, business_appt])
+    await db_session.commit()
+
+    calls = []
+    monkeypatch.setattr(
+        "app.services.appointment_reminder_service.schedule_appointment_client_reminder",
+        lambda appointment_id: calls.append(("client", appointment_id)),
+    )
+    monkeypatch.setattr(
+        "app.services.appointment_reminder_service.schedule_appointment_business_now",
+        lambda appointment_id: calls.append(("business", appointment_id)),
+    )
+
+    await _send_due(db_session)
+    await db_session.refresh(client_appt)
+    await db_session.refresh(business_appt)
+
+    assert client_appt.client_reminder_sent_at is not None
+    assert business_appt.business_reminder_sent_at is not None
+    assert ("client", str(client_appt.id)) in calls
+    assert ("business", str(business_appt.id)) in calls

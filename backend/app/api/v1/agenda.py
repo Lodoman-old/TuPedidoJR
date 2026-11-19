@@ -40,6 +40,7 @@ from app.services.appointment_settlement_service import (
     no_show_appointment,
 )
 from app.services.order_service import get_setting_value
+from app.services.push_service import schedule_new_appointment
 from app.services.restaurant_access import MANAGE_ROLES, have_role
 
 router = APIRouter()
@@ -458,6 +459,7 @@ async def create_appointment(
         await db.rollback()
         raise HTTPException(status_code=409, detail="Ese horario ya no está disponible") from exc
     await db.refresh(appointment)
+    schedule_new_appointment(str(appointment.id))
     if appointment.payment_mode != "cash":
         schedule_validation(appointment.id)
     return _appointment_out(appointment, service.name, chosen.name)

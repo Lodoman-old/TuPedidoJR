@@ -4,6 +4,8 @@ import logging
 import os
 import time
 import uuid
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import httpx
 from jose import jwt
@@ -14,6 +16,9 @@ from app.core.config import settings
 from app.models.delivery_person import DeliveryPerson
 from app.models.mandado import Mandado
 from app.models.order import Order
+from app.models.appointment import Appointment
+from app.models.business_service import BusinessService
+from app.models.business_staff import BusinessStaff
 from app.models.push_token import PushToken
 from app.models.reservation import Reservation
 from app.models.restaurant import Restaurant
@@ -500,6 +505,157 @@ def schedule_new_reservation(reservation_id: str, deposit_pending: bool = False)
         asyncio.create_task(notify_new_reservation(reservation_id, deposit_pending))
     except RuntimeError:
         logger.debug("No event loop for push notification")
+
+
+LOCAL_TZ = ZoneInfo("America/Mexico_City")
+
+
+def _appointment_when(appointment: Appointment) -> str:
+    value = appointment.start_at
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(LOCAL_TZ).strftime("%d/%m %H:%M")
+
+
+async def _appointment_context(db, appointment_id: str):
+    appointment = await db.get(Appointment, uuid.UUID(str(appointment_id)))
+    if not appointment:
+        return None
+    restaurant = await db.get(Restaurant, appointment.restaurant_id)
+    service = await db.get(BusinessService, appointment.service_id) if appointment.service_id else None
+    staff = await db.get(BusinessStaff, appointment.staff_id) if appointment.staff_id else None
+    client = await db.get(User, appointment.client_user_id) if appointment.client_user_id else None
+    return appointment, restaurant, service, staff, client
+
+
+async def _notify_new_appointment(appointment_id: str) -> None:
+    try:
+        async with async_session() as db:
+            ctx = await _appointment_context(db, appointment_id)
+            if not ctx:
+                return
+            appointment, restaurant, service, staff, client = ctx
+            if not restaurant:
+                return
+            members_result = await db.execute(
+                select(RestaurantUser.user_id).where(
+                    RestaurantUser.restaurant_id == restaurant.id,
+                    RestaurantUser.is_active.is_(True),
+                    RestaurantUser.role.in_(ORDER_ROLES),
+                )
+            )
+            user_ids = {restaurant.owner_id, *members_result.scalars().all()}
+            when = _appointment_when(appointment)
+            name = client.name if client else appointment.client_name
+            service_name = service.name if service else "Servicio"
+            staff_name = staff.name if staff else "por asignar"
+            body = f"{name}: {service_name} · {when} · con {staff_name}"
+            for user_id in user_ids:
+                await send_to_user(
+                    db,
+                    user_id,
+                    "Nueva cita",
+                    body,
+                    {
+                        "type": "restaurant_appointment",
+                        "appointment_id": str(appointment.id),
+                        "restaurant_id": str(restaurant.id),
+                    },
+                    "green",
+                )
+    except Exception:
+        logger.exception("Push new-appointment notification failed for %s", appointment_id)
+
+
+async def _notify_appointment_client_reminder(appointment_id: str) -> None:
+    try:
+        async with async_session() as db:
+            ctx = await _appointment_context(db, appointment_id)
+            if not ctx:
+                return
+            appointment, restaurant, service, staff, client = ctx
+            if not appointment.client_user_id:
+                return
+            service_name = service.name if service else "tu servicio"
+            staff_name = staff.name if staff else "tu profesional"
+            start = appointment.start_at
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=timezone.utc)
+            hour = start.astimezone(LOCAL_TZ).strftime("%H:%M")
+            await send_to_user(
+                db,
+                appointment.client_user_id,
+                "Tu cita es en 30 minutos",
+                f"{service_name} con {staff_name} a las {hour}. ¡Te esperamos!",
+                {
+                    "type": "appointment_reminder",
+                    "appointment_id": str(appointment.id),
+                    "restaurant_id": str(restaurant.id) if restaurant else None,
+                },
+                "amber",
+            )
+    except Exception:
+        logger.exception("Push client appointment reminder failed for %s", appointment_id)
+
+
+async def _notify_appointment_business_now(appointment_id: str) -> None:
+    try:
+        async with async_session() as db:
+            ctx = await _appointment_context(db, appointment_id)
+            if not ctx:
+                return
+            appointment, restaurant, service, staff, client = ctx
+            if not restaurant:
+                return
+            members_result = await db.execute(
+                select(RestaurantUser.user_id).where(
+                    RestaurantUser.restaurant_id == restaurant.id,
+                    RestaurantUser.is_active.is_(True),
+                    RestaurantUser.role.in_(ORDER_ROLES),
+                )
+            )
+            user_ids = {restaurant.owner_id, *members_result.scalars().all()}
+            when = _appointment_when(appointment)
+            name = client.name if client else appointment.client_name
+            service_name = service.name if service else "Servicio"
+            staff_name = staff.name if staff else "por asignar"
+            body = f"{name}: {service_name} con {staff_name} · {when}"
+            for user_id in user_ids:
+                await send_to_user(
+                    db,
+                    user_id,
+                    "Cita ahora",
+                    body,
+                    {
+                        "type": "restaurant_appointment_now",
+                        "appointment_id": str(appointment.id),
+                        "restaurant_id": str(restaurant.id),
+                    },
+                    "amber",
+                )
+    except Exception:
+        logger.exception("Push business appointment reminder failed for %s", appointment_id)
+
+
+def schedule_new_appointment(appointment_id: str) -> None:
+    try:
+        asyncio.create_task(_notify_new_appointment(str(appointment_id)))
+    except RuntimeError:
+        logger.debug("No event loop for appointment push notification")
+
+
+def schedule_appointment_client_reminder(appointment_id: str) -> None:
+    try:
+        asyncio.create_task(_notify_appointment_client_reminder(str(appointment_id)))
+    except RuntimeError:
+        logger.debug("No event loop for appointment reminder")
+
+
+def schedule_appointment_business_now(appointment_id: str) -> None:
+    try:
+        asyncio.create_task(_notify_appointment_business_now(str(appointment_id)))
+    except RuntimeError:
+        logger.debug("No event loop for appointment reminder")
 
 
 def schedule_reservation_status(reservation_id: str) -> None:

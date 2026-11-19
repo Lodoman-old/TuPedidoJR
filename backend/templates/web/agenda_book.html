@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<style>
+  .agenda-service {
+    border: 1px solid #e6ebf2; border-radius: .9rem; padding: .85rem .95rem;
+    background: #fff; cursor: pointer; transition: all .15s ease; height: 100%;
+  }
+  .agenda-service:hover { border-color: #1B2F6B; }
+  .agenda-service.selected { border-color: #1B2F6B; background: #eef2ff; box-shadow: 0 6px 18px rgba(27,47,107,.12); }
+  .agenda-service .price { font-weight: 700; color: #1B2F6B; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: .35rem; }
+  .cal-head { text-align: center; font-size: .72rem; font-weight: 700; color: #6c757d; text-transform: uppercase; padding: .25rem 0; }
+  .cal-day {
+    border: 1px solid #e9edf3; border-radius: .65rem; background: #fff;
+    aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; font-size: .86rem; color: #adb5bd; cursor: default; padding: .1rem;
+  }
+  .cal-day.available { color: #147a4a; border-color: #bfe5d2; background: #f1fbf6; cursor: pointer; font-weight: 700; }
+  .cal-day.available:hover { background: #ddf5e9; }
+  .cal-day.selected { background: #1B2F6B; border-color: #1B2F6B; color: #fff; }
+  .cal-day .count { font-size: .62rem; font-weight: 500; }
+  .cal-day.empty { border: 0; background: transparent; }
+  .slot-btn { min-width: 74px; }
+  .slot-btn.selected { background: #1B2F6B; border-color: #1B2F6B; color: #fff; }
+  @media (max-width: 575.98px) {
+    .cal-grid { gap: .22rem; }
+    .cal-day { border-radius: .5rem; font-size: .8rem; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+  <a href="/web/restaurants/{{ restaurant_id }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <h5 class="mb-0 ms-1" id="businessName">Agendar cita</h5>
+</div>
+
+<div id="agendaUnavailable" class="alert alert-info d-none"></div>
+
+<div id="bookingFlow" class="d-none">
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">1</span> Elige tu servicio</div>
+      <div id="serviceList" class="row g-2"></div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">2</span> Elige a tu profesional</div>
+      <div id="staffList" class="d-flex flex-wrap gap-2"></div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">3</span> Elige la fecha</div>
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <button class="btn btn-sm btn-outline-secondary" id="prevMonth" aria-label="Mes anterior"><i class="bi bi-chevron-left"></i></button>
+        <div class="fw-semibold text-center flex-grow-1" id="monthLabel"></div>
+        <button class="btn btn-sm btn-outline-secondary" id="nextMonth" aria-label="Mes siguiente"><i class="bi bi-chevron-right"></i></button>
+      </div>
+      <div class="cal-grid mb-1" id="calHead"></div>
+      <div class="cal-grid" id="calDays"></div>
+      <div class="small text-muted mt-2"><span class="text-success fw-bold">Verde</span> = hay horarios disponibles.</div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">4</span> Elige la hora</div>
+      <div id="slotList" class="d-flex flex-wrap gap-2">
+        <div class="text-muted small">Primero elige un día disponible.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3 d-none" id="confirmCard">
+    <div class="card-body">
+      <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">5</span> Confirma tu cita</div>
+      <div id="summaryBox" class="alert alert-light border small"></div>
+      <div class="row g-2">
+        <div class="col-md-6">
+          <label class="form-label small mb-1" for="clientName">Nombre</label>
+          <input class="form-control" id="clientName" maxlength="120" autocomplete="name">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small mb-1" for="clientPhone">Teléfono (opcional)</label>
+          <input class="form-control" id="clientPhone" maxlength="25" inputmode="tel" autocomplete="tel">
+        </div>
+        <div class="col-12">
+          <label class="form-label small mb-1" for="clientNotes">Notas (opcional)</label>
+          <textarea class="form-control" id="clientNotes" rows="2" maxlength="500"></textarea>
+        </div>
+      </div>
+      <div class="form-check mt-3">
+        <input class="form-check-input" type="checkbox" id="cashConfirm">
+        <label class="form-check-label small" for="cashConfirm">
+          Pagaré en el negocio en efectivo. El negocio cobra el servicio más $5 de cuota de servicio.
+        </label>
+      </div>
+      <div class="text-danger small mt-2 d-none" id="bookingError"></div>
+      <button class="btn btn-primary w-100 mt-3" id="confirmBtn" onclick="confirmAppointment()">
+        <i class="bi bi-calendar-check"></i> Confirmar cita
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="card d-none" id="successCard">
+  <div class="card-body text-center py-4">
+    <div class="display-5 text-success mb-2"><i class="bi bi-check-circle"></i></div>
+    <h5>Tu cita quedó agendada</h5>
+    <div id="successDetails" class="text-muted mb-3"></div>
+    <a href="/web/restaurants/{{ restaurant_id }}" class="btn btn-outline-primary">Volver al negocio</a>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  const money = (v) => '$' + Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const CLIENT_FEE = 5;
+  const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+  let info = null;
+  let serviceId = null;
+  let staffId = null;
+  let viewYear = 0;
+  let viewMonth = 0;
+  let availability = {};
+  let selectedDate = null;
+  let selectedTime = null;
+
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function monthKey(y, m) { return `${y}-${pad(m + 1)}`; }
+
+  function currentService() {
+    return (info.services || []).find((s) => s.id === serviceId) || null;
+  }
+
+  function renderServices() {
+    const box = document.getElementById('serviceList');
+    if (!info.services.length) {
+      box.innerHTML = '<div class="col-12 text-muted small">Este negocio todavía no publicó servicios.</div>';
+      return;
+    }
+    box.innerHTML = info.services.map((s) => `
+      <div class="col-md-6 col-xl-4">
+        <div class="agenda-service ${s.id === serviceId ? 'selected' : ''}" onclick="selectService('${s.id}')">
+          <div class="fw-semibold">${esc(s.name)}</div>
+          <div class="small text-muted">${s.duration_min} min</div>
+          <div class="price mt-1">${money(s.price)}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  function renderStaff() {
+    const box = document.getElementById('staffList');
+    const chips = ['<button class="agenda-chip ' + (staffId ? '' : 'active') + '" onclick="selectStaff(null)">Cualquiera</button>'];
+    (info.staff || []).forEach((s) => {
+      chips.push(`<button class="agenda-chip ${staffId === s.id ? 'active' : ''}" onclick="selectStaff('${s.id}')">${esc(s.name)}</button>`);
+    });
+    box.innerHTML = chips.join('');
+  }
+
+  async function selectService(id) {
+    serviceId = id;
+    selectedDate = null;
+    selectedTime = null;
+    document.getElementById('confirmCard').classList.add('d-none');
+    renderServices();
+    await loadAvailability();
+    renderCalendar();
+    document.getElementById('slotList').innerHTML = '<div class="text-muted small">Primero elige un día disponible.</div>';
+  }
+
+  async function selectStaff(id) {
+    staffId = id;
+    selectedDate = null;
+    selectedTime = null;
+    document.getElementById('confirmCard').classList.add('d-none');
+    renderStaff();
+    await loadAvailability();
+    renderCalendar();
+    document.getElementById('slotList').innerHTML = '<div class="text-muted small">Primero elige un día disponible.</div>';
+  }
+
+  async function loadAvailability() {
+    availability = {};
+    if (!serviceId) return;
+    const params = new URLSearchParams({ month: monthKey(viewYear, viewMonth), service_id: serviceId });
+    if (staffId) params.set('staff_id', staffId);
+    try {
+      const res = await apiRequest('GET', `/agenda/${RID}/availability?${params.toString()}`);
+      (res.days || []).forEach((d) => { availability[d.date] = d.count; });
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  }
+
+  function renderCalendar() {
+    document.getElementById('monthLabel').textContent = `${MONTHS[viewMonth]} ${viewYear}`;
+    const head = document.getElementById('calHead');
+    head.innerHTML = WEEKDAYS.map((d) => `<div class="cal-head">${d}</div>`).join('');
+    const grid = document.getElementById('calDays');
+    const first = new Date(viewYear, viewMonth, 1);
+    const offset = (first.getDay() + 6) % 7;
+    const total = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+    const cells = [];
+    for (let i = 0; i < offset; i += 1) cells.push('<div class="cal-day empty"></div>');
+    for (let day = 1; day <= total; day += 1) {
+      const key = `${viewYear}-${pad(viewMonth + 1)}-${pad(day)}`;
+      const count = availability[key] || 0;
+      const usable = count > 0 && key >= todayKey;
+      const cls = ['cal-day'];
+      if (usable) cls.push('available');
+      if (key === selectedDate) cls.push('selected');
+      cells.push(`<div class="${cls.join(' ')}" ${usable ? `onclick="selectDay('${key}')"` : ''}>
+        <span>${day}</span>${usable ? `<span class="count">${count} ${count === 1 ? 'hora' : 'horas'}</span>` : ''}
+      </div>`);
+    }
+    grid.innerHTML = cells.join('');
+  }
+
+  async function selectDay(key) {
+    selectedDate = key;
+    selectedTime = null;
+    document.getElementById('confirmCard').classList.add('d-none');
+    renderCalendar();
+    const box = document.getElementById('slotList');
+    box.innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div>';
+    const params = new URLSearchParams({ date: key, service_id: serviceId });
+    if (staffId) params.set('staff_id', staffId);
+    try {
+      const res = await apiRequest('GET', `/agenda/${RID}/slots?${params.toString()}`);
+      if (!res.slots.length) {
+        box.innerHTML = '<div class="text-muted small">Ya no quedan horarios ese día. Prueba con otro.</div>';
+        return;
+      }
+      box.innerHTML = res.slots.map((t) => `<button class="btn btn-sm btn-outline-primary slot-btn" onclick="selectTime('${t}')">${t}</button>`).join('');
+    } catch (err) {
+      box.innerHTML = `<div class="text-danger small">${esc(err.message)}</div>`;
+    }
+  }
+
+  function selectTime(time) {
+    selectedTime = time;
+    document.querySelectorAll('#slotList .slot-btn').forEach((b) => {
+      b.classList.toggle('selected', b.textContent === time);
+    });
+    const service = currentService();
+    const [h, m] = time.split(':').map(Number);
+    const endMinutes = h * 60 + m + (service ? service.duration_min : 30);
+    const endTime = `${pad(Math.floor(endMinutes / 60) % 24)}:${pad(endMinutes % 60)}`;
+    const dateLabel = new Date(`${selectedDate}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+    document.getElementById('summaryBox').innerHTML = `
+      <div class="d-flex justify-content-between"><span>Servicio</span><strong>${esc(service.name)}</strong></div>
+      <div class="d-flex justify-content-between"><span>Fecha</span><strong>${dateLabel}</strong></div>
+      <div class="d-flex justify-content-between"><span>Hora</span><strong>${time} a ${endTime}</strong></div>
+      <div class="d-flex justify-content-between"><span>Precio del servicio</span><strong>${money(service.price)}</strong></div>
+      <div class="d-flex justify-content-between"><span>Cuota de servicio</span><strong>${money(CLIENT_FEE)}</strong></div>
+      <div class="d-flex justify-content-between border-top pt-1 mt-1"><span>Total en el negocio</span><strong>${money(Number(service.price) + CLIENT_FEE)}</strong></div>`;
+    document.getElementById('confirmCard').classList.remove('d-none');
+    document.getElementById('cashConfirm').checked = false;
+    document.getElementById('bookingError').classList.add('d-none');
+    document.getElementById('clientName').value = sessionStorage.getItem('user_name') || '';
+    document.getElementById('confirmCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  async function confirmAppointment() {
+    const errorBox = document.getElementById('bookingError');
+    errorBox.classList.add('d-none');
+    const name = document.getElementById('clientName').value.trim();
+    if (!name) {
+      errorBox.textContent = 'Escribe tu nombre.';
+      errorBox.classList.remove('d-none');
+      return;
+    }
+    if (!document.getElementById('cashConfirm').checked) {
+      errorBox.textContent = 'Confirma que pagarás en el negocio.';
+      errorBox.classList.remove('d-none');
+      return;
+    }
+    const button = document.getElementById('confirmBtn');
+    button.disabled = true;
+    try {
+      const payload = {
+        service_id: serviceId,
+        staff_id: staffId,
+        start_at: `${selectedDate}T${selectedTime}:00`,
+        client_name: name,
+        client_phone: document.getElementById('clientPhone').value.trim() || null,
+        notes: document.getElementById('clientNotes').value.trim() || null,
+        payment_mode: 'cash',
+      };
+      const res = await apiRequest('POST', `/agenda/${RID}/appointments`, payload);
+      const dateLabel = new Date(`${selectedDate}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+      document.getElementById('successDetails').innerHTML = `
+        <div><strong>${esc(res.service_name || '')}</strong> con ${esc(res.staff_name || 'tu profesional')}</div>
+        <div>${dateLabel} a las ${selectedTime}</div>
+        <div>Paga en el negocio: <strong>${money(Number(res.price) + CLIENT_FEE)}</strong></div>`;
+      document.getElementById('bookingFlow').classList.add('d-none');
+      document.getElementById('successCard').classList.remove('d-none');
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.classList.remove('d-none');
+      if (/no está disponible|409/.test(err.message)) await loadAvailability();
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  document.getElementById('prevMonth').addEventListener('click', async () => {
+    viewMonth -= 1;
+    if (viewMonth < 0) { viewMonth = 11; viewYear -= 1; }
+    await loadAvailability();
+    renderCalendar();
+  });
+
+  document.getElementById('nextMonth').addEventListener('click', async () => {
+    viewMonth += 1;
+    if (viewMonth > 11) { viewMonth = 0; viewYear += 1; }
+    await loadAvailability();
+    renderCalendar();
+  });
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      info = await apiRequest('GET', `/agenda/${RID}/info`);
+      document.getElementById('businessName').textContent = `Agendar cita · ${info.restaurant.name}`;
+      if (!info.restaurant.appointments_enabled || !info.restaurant.affiliation_active) {
+        document.getElementById('agendaUnavailable').classList.remove('d-none');
+        document.getElementById('agendaUnavailable').innerHTML = info.restaurant.appointments_enabled
+          ? 'Este negocio tiene la agenda suspendida porque su afiliación no está vigente.'
+          : 'Este negocio todavía no abre su agenda en línea.';
+        return;
+      }
+      if (!info.services.length) {
+        document.getElementById('agendaUnavailable').classList.remove('d-none');
+        document.getElementById('agendaUnavailable').textContent = 'Este negocio todavía no publicó servicios.';
+        return;
+      }
+      document.getElementById('bookingFlow').classList.remove('d-none');
+      const today = new Date();
+      viewYear = today.getFullYear();
+      viewMonth = today.getMonth();
+      serviceId = info.services[0].id;
+      staffId = null;
+      renderServices();
+      renderStaff();
+      await loadAvailability();
+      renderCalendar();
+    } catch (err) {
+      document.getElementById('agendaUnavailable').classList.remove('d-none');
+      document.getElementById('agendaUnavailable').textContent = err.message;
+    }
+  });
+</script>
+{% endblock %}

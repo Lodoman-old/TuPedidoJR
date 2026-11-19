@@ -18,6 +18,7 @@ class Restaurant(TimestampMixin, Base):
     business_type = Column(String(30), default="restaurant", nullable=False, index=True)
     catalog_enabled = Column(Boolean, default=True, nullable=False)
     accepts_custom_requests = Column(Boolean, default=True, nullable=False)
+    appointments_enabled = Column(Boolean, default=False, nullable=False)
     pickup_enabled = Column(Boolean, default=False, nullable=False)
     status = Column(String(20), default="active", nullable=False)
     rejection_reason = Column(Text, nullable=True)

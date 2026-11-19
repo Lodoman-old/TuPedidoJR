@@ -1,0 +1,366 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<style>
+  .agenda-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  .agenda-card { border: 1px solid #e6ebf2; border-radius: .9rem; background: #fff; }
+  .agenda-row { display: flex; gap: .75rem; align-items: center; padding: .7rem .9rem; border-top: 1px solid #f0f3f7; }
+  .agenda-row:first-child { border-top: 0; }
+  .agenda-time { min-width: 64px; font-weight: 700; color: #1B2F6B; }
+  .agenda-chip {
+    display: inline-flex; align-items: center; gap: .3rem;
+    border: 1px solid #e6ebf2; border-radius: 999px;
+    padding: .3rem .7rem; font-size: .82rem; background: #fff;
+  }
+  .agenda-chip.active { border-color: #1B2F6B; background: #eef2ff; color: #1B2F6B; font-weight: 600; }
+  .agenda-badge-done { background: #e7f5ee; color: #147a4a; }
+  .agenda-badge-noshow { background: #fdeaea; color: #b02a37; }
+  .agenda-badge-cancel { background: #f1f3f5; color: #6c757d; }
+  .agenda-badge-pending { background: #fff4d6; color: #8a6100; }
+  @media (max-width: 575.98px) {
+    .agenda-row { flex-wrap: wrap; }
+    .agenda-row .agenda-actions { margin-left: 0 !important; width: 100%; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+  <a href="/web/restaurants/{{ restaurant_id }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <h5 class="mb-0 ms-1" id="agendaTitle">Agenda</h5>
+  <a href="/web/restaurants/{{ restaurant_id }}/agenda/book" class="btn btn-sm btn-primary ms-auto">
+    <i class="bi bi-calendar-plus"></i> Ver como cliente
+  </a>
+</div>
+
+<div id="affiliationAlert" class="alert alert-warning d-none"></div>
+
+<div class="card mb-3">
+  <div class="card-body d-flex flex-wrap align-items-center gap-2">
+    <div class="flex-grow-1">
+      <div class="fw-bold">Agenda de citas</div>
+      <div class="text-muted small">Actívala para que tus clientes reserven servicios como barbería o salón.</div>
+    </div>
+    <div class="form-check form-switch m-0">
+      <input class="form-check-input" type="checkbox" role="switch" id="agendaToggle">
+      <label class="form-check-label small" for="agendaToggle">Activa</label>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <strong>Servicios</strong>
+        <button class="btn btn-sm btn-outline-primary ms-auto" onclick="openServiceForm()">
+          <i class="bi bi-plus-lg"></i> Servicio
+        </button>
+      </div>
+      <div id="servicesList" class="card-body p-0"></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <strong>Profesionales</strong>
+        <button class="btn btn-sm btn-outline-primary ms-auto" onclick="openStaffForm()">
+          <i class="bi bi-plus-lg"></i> Profesional
+        </button>
+      </div>
+      <div id="staffList" class="card-body p-0"></div>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header d-flex flex-wrap align-items-center gap-2">
+    <strong>Citas del día</strong>
+    <input type="date" id="agendaDate" class="form-control form-control-sm ms-auto" style="max-width: 170px;">
+    <button class="btn btn-sm btn-outline-secondary" onclick="loadAppointments()">
+      <i class="bi bi-arrow-clockwise"></i>
+    </button>
+  </div>
+  <div id="appointmentsList" class="card-body p-0"></div>
+</div>
+
+<div class="modal fade" id="agendaModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="agendaModalTitle">Servicio</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="itemId">
+        <div class="mb-2">
+          <label class="form-label small mb-1" id="nameLabel">Nombre</label>
+          <input class="form-control" id="itemName" maxlength="120">
+        </div>
+        <div class="mb-2 d-none" id="descriptionBox">
+          <label class="form-label small mb-1">Descripción</label>
+          <textarea class="form-control" id="itemDescription" rows="2"></textarea>
+        </div>
+        <div class="row g-2">
+          <div class="col-6 d-none" id="durationBox">
+            <label class="form-label small mb-1">Duración (min)</label>
+            <input type="number" class="form-control" id="itemDuration" min="5" max="480" step="5" value="30">
+          </div>
+          <div class="col-6 d-none" id="priceBox">
+            <label class="form-label small mb-1">Precio (MXN)</label>
+            <input type="number" class="form-control" id="itemPrice" min="0" step="1" value="0">
+          </div>
+        </div>
+        <div class="text-danger small mt-2 d-none" id="itemError"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-sm btn-primary" id="saveItemBtn" onclick="saveItem()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  const money = (v) => '$' + Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  let services = [];
+  let staff = [];
+  let restaurant = null;
+  let itemMode = 'service';
+
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  async function loadRestaurant() {
+    restaurant = await apiRequest('GET', `/restaurants/${RID}`);
+    document.getElementById('agendaTitle').textContent = `Agenda · ${restaurant.name}`;
+    document.getElementById('agendaToggle').checked = Boolean(restaurant.appointments_enabled);
+
+    const alertBox = document.getElementById('affiliationAlert');
+    const expires = restaurant.affiliation_expires_at;
+    const today = new Date().toISOString().slice(0, 10);
+    if (!expires) {
+      alertBox.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Este negocio no tiene afiliación activa. La agenda no aceptará citas hasta que el administrador registre el pago de la afiliación anual.';
+      alertBox.classList.remove('d-none');
+    } else if (expires < today) {
+      alertBox.innerHTML = `<i class="bi bi-exclamation-triangle"></i> La afiliación venció el ${expires}. La agenda no aceptará citas hasta renovarla.`;
+      alertBox.classList.remove('d-none');
+    } else {
+      alertBox.classList.add('d-none');
+    }
+  }
+
+  document.getElementById('agendaToggle').addEventListener('change', async (event) => {
+    const enabled = event.target.checked;
+    try {
+      await apiRequest('PATCH', `/agenda/${RID}/settings`, { appointments_enabled: enabled });
+      showToast(enabled ? 'Agenda activada' : 'Agenda desactivada');
+    } catch (err) {
+      event.target.checked = !enabled;
+      showToast(err.message, 'danger');
+    }
+  });
+
+  async function loadServices() {
+    services = await apiRequest('GET', `/agenda/${RID}/services`);
+    const box = document.getElementById('servicesList');
+    if (!services.length) {
+      box.innerHTML = '<div class="p-3 text-muted small">Aún no hay servicios. Agrega el primero, por ejemplo “Corte de cabello”.</div>';
+      return;
+    }
+    box.innerHTML = services.map((s) => `
+      <div class="agenda-row">
+        <div class="flex-grow-1 min-w-0">
+          <div class="fw-semibold ${s.is_active ? '' : 'text-muted text-decoration-line-through'}">${esc(s.name)}</div>
+          <div class="small text-muted">${s.duration_min} min · ${money(s.price)}${s.description ? ' · ' + esc(s.description) : ''}</div>
+        </div>
+        <div class="agenda-actions ms-auto d-flex gap-1">
+          <button class="btn btn-sm btn-outline-secondary" onclick="openServiceForm('${s.id}')"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-${s.is_active ? 'danger' : 'success'}" onclick="toggleService('${s.id}', ${!s.is_active})">
+            <i class="bi bi-${s.is_active ? 'pause' : 'play'}"></i>
+          </button>
+        </div>
+      </div>`).join('');
+  }
+
+  async function loadStaff() {
+    staff = await apiRequest('GET', `/agenda/${RID}/staff`);
+    const box = document.getElementById('staffList');
+    if (!staff.length) {
+      box.innerHTML = '<div class="p-3 text-muted small">Registra al menos un profesional para que se puedan asignar citas.</div>';
+      return;
+    }
+    box.innerHTML = staff.map((s) => `
+      <div class="agenda-row">
+        <div class="flex-grow-1 min-w-0">
+          <div class="fw-semibold ${s.is_active ? '' : 'text-muted text-decoration-line-through'}">${esc(s.name)}</div>
+          <div class="small text-muted">${esc(s.role || 'Profesional')}</div>
+        </div>
+        <div class="agenda-actions ms-auto d-flex gap-1">
+          <button class="btn btn-sm btn-outline-secondary" onclick="openStaffForm('${s.id}')"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-${s.is_active ? 'danger' : 'success'}" onclick="toggleStaff('${s.id}', ${!s.is_active})">
+            <i class="bi bi-${s.is_active ? 'pause' : 'play'}"></i>
+          </button>
+        </div>
+      </div>`).join('');
+  }
+
+  function openServiceForm(id) {
+    itemMode = 'service';
+    const item = services.find((s) => s.id === id);
+    document.getElementById('agendaModalTitle').textContent = item ? 'Editar servicio' : 'Nuevo servicio';
+    document.getElementById('nameLabel').textContent = 'Nombre del servicio';
+    document.getElementById('descriptionBox').classList.remove('d-none');
+    document.getElementById('durationBox').classList.remove('d-none');
+    document.getElementById('priceBox').classList.remove('d-none');
+    document.getElementById('itemDescription').placeholder = '';
+    document.getElementById('itemId').value = item ? item.id : '';
+    document.getElementById('itemName').value = item ? item.name : '';
+    document.getElementById('itemDescription').value = item ? (item.description || '') : '';
+    document.getElementById('itemDuration').value = item ? item.duration_min : 30;
+    document.getElementById('itemPrice').value = item ? Number(item.price) : 0;
+    document.getElementById('itemError').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('agendaModal')).show();
+  }
+
+  function openStaffForm(id) {
+    itemMode = 'staff';
+    const item = staff.find((s) => s.id === id);
+    document.getElementById('agendaModalTitle').textContent = item ? 'Editar profesional' : 'Nuevo profesional';
+    document.getElementById('nameLabel').textContent = 'Nombre';
+    document.getElementById('descriptionBox').classList.remove('d-none');
+    document.getElementById('durationBox').classList.add('d-none');
+    document.getElementById('priceBox').classList.add('d-none');
+    document.getElementById('itemDescription').value = item ? (item.role || '') : '';
+    document.getElementById('itemDescription').placeholder = 'Puesto o especialidad (opcional)';
+    document.getElementById('itemId').value = item ? item.id : '';
+    document.getElementById('itemName').value = item ? item.name : '';
+    document.getElementById('itemError').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('agendaModal')).show();
+  }
+
+  async function saveItem() {
+    const id = document.getElementById('itemId').value;
+    const name = document.getElementById('itemName').value.trim();
+    const errorBox = document.getElementById('itemError');
+    if (!name) {
+      errorBox.textContent = 'Escribe un nombre.';
+      errorBox.classList.remove('d-none');
+      return;
+    }
+    const button = document.getElementById('saveItemBtn');
+    button.disabled = true;
+    try {
+      if (itemMode === 'service') {
+        const payload = {
+          name,
+          description: document.getElementById('itemDescription').value.trim() || null,
+          duration_min: Number(document.getElementById('itemDuration').value || 30),
+          price: Number(document.getElementById('itemPrice').value || 0),
+        };
+        if (id) await apiRequest('PATCH', `/agenda/${RID}/services/${id}`, payload);
+        else await apiRequest('POST', `/agenda/${RID}/services`, payload);
+        await loadServices();
+      } else {
+        const payload = { name, role: document.getElementById('itemDescription').value.trim() || null };
+        if (id) await apiRequest('PATCH', `/agenda/${RID}/staff/${id}`, payload);
+        else await apiRequest('POST', `/agenda/${RID}/staff`, payload);
+        await loadStaff();
+      }
+      bootstrap.Modal.getInstance(document.getElementById('agendaModal')).hide();
+      showToast('Guardado');
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.classList.remove('d-none');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function toggleService(id, active) {
+    try {
+      await apiRequest('PATCH', `/agenda/${RID}/services/${id}`, { is_active: active });
+      await loadServices();
+    } catch (err) { showToast(err.message, 'danger'); }
+  }
+
+  async function toggleStaff(id, active) {
+    try {
+      await apiRequest('PATCH', `/agenda/${RID}/staff/${id}`, { is_active: active });
+      await loadStaff();
+    } catch (err) { showToast(err.message, 'danger'); }
+  }
+
+  async function loadAppointments() {
+    const date = document.getElementById('agendaDate').value;
+    if (!date) return;
+    const box = document.getElementById('appointmentsList');
+    box.innerHTML = '<div class="p-3 text-center"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+    try {
+      const rows = await apiRequest('GET', `/agenda/${RID}/appointments?date=${date}`);
+      if (!rows.length) {
+        box.innerHTML = '<div class="p-3 text-muted small">No hay citas para ese día.</div>';
+        return;
+      }
+      const badge = (status) => {
+        const map = {
+          confirmed: ['agenda-badge-pending', 'Confirmada'],
+          pending: ['agenda-badge-pending', 'Pendiente'],
+          completed: ['agenda-badge-done', 'Completada'],
+          no_show: ['agenda-badge-noshow', 'No asistió'],
+          cancelled: ['agenda-badge-cancel', 'Cancelada'],
+        };
+        const [cls, label] = map[status] || ['agenda-badge-cancel', status];
+        return `<span class="badge ${cls}">${label}</span>`;
+      };
+      box.innerHTML = rows.map((a) => {
+        const time = new Date(a.start_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        const end = new Date(a.end_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        const actions = [];
+        if (a.status === 'confirmed' || a.status === 'pending') {
+          actions.push(`<button class="btn btn-sm btn-outline-success" onclick="setStatus('${a.id}', 'completed')">Completada</button>`);
+          actions.push(`<button class="btn btn-sm btn-outline-danger" onclick="setStatus('${a.id}', 'no_show')">No asistió</button>`);
+          actions.push(`<button class="btn btn-sm btn-outline-secondary" onclick="setStatus('${a.id}', 'cancelled')">Cancelar</button>`);
+        }
+        return `
+          <div class="agenda-row">
+            <div class="agenda-time">${time}<div class="small text-muted fw-normal">${end}</div></div>
+            <div class="flex-grow-1 min-w-0">
+              <div class="fw-semibold">${esc(a.client_name)} ${badge(a.status)}</div>
+              <div class="small text-muted">${esc(a.service_name || 'Servicio')} · ${esc(a.staff_name || 'Sin asignar')} · ${money(a.price)}</div>
+              ${a.client_phone ? `<div class="small text-muted"><i class="bi bi-telephone"></i> ${esc(a.client_phone)}</div>` : ''}
+              ${a.notes ? `<div class="small text-muted">${esc(a.notes)}</div>` : ''}
+            </div>
+            <div class="agenda-actions ms-auto d-flex gap-1 flex-wrap">${actions.join('')}</div>
+          </div>`;
+      }).join('');
+    } catch (err) {
+      box.innerHTML = `<div class="p-3 text-danger small">${esc(err.message)}</div>`;
+    }
+  }
+
+  async function setStatus(id, status) {
+    const labels = { completed: 'marcar como completada', no_show: 'marcar como no asistió', cancelled: 'cancelar' };
+    if (!confirm(`¿Seguro que quieres ${labels[status]} esta cita?`)) return;
+    try {
+      await apiRequest('PATCH', `/agenda/${RID}/appointments/${id}`, { status });
+      await loadAppointments();
+      showToast('Cita actualizada');
+    } catch (err) { showToast(err.message, 'danger'); }
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('agendaDate').value = new Date().toISOString().slice(0, 10);
+    try {
+      await loadRestaurant();
+      await Promise.all([loadServices(), loadStaff()]);
+      await loadAppointments();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  });
+</script>
+{% endblock %}

@@ -30,6 +30,9 @@ from app.models.receipt_validation import ReceiptValidation
 from app.models.delivery_incident import DeliveryIncident
 from app.models.restaurant_adjustment import RestaurantAdjustment
 from app.models.security import BlockedIP, SecurityEvent
+from app.models.business_service import BusinessService
+from app.models.business_staff import BusinessStaff
+from app.models.appointment import Appointment
 
 __all__ = [
     "User",
@@ -67,4 +70,7 @@ __all__ = [
     "RestaurantAdjustment",
     "SecurityEvent",
     "BlockedIP",
+    "BusinessService",
+    "BusinessStaff",
+    "Appointment",
 ]

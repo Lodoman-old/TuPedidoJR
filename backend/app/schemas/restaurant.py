@@ -117,6 +117,7 @@ class RestaurantOut(BaseModel):
     business_type: str = "restaurant"
     catalog_enabled: bool = True
     accepts_custom_requests: bool = True
+    appointments_enabled: bool = False
     pickup_enabled: bool = False
     effective_commission_percentage: Decimal = Decimal("0")
     affiliated: bool = False
@@ -155,6 +156,7 @@ class RestaurantListItem(BaseModel):
     business_type: str = "restaurant"
     catalog_enabled: bool = True
     accepts_custom_requests: bool = True
+    appointments_enabled: bool = False
     pickup_enabled: bool = False
     logo_url: str | None
     is_open: bool

@@ -197,6 +197,9 @@
               ${r.reservations_enabled && !r.viewer_role && !isStore
                 ? `<div class="mt-2"><a class="btn btn-sm btn-outline-success" href="/web/restaurants/${RID}/reserve"><i class="bi bi-calendar-check"></i> Reservar mesa</a></div>`
                 : ''}
+              ${r.appointments_enabled && !r.viewer_role
+                ? `<div class="mt-2"><a class="btn btn-sm btn-primary" href="/web/restaurants/${RID}/agenda/book"><i class="bi bi-calendar-week"></i> Agendar cita</a></div>`
+                : ''}
             </div>
           </div>
         </div>`;
@@ -225,6 +228,9 @@
           buttons.push(`<a href="/web/restaurants/${RID}/orders" class="btn btn-sm btn-nav-orders"><i class="bi bi-receipt"></i> Pedidos</a>`);
           if (!isStore) {
             buttons.push(`<a href="/web/restaurants/${RID}/reservations" class="btn btn-sm btn-nav-reservations"><i class="bi bi-calendar-check"></i> Reservaciones</a>`);
+          }
+          if (canManage) {
+            buttons.push(`<a href="/web/restaurants/${RID}/agenda" class="btn btn-sm btn-nav-agenda"><i class="bi bi-calendar-week"></i> Agenda</a>`);
           }
           if (isStore || r.accepts_custom_requests) {
             buttons.push(`<a href="/web/restaurants/${RID}/requests" class="btn btn-sm btn-nav-requests"><i class="bi bi-chat-square-text"></i> ${isStore ? 'Solicitudes' : 'Pedidos especiales'}</a>`);

@@ -192,6 +192,16 @@ async def web_restaurant_reservations(request: Request, restaurant_id: str):
     )
 
 
+@router.get("/restaurants/{restaurant_id}/agenda")
+async def web_restaurant_agenda(request: Request, restaurant_id: str):
+    return templates.TemplateResponse(request, "agenda_manage.html", {"restaurant_id": restaurant_id})
+
+
+@router.get("/restaurants/{restaurant_id}/agenda/book")
+async def web_restaurant_agenda_book(request: Request, restaurant_id: str):
+    return templates.TemplateResponse(request, "agenda_book.html", {"restaurant_id": restaurant_id})
+
+
 @router.get("/reservations")
 async def web_my_reservations(request: Request):
     return templates.TemplateResponse(request, "reservations.html")

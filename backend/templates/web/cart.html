@@ -73,55 +73,66 @@ let scheduleState = { enabled: false, value: '' };
   function sanitizeCartWithMenu(info) {
     const menu = info?.menu || [];
     if (!menu.length) return;
+    const rate = Number(info?.effective_commission_percentage || 0) || 0;
     const byId = new Map(menu.map(i => [String(i.id), i]));
     const cart = getCart();
     const kept = [];
     const removedNames = [];
+    const priceNotes = [];
     let adjusted = false;
     for (const line of cart) {
       const item = byId.get(String(line.menu_item_id));
-      if (!item) {
+      if (!item || item.is_available === false) {
         removedNames.push(line.name);
         adjusted = true;
         continue;
       }
       const groups = item.option_groups || [];
-      const validIds = new Set(groups.flatMap(g => (g.options || []).map(o => String(o.id))));
+      const availableOptions = (group) => (group.options || []).filter(o => o.is_available !== false);
+      const validIds = new Set(groups.flatMap(g => availableOptions(g).map(o => String(o.id))));
       const currentIds = line.option_ids || [];
       const keptIds = currentIds.filter(id => validIds.has(String(id)));
-      let lineOut = line;
-      if (keptIds.length !== currentIds.length) {
+      const missingRequired = groups.some(group =>
+        group.is_required && !availableOptions(group).some(o => keptIds.includes(String(o.id)))
+      );
+      if (missingRequired) {
+        removedNames.push(line.name);
         adjusted = true;
-        const names = [];
-        let price = Number(item.price || 0);
-        for (const group of groups) {
-          const chosen = (group.options || []).filter(o => keptIds.includes(String(o.id)));
-          if (!chosen.length) continue;
-          if (group.pricing_mode === 'max') {
-            price = Math.max(price, ...chosen.map(o => Number(o.price_delta || 0)));
-            chosen.forEach(o => names.push(`${group.name}: ${o.name} (1/${chosen.length})`));
-          } else {
-            price += chosen.reduce((sum, o) => sum + Number(o.price_delta || 0), 0);
-            chosen.forEach(o => names.push(`${group.name}: ${o.name}`));
-          }
-        }
-        const missingRequired = groups.some(group =>
-          group.is_required && !(group.options || []).some(o => keptIds.includes(String(o.id)))
-        );
-        if (missingRequired) {
-          removedNames.push(line.name);
-          continue;
-        }
-        lineOut = { ...line, option_ids: keptIds, option_names: names, price };
+        continue;
       }
-      kept.push(lineOut);
+      const names = [];
+      let baseUnit = Number(item.price || 0);
+      for (const group of groups) {
+        const chosen = availableOptions(group).filter(o => keptIds.includes(String(o.id)));
+        if (!chosen.length) continue;
+        if (group.pricing_mode === 'max') {
+          baseUnit = Math.max(baseUnit, ...chosen.map(o => Number(o.price_delta || 0)));
+          chosen.forEach(o => names.push(`${group.name}: ${o.name} (1/${chosen.length})`));
+        } else {
+          baseUnit += chosen.reduce((sum, o) => sum + Number(o.price_delta || 0), 0);
+          chosen.forEach(o => names.push(`${group.name}: ${o.name}`));
+        }
+      }
+      const newPrice = roundHalfDown(baseUnit * (1 + rate / 100));
+      const optionsChanged = keptIds.length !== currentIds.length;
+      const priceChanged = Math.abs(newPrice - Number(line.price || 0)) > 0.009;
+      const nameChanged = item.name !== line.name;
+      if (optionsChanged || priceChanged || nameChanged) {
+        adjusted = true;
+        if (priceChanged) priceNotes.push(`${item.name} (${money0(line.price)} → ${money0(newPrice)})`);
+      }
+      kept.push({ ...line, name: item.name, option_ids: keptIds, option_names: names, price: newPrice });
     }
     if (!adjusted) return;
     sessionStorage.setItem('cart', JSON.stringify(kept));
-    const unique = [...new Set(removedNames)];
-    cartNotice = unique.length
-      ? `Quitamos ${unique.length} producto(s) que cambiaron en el menú: ${unique.join(', ')}. Vuelve a agregarlos.`
-      : 'Actualizamos las opciones de tu carrito porque el menú cambió.';
+    const parts = [];
+    const uniqueRemoved = [...new Set(removedNames)];
+    if (uniqueRemoved.length) {
+      parts.push(`Quitamos ${uniqueRemoved.length} producto(s) que ya no están disponibles: ${uniqueRemoved.join(', ')}. Vuelve a agregarlos.`);
+    }
+    if (priceNotes.length) parts.push(`Actualizamos precios: ${priceNotes.join(', ')}.`);
+    if (!parts.length) parts.push('Actualizamos tu carrito con el menú vigente.');
+    cartNotice = parts.join(' ');
     updateCartBadge();
     if (typeof scheduleCartSync === 'function') scheduleCartSync();
   }

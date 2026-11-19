@@ -8,6 +8,14 @@
   .agenda-service:hover { border-color: #1B2F6B; }
   .agenda-service.selected { border-color: #1B2F6B; background: #eef2ff; box-shadow: 0 6px 18px rgba(27,47,107,.12); }
   .agenda-service .price { font-weight: 700; color: #1B2F6B; }
+  .agenda-chip {
+    display: inline-flex; align-items: center; gap: .3rem;
+    border: 1px solid #e6ebf2; border-radius: 999px;
+    padding: .4rem .85rem; background: #fff; font-size: .85rem;
+  }
+  .agenda-chip.active {
+    border-color: #1B2F6B; background: #eef2ff; color: #1B2F6B; font-weight: 600;
+  }
   .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: .35rem; }
   .cal-head { text-align: center; font-size: .72rem; font-weight: 700; color: #6c757d; text-transform: uppercase; padding: .25rem 0; }
   .cal-day {

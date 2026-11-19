@@ -434,7 +434,7 @@
     if (!confirm(`¿Seguro que quieres ${labels[status]} esta cita?`)) return;
     try {
       await apiRequest('PATCH', `/agenda/${RID}/appointments/${id}`, { status });
-      await loadAppointments();
+      await Promise.all([loadAppointments(), loadBalance()]);
       showToast('Cita actualizada');
     } catch (err) { showToast(err.message, 'danger'); }
   }

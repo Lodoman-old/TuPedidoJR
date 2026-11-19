@@ -178,7 +178,57 @@ async def robots_txt():
 
     if settings.NOINDEX:
         return PlainTextResponse("User-agent: *\nDisallow: /\n")
-    return PlainTextResponse("User-agent: *\nAllow: /\n")
+    base = settings.APP_URL.rstrip("/")
+    body = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /web/admin/\n"
+        "Disallow: /web/login\n"
+        "Disallow: /web/register\n"
+        "Disallow: /web/register-restaurant\n"
+        "Disallow: /web/profile\n"
+        "Disallow: /web/cart\n"
+        "Disallow: /api/\n"
+        f"Sitemap: {base}/sitemap.xml\n"
+    )
+    return PlainTextResponse(body)
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap_xml():
+    from fastapi.responses import Response
+    from sqlalchemy import text
+
+    from app.db.session import async_session
+
+    base = settings.APP_URL.rstrip("/")
+    paths = ["/web/inicio", "/web/app", "/manuales"]
+    try:
+        async with async_session() as db:
+            result = await db.execute(text(
+                "SELECT slug FROM restaurants "
+                "WHERE slug IS NOT NULL AND status = 'active' AND public_page_enabled = true "
+                "ORDER BY name"
+            ))
+            paths += [f"/r/{slug}" for slug in result.scalars().all() if slug]
+    except Exception:
+        pass
+
+    items = []
+    for path in paths:
+        priority = "1.0" if path == "/web/inicio" else "0.7"
+        items.append(
+            f"<url><loc>{base}{path}</loc>"
+            "<changefreq>weekly</changefreq>"
+            f"<priority>{priority}</priority></url>"
+        )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        + "".join(items)
+        + "</urlset>"
+    )
+    return Response(content=xml, media_type="application/xml")
 
 
 app.mount("/static", StaticFiles(directory=Path(__file__).parent.parent / "static"), name="static")

@@ -538,6 +538,37 @@ async function listMyDeliveryOrders() { return await apiRequest('GET', '/deliver
 async function listDeliveryPayouts() { return await apiRequest('GET', '/delivery/payouts'); }
 async function getDeliveryEarnings() { return await apiRequest('GET', '/delivery/earnings'); }
 async function getDeliveryProfile() { return await apiRequest('GET', '/delivery/profile'); }
+
+let courierTrackingOn = false;
+async function startCourierTracking() {
+  const plugins = window.Capacitor && window.Capacitor.Plugins;
+  const plugin = plugins && plugins.BackgroundLocation;
+  const token = sessionStorage.getItem('token');
+  if (!plugin || !token || courierTrackingOn) return false;
+  try {
+    if (plugins.Geolocation) {
+      const status = await plugins.Geolocation.checkPermissions();
+      if (status.location !== 'granted') {
+        const requested = await plugins.Geolocation.requestPermissions({ permissions: ['location'] });
+        if (requested.location !== 'granted') return false;
+      }
+    }
+    await plugin.start({ token, url: window.location.origin });
+    courierTrackingOn = true;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+async function stopCourierTracking() {
+  const plugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundLocation;
+  if (plugin) {
+    try { await plugin.stop(); } catch (e) { /* sin servicio activo */ }
+  }
+  courierTrackingOn = false;
+}
+window.courierTrackingActive = () => courierTrackingOn;
+window.setCourierTracking = (on) => (on ? startCourierTracking() : stopCourierTracking());
 async function updateDeliveryProfile(data) { return await apiRequest('PATCH', '/delivery/profile', data); }
 async function setDeliveryAvailability(isAvailable) { return await apiRequest('PATCH', '/delivery/availability', { is_available: isAvailable }); }
 async function uploadFile(file) {
@@ -740,13 +771,15 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         if (nav) nav.textContent = displayName;
 
         let isDelivery = false;
+        let deliveryProfile = null;
         try {
-          await apiRequest('GET', '/delivery/profile');
+          deliveryProfile = await apiRequest('GET', '/delivery/profile');
           isDelivery = true;
         } catch (e) { /* customer or restaurant account */ }
         sessionStorage.setItem('is_delivery', isDelivery ? 'true' : 'false');
         applyDeliveryNav(isDelivery);
         applyManualNav();
+        window.setCourierTracking?.(isDelivery && Boolean(deliveryProfile && deliveryProfile.is_available));
         if (isDelivery) hideDeliveryIrrelevantNav();
         else document.querySelectorAll('.nav-delivery-hide').forEach(el => el.style.display = '');
         if (enforceDeliveryGuard(isDelivery)) return;
@@ -1163,6 +1196,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
       updateCartBadge();
       document.getElementById('logoutBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
+        window.setCourierTracking?.(false);
         resetLocalCart();
         sessionStorage.removeItem('token');
         sessionStorage.removeItem('is_superuser');

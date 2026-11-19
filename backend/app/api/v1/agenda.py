@@ -19,6 +19,7 @@ from app.models.user import User
 from app.schemas.agenda import (
     AppointmentIn,
     AppointmentOut,
+    AppointmentProof,
     AppointmentStatusUpdate,
     ServiceIn,
     ServiceOut,
@@ -27,6 +28,7 @@ from app.schemas.agenda import (
     StaffOut,
     StaffUpdate,
 )
+from app.services.appointment_payment_service import payment_plan, schedule_validation
 from app.services.order_service import get_setting_value
 from app.services.restaurant_access import MANAGE_ROLES, have_role
 
@@ -58,6 +60,38 @@ def _staff_out(item: BusinessStaff) -> StaffOut:
     return StaffOut(
         id=item.id, name=item.name, role=item.role,
         is_active=item.is_active, sort_order=item.sort_order,
+    )
+
+
+def _appointment_out(a: Appointment, service_name: str | None = None,
+                     staff_name: str | None = None) -> AppointmentOut:
+    return AppointmentOut(
+        id=a.id,
+        service_id=a.service_id,
+        staff_id=a.staff_id,
+        service_name=service_name,
+        staff_name=staff_name,
+        client_name=a.client_name,
+        client_phone=a.client_phone,
+        start_at=a.start_at,
+        end_at=a.end_at,
+        status=a.status,
+        price=a.price,
+        payment_mode=a.payment_mode,
+        payment_status=a.payment_status,
+        deposit_amount=a.deposit_amount,
+        deposit_percent=a.deposit_percent,
+        online_amount=a.online_amount,
+        cash_due=a.cash_due,
+        business_credit=a.business_credit,
+        business_debt=a.business_debt,
+        platform_fee=a.platform_fee,
+        business_fee=a.business_fee,
+        payment_reference=a.payment_reference,
+        receipt_status=a.receipt_status,
+        proof_url=a.proof_url,
+        paid_at=a.paid_at,
+        notes=a.notes,
     )
 
 
@@ -207,6 +241,14 @@ async def agenda_info(
         },
         "services": [_service_out(s) for s in services],
         "staff": [_staff_out(s) for s in staff],
+        "payment": {
+            "client_fee": str(await get_setting_value(db, "APP_APPOINTMENT_CLIENT_FEE", "5.0")),
+            "business_fee": str(await get_setting_value(db, "APP_APPOINTMENT_BUSINESS_FEE", "5.0")),
+            "deposit_percent": str(await get_setting_value(db, "APP_APPOINTMENT_DEPOSIT_PERCENT", "20")),
+            "bank_name": (await get_setting_value(db, "BANK_NAME", "")).strip(),
+            "bank_holder": (await get_setting_value(db, "BANK_ACCOUNT_HOLDER", "")).strip(),
+            "bank_clabe": (await get_setting_value(db, "BANK_CLABE", "")).strip(),
+        },
         "schedule": [
             {
                 "day_of_week": r.day_of_week,
@@ -335,8 +377,16 @@ async def create_appointment(
         raise HTTPException(status_code=409, detail="Ese horario ya no está disponible")
     chosen = free_staff[0]
 
+    if body.payment_mode in ("deposit", "full") and not (body.proof_url or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Sube el comprobante de tu transferencia",
+        )
+
     client_fee = Decimal(await get_setting_value(db, "APP_APPOINTMENT_CLIENT_FEE", "5.0"))
     business_fee = Decimal(await get_setting_value(db, "APP_APPOINTMENT_BUSINESS_FEE", "5.0"))
+    deposit_percent = Decimal(await get_setting_value(db, "APP_APPOINTMENT_DEPOSIT_PERCENT", "20"))
+    plan = payment_plan(service.price, body.payment_mode, client_fee, business_fee, deposit_percent)
     appointment = Appointment(
         restaurant_id=restaurant.id,
         service_id=service.id,
@@ -348,11 +398,18 @@ async def create_appointment(
         end_at=_utc(end_local),
         status="confirmed",
         price=service.price,
-        payment_mode="cash",
-        payment_status="cash_pending",
-        deposit_amount=Decimal("0"),
+        payment_mode=body.payment_mode,
+        payment_status=plan["payment_status"],
+        deposit_amount=plan["deposit_amount"],
+        deposit_percent=plan["deposit_percent"],
+        online_amount=plan["online_amount"],
+        cash_due=plan["cash_due"],
+        business_credit=plan["business_credit"],
+        business_debt=plan["business_debt"],
         platform_fee=client_fee + business_fee,
         business_fee=business_fee,
+        receipt_status="pending" if body.payment_mode != "cash" else "none",
+        proof_url=(body.proof_url or "").strip() or None,
         notes=(body.notes or "").strip() or None,
     )
     db.add(appointment)
@@ -362,24 +419,9 @@ async def create_appointment(
         await db.rollback()
         raise HTTPException(status_code=409, detail="Ese horario ya no está disponible") from exc
     await db.refresh(appointment)
-    return AppointmentOut(
-        id=appointment.id,
-        service_id=appointment.service_id,
-        staff_id=appointment.staff_id,
-        service_name=service.name,
-        staff_name=chosen.name,
-        client_name=appointment.client_name,
-        client_phone=appointment.client_phone,
-        start_at=appointment.start_at,
-        end_at=appointment.end_at,
-        status=appointment.status,
-        price=appointment.price,
-        payment_mode=appointment.payment_mode,
-        payment_status=appointment.payment_status,
-        platform_fee=appointment.platform_fee,
-        business_fee=appointment.business_fee,
-        notes=appointment.notes,
-    )
+    if appointment.payment_mode != "cash":
+        schedule_validation(appointment.id)
+    return _appointment_out(appointment, service.name, chosen.name)
 
 
 @router.get("/{restaurant_id}/appointments", response_model=list[AppointmentOut])
@@ -396,23 +438,10 @@ async def list_appointments(
     services = {str(s.id): s.name for s in await _services(db, restaurant.id)}
     staff = {str(s.id): s.name for s in await _staff(db, restaurant.id)}
     return [
-        AppointmentOut(
-            id=a.id,
-            service_id=a.service_id,
-            staff_id=a.staff_id,
-            service_name=services.get(str(a.service_id)),
-            staff_name=staff.get(str(a.staff_id)),
-            client_name=a.client_name,
-            client_phone=a.client_phone,
-            start_at=a.start_at,
-            end_at=a.end_at,
-            status=a.status,
-            price=a.price,
-            payment_mode=a.payment_mode,
-            payment_status=a.payment_status,
-            platform_fee=a.platform_fee,
-            business_fee=a.business_fee,
-            notes=a.notes,
+        _appointment_out(
+            a,
+            services.get(str(a.service_id)),
+            staff.get(str(a.staff_id)),
         )
         for a in sorted(rows, key=lambda x: x.start_at)
     ]
@@ -436,23 +465,67 @@ async def update_appointment(
     await db.refresh(appointment)
     services = {str(s.id): s.name for s in await _services(db, restaurant.id)}
     staff = {str(s.id): s.name for s in await _staff(db, restaurant.id)}
-    return AppointmentOut(
-        id=appointment.id,
-        service_id=appointment.service_id,
-        staff_id=appointment.staff_id,
-        service_name=services.get(str(appointment.service_id)),
-        staff_name=staff.get(str(appointment.staff_id)),
-        client_name=appointment.client_name,
-        client_phone=appointment.client_phone,
-        start_at=appointment.start_at,
-        end_at=appointment.end_at,
-        status=appointment.status,
-        price=appointment.price,
-        payment_mode=appointment.payment_mode,
-        payment_status=appointment.payment_status,
-        platform_fee=appointment.platform_fee,
-        business_fee=appointment.business_fee,
-        notes=appointment.notes,
+    return _appointment_out(
+        appointment,
+        services.get(str(appointment.service_id)),
+        staff.get(str(appointment.staff_id)),
+    )
+
+
+@router.get("/{restaurant_id}/appointments/{appointment_id}", response_model=AppointmentOut)
+async def get_appointment(
+    restaurant_id: str,
+    appointment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    restaurant = await _restaurant(db, restaurant_id)
+    appointment = await db.get(Appointment, appointment_id)
+    if not appointment or appointment.restaurant_id != restaurant.id:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+    can_manage = await have_role(db, restaurant.id, current_user, MANAGE_ROLES)
+    if appointment.client_user_id != current_user.id and not can_manage:
+        raise HTTPException(status_code=403, detail="No tienes acceso a esta cita")
+    services = {str(s.id): s.name for s in await _services(db, restaurant.id)}
+    staff = {str(s.id): s.name for s in await _staff(db, restaurant.id)}
+    return _appointment_out(
+        appointment,
+        services.get(str(appointment.service_id)),
+        staff.get(str(appointment.staff_id)),
+    )
+
+
+@router.post("/{restaurant_id}/appointments/{appointment_id}/proof", response_model=AppointmentOut)
+async def upload_appointment_proof(
+    restaurant_id: str,
+    appointment_id: str,
+    body: AppointmentProof,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    restaurant = await _restaurant(db, restaurant_id)
+    appointment = await db.get(Appointment, appointment_id)
+    if not appointment or appointment.restaurant_id != restaurant.id:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+    if appointment.client_user_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="No puedes editar esta cita")
+    if appointment.payment_mode == "cash":
+        raise HTTPException(status_code=400, detail="Esta cita se paga en efectivo")
+    if appointment.payment_status in ("paid", "deposit_paid"):
+        raise HTTPException(status_code=400, detail="Esta cita ya está pagada")
+    appointment.proof_url = body.proof_url.strip()
+    appointment.payment_status = "proof_review"
+    appointment.receipt_status = "pending"
+    appointment.payment_reference = None
+    await db.commit()
+    await db.refresh(appointment)
+    schedule_validation(appointment.id)
+    services = {str(s.id): s.name for s in await _services(db, restaurant.id)}
+    staff = {str(s.id): s.name for s in await _staff(db, restaurant.id)}
+    return _appointment_out(
+        appointment,
+        services.get(str(appointment.service_id)),
+        staff.get(str(appointment.staff_id)),
     )
 
 

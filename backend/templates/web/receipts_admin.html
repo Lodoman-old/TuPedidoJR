@@ -13,6 +13,7 @@
 <div class="alert alert-info py-2 small">
   <strong>Cómo leerlo:</strong> 85% o más = se puede aprobar sin problema; 50–84% = revisa algo;
   menos de 50% = revisa a fondo. La IA puede equivocarse, sobre todo con PDFs editados.
+  <br><strong>Citas:</strong> el pago por transferencia entra a la cuenta de TuPedidoJR; con 85% o más la cita se marca pagada automáticamente. Si queda en revisión, apruébala o recházala aquí.
 </div>
 
 <div class="d-flex gap-2 mb-3 flex-wrap">
@@ -39,7 +40,7 @@
   }
 
   function badgeFor(v) {
-    if (v.status === 'high') return 'success';
+    if (v.status === 'high' || v.status === 'approved') return 'success';
     if (v.status === 'review') return 'warning text-dark';
     return 'danger';
   }
@@ -103,6 +104,13 @@
             <button class="btn btn-sm btn-outline-secondary" onclick="revalidate('${v.id}')">
               <i class="bi bi-arrow-repeat"></i> Validar de nuevo
             </button>
+            ${v.entity_type === 'appointment_payment' && v.status !== 'approved' && v.status !== 'rejected' ? `
+              <button class="btn btn-sm btn-success" onclick="settle('${v.id}', 'approve')">
+                <i class="bi bi-check2-circle"></i> Aprobar pago
+              </button>
+              <button class="btn btn-sm btn-outline-danger" onclick="settle('${v.id}', 'reject')">
+                <i class="bi bi-x-circle"></i> Rechazar
+              </button>` : ''}
             <span class="small text-muted align-self-center">${esc(v.provider)} · ${esc(v.model || '')}</span>
           </div>
         </div>
@@ -130,6 +138,20 @@
     try {
       await apiRequest('POST', `/admin/receipts/${id}/revalidate`, {});
       showToast('Comprobante validado de nuevo', 'success');
+      loadValidations();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
+  async function settle(id, action) {
+    const question = action === 'approve'
+      ? '¿Aprobar este pago? La cita quedará marcada como pagada.'
+      : '¿Rechazar este comprobante? La cita quedará pendiente de pago.';
+    if (!confirm(question)) return;
+    try {
+      await apiRequest('POST', `/admin/receipts/${id}/${action}`, {});
+      showToast(action === 'approve' ? 'Pago aprobado' : 'Comprobante rechazado', 'success');
       loadValidations();
     } catch (e) {
       showToast(e.message, 'danger');

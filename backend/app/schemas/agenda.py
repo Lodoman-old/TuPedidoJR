@@ -68,7 +68,12 @@ class AppointmentIn(BaseModel):
     client_name: str = Field(min_length=1, max_length=120)
     client_phone: str | None = Field(default=None, max_length=25)
     notes: str | None = None
-    payment_mode: str = "cash"
+    payment_mode: str = Field(default="cash", pattern="^(cash|deposit|full)$")
+    proof_url: str | None = None
+
+
+class AppointmentProof(BaseModel):
+    proof_url: str = Field(min_length=1)
 
 
 class AppointmentStatusUpdate(BaseModel):
@@ -89,6 +94,16 @@ class AppointmentOut(BaseModel):
     price: Decimal
     payment_mode: str
     payment_status: str
+    deposit_amount: Decimal = Decimal("0")
+    deposit_percent: Decimal = Decimal("0")
+    online_amount: Decimal = Decimal("0")
+    cash_due: Decimal = Decimal("0")
+    business_credit: Decimal = Decimal("0")
+    business_debt: Decimal = Decimal("0")
     platform_fee: Decimal
     business_fee: Decimal
+    payment_reference: str | None = None
+    receipt_status: str = "none"
+    proof_url: str | None = None
+    paid_at: datetime | None = None
     notes: str | None

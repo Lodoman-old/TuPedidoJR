@@ -409,6 +409,42 @@ async def _run_validation(
         await _validate_record(db, record)
 
 
+async def create_and_validate(
+    db: AsyncSession,
+    entity_type: str,
+    entity_id,
+    file_url: str,
+    expected_kind: str,
+    expected_amount=None,
+    expected_date=None,
+    expected_recipient: str | None = None,
+) -> ReceiptValidation | None:
+    """Crea el registro de validación y lo evalúa en la sesión del llamador.
+
+    Siempre deja el registro para revisión manual; si la IA está activa y hay
+    clave, además lo evalúa y actualiza el grado de certeza.
+    """
+    record = ReceiptValidation(
+        entity_type=entity_type,
+        entity_id=UUID(str(entity_id)),
+        file_url=file_url,
+        expected_kind=expected_kind,
+        expected_amount=expected_amount,
+        expected_date=expected_date,
+        expected_recipient=expected_recipient,
+        status="review",
+    )
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+
+    enabled = (await get_setting_value(db, "RECEIPT_VALIDATION_ENABLED", "false")).lower() == "true"
+    api_key = (await get_setting_value(db, "GEMINI_API_KEY", "")).strip()
+    if not enabled or not api_key:
+        return record
+    return await _validate_record(db, record)
+
+
 def schedule_receipt_validation(
     entity_type: str,
     entity_id: str,

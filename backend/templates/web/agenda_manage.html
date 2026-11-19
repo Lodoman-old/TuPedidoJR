@@ -325,6 +325,27 @@
         const [cls, label] = map[status] || ['agenda-badge-cancel', status];
         return `<span class="badge ${cls}">${label}</span>`;
       };
+      const paymentBadge = (a) => {
+        const map = {
+          cash_pending: ['agenda-badge-pending', 'Efectivo pendiente'],
+          proof_pending: ['agenda-badge-pending', 'Falta comprobante'],
+          proof_review: ['agenda-badge-pending', 'Comprobante en revisión'],
+          deposit_paid: ['agenda-badge-done', 'Anticipo pagado'],
+          paid: ['agenda-badge-done', 'Pagado en línea'],
+          proof_rejected: ['agenda-badge-noshow', 'Comprobante rechazado'],
+        };
+        const [cls, label] = map[a.payment_status] || ['agenda-badge-cancel', a.payment_status];
+        return `<span class="badge ${cls}">${label}</span>`;
+      };
+      const paymentLine = (a) => {
+        if (a.payment_mode === 'cash') {
+          return `Cobra en el negocio: ${money(a.cash_due || (Number(a.price) + 5))}`;
+        }
+        if (a.payment_mode === 'deposit') {
+          return `Anticipo en línea: ${money(a.online_amount)} · Cobra en el negocio: ${money(a.cash_due)}`;
+        }
+        return `Pagado en línea: ${money(a.online_amount)}`;
+      };
       box.innerHTML = rows.map((a) => {
         const time = new Date(a.start_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
         const end = new Date(a.end_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
@@ -334,12 +355,16 @@
           actions.push(`<button class="btn btn-sm btn-outline-danger" onclick="setStatus('${a.id}', 'no_show')">No asistió</button>`);
           actions.push(`<button class="btn btn-sm btn-outline-secondary" onclick="setStatus('${a.id}', 'cancelled')">Cancelar</button>`);
         }
+        if (a.proof_url) {
+          actions.push(`<button class="btn btn-sm btn-outline-primary" onclick="openDocumentPreview('${esc(a.proof_url)}','Comprobante de la cita')"><i class="bi bi-file-earmark-text"></i></button>`);
+        }
         return `
           <div class="agenda-row">
             <div class="agenda-time">${time}<div class="small text-muted fw-normal">${end}</div></div>
             <div class="flex-grow-1 min-w-0">
               <div class="fw-semibold">${esc(a.client_name)} ${badge(a.status)}</div>
               <div class="small text-muted">${esc(a.service_name || 'Servicio')} · ${esc(a.staff_name || 'Sin asignar')} · ${money(a.price)}</div>
+              <div class="small">${paymentBadge(a)} <span class="text-muted">${paymentLine(a)}</span></div>
               ${a.client_phone ? `<div class="small text-muted"><i class="bi bi-telephone"></i> ${esc(a.client_phone)}</div>` : ''}
               ${a.notes ? `<div class="small text-muted">${esc(a.notes)}</div>` : ''}
             </div>

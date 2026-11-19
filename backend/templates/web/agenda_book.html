@@ -80,7 +80,31 @@
     <div class="card-body">
       <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">5</span> Confirma tu cita</div>
       <div id="summaryBox" class="alert alert-light border small"></div>
-      <div class="row g-2">
+      <div class="mb-3">
+        <div class="fw-semibold small mb-2">Forma de pago</div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="payMode" id="payCash" value="cash" checked onchange="updatePaymentMode()">
+          <label class="form-check-label" for="payCash">Efectivo en el negocio · <span class="pay-amount" data-mode="cash"></span></label>
+        </div>
+        <div class="form-check" id="depositOption">
+          <input class="form-check-input" type="radio" name="payMode" id="payDeposit" value="deposit" onchange="updatePaymentMode()">
+          <label class="form-check-label" for="payDeposit">Anticipo por transferencia · <span class="pay-amount" data-mode="deposit"></span></label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="payMode" id="payFull" value="full" onchange="updatePaymentMode()">
+          <label class="form-check-label" for="payFull">Servicio completo por transferencia · <span class="pay-amount" data-mode="full"></span></label>
+        </div>
+      </div>
+      <div class="border rounded p-2 small d-none" id="transferBox">
+        <div class="fw-semibold mb-1"><i class="bi bi-bank"></i> Datos para transferir</div>
+        <div id="bankInfo" class="mb-2"></div>
+        <div class="alert alert-info py-1 px-2 small mb-2">
+          La transferencia se hace a la cuenta de <strong>TuPedidoJR</strong>. Sube tu comprobante y la plataforma lo valida.
+        </div>
+        <label class="form-label small mb-1" for="proofFile">Comprobante (imagen o PDF)</label>
+        <input class="form-control form-control-sm" type="file" id="proofFile" accept="image/*,application/pdf">
+      </div>
+      <div class="row g-2 mt-2">
         <div class="col-md-6">
           <label class="form-label small mb-1" for="clientName">Nombre</label>
           <input class="form-control" id="clientName" maxlength="120" autocomplete="name">
@@ -96,8 +120,8 @@
       </div>
       <div class="form-check mt-3">
         <input class="form-check-input" type="checkbox" id="cashConfirm">
-        <label class="form-check-label small" for="cashConfirm">
-          Pagaré en el negocio en efectivo. El negocio cobra el servicio más $5 de cuota de servicio.
+        <label class="form-check-label small" for="cashConfirm" id="confirmLabel">
+          Confirmo que los datos de mi cita son correctos.
         </label>
       </div>
       <div class="text-danger small mt-2 d-none" id="bookingError"></div>
@@ -121,7 +145,6 @@
 <script>
   const RID = '{{ restaurant_id }}';
   const money = (v) => '$' + Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const CLIENT_FEE = 5;
   const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
@@ -133,6 +156,7 @@
   let availability = {};
   let selectedDate = null;
   let selectedTime = null;
+  let selectedEnd = null;
 
   function esc(v) {
     return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -260,20 +284,112 @@
     const service = currentService();
     const [h, m] = time.split(':').map(Number);
     const endMinutes = h * 60 + m + (service ? service.duration_min : 30);
-    const endTime = `${pad(Math.floor(endMinutes / 60) % 24)}:${pad(endMinutes % 60)}`;
-    const dateLabel = new Date(`${selectedDate}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
-    document.getElementById('summaryBox').innerHTML = `
-      <div class="d-flex justify-content-between"><span>Servicio</span><strong>${esc(service.name)}</strong></div>
-      <div class="d-flex justify-content-between"><span>Fecha</span><strong>${dateLabel}</strong></div>
-      <div class="d-flex justify-content-between"><span>Hora</span><strong>${time} a ${endTime}</strong></div>
-      <div class="d-flex justify-content-between"><span>Precio del servicio</span><strong>${money(service.price)}</strong></div>
-      <div class="d-flex justify-content-between"><span>Cuota de servicio</span><strong>${money(CLIENT_FEE)}</strong></div>
-      <div class="d-flex justify-content-between border-top pt-1 mt-1"><span>Total en el negocio</span><strong>${money(Number(service.price) + CLIENT_FEE)}</strong></div>`;
+    selectedEnd = `${pad(Math.floor(endMinutes / 60) % 24)}:${pad(endMinutes % 60)}`;
     document.getElementById('confirmCard').classList.remove('d-none');
     document.getElementById('cashConfirm').checked = false;
     document.getElementById('bookingError').classList.add('d-none');
     document.getElementById('clientName').value = sessionStorage.getItem('user_name') || '';
+    const defaultMode = document.getElementById('payCash');
+    if (defaultMode) defaultMode.checked = true;
+    updatePaymentMode();
     document.getElementById('confirmCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function round2(value) {
+    return Math.round(Number(value || 0) * 100) / 100;
+  }
+
+  function feeValues() {
+    return {
+      client: Number(info.payment.client_fee || 5),
+      business: Number(info.payment.business_fee || 5),
+      percent: Number(info.payment.deposit_percent || 20),
+    };
+  }
+
+  function planFor(mode) {
+    const service = currentService();
+    const price = Number(service.price || 0);
+    const fees = feeValues();
+    if (mode === 'deposit') {
+      const deposit = round2(Math.min(price * fees.percent / 100, price));
+      return {
+        mode,
+        deposit,
+        online: round2(deposit + fees.client),
+        cash: round2(price - deposit),
+        price,
+      };
+    }
+    if (mode === 'full') {
+      return { mode, deposit: 0, online: round2(price + fees.client), cash: 0, price };
+    }
+    return { mode: 'cash', deposit: 0, online: 0, cash: round2(price + fees.client), price };
+  }
+
+  function selectedMode() {
+    const checked = document.querySelector('input[name="payMode"]:checked');
+    return checked ? checked.value : 'cash';
+  }
+
+  function updatePaymentMode() {
+    const plan = planFor(selectedMode());
+    const transfer = plan.mode !== 'cash';
+    document.querySelectorAll('.pay-amount').forEach((el) => {
+      const p = planFor(el.dataset.mode);
+      if (el.dataset.mode === 'deposit') {
+        el.textContent = `$${p.online.toFixed(2)} en línea (${feeValues().percent}% = $${p.deposit.toFixed(2)}) + $${p.cash.toFixed(2)} en el negocio`;
+      } else if (el.dataset.mode === 'full') {
+        el.textContent = `$${p.online.toFixed(2)} en línea`;
+      } else {
+        el.textContent = `$${p.cash.toFixed(2)} al llegar`;
+      }
+    });
+    document.getElementById('transferBox').classList.toggle('d-none', !transfer);
+    document.getElementById('confirmLabel').textContent = transfer
+      ? 'Confirmo mis datos y que haré la transferencia a la cuenta de TuPedidoJR.'
+      : 'Confirmo que pagaré en el negocio en efectivo.';
+    renderSummary();
+  }
+
+  function renderSummary() {
+    const service = currentService();
+    if (!service || !selectedTime) return;
+    const plan = planFor(selectedMode());
+    const fees = feeValues();
+    const dateLabel = new Date(`${selectedDate}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+    const lines = [
+      ['Servicio', esc(service.name)],
+      ['Fecha', dateLabel],
+      ['Hora', `${selectedTime} a ${selectedEnd}`],
+      ['Precio del servicio', money(plan.price)],
+    ];
+    if (plan.mode === 'deposit') {
+      lines.push([`Anticipo ${fees.percent}%`, money(plan.deposit)]);
+      lines.push(['Cuota de servicio (cliente)', money(fees.client)]);
+      lines.push(['Pagas en línea ahora', money(plan.online)]);
+      lines.push(['Pagas en el negocio', money(plan.cash)]);
+    } else if (plan.mode === 'full') {
+      lines.push(['Cuota de servicio (cliente)', money(fees.client)]);
+      lines.push(['Pagas en línea ahora', money(plan.online)]);
+      lines.push(['Pagas en el negocio', money(0)]);
+    } else {
+      lines.push(['Cuota de servicio (cliente)', money(fees.client)]);
+      lines.push(['Total en el negocio', money(plan.cash)]);
+    }
+    document.getElementById('summaryBox').innerHTML = lines
+      .map(([label, value], index) => `<div class="d-flex justify-content-between ${index === 1 ? 'border-top pt-1 mt-1' : ''}"><span>${label}</span><strong>${value}</strong></div>`)
+      .join('');
+  }
+
+  function fillBankInfo() {
+    const pay = info.payment || {};
+    const rows = [];
+    if (pay.bank_name) rows.push(`<div><strong>Banco:</strong> ${esc(pay.bank_name)}</div>`);
+    if (pay.bank_holder) rows.push(`<div><strong>Titular:</strong> ${esc(pay.bank_holder)}</div>`);
+    if (pay.bank_clabe) rows.push(`<div><strong>CLABE:</strong> ${esc(pay.bank_clabe)}</div>`);
+    if (!rows.length) rows.push('<div class="text-muted">La plataforma todavía no publica sus datos bancarios.</div>');
+    document.getElementById('bankInfo').innerHTML = rows.join('');
   }
 
   async function confirmAppointment() {
@@ -286,12 +402,38 @@
       return;
     }
     if (!document.getElementById('cashConfirm').checked) {
-      errorBox.textContent = 'Confirma que pagarás en el negocio.';
+      errorBox.textContent = 'Confirma los datos de tu cita para continuar.';
       errorBox.classList.remove('d-none');
       return;
     }
+    const mode = selectedMode();
+    const plan = planFor(mode);
     const button = document.getElementById('confirmBtn');
-    button.disabled = true;
+    let proofUrl = null;
+    if (mode !== 'cash') {
+      const file = document.getElementById('proofFile').files[0];
+      if (!file) {
+        errorBox.textContent = 'Sube el comprobante de tu transferencia.';
+        errorBox.classList.remove('d-none');
+        return;
+      }
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Subiendo comprobante...';
+      try {
+        const uploaded = await uploadDocument(file);
+        proofUrl = uploaded.url || uploaded.file_url || uploaded.path;
+      } catch (err) {
+        button.disabled = false;
+        button.innerHTML = '<i class="bi bi-calendar-check"></i> Confirmar cita';
+        errorBox.textContent = err.message;
+        errorBox.classList.remove('d-none');
+        return;
+      }
+      button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Agendando...';
+    } else {
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Agendando...';
+    }
     try {
       const payload = {
         service_id: serviceId,
@@ -300,14 +442,23 @@
         client_name: name,
         client_phone: document.getElementById('clientPhone').value.trim() || null,
         notes: document.getElementById('clientNotes').value.trim() || null,
-        payment_mode: 'cash',
+        payment_mode: mode,
+        proof_url: proofUrl,
       };
       const res = await apiRequest('POST', `/agenda/${RID}/appointments`, payload);
       const dateLabel = new Date(`${selectedDate}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+      let paymentLine = '';
+      if (mode === 'cash') {
+        paymentLine = `<div>Paga en el negocio: <strong>${money(plan.cash)}</strong></div>`;
+      } else {
+        const reviewed = res.payment_status === 'paid' || res.payment_status === 'deposit_paid';
+        paymentLine = `<div>Pagaste en línea: <strong>${money(res.online_amount || plan.online)}</strong> · ${reviewed ? 'confirmado' : 'comprobante en revisión'}</div>`;
+        if (plan.cash > 0) paymentLine += `<div>Paga en el negocio: <strong>${money(res.cash_due || plan.cash)}</strong></div>`;
+      }
       document.getElementById('successDetails').innerHTML = `
         <div><strong>${esc(res.service_name || '')}</strong> con ${esc(res.staff_name || 'tu profesional')}</div>
         <div>${dateLabel} a las ${selectedTime}</div>
-        <div>Paga en el negocio: <strong>${money(Number(res.price) + CLIENT_FEE)}</strong></div>`;
+        ${paymentLine}`;
       document.getElementById('bookingFlow').classList.add('d-none');
       document.getElementById('successCard').classList.remove('d-none');
     } catch (err) {
@@ -316,6 +467,7 @@
       if (/no está disponible|409/.test(err.message)) await loadAvailability();
     } finally {
       button.disabled = false;
+      button.innerHTML = '<i class="bi bi-calendar-check"></i> Confirmar cita';
     }
   }
 
@@ -355,6 +507,17 @@
         return;
       }
       document.getElementById('bookingFlow').classList.remove('d-none');
+      const depositPercent = Number(info.payment?.deposit_percent || 0);
+      if (!(depositPercent > 0 && depositPercent < 100)) {
+        document.getElementById('depositOption').classList.add('d-none');
+      }
+      if (!info.payment?.bank_clabe) {
+        document.getElementById('depositOption').classList.add('d-none');
+        const fullOption = document.getElementById('payFull')?.closest('.form-check');
+        if (fullOption) fullOption.classList.add('d-none');
+        document.getElementById('transferBox').classList.add('d-none');
+      }
+      fillBankInfo();
       const today = new Date();
       viewYear = today.getFullYear();
       viewMonth = today.getMonth();

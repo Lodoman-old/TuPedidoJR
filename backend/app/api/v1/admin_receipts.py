@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -6,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_superuser
 from app.db.session import get_db
+from app.models.appointment import Appointment
 from app.models.receipt_validation import ReceiptValidation
 from app.models.user import User
 from app.services.receipt_validation_service import revalidate_receipt
@@ -16,6 +18,7 @@ ENTITY_LABELS = {
     "mandado_prepayment": "Prepago de mandado",
     "mandado_purchase": "Ticket de compra de mandado",
     "reservation_deposit": "Depósito de reservación",
+    "appointment_payment": "Pago de cita",
 }
 KIND_LABELS = {
     "purchase_receipt": "Ticket de compra",
@@ -25,6 +28,8 @@ STATUS_LABELS = {
     "high": "Se puede aprobar",
     "review": "Revisar",
     "low": "Revisar a fondo",
+    "approved": "Aprobado",
+    "rejected": "Rechazado",
 }
 
 
@@ -84,4 +89,54 @@ async def revalidate(
     if not record:
         raise HTTPException(status_code=404, detail="Comprobante no encontrado")
     record = await revalidate_receipt(db, record)
+    return _row(record)
+
+
+async def _settle_appointment(db: AsyncSession, record: ReceiptValidation, approved: bool) -> None:
+    if record.entity_type != "appointment_payment":
+        return
+    appointment = await db.get(Appointment, record.entity_id)
+    if not appointment:
+        return
+    if approved:
+        appointment.receipt_status = "approved"
+        appointment.payment_status = (
+            "paid" if appointment.payment_mode == "full" else "deposit_paid"
+        )
+        appointment.paid_at = datetime.now(timezone.utc)
+    else:
+        appointment.receipt_status = "rejected"
+        appointment.payment_status = "proof_rejected"
+        appointment.paid_at = None
+
+
+@router.post("/receipts/{receipt_id}/approve")
+async def approve_receipt(
+    receipt_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    record = await db.get(ReceiptValidation, _uuid(receipt_id))
+    if not record:
+        raise HTTPException(status_code=404, detail="Comprobante no encontrado")
+    record.status = "approved"
+    await _settle_appointment(db, record, True)
+    await db.commit()
+    await db.refresh(record)
+    return _row(record)
+
+
+@router.post("/receipts/{receipt_id}/reject")
+async def reject_receipt(
+    receipt_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    record = await db.get(ReceiptValidation, _uuid(receipt_id))
+    if not record:
+        raise HTTPException(status_code=404, detail="Comprobante no encontrado")
+    record.status = "rejected"
+    await _settle_appointment(db, record, False)
+    await db.commit()
+    await db.refresh(record)
     return _row(record)

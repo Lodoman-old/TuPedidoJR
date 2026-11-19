@@ -10,6 +10,7 @@ from app.core.security import decode_access_token
 from app.models.restaurant import Restaurant
 from app.models.restaurant_schedule import RestaurantSchedule
 from app.models.user import User
+from app.services.appointment_payment_service import payment_plan
 
 
 def _headers(token: str) -> dict:
@@ -212,3 +213,125 @@ async def test_owner_marks_appointment_status(
     )
     assert updated.status_code == 200
     assert updated.json()["status"] == "completed"
+
+
+def test_payment_plan_cash():
+    plan = payment_plan(100, "cash", 5, 5, 20)
+    assert plan["online_amount"] == 0
+    assert plan["cash_due"] == 105
+    assert plan["business_credit"] == 0
+    assert plan["business_debt"] == 10
+    assert plan["payment_status"] == "cash_pending"
+
+
+def test_payment_plan_deposit():
+    plan = payment_plan(100, "deposit", 5, 5, 20)
+    assert plan["deposit_amount"] == 20
+    assert plan["online_amount"] == 25
+    assert plan["cash_due"] == 80
+    assert plan["business_credit"] == 15
+    assert plan["business_debt"] == 0
+
+
+def test_payment_plan_full():
+    plan = payment_plan(100, "full", 5, 5, 20)
+    assert plan["online_amount"] == 105
+    assert plan["cash_due"] == 0
+    assert plan["business_credit"] == 95
+    assert plan["business_debt"] == 0
+
+
+@pytest.mark.asyncio
+async def test_transfer_booking_requires_proof(
+    client, customer_token, business, service, staff
+):
+    resto, target = business
+    resp = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments",
+        headers=_headers(customer_token),
+        json={
+            "service_id": service["id"],
+            "staff_id": staff["id"],
+            "start_at": f"{target.isoformat()}T12:00:00",
+            "client_name": "Cliente Agenda",
+            "payment_mode": "deposit",
+        },
+    )
+    assert resp.status_code == 400
+    assert "comprobante" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_full_transfer_booking_amounts(
+    client, customer_token, business, service, staff, monkeypatch
+):
+    monkeypatch.setattr("app.api.v1.agenda.schedule_validation", lambda *a, **k: None)
+    resto, target = business
+    resp = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments",
+        headers=_headers(customer_token),
+        json={
+            "service_id": service["id"],
+            "staff_id": staff["id"],
+            "start_at": f"{target.isoformat()}T12:15:00",
+            "client_name": "Cliente Agenda",
+            "payment_mode": "full",
+            "proof_url": "/static/uploads/transferencia.jpg",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    data = resp.json()
+    assert data["payment_mode"] == "full"
+    assert float(data["online_amount"]) == 105
+    assert float(data["business_credit"]) == 95
+    assert float(data["cash_due"]) == 0
+    assert data["receipt_status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_proof_only_for_transfer_appointments(
+    client, customer_token, business, service, staff, monkeypatch
+):
+    monkeypatch.setattr("app.api.v1.agenda.schedule_validation", lambda *a, **k: None)
+    resto, target = business
+    created = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments",
+        headers=_headers(customer_token),
+        json={
+            "service_id": service["id"],
+            "staff_id": staff["id"],
+            "start_at": f"{target.isoformat()}T12:30:00",
+            "client_name": "Cliente Agenda",
+            "payment_mode": "deposit",
+            "proof_url": "/static/uploads/anticipo.jpg",
+        },
+    )
+    assert created.status_code == 201, created.text
+    appointment_id = created.json()["id"]
+
+    again = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments/{appointment_id}/proof",
+        headers=_headers(customer_token),
+        json={"proof_url": "/static/uploads/otro.jpg"},
+    )
+    assert again.status_code == 200
+    assert again.json()["payment_status"] == "proof_review"
+
+    cash = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments",
+        headers=_headers(customer_token),
+        json={
+            "service_id": service["id"],
+            "staff_id": staff["id"],
+            "start_at": f"{target.isoformat()}T09:30:00",
+            "client_name": "Cliente Efectivo",
+            "payment_mode": "cash",
+        },
+    )
+    cash_id = cash.json()["id"]
+    rejected = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments/{cash_id}/proof",
+        headers=_headers(customer_token),
+        json={"proof_url": "/static/uploads/no.jpg"},
+    )
+    assert rejected.status_code == 400

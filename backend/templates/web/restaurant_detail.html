@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="d-flex align-items-center gap-2 mb-2">
+<div class="d-flex align-items-center gap-2 mb-2" id="restaurantTopBar">
   <a href="/web/restaurants" class="btn btn-sm btn-outline-secondary" id="restaurantBackBtn">
     <i class="bi bi-arrow-left"></i> Volver
   </a>
-  <a href="/web/cart" class="btn btn-sm btn-outline-primary ms-auto">
+  <a href="/web/cart" class="btn btn-sm btn-outline-primary ms-auto" id="restaurantCartBtn">
     <i class="bi bi-cart"></i> Ver carrito
   </a>
 </div>
@@ -209,8 +209,8 @@
         const role = r.viewer_role || null;
         isStaff = Boolean(role);
         viewerIsStaff = isStaff;
-        const backBtn = document.getElementById('restaurantBackBtn');
-        if (backBtn) backBtn.classList.toggle('d-none', isStaff);
+        const topBar = document.getElementById('restaurantTopBar');
+        if (topBar) topBar.classList.toggle('d-none', isStaff);
         owner = role === 'owner' || role === 'admin';
         canManage = ['owner', 'manager', 'admin'].includes(role);
         canFinance = ['owner', 'manager', 'admin'].includes(role);

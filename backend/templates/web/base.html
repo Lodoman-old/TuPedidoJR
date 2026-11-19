@@ -781,6 +781,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         if (myRestaurantId) sessionStorage.setItem('my_restaurant_id', myRestaurantId);
         else sessionStorage.removeItem('my_restaurant_id');
         applyRestaurantNav(isRestaurantStaff, myRestaurantId, isRestaurantManager);
+        updateCartBadge();
         if (
           isRestaurantStaff &&
           myRestaurantId &&
@@ -1203,7 +1204,8 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         const publicPath = ['/web/login', '/web/register', '/web/register-restaurant', '/web/forgot-password', '/web/reset-password', '/web/app']
           .some(p => window.location.pathname.startsWith(p));
         const hasSession = !!sessionStorage.getItem('token');
-        const hidden = !hasSession || count <= 0 || publicPath || window.location.pathname.startsWith('/web/cart');
+        const isStaff = sessionStorage.getItem('is_restaurant_staff') === 'true';
+        const hidden = !hasSession || count <= 0 || publicPath || isStaff || window.location.pathname.startsWith('/web/cart');
         floating.classList.toggle('d-none', hidden);
         const floatingCount = document.getElementById('floatingCartCount');
         if (floatingCount) floatingCount.textContent = count;

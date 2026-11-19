@@ -191,13 +191,19 @@ async def agenda_info(
     services = await _services(db, restaurant.id, only_active=True)
     staff = await _staff(db, restaurant.id, only_active=True)
     schedule = await _schedule(db, restaurant.id)
+    affiliation_active = (
+        restaurant.affiliation_expires_at is not None
+        and restaurant.affiliation_expires_at >= _today()
+    )
     return {
         "restaurant": {
             "id": str(restaurant.id),
             "name": restaurant.name,
             "slug": restaurant.slug,
             "appointments_enabled": restaurant.appointments_enabled,
-            "affiliation_active": _agenda_active(restaurant),
+            "affiliation_active": affiliation_active,
+            "booking_active": _agenda_active(restaurant),
+            "schedule_configured": any(not r.is_closed for r in schedule),
         },
         "services": [_service_out(s) for s in services],
         "staff": [_staff_out(s) for s in staff],

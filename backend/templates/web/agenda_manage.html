@@ -142,11 +142,20 @@
     const alertBox = document.getElementById('affiliationAlert');
     const expires = restaurant.affiliation_expires_at;
     const today = new Date().toISOString().slice(0, 10);
+    const warnings = [];
     if (!expires) {
-      alertBox.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Este negocio no tiene afiliación activa. La agenda no aceptará citas hasta que el administrador registre el pago de la afiliación anual.';
-      alertBox.classList.remove('d-none');
+      warnings.push('Este negocio no tiene afiliación activa. La agenda no aceptará citas hasta que el administrador registre el pago de la afiliación anual.');
     } else if (expires < today) {
-      alertBox.innerHTML = `<i class="bi bi-exclamation-triangle"></i> La afiliación venció el ${expires}. La agenda no aceptará citas hasta renovarla.`;
+      warnings.push(`La afiliación venció el ${expires}. La agenda no aceptará citas hasta renovarla.`);
+    }
+    try {
+      const agendaInfo = await apiRequest('GET', `/agenda/${RID}/info`);
+      if (!agendaInfo.restaurant.schedule_configured) {
+        warnings.push('No hay horario del negocio configurado. <a href="/web/restaurants/' + RID + '/profile" class="alert-link">Configúralo en Perfil del negocio</a> para que el calendario muestre horarios.');
+      }
+    } catch (e) {}
+    if (warnings.length) {
+      alertBox.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + warnings.join('<br>');
       alertBox.classList.remove('d-none');
     } else {
       alertBox.classList.add('d-none');

@@ -337,11 +337,16 @@
     try {
       info = await apiRequest('GET', `/agenda/${RID}/info`);
       document.getElementById('businessName').textContent = `Agendar cita · ${info.restaurant.name}`;
-      if (!info.restaurant.appointments_enabled || !info.restaurant.affiliation_active) {
+      if (!info.restaurant.booking_active) {
         document.getElementById('agendaUnavailable').classList.remove('d-none');
-        document.getElementById('agendaUnavailable').innerHTML = info.restaurant.appointments_enabled
-          ? 'Este negocio tiene la agenda suspendida porque su afiliación no está vigente.'
-          : 'Este negocio todavía no abre su agenda en línea.';
+        document.getElementById('agendaUnavailable').innerHTML = !info.restaurant.appointments_enabled
+          ? 'Este negocio todavía no abre su agenda en línea.'
+          : 'Este negocio tiene la agenda suspendida porque su afiliación no está vigente.';
+        return;
+      }
+      if (!info.restaurant.schedule_configured) {
+        document.getElementById('agendaUnavailable').classList.remove('d-none');
+        document.getElementById('agendaUnavailable').textContent = 'Este negocio todavía no publica su horario de atención.';
         return;
       }
       if (!info.services.length) {

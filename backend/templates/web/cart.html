@@ -123,6 +123,7 @@ let scheduleState = { enabled: false, value: '' };
       ? `Quitamos ${unique.length} producto(s) que cambiaron en el menú: ${unique.join(', ')}. Vuelve a agregarlos.`
       : 'Actualizamos las opciones de tu carrito porque el menú cambió.';
     updateCartBadge();
+    if (typeof scheduleCartSync === 'function') scheduleCartSync();
   }
 
   function esc(value) {

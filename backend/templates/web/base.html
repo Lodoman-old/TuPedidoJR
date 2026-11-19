@@ -623,7 +623,10 @@ async function hydrateCartFromServer() {
     const data = await apiRequest('GET', '/profile/cart');
     if (data.items && data.items.length) {
       sessionStorage.setItem('cart', JSON.stringify(data.items));
-      if (data.restaurant_id) sessionStorage.setItem('cartRestaurantId', data.restaurant_id);
+      const rid = data.restaurant_id
+        || (data.items.find(i => i.restaurant_id) || {}).restaurant_id
+        || null;
+      if (rid) sessionStorage.setItem('cartRestaurantId', rid);
       updateCartBadge();
       window.dispatchEvent(new Event('cart:hydrated'));
     }

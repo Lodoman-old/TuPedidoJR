@@ -818,7 +818,21 @@ async function refreshEstimate() {
     if (!feeEl || !cart.length) return;
 
     const items = cart.map(i => ({ menu_item_id: i.menu_item_id, quantity: i.quantity, option_ids: i.option_ids || [] }));
-    const rid = sessionStorage.getItem('cartRestaurantId');
+    let rid = sessionStorage.getItem('cartRestaurantId');
+    if (!rid) {
+      const first = cart.find(i => i.restaurant_id);
+      if (first) {
+        rid = first.restaurant_id;
+        sessionStorage.setItem('cartRestaurantId', rid);
+      }
+    }
+    if (!rid) {
+      feeEl.textContent = '—';
+      flatEl.textContent = '—';
+      totalEl.textContent = money(subtotal + tipAmount);
+      if (estimateMsg) estimateMsg.textContent = 'No se encontró el negocio del carrito. Vuelve a agregar los productos.';
+      return;
+    }
     const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
 
     if (fulfillment !== 'pickup' && (addressState.lat == null || addressState.lng == null)) {

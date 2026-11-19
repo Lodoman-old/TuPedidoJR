@@ -355,6 +355,11 @@ async def web_admin_receipts(request: Request):
     return templates.TemplateResponse(request, "receipts_admin.html")
 
 
+@router.get("/admin/agenda")
+async def web_admin_agenda(request: Request):
+    return templates.TemplateResponse(request, "agenda_admin.html")
+
+
 @router.get("/admin/incidents")
 async def web_admin_incidents(request: Request):
     return templates.TemplateResponse(request, "incidents_admin.html")

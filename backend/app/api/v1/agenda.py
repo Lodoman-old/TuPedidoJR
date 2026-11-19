@@ -4,13 +4,14 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_optional_user
 from app.db.session import get_db
 from app.models.appointment import Appointment
+from app.models.appointment_debt import AppointmentDebt
 from app.models.business_service import BusinessService
 from app.models.business_staff import BusinessStaff
 from app.models.restaurant import Restaurant
@@ -29,6 +30,15 @@ from app.schemas.agenda import (
     StaffUpdate,
 )
 from app.services.appointment_payment_service import payment_plan, schedule_validation
+from app.services.appointment_settlement_service import (
+    MAX_UNPAID_NO_SHOWS,
+    assign_pending_debts,
+    business_balance,
+    cancel_appointment,
+    complete_appointment,
+    count_pending_debts,
+    no_show_appointment,
+)
 from app.services.order_service import get_setting_value
 from app.services.restaurant_access import MANAGE_ROLES, have_role
 
@@ -91,6 +101,7 @@ def _appointment_out(a: Appointment, service_name: str | None = None,
         receipt_status=a.receipt_status,
         proof_url=a.proof_url,
         paid_at=a.paid_at,
+        refund_amount=a.refund_amount,
         notes=a.notes,
     )
 
@@ -219,7 +230,7 @@ def _parse_local_start(value: str) -> datetime:
 async def agenda_info(
     restaurant_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User | None = Depends(get_optional_user),
+    current_user: User | None = Depends(get_optional_user),
 ):
     restaurant = await _restaurant(db, restaurant_id)
     services = await _services(db, restaurant.id, only_active=True)
@@ -229,6 +240,19 @@ async def agenda_info(
         restaurant.affiliation_expires_at is not None
         and restaurant.affiliation_expires_at >= _today()
     )
+    viewer_debts = {"count": 0, "amount": "0"}
+    if current_user:
+        result = await db.execute(
+            select(
+                func.count(AppointmentDebt.id),
+                func.coalesce(func.sum(AppointmentDebt.amount), 0),
+            ).where(
+                AppointmentDebt.user_id == current_user.id,
+                AppointmentDebt.status == "pending",
+            )
+        )
+        count, amount = result.one()
+        viewer_debts = {"count": int(count or 0), "amount": str(amount or 0)}
     return {
         "restaurant": {
             "id": str(restaurant.id),
@@ -239,6 +263,7 @@ async def agenda_info(
             "booking_active": _agenda_active(restaurant),
             "schedule_configured": any(not r.is_closed for r in schedule),
         },
+        "viewer": viewer_debts,
         "services": [_service_out(s) for s in services],
         "staff": [_staff_out(s) for s in staff],
         "payment": {
@@ -359,10 +384,22 @@ async def create_appointment(
     if not inside:
         raise HTTPException(status_code=400, detail="Ese horario está fuera del horario del negocio")
 
-    # Serializa las reservas del negocio para evitar dos citas al mismo tiempo.
+    # Serializa las reservas del negocio y las deudas del cliente.
     await db.execute(
         select(Restaurant.id).where(Restaurant.id == restaurant.id).with_for_update()
     )
+    await db.execute(
+        select(User.id).where(User.id == current_user.id).with_for_update()
+    )
+    pending_debts = await count_pending_debts(db, current_user.id)
+    if pending_debts >= MAX_UNPAID_NO_SHOWS:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Tienes 3 citas sin asistir sin pagar. "
+                "Liquida tus adeudos pendientes para volver a reservar."
+            ),
+        )
 
     appointments = await _day_appointments(db, restaurant.id, start_local.date())
     free_staff = []
@@ -414,6 +451,8 @@ async def create_appointment(
     )
     db.add(appointment)
     try:
+        await db.flush()
+        await assign_pending_debts(db, appointment)
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
@@ -460,6 +499,22 @@ async def update_appointment(
     appointment = await db.get(Appointment, appointment_id)
     if not appointment or appointment.restaurant_id != restaurant.id:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
+    if appointment.status == body.status:
+        services = {str(s.id): s.name for s in await _services(db, restaurant.id)}
+        staff = {str(s.id): s.name for s in await _staff(db, restaurant.id)}
+        return _appointment_out(
+            appointment,
+            services.get(str(appointment.service_id)),
+            staff.get(str(appointment.staff_id)),
+        )
+    if appointment.status not in ("pending", "confirmed"):
+        raise HTTPException(status_code=400, detail="Esta cita ya está cerrada")
+    if body.status == "completed":
+        await complete_appointment(db, appointment)
+    elif body.status == "no_show":
+        await no_show_appointment(db, appointment)
+    elif body.status == "cancelled":
+        await cancel_appointment(db, appointment)
     appointment.status = body.status
     await db.commit()
     await db.refresh(appointment)
@@ -527,6 +582,17 @@ async def upload_appointment_proof(
         services.get(str(appointment.service_id)),
         staff.get(str(appointment.staff_id)),
     )
+
+
+@router.get("/{restaurant_id}/balance")
+async def get_business_balance(
+    restaurant_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    restaurant = await _restaurant(db, restaurant_id)
+    await _manage(db, restaurant, current_user)
+    return await business_balance(db, restaurant.id)
 
 
 @router.get("/{restaurant_id}/services", response_model=list[ServiceOut])

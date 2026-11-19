@@ -48,6 +48,29 @@
   </div>
 </div>
 
+<div class="card mb-3" id="balanceCard">
+  <div class="card-body">
+    <div class="d-flex flex-wrap align-items-center gap-3">
+      <div>
+        <div class="text-muted small">Saldo con la plataforma</div>
+        <div class="fs-4 fw-bold" id="balanceNet">$0.00</div>
+        <div class="small text-muted" id="balanceHint"></div>
+      </div>
+      <div class="ms-auto d-flex gap-3 text-center">
+        <div>
+          <div class="text-muted small">Te deben</div>
+          <div class="fw-semibold text-success" id="balanceCredit">$0.00</div>
+        </div>
+        <div>
+          <div class="text-muted small">Debes</div>
+          <div class="fw-semibold text-danger" id="balanceDebit">$0.00</div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-2" id="balanceEntries"></div>
+  </div>
+</div>
+
 <div class="row g-3">
   <div class="col-lg-6">
     <div class="card h-100">
@@ -303,6 +326,35 @@
     } catch (err) { showToast(err.message, 'danger'); }
   }
 
+  async function loadBalance() {
+    try {
+      const data = await apiRequest('GET', `/agenda/${RID}/balance`);
+      const net = Number(data.net || 0);
+      document.getElementById('balanceCredit').textContent = money(data.credit);
+      document.getElementById('balanceDebit').textContent = money(data.debit);
+      document.getElementById('balanceNet').textContent = money(Math.abs(net));
+      document.getElementById('balanceNet').className = `fs-4 fw-bold ${net >= 0 ? 'text-success' : 'text-danger'}`;
+      document.getElementById('balanceHint').textContent = net >= 0
+        ? 'La plataforma te debe este importe.'
+        : 'Este importe lo debes a la plataforma.';
+      const entries = (data.entries || []).slice(0, 6);
+      document.getElementById('balanceEntries').innerHTML = entries.length
+        ? entries.map((e) => {
+            const isCredit = e.kind === 'credit';
+            const label = isCredit ? 'A tu favor' : 'A favor de la plataforma';
+            const status = e.status === 'settled' ? 'Liquidado' : 'Pendiente';
+            const date = e.created_at ? new Date(e.created_at).toLocaleDateString('es-MX') : '';
+            return `<div class="d-flex justify-content-between small border-top py-1">
+              <span class="text-muted">${esc(e.notes || label)} · ${date}</span>
+              <span class="${isCredit ? 'text-success' : 'text-danger'} fw-semibold">${isCredit ? '+' : '-'}${money(e.amount)} <span class="text-muted fw-normal">· ${status}</span></span>
+            </div>`;
+          }).join('')
+        : '<div class="small text-muted">Todavía no hay movimientos.</div>';
+    } catch (err) {
+      // El saldo es informativo; no bloquea la agenda.
+    }
+  }
+
   async function loadAppointments() {
     const date = document.getElementById('agendaDate').value;
     if (!date) return;
@@ -365,6 +417,7 @@
               <div class="fw-semibold">${esc(a.client_name)} ${badge(a.status)}</div>
               <div class="small text-muted">${esc(a.service_name || 'Servicio')} · ${esc(a.staff_name || 'Sin asignar')} · ${money(a.price)}</div>
               <div class="small">${paymentBadge(a)} <span class="text-muted">${paymentLine(a)}</span></div>
+              ${Number(a.refund_amount || 0) > 0 ? `<div class="small text-info"><i class="bi bi-arrow-counterclockwise"></i> Reembolso pendiente: ${money(a.refund_amount)}</div>` : ''}
               ${a.client_phone ? `<div class="small text-muted"><i class="bi bi-telephone"></i> ${esc(a.client_phone)}</div>` : ''}
               ${a.notes ? `<div class="small text-muted">${esc(a.notes)}</div>` : ''}
             </div>
@@ -390,7 +443,7 @@
     document.getElementById('agendaDate').value = new Date().toISOString().slice(0, 10);
     try {
       await loadRestaurant();
-      await Promise.all([loadServices(), loadStaff()]);
+      await Promise.all([loadServices(), loadStaff(), loadBalance()]);
       await loadAppointments();
     } catch (err) {
       showToast(err.message, 'danger');

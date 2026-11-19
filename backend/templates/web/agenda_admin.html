@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h5 class="mb-0"><i class="bi bi-calendar-week"></i> Agenda y saldos</h5>
+    <small class="text-muted">Saldos de citas entre la plataforma y los negocios, y adeudos de clientes.</small>
+  </div>
+  <button class="btn btn-sm btn-outline-secondary" onclick="loadAll()">
+    <i class="bi bi-arrow-clockwise"></i> Actualizar
+  </button>
+</div>
+
+<div id="agendaAdminError" class="alert alert-danger d-none"></div>
+
+<div class="card mb-4">
+  <div class="card-header fw-semibold">Saldos por negocio</div>
+  <div class="card-body p-0" id="balanceList">
+    <div class="p-3 text-center"><div class="spinner-border spinner-border-sm text-primary"></div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header fw-semibold">Adeudos de clientes por no-show</div>
+  <div class="card-body p-0" id="debtList">
+    <div class="p-3 text-center"><div class="spinner-border spinner-border-sm text-primary"></div></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const money = (v) => '$' + Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  async function loadAll() {
+    const error = document.getElementById('agendaAdminError');
+    try {
+      const data = await apiRequest('GET', '/admin/agenda/balances');
+      error.classList.add('d-none');
+      renderBalances(data.businesses || []);
+      renderDebts(data.client_debts || []);
+    } catch (err) {
+      error.textContent = err.message;
+      error.classList.remove('d-none');
+    }
+  }
+
+  function renderBalances(businesses) {
+    const box = document.getElementById('balanceList');
+    if (!businesses.length) {
+      box.innerHTML = '<div class="p-3 text-muted small">No hay saldos pendientes.</div>';
+      return;
+    }
+    box.innerHTML = businesses.map((b) => {
+      const net = Number(b.net || 0);
+      return `<div class="d-flex flex-wrap align-items-center gap-3 p-3 border-top">
+        <div class="flex-grow-1 min-w-0">
+          <div class="fw-semibold">${esc(b.name)}</div>
+          <div class="small text-muted">
+            Te deben <span class="text-success fw-semibold">${money(b.credit)}</span>
+            · Debe <span class="text-danger fw-semibold">${money(b.debit)}</span>
+          </div>
+        </div>
+        <div class="text-end">
+          <div class="small text-muted">Neto</div>
+          <div class="fw-bold ${net >= 0 ? 'text-success' : 'text-danger'}">${money(Math.abs(net))}</div>
+        </div>
+        <button class="btn btn-sm btn-outline-primary" onclick="settle('${b.restaurant_id}', '${esc(b.name)}')">
+          <i class="bi bi-check2-square"></i> Liquidar
+        </button>
+      </div>`;
+    }).join('');
+  }
+
+  function renderDebts(debts) {
+    const box = document.getElementById('debtList');
+    if (!debts.length) {
+      box.innerHTML = '<div class="p-3 text-muted small">No hay adeudos pendientes.</div>';
+      return;
+    }
+    box.innerHTML = debts.map((d) => `
+      <div class="d-flex flex-wrap align-items-center gap-3 p-3 border-top">
+        <div class="flex-grow-1 min-w-0">
+          <div class="fw-semibold">${esc(d.name)}</div>
+          <div class="small text-muted">${esc(d.email)} · ${d.count} cita(s) · ${d.status === 'assigned' ? 'por cobrar en su próxima cita' : 'pendiente'}</div>
+        </div>
+        <div class="fw-bold text-danger">${money(d.amount)}</div>
+        <button class="btn btn-sm btn-outline-secondary" onclick="settleDebt('${d.user_id}')">
+          <i class="bi bi-check2-circle"></i> Marcar pagado
+        </button>
+      </div>`).join('');
+  }
+
+  async function settle(restaurantId, name) {
+    if (!confirm(`¿Marcar como liquidados todos los movimientos pendientes de ${name}?`)) return;
+    try {
+      const res = await apiRequest('POST', `/admin/agenda/restaurants/${restaurantId}/settle`, {});
+      showToast(`${res.settled} movimiento(s) liquidados`, 'success');
+      loadAll();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  }
+
+  async function settleDebt(userId) {
+    if (!confirm('¿Marcar todos los adeudos de este cliente como pagados?')) return;
+    try {
+      const debts = await apiRequest('GET', '/admin/agenda/client-debts');
+      const rows = debts.filter((d) => d.user_id === userId);
+      for (const row of rows) {
+        await apiRequest('POST', `/admin/agenda/client-debts/${row.id}/settle`, {});
+      }
+      showToast('Adeudos liquidados', 'success');
+      loadAll();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  }
+
+  loadAll();
+</script>
+{% endblock %}

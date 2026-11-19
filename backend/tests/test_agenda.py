@@ -7,6 +7,8 @@ import pytest
 from httpx import AsyncClient
 
 from app.core.security import decode_access_token
+from app.models.appointment import Appointment
+from app.models.appointment_debt import AppointmentDebt
 from app.models.restaurant import Restaurant
 from app.models.restaurant_schedule import RestaurantSchedule
 from app.models.user import User
@@ -335,3 +337,168 @@ async def test_proof_only_for_transfer_appointments(
         json={"proof_url": "/static/uploads/no.jpg"},
     )
     assert rejected.status_code == 400
+
+
+async def _book(client, resto, service, staff, token, start, mode="cash", proof=None):
+    payload = {
+        "service_id": service["id"],
+        "staff_id": staff["id"],
+        "start_at": f"{start.isoformat()}T09:00:00",
+        "client_name": "Cliente Agenda",
+        "payment_mode": mode,
+    }
+    if proof:
+        payload["proof_url"] = proof
+    return await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments",
+        headers=_headers(token),
+        json=payload,
+    )
+
+
+@pytest.mark.asyncio
+async def test_pending_debt_is_added_to_next_cash_booking(
+    client, customer_token, business, service, staff, db_session
+):
+    resto, target = business
+    customer_id = decode_access_token(customer_token)["sub"]
+    db_session.add(AppointmentDebt(
+        user_id=customer_id,
+        restaurant_id=resto.id,
+        amount=10,
+        platform_amount=5,
+        business_amount=5,
+        status="pending",
+    ))
+    await db_session.commit()
+
+    created = await _book(client, resto, service, staff, customer_token, target)
+    assert created.status_code == 201, created.text
+    data = created.json()
+    assert float(data["cash_due"]) == 115
+    assert float(data["price"]) == 100
+
+    debts = (await db_session.execute(
+        AppointmentDebt.__table__.select().where(AppointmentDebt.status == "assigned")
+    )).mappings().all()
+    assert len(debts) == 1
+
+
+@pytest.mark.asyncio
+async def test_three_pending_debts_block_booking(
+    client, customer_token, business, service, staff, db_session
+):
+    resto, target = business
+    customer_id = decode_access_token(customer_token)["sub"]
+    for _ in range(3):
+        db_session.add(AppointmentDebt(
+            user_id=customer_id,
+            restaurant_id=resto.id,
+            amount=10,
+            platform_amount=5,
+            business_amount=5,
+            status="pending",
+        ))
+    await db_session.commit()
+
+    blocked = await _book(client, resto, service, staff, customer_token, target)
+    assert blocked.status_code == 403
+    assert "3 citas" in blocked.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_cash_no_show_creates_debt(
+    client, owner_token, customer_token, business, service, staff, db_session
+):
+    resto, target = business
+    created = await _book(client, resto, service, staff, customer_token, target)
+    appointment_id = created.json()["id"]
+
+    updated = await client.patch(
+        f"/api/v1/agenda/{resto.id}/appointments/{appointment_id}",
+        headers=_headers(owner_token),
+        json={"status": "no_show"},
+    )
+    assert updated.status_code == 200, updated.text
+
+    debts = (await db_session.execute(
+        AppointmentDebt.__table__.select().where(AppointmentDebt.status == "pending")
+    )).mappings().all()
+    assert len(debts) == 1
+    assert float(debts[0]["amount"]) == 10
+
+
+@pytest.mark.asyncio
+async def test_completed_cash_records_business_debit(
+    client, owner_token, customer_token, business, service, staff
+):
+    resto, target = business
+    created = await _book(client, resto, service, staff, customer_token, target)
+    appointment_id = created.json()["id"]
+
+    await client.patch(
+        f"/api/v1/agenda/{resto.id}/appointments/{appointment_id}",
+        headers=_headers(owner_token),
+        json={"status": "completed"},
+    )
+    balance = await client.get(
+        f"/api/v1/agenda/{resto.id}/balance", headers=_headers(owner_token)
+    )
+    assert balance.status_code == 200
+    assert float(balance.json()["debit"]) == 10
+    assert float(balance.json()["net"]) == -10
+
+
+@pytest.mark.asyncio
+async def test_completed_online_records_business_credit(
+    client, owner_token, customer_token, business, service, staff, monkeypatch
+):
+    monkeypatch.setattr("app.api.v1.agenda.schedule_validation", lambda *a, **k: None)
+    resto, target = business
+    created = await _book(
+        client, resto, service, staff, customer_token, target,
+        mode="full", proof="/static/uploads/pago.jpg",
+    )
+    appointment_id = created.json()["id"]
+
+    await client.patch(
+        f"/api/v1/agenda/{resto.id}/appointments/{appointment_id}",
+        headers=_headers(owner_token),
+        json={"status": "completed"},
+    )
+    balance = await client.get(
+        f"/api/v1/agenda/{resto.id}/balance", headers=_headers(owner_token)
+    )
+    assert float(balance.json()["credit"]) == 95
+    assert float(balance.json()["net"]) == 95
+
+
+@pytest.mark.asyncio
+async def test_online_no_show_refunds_and_compensates_business(
+    client, owner_token, customer_token, business, service, staff, db_session, monkeypatch
+):
+    monkeypatch.setattr("app.api.v1.agenda.schedule_validation", lambda *a, **k: None)
+    resto, target = business
+    created = await _book(
+        client, resto, service, staff, customer_token, target,
+        mode="full", proof="/static/uploads/pago.jpg",
+    )
+    appointment_id = created.json()["id"]
+
+    appointment = await db_session.get(Appointment, uuid.UUID(appointment_id))
+    appointment.payment_status = "paid"
+    db_session.add(appointment)
+    await db_session.commit()
+
+    updated = await client.patch(
+        f"/api/v1/agenda/{resto.id}/appointments/{appointment_id}",
+        headers=_headers(owner_token),
+        json={"status": "no_show"},
+    )
+    assert updated.status_code == 200
+    assert float(updated.json()["refund_amount"]) == 95
+
+    balance = await client.get(
+        f"/api/v1/agenda/{resto.id}/balance", headers=_headers(owner_token)
+    )
+    assert float(balance.json()["credit"]) == 5

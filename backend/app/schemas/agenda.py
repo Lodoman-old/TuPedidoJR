@@ -106,4 +106,5 @@ class AppointmentOut(BaseModel):
     receipt_status: str = "none"
     proof_url: str | None = None
     paid_at: datetime | None = None
+    refund_amount: Decimal = Decimal("0")
     notes: str | None

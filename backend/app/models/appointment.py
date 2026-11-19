@@ -52,5 +52,6 @@ class Appointment(TimestampMixin, Base):
     payment_reference = Column(String(120), nullable=True)
     receipt_status = Column(String(20), default="none", nullable=False)
     paid_at = Column(DateTime(timezone=True), nullable=True)
+    refund_amount = Column(Numeric(10, 2), default=0, nullable=False)
     proof_url = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)

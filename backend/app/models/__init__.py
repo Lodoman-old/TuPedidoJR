@@ -33,6 +33,8 @@ from app.models.security import BlockedIP, SecurityEvent
 from app.models.business_service import BusinessService
 from app.models.business_staff import BusinessStaff
 from app.models.appointment import Appointment
+from app.models.appointment_debt import AppointmentDebt
+from app.models.business_ledger import BusinessLedger
 
 __all__ = [
     "User",
@@ -73,4 +75,6 @@ __all__ = [
     "BusinessService",
     "BusinessStaff",
     "Appointment",
+    "AppointmentDebt",
+    "BusinessLedger",
 ]

@@ -110,7 +110,7 @@ async def _run_validation(appointment_id: str) -> None:
             appointment.receipt_status = (
                 "approved" if record.status == "high" else "review"
             )
-            if record.status == "high":
+            if record.status == "high" and appointment.status != "no_show":
                 appointment.payment_status = (
                     "paid" if appointment.payment_mode == "full" else "deposit_paid"
                 )

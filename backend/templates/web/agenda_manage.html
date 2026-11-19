@@ -147,6 +147,27 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="reassignModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Reasignar profesional</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2">La cita conserva la misma fecha, hora y servicio. El cliente recibirá un aviso con el nuevo profesional.</p>
+        <label class="form-label small mb-1" for="reassignStaff">Profesional</label>
+        <select class="form-select" id="reassignStaff"></select>
+        <div class="text-danger small mt-2 d-none" id="reassignError"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-sm btn-primary" id="reassignBtn" onclick="saveReassign()">Reasignar</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -441,6 +462,7 @@
         const end = new Date(a.end_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
         const actions = [];
         if (a.status === 'confirmed' || a.status === 'pending') {
+          actions.push(`<button class="btn btn-sm btn-outline-primary" onclick="openReassign('${a.id}')">Reasignar</button>`);
           actions.push(`<button class="btn btn-sm btn-outline-success" onclick="setStatus('${a.id}', 'completed')">Completada</button>`);
           actions.push(`<button class="btn btn-sm btn-outline-danger" onclick="setStatus('${a.id}', 'no_show')">No asistió</button>`);
           actions.push(`<button class="btn btn-sm btn-outline-secondary" onclick="setStatus('${a.id}', 'cancelled')">Cancelar</button>`);
@@ -468,9 +490,48 @@
     }
   }
 
+  let reassignAppointmentId = null;
+
+  function openReassign(id) {
+    reassignAppointmentId = id;
+    const select = document.getElementById('reassignStaff');
+    const active = staff.filter((s) => s.is_active);
+    select.innerHTML = active.map((s) => `<option value="${s.id}">${esc(s.name)}${s.role ? ' · ' + esc(s.role) : ''}</option>`).join('');
+    document.getElementById('reassignError').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('reassignModal')).show();
+  }
+
+  async function saveReassign() {
+    const staffId = document.getElementById('reassignStaff').value;
+    const errorBox = document.getElementById('reassignError');
+    errorBox.classList.add('d-none');
+    if (!staffId) {
+      errorBox.textContent = 'Elige un profesional.';
+      errorBox.classList.remove('d-none');
+      return;
+    }
+    const button = document.getElementById('reassignBtn');
+    button.disabled = true;
+    try {
+      await apiRequest('PATCH', `/agenda/${RID}/appointments/${reassignAppointmentId}/staff`, { staff_id: staffId });
+      bootstrap.Modal.getInstance(document.getElementById('reassignModal')).hide();
+      await Promise.all([loadAppointments(), loadBalance()]);
+      showToast('Profesional reasignado. El cliente recibió el aviso.');
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.classList.remove('d-none');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   async function setStatus(id, status) {
     const labels = { completed: 'marcar como completada', no_show: 'marcar como no asistió', cancelled: 'cancelar' };
-    if (!confirm(`¿Seguro que quieres ${labels[status]} esta cita?`)) return;
+    let question = `¿Seguro que quieres ${labels[status]} esta cita?`;
+    if (status === 'cancelled') {
+      question = 'El cliente recibirá un aviso y, si pagó en línea, se registrará su reembolso. ¿Cancelar la cita?';
+    }
+    if (!confirm(question)) return;
     try {
       await apiRequest('PATCH', `/agenda/${RID}/appointments/${id}`, { status });
       await Promise.all([loadAppointments(), loadBalance()]);

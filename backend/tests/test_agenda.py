@@ -688,6 +688,90 @@ async def test_balance_breaks_down_by_staff(
 
 
 @pytest.mark.asyncio
+async def test_reassign_and_cancel_notify_client(
+    client, owner_token, customer_token, business, service, staff, monkeypatch
+):
+    resto, target = business
+    second = await client.post(
+        f"/api/v1/agenda/{resto.id}/staff",
+        headers=_headers(owner_token),
+        json={"name": "Diego", "role": "Barbero"},
+    )
+    assert second.status_code == 201, second.text
+    second_id = second.json()["id"]
+
+    created = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments",
+        headers=_headers(customer_token),
+        json={
+            "service_id": service["id"],
+            "staff_id": staff["id"],
+            "start_at": f"{target.isoformat()}T09:00:00",
+            "client_name": "Cliente Demo",
+            "payment_mode": "cash",
+        },
+    )
+    assert created.status_code == 201, created.text
+    appointment_id = created.json()["id"]
+
+    calls = []
+    monkeypatch.setattr(
+        "app.api.v1.agenda.schedule_appointment_status",
+        lambda appointment_id, event: calls.append((appointment_id, event)),
+    )
+
+    reassigned = await client.patch(
+        f"/api/v1/agenda/{resto.id}/appointments/{appointment_id}/staff",
+        headers=_headers(owner_token),
+        json={"staff_id": second_id},
+    )
+    assert reassigned.status_code == 200, reassigned.text
+    assert reassigned.json()["staff_name"] == "Diego"
+    assert calls[-1] == (appointment_id, "reassigned")
+
+    # Diego ya tiene otra cita a las 10:00: no se le puede reasignar otra a la misma hora.
+    ana_ten = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments",
+        headers=_headers(customer_token),
+        json={
+            "service_id": service["id"],
+            "staff_id": staff["id"],
+            "start_at": f"{target.isoformat()}T10:00:00",
+            "client_name": "Cliente Ana",
+        },
+    )
+    diego_booked = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments",
+        headers=_headers(customer_token),
+        json={
+            "service_id": service["id"],
+            "staff_id": second_id,
+            "start_at": f"{target.isoformat()}T10:00:00",
+            "client_name": "Cliente Diego",
+        },
+    )
+    assert diego_booked.status_code == 201
+    assert ana_ten.status_code == 201
+
+    blocked = await client.patch(
+        f"/api/v1/agenda/{resto.id}/appointments/{ana_ten.json()['id']}/staff",
+        headers=_headers(owner_token),
+        json={"staff_id": second_id},
+    )
+    assert blocked.status_code == 409
+    assert "otra cita" in blocked.json()["detail"]
+
+    cancelled = await client.patch(
+        f"/api/v1/agenda/{resto.id}/appointments/{appointment_id}",
+        headers=_headers(owner_token),
+        json={"status": "cancelled"},
+    )
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+    assert calls[-1] == (appointment_id, "cancelled")
+
+
+@pytest.mark.asyncio
 async def test_appointment_reminders_are_queued(
     client, customer_token, business, service, staff, db_session, monkeypatch
 ):

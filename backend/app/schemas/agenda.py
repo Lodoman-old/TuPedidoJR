@@ -76,6 +76,10 @@ class AppointmentProof(BaseModel):
     proof_url: str = Field(min_length=1)
 
 
+class AppointmentReassign(BaseModel):
+    staff_id: UUID
+
+
 class AppointmentStatusUpdate(BaseModel):
     status: str = Field(pattern="^(confirmed|completed|cancelled|no_show)$")
 

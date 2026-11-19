@@ -637,6 +637,47 @@ async def _notify_appointment_business_now(appointment_id: str) -> None:
         logger.exception("Push business appointment reminder failed for %s", appointment_id)
 
 
+async def _notify_appointment_status(appointment_id: str, event: str) -> None:
+    try:
+        async with async_session() as db:
+            ctx = await _appointment_context(db, appointment_id)
+            if not ctx:
+                return
+            appointment, restaurant, service, staff, client = ctx
+            if not appointment.client_user_id:
+                return
+            service_name = service.name if service else "Tu servicio"
+            staff_name = staff.name if staff else "tu profesional"
+            when = _appointment_when(appointment)
+            if event == "cancelled":
+                title = "Tu cita fue cancelada"
+                refund = appointment.refund_amount or 0
+                body = f"{service_name} · {when}."
+                if refund > 0:
+                    body += f" Reembolso registrado: ${refund:.2f}."
+            elif event == "reassigned":
+                title = "Tu cita cambió de profesional"
+                body = f"{service_name} ahora con {staff_name} · {when}."
+            else:
+                title = "Tu cita fue actualizada"
+                body = f"{service_name} con {staff_name} · {when}."
+            await send_to_user(
+                db,
+                appointment.client_user_id,
+                title,
+                body,
+                {
+                    "type": "appointment_status",
+                    "status": event,
+                    "appointment_id": str(appointment.id),
+                    "restaurant_id": str(restaurant.id) if restaurant else None,
+                },
+                "red" if event == "cancelled" else "green",
+            )
+    except Exception:
+        logger.exception("Push appointment status notification failed for %s", appointment_id)
+
+
 def schedule_new_appointment(appointment_id: str) -> None:
     try:
         asyncio.create_task(_notify_new_appointment(str(appointment_id)))
@@ -656,6 +697,13 @@ def schedule_appointment_business_now(appointment_id: str) -> None:
         asyncio.create_task(_notify_appointment_business_now(str(appointment_id)))
     except RuntimeError:
         logger.debug("No event loop for appointment reminder")
+
+
+def schedule_appointment_status(appointment_id: str, event: str) -> None:
+    try:
+        asyncio.create_task(_notify_appointment_status(str(appointment_id), str(event)))
+    except RuntimeError:
+        logger.debug("No event loop for appointment status notification")
 
 
 def schedule_reservation_status(reservation_id: str) -> None:

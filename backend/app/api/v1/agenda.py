@@ -21,6 +21,7 @@ from app.schemas.agenda import (
     AppointmentIn,
     AppointmentOut,
     AppointmentProof,
+    AppointmentReassign,
     AppointmentStatusUpdate,
     ServiceIn,
     ServiceOut,
@@ -40,7 +41,7 @@ from app.services.appointment_settlement_service import (
     no_show_appointment,
 )
 from app.services.order_service import get_setting_value
-from app.services.push_service import schedule_new_appointment
+from app.services.push_service import schedule_new_appointment, schedule_appointment_status
 from app.services.restaurant_access import MANAGE_ROLES, have_role
 
 router = APIRouter()
@@ -537,12 +538,67 @@ async def update_appointment(
     appointment.status = body.status
     await db.commit()
     await db.refresh(appointment)
+    if body.status == "cancelled":
+        schedule_appointment_status(str(appointment.id), "cancelled")
     services = {str(s.id): s.name for s in await _services(db, restaurant.id)}
     staff = {str(s.id): s.name for s in await _staff(db, restaurant.id)}
     return _appointment_out(
         appointment,
         services.get(str(appointment.service_id)),
         staff.get(str(appointment.staff_id)),
+    )
+
+
+@router.patch("/{restaurant_id}/appointments/{appointment_id}/staff", response_model=AppointmentOut)
+async def reassign_appointment(
+    restaurant_id: str,
+    appointment_id: str,
+    body: AppointmentReassign,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    restaurant = await _restaurant(db, restaurant_id)
+    await _manage(db, restaurant, current_user)
+    appointment = await db.get(Appointment, appointment_id)
+    if not appointment or appointment.restaurant_id != restaurant.id:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+    if appointment.status not in ("pending", "confirmed"):
+        raise HTTPException(status_code=400, detail="La cita ya está cerrada")
+    staff_list = await _staff(db, restaurant.id, only_active=True)
+    staff = next((s for s in staff_list if str(s.id) == str(body.staff_id)), None)
+    if not staff:
+        raise HTTPException(
+            status_code=400,
+            detail="Ese profesional ya no está disponible. Elige otro profesional.",
+        )
+
+    await db.execute(
+        select(Restaurant.id).where(Restaurant.id == restaurant.id).with_for_update()
+    )
+    local_date = appointment.start_at.astimezone(LOCAL_TZ).date()
+    day_rows = await _day_appointments(db, restaurant.id, local_date)
+    busy = any(
+        a.id != appointment.id
+        and a.staff_id == staff.id
+        and a.status in ACTIVE_STATUSES
+        and _overlaps(appointment.start_at, appointment.end_at, a.start_at, a.end_at)
+        for a in day_rows
+    )
+    if busy:
+        raise HTTPException(
+            status_code=409,
+            detail="Ese profesional ya tiene otra cita en ese horario. Elige otro.",
+        )
+
+    appointment.staff_id = staff.id
+    await db.commit()
+    await db.refresh(appointment)
+    schedule_appointment_status(str(appointment.id), "reassigned")
+    services = {str(s.id): s.name for s in await _services(db, restaurant.id)}
+    return _appointment_out(
+        appointment,
+        services.get(str(appointment.service_id)),
+        staff.name,
     )
 
 

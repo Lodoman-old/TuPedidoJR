@@ -68,6 +68,62 @@
   let fulfillment = 'delivery';
   let coverageInside = null;
 let scheduleState = { enabled: false, value: '' };
+  let cartNotice = '';
+
+  function sanitizeCartWithMenu(info) {
+    const menu = info?.menu || [];
+    if (!menu.length) return;
+    const byId = new Map(menu.map(i => [String(i.id), i]));
+    const cart = getCart();
+    const kept = [];
+    const removedNames = [];
+    let adjusted = false;
+    for (const line of cart) {
+      const item = byId.get(String(line.menu_item_id));
+      if (!item) {
+        removedNames.push(line.name);
+        adjusted = true;
+        continue;
+      }
+      const groups = item.option_groups || [];
+      const validIds = new Set(groups.flatMap(g => (g.options || []).map(o => String(o.id))));
+      const currentIds = line.option_ids || [];
+      const keptIds = currentIds.filter(id => validIds.has(String(id)));
+      let lineOut = line;
+      if (keptIds.length !== currentIds.length) {
+        adjusted = true;
+        const names = [];
+        let price = Number(item.price || 0);
+        for (const group of groups) {
+          const chosen = (group.options || []).filter(o => keptIds.includes(String(o.id)));
+          if (!chosen.length) continue;
+          if (group.pricing_mode === 'max') {
+            price = Math.max(price, ...chosen.map(o => Number(o.price_delta || 0)));
+            chosen.forEach(o => names.push(`${group.name}: ${o.name} (1/${chosen.length})`));
+          } else {
+            price += chosen.reduce((sum, o) => sum + Number(o.price_delta || 0), 0);
+            chosen.forEach(o => names.push(`${group.name}: ${o.name}`));
+          }
+        }
+        const missingRequired = groups.some(group =>
+          group.is_required && !(group.options || []).some(o => keptIds.includes(String(o.id)))
+        );
+        if (missingRequired) {
+          removedNames.push(line.name);
+          continue;
+        }
+        lineOut = { ...line, option_ids: keptIds, option_names: names, price };
+      }
+      kept.push(lineOut);
+    }
+    if (!adjusted) return;
+    sessionStorage.setItem('cart', JSON.stringify(kept));
+    const unique = [...new Set(removedNames)];
+    cartNotice = unique.length
+      ? `Quitamos ${unique.length} producto(s) que cambiaron en el menú: ${unique.join(', ')}. Vuelve a agregarlos.`
+      : 'Actualizamos las opciones de tu carrito porque el menú cambió.';
+    updateCartBadge();
+  }
 
   function esc(value) {
     return String(value ?? '').replace(/[&<>"']/g, (c) => ({
@@ -107,7 +163,10 @@ let scheduleState = { enabled: false, value: '' };
     const container = document.getElementById('cartContent');
     const empty = document.getElementById('cartEmpty');
     if (cart.length === 0) {
-      container.innerHTML = '';
+      container.innerHTML = cartNotice
+        ? `<div class="alert alert-warning py-2">${esc(cartNotice)}</div>`
+        : '';
+      cartNotice = '';
       empty.classList.remove('d-none');
       return;
     }
@@ -123,7 +182,12 @@ let scheduleState = { enabled: false, value: '' };
       return;
     }
     let subtotal = 0;
-    let html = '<div class="card p-3 mb-3">';
+    let html = '';
+    if (cartNotice) {
+      html += `<div class="alert alert-warning py-2">${esc(cartNotice)}</div>`;
+      cartNotice = '';
+    }
+    html += '<div class="card p-3 mb-3">';
     cart.forEach((item, idx) => {
       const st = item.price * item.quantity;
       subtotal += st;
@@ -295,6 +359,7 @@ let scheduleState = { enabled: false, value: '' };
         <div class="form-text">En transferencia se cobra el saldo completo. Los abonos aplican al pagar en efectivo.</div>
       </div>
       <div id="estimateMsg" class="small text-muted mt-1"></div>
+      <div id="estimateError" class="alert alert-warning small mt-2 mb-0 d-none"></div>
       <div id="distanceWarning" class="alert alert-warning small mt-2 mb-0 d-none"></div>
     </div>`;
 
@@ -862,6 +927,7 @@ async function refreshEstimate() {
         fulfillment === 'pickup' ? null : addressState.lng,
         appliedCoupon, tipAmount, pointsToRedeem, fulfillment,
       );
+      document.getElementById('estimateError')?.classList.add('d-none');
       feeEl.textContent = money(res.delivery_fee);
       flatEl.textContent = money(res.flat_usage_fee);
       estimateState = {
@@ -913,6 +979,11 @@ async function refreshEstimate() {
       }
     } catch (e) {
       if (estimateMsg) estimateMsg.textContent = 'No se pudo calcular el envío: ' + e.message;
+      const box = document.getElementById('estimateError');
+      if (box) {
+        box.textContent = 'No pudimos calcular el envío. Revisa tu dirección o vuelve a agregar los productos: ' + e.message;
+        box.classList.remove('d-none');
+      }
     }
   }
 
@@ -1208,6 +1279,7 @@ async function refreshEstimate() {
     if (cartRid) {
       try { restaurantInfo = await apiRequest('GET', `/restaurants/${cartRid}`); } catch (e) { /* ignore */ }
     }
+    sanitizeCartWithMenu(restaurantInfo);
     await loadLoyalty();
     await loadSavedAddresses();
     renderCart();

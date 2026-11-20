@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,6 +37,10 @@ from app.services.payout_service import (
 from app.services.audit_service import log_action
 
 router = APIRouter()
+
+
+class PayoutPaidBody(BaseModel):
+    confirmation_code: str | None = None
 
 
 def _money(value) -> str:
@@ -277,7 +282,7 @@ async def admin_payouts(
         cutoff = await local_today(db) - timedelta(days=30)
         monthly_sales = sum(
             (o.subtotal or 0)
-            for o in balance["orders"]
+            for o in balance["all_orders"]
             if o.placed_at and o.placed_at.date() >= cutoff
         )
         restaurants.append({
@@ -289,7 +294,20 @@ async def admin_payouts(
             "pending_amount": _money(balance["pending"]),
             "earned_total": _money(balance["earned"]),
             "restaurant_debt": _money(balance.get("cash_debt", 0)),
+            "net_amount": _money(balance["net"]),
             "monthly_sales": _money(monthly_sales),
+            "orders_count": len(balance.get("all_orders", [])),
+            "commission_total": _money(sum(
+                (o.platform_commission or 0) for o in balance.get("all_orders", [])
+            )),
+            "flat_fee_total": _money(sum(
+                (o.flat_usage_fee or 0) for o in balance.get("all_orders", [])
+            )),
+            "shipment_credit": _money(balance.get("shipment_credit", 0)),
+            "shipment_charge": _money(balance.get("shipment_charge", 0)),
+            "adjustment_credit": _money(balance.get("adjustment_credit", 0)),
+            "adjustment_charge": _money(balance.get("adjustment_charge", 0)),
+            "loyalty_credit": _money(balance.get("loyalty_credit", 0)),
             "last_payout_date": balance["last_payout"].isoformat() if balance["last_payout"] else None,
             "next_payout_date": next_date.isoformat(),
             "status": _due_state(balance["pending"], next_date),
@@ -647,6 +665,7 @@ async def confirm_transfer_received(
 async def mark_payout_paid(
     kind: str,
     payout_id: str,
+    body: PayoutPaidBody | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_superuser),
 ):
@@ -656,13 +675,23 @@ async def mark_payout_paid(
     payout = await db.get(model, _uuid(payout_id))
     if not payout:
         raise HTTPException(status_code=404, detail="Liquidación no encontrada")
+    if kind == "courier" and payout.direction == "to_platform":
+        code = ((body.confirmation_code if body else "") or "").strip()
+        if payout.confirmation_code and code != payout.confirmation_code:
+            raise HTTPException(
+                status_code=400,
+                detail="Escribe el código de 6 dígitos que muestra el repartidor",
+            )
     now = datetime.now(timezone.utc)
     payout.status = "paid"
     payout.paid_at = now
     payout.confirmed_at = now
     await log_action(
         db, current_user.id, f"payout.{kind}.paid", f"{kind}_payout", payout.id,
-        {"amount": _money(getattr(payout, "net_payout", None) or getattr(payout, "total_earnings", None))},
+        {
+            "amount": _money(getattr(payout, "net_payout", None) or getattr(payout, "net_amount", None)),
+            "confirmation_code": getattr(payout, "confirmation_code", None),
+        },
     )
     await db.commit()
     return {"id": str(payout.id), "status": payout.status}
@@ -695,6 +724,10 @@ async def payout_history(
             "kind": "restaurant",
             "name": name,
             "amount": _money(payout.net_payout),
+            "net_amount": _money(payout.net_payout),
+            "direction": "to_restaurant",
+            "payout_method": "transfer",
+            "confirmation_code": None,
             "status": payout.status,
             "period_start": payout.period_start.isoformat(),
             "period_end": payout.period_end.isoformat(),
@@ -706,7 +739,14 @@ async def payout_history(
             "id": str(payout.id),
             "kind": "courier",
             "name": name,
-            "amount": _money(payout.total_earnings),
+            "amount": _money(abs(payout.net_amount or 0)),
+            "net_amount": _money(payout.net_amount),
+            "earnings": _money(payout.total_earnings),
+            "debt": _money(payout.total_debt),
+            "advances": _money(payout.total_advances),
+            "direction": payout.direction,
+            "payout_method": payout.payout_method,
+            "confirmation_code": payout.confirmation_code,
             "status": payout.status,
             "period_start": payout.period_start.isoformat(),
             "period_end": payout.period_end.isoformat(),

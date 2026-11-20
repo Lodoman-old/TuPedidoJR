@@ -168,6 +168,25 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="statusModalTitle">Confirmar cambio</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0" id="statusModalBody"></p>
+        <div class="alert alert-light border small mt-3 mb-0" id="statusModalNote"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Volver</button>
+        <button class="btn btn-sm btn-success" id="statusModalBtn" onclick="confirmStatusChange()">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -529,18 +548,62 @@
     }
   }
 
-  async function setStatus(id, status) {
-    const labels = { completed: 'marcar como completada', no_show: 'marcar como no asistió', cancelled: 'cancelar' };
-    let question = `¿Seguro que quieres ${labels[status]} esta cita?`;
-    if (status === 'cancelled') {
-      question = 'El cliente recibirá un aviso y, si pagó en línea, se registrará su reembolso. ¿Cancelar la cita?';
-    }
-    if (!confirm(question)) return;
+  let pendingStatusChange = null;
+  let statusModalInstance = null;
+
+  function setStatus(id, status) {
+    const configs = {
+      completed: {
+        title: 'Completar cita',
+        body: '¿Confirmas que la cita ya se completó?',
+        note: 'El servicio se registrará como ingreso en el saldo del profesional.',
+        button: 'Sí, completar',
+        buttonClass: 'btn-success',
+      },
+      no_show: {
+        title: 'Marcar inasistencia',
+        body: '¿El cliente no asistió a la cita?',
+        note: 'Se registrará la inasistencia y el adeudo correspondiente.',
+        button: 'Sí, marcar inasistencia',
+        buttonClass: 'btn-warning',
+      },
+      cancelled: {
+        title: 'Cancelar cita',
+        body: 'El cliente recibirá un aviso y, si pagó en línea, se registrará su reembolso.',
+        note: 'El horario quedará libre para otro cliente.',
+        button: 'Sí, cancelar',
+        buttonClass: 'btn-danger',
+      },
+    };
+    const config = configs[status];
+    if (!config) return;
+    pendingStatusChange = { id, status };
+    document.getElementById('statusModalTitle').textContent = config.title;
+    document.getElementById('statusModalBody').textContent = config.body;
+    document.getElementById('statusModalNote').textContent = config.note;
+    const button = document.getElementById('statusModalBtn');
+    button.className = 'btn btn-sm ' + config.buttonClass;
+    button.textContent = config.button;
+    button.disabled = false;
+    statusModalInstance = statusModalInstance || new bootstrap.Modal(document.getElementById('statusModal'));
+    statusModalInstance.show();
+  }
+
+  async function confirmStatusChange() {
+    if (!pendingStatusChange) return;
+    const { id, status } = pendingStatusChange;
+    const button = document.getElementById('statusModalBtn');
+    button.disabled = true;
     try {
       await apiRequest('PATCH', `/agenda/${RID}/appointments/${id}`, { status });
+      statusModalInstance.hide();
+      pendingStatusChange = null;
       await Promise.all([loadAppointments(), loadBalance()]);
       showToast('Cita actualizada');
-    } catch (err) { showToast(err.message, 'danger'); }
+    } catch (err) {
+      showToast(err.message, 'danger');
+      button.disabled = false;
+    }
   }
 
   document.addEventListener('DOMContentLoaded', async () => {

@@ -13,6 +13,46 @@
 <div id="mandadoAdvancesCard" class="mb-3"></div>
 <div id="payoutsLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
 <div id="payoutsContent" class="d-none"></div>
+
+<div class="modal fade" id="payoutPaidModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="payoutPaidTitle">Confirmar liquidación</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-0" id="payoutPaidSummary"></p>
+        <div id="payoutCodeBox" class="mt-3 d-none">
+          <label class="form-label small mb-1" for="payoutCodeInput">Código del corte</label>
+          <input id="payoutCodeInput" class="form-control" inputmode="numeric" maxlength="6"
+                 autocomplete="off" placeholder="6 dígitos">
+          <div class="form-text">Pídelo al repartidor. Confirma que el efectivo ya está en la plataforma.</div>
+        </div>
+        <div id="payoutPaidError" class="text-danger small mt-2 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-sm btn-success" id="payoutPaidBtn" onclick="confirmPayoutPaid()">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="businessBalanceModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="businessBalanceTitle">Cuenta del negocio</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="businessBalanceBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -46,21 +86,32 @@
     </div></div>`;
   }
 
+  let restaurantsById = {};
+
   function renderRestaurants(restaurants) {
+    restaurantsById = Object.fromEntries(restaurants.map(r => [String(r.id), r]));
     return `<div class="card p-3 mb-3">
       <h6>Restaurantes</h6>
-      <p class="small text-muted">La comisión individual reemplaza la comisión global. Si dejas el campo vacío, se usa la global.</p>
-      <div class="table-responsive"><table class="table table-sm align-middle" style="min-width:1100px">
+      <p class="small text-muted">La comisión individual reemplaza la comisión global. Si dejas el campo vacío, se usa la global.<br>
+        <strong>Se le debe</strong> es lo que la plataforma le pagará. <strong>Debe</strong> es el efectivo o los cargos que el negocio cobró por la plataforma. <strong>Neto</strong> es lo que realmente se paga o se cobra.</p>
+      <div class="table-responsive"><table class="table table-sm align-middle" style="min-width:1220px">
         <thead><tr>
-          <th>Restaurante</th><th class="text-end">Ventas 30d</th><th class="text-end">Pendiente</th><th class="text-end">Debe a plataforma</th><th>Comisión %</th>
+          <th>Restaurante</th><th class="text-end">Ventas 30d</th><th class="text-end">Se le debe</th><th class="text-end">Debe a plataforma</th><th class="text-end">Neto</th><th>Comisión %</th>
           <th>Frecuencia</th><th>Próximo pago</th><th>Estado</th><th></th>
         </tr></thead>
-        <tbody>${restaurants.map(r => `
-          <tr>
+        <tbody>${restaurants.map(r => {
+          const net = parseFloat(r.net_amount || 0);
+          const netLabel = net > 0
+            ? `<span class="text-success fw-bold">Pagar ${money(net)}</span>`
+            : (net < 0
+              ? `<span class="text-danger fw-bold">Cobrar ${money(Math.abs(net))}</span>`
+              : '<span class="text-muted">Sin saldo</span>');
+          return `<tr>
             <td>${esc(r.name)}</td>
             <td class="text-end">${money(r.monthly_sales)}</td>
             <td class="text-end fw-bold">${money(r.pending_amount)}</td>
             <td class="text-end text-danger">${money(r.restaurant_debt || 0)}</td>
+            <td class="text-end">${netLabel}</td>
             <td style="min-width:110px">
               <input type="number" class="form-control form-control-sm" id="r_comm_${r.id}"
                      min="0" max="100" step="0.1" value="${r.uses_global_commission ? '' : r.commission_percentage}"
@@ -74,11 +125,15 @@
             <td>${r.next_payout_date || '—'}</td>
             <td>${statusBadge(r.status)}</td>
             <td class="text-end text-nowrap">
+              <button class="btn btn-sm btn-outline-secondary" onclick="openBusinessBalance('${r.id}')" title="Ver desglose">
+                <i class="bi bi-eye"></i> Detalle
+              </button>
               <button class="btn btn-sm btn-outline-primary" onclick="saveRestaurant('${r.id}')">Guardar</button>
               <button class="btn btn-sm btn-success" onclick="payRestaurant('${r.id}')"
                       ${parseFloat(r.pending_amount) <= 0 ? 'disabled' : ''}>Generar pago</button>
             </td>
-          </tr>`).join('')}</tbody>
+          </tr>`;
+        }).join('')}</tbody>
       </table></div>
     </div>`;
   }
@@ -191,6 +246,81 @@
     </div>`;
   }
 
+  function openBusinessBalance(id) {
+    const r = restaurantsById[String(id)];
+    if (!r) return;
+    const pending = parseFloat(r.pending_amount || 0);
+    const debt = parseFloat(r.restaurant_debt || 0);
+    const net = parseFloat(r.net_amount || 0);
+    const netBlock = net > 0
+      ? `<div class="alert alert-success mb-0"><strong>La plataforma le paga al negocio:</strong> ${money(net)}</div>`
+      : (net < 0
+        ? `<div class="alert alert-danger mb-0"><strong>El negocio debe entregar a la plataforma:</strong> ${money(Math.abs(net))}</div>`
+        : '<div class="alert alert-secondary mb-0"><strong>Sin saldo pendiente.</strong></div>');
+    document.getElementById('businessBalanceTitle').textContent = r.name || 'Negocio';
+    document.getElementById('businessBalanceBody').innerHTML = `
+      <div class="row g-2 mb-3">
+        <div class="col-6"><div class="border rounded p-2 text-center">
+          <small class="text-muted d-block">Se le debe al negocio</small>
+          <strong class="text-success fs-5">${money(pending)}</strong>
+        </div></div>
+        <div class="col-6"><div class="border rounded p-2 text-center">
+          <small class="text-muted d-block">El negocio debe</small>
+          <strong class="text-danger fs-5">${money(debt)}</strong>
+        </div></div>
+      </div>
+      ${netBlock}
+      <table class="table table-sm mt-3 mb-0">
+        <tbody>
+          <tr><td>Ventas últimos 30 días</td><td class="text-end">${money(r.monthly_sales)}</td></tr>
+          <tr><td>Ganancia neta acumulada</td><td class="text-end fw-bold">${money(r.earned_total)}</td></tr>
+          <tr><td>Comisión de la plataforma (ya descontada)</td><td class="text-end">${money(r.commission_total)}</td></tr>
+          <tr><td>Cuota fija por pedido (ya descontada)</td><td class="text-end">${money(r.flat_fee_total)}</td></tr>
+          <tr><td>Envíos de negocio a favor</td><td class="text-end">${money(r.shipment_credit)}</td></tr>
+          <tr><td>Envíos de negocio por cobrar</td><td class="text-end">${money(r.shipment_charge)}</td></tr>
+          <tr><td>Ajustes a favor</td><td class="text-end">${money(r.adjustment_credit)}</td></tr>
+          <tr><td>Ajustes por cobrar</td><td class="text-end">${money(r.adjustment_charge)}</td></tr>
+          <tr><td>Puntos absorbidos por la plataforma</td><td class="text-end">${money(r.loyalty_credit)}</td></tr>
+          <tr><td>Pedidos considerados</td><td class="text-end">${r.orders_count || 0}</td></tr>
+        </tbody>
+      </table>
+      <p class="small text-muted mt-3 mb-0">La ganancia neta ya incluye comisiones, envíos, ajustes y puntos. La plataforma le debe ${money(pending)} y el negocio debe ${money(debt)}. Al generar el pago se aplica el neto: ${net > 0 ? `se le pagan ${money(net)}` : net < 0 ? `se le cobran ${money(Math.abs(net))}` : 'no hay movimiento'}.</p>
+    `;
+    new bootstrap.Modal(document.getElementById('businessBalanceModal')).show();
+  }
+
+  function renderPendingPayouts(history) {
+    const rows = history.filter(h => h.status === 'pending');
+    if (!rows.length) return '';
+    return `<div class="card p-3 mb-3 border-warning">
+      <h6 class="m-0"><i class="bi bi-hourglass-split"></i> Cortes pendientes de cerrar</h6>
+      <p class="small text-muted mb-2">Aquí confirmas cuando el repartidor te entrega el efectivo o cuando la plataforma le paga.</p>
+      <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Tipo</th><th>Nombre</th><th class="text-end">Monto</th><th>Concepto</th><th>Código</th><th></th></tr></thead>
+        <tbody>${rows.map(h => {
+          const isCourier = h.kind === 'courier';
+          const toPlatform = isCourier && h.direction === 'to_platform';
+          return `<tr>
+            <td>${isCourier ? 'Repartidor' : 'Restaurante'}</td>
+            <td>${esc(h.name)}</td>
+            <td class="text-end fw-bold">${money(h.amount)}</td>
+            <td>${!isCourier
+              ? '<span class="badge bg-primary">Pago al negocio</span>'
+              : (toPlatform
+                ? '<span class="badge bg-warning text-dark">Repartidor entrega efectivo</span>'
+                : '<span class="badge bg-info text-dark">Plataforma paga al repartidor</span>')}</td>
+            <td>${isCourier && h.confirmation_code ? `<strong>${esc(h.confirmation_code)}</strong>` : '—'}</td>
+            <td class="text-end">
+              ${isCourier
+                ? `<button class="btn btn-sm ${toPlatform ? 'btn-warning' : 'btn-success'}" onclick="openPayoutPaid('courier','${h.id}','${h.direction}','${esc(h.confirmation_code || '')}')">${toPlatform ? 'Recibí el efectivo' : 'Marcar pagada'}</button>`
+                : `<button class="btn btn-sm btn-success" onclick="openPayoutPaid('restaurant','${h.id}','to_restaurant','')">Marcar pagada</button>`}
+            </td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+    </div>`;
+  }
+
   function renderHistory(history) {
     if (!history.length) {
       return '<div class="card p-3"><h6>Historial</h6><p class="small text-muted mb-0">Sin liquidaciones registradas.</p></div>';
@@ -199,19 +329,36 @@
     const statusLabel = { pending: 'Pendiente', paid: 'Pagada', confirmed: 'Confirmada', cancelled: 'Cancelada' };
     return `<div class="card p-3">
       <h6>Historial de liquidaciones</h6>
+      <p class="small text-muted">Los cortes de repartidor muestran si el efectivo lo entrega el repartidor o si la plataforma se lo paga.</p>
       <div class="table-responsive"><table class="table table-sm align-middle">
-        <thead><tr><th>Tipo</th><th>Nombre</th><th>Período</th><th class="text-end">Monto</th><th>Estado</th><th></th></tr></thead>
-        <tbody>${history.map(h => `
-          <tr>
+        <thead><tr><th>Tipo</th><th>Nombre</th><th>Período</th><th class="text-end">Monto</th><th>Concepto</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${history.map(h => {
+          const isCourier = h.kind === 'courier';
+          const toPlatform = isCourier && h.direction === 'to_platform';
+          const concept = !isCourier
+            ? '<span class="badge bg-primary">Pago al negocio</span>'
+            : (toPlatform
+              ? '<span class="badge bg-warning text-dark">Repartidor entrega efectivo</span>'
+              : '<span class="badge bg-info text-dark">Plataforma paga al repartidor</span>');
+          const code = isCourier && h.confirmation_code
+            ? `<div class="small text-muted mt-1">Código: <strong>${esc(h.confirmation_code)}</strong></div>`
+            : '';
+          let action = '';
+          if (h.status === 'pending') {
+            action = isCourier
+              ? `<button class="btn btn-sm ${toPlatform ? 'btn-warning' : 'btn-success'}" onclick="openPayoutPaid('courier','${h.id}','${h.direction}','${esc(h.confirmation_code || '')}')">${toPlatform ? 'Recibí el efectivo' : 'Marcar pagada'}</button>`
+              : `<button class="btn btn-sm btn-success" onclick="openPayoutPaid('restaurant','${h.id}','to_restaurant','')">Marcar pagada</button>`;
+          }
+          return `<tr>
             <td>${kindLabel[h.kind] || h.kind}</td>
             <td>${esc(h.name)}</td>
             <td class="small">${h.period_start} a ${h.period_end}</td>
             <td class="text-end fw-bold">${money(h.amount)}</td>
+            <td>${concept}${code}</td>
             <td><span class="badge bg-${h.status === 'paid' || h.status === 'confirmed' ? 'success' : h.status === 'cancelled' ? 'secondary' : 'warning'}">${statusLabel[h.status] || h.status}</span></td>
-            <td class="text-end">
-              ${h.status === 'pending' ? `<button class="btn btn-sm btn-success" onclick="markPaid('${h.kind}','${h.id}')">Marcar pagada</button>` : ''}
-            </td>
-          </tr>`).join('')}</tbody>
+            <td class="text-end">${action}</td>
+          </tr>`;
+        }).join('')}</tbody>
       </table></div>
     </div>`;
   }
@@ -573,19 +720,27 @@
       const restaurants = data.restaurants || [];
       const couriers = data.couriers || [];
       const pendingRestaurants = restaurants.reduce((s, r) => s + parseFloat(r.pending_amount || 0), 0);
-      const pendingCouriers = couriers.reduce((s, c) => s + parseFloat(c.pending_amount || 0), 0);
-      const courierDebt = couriers.reduce((s, c) => s + parseFloat(c.pending_debt || 0), 0);
+      const businessDebt = restaurants.reduce(
+        (s, r) => s + Math.max(-parseFloat(r.net_amount || 0), 0), 0
+      );
+      const pendingCouriers = couriers.reduce(
+        (s, c) => s + Math.max(parseFloat(c.net_amount || 0), 0), 0
+      );
+      const courierDebt = couriers.reduce(
+        (s, c) => s + Math.max(-parseFloat(c.net_amount || 0), 0), 0
+      );
       const pendingTransfers = (data.pending_transfers || []).reduce((s, t) => s + parseFloat(t.amount || 0), 0);
       const pendingAdvances = (advances || []).filter(a => a.status === 'pending').reduce((s, a) => s + parseFloat(a.amount || 0), 0);
       const dueCount = [...restaurants, ...couriers].filter(x => x.status === 'due').length;
 
       content.innerHTML = `
         <div class="row g-2 mb-3">
-          ${summaryCard('Pendiente restaurantes', money(pendingRestaurants))}
-          ${summaryCard('Pendiente repartidores', money(pendingCouriers))}
+          ${summaryCard('Plataforma debe a negocios', money(pendingRestaurants), pendingRestaurants ? 'border-success' : '')}
+          ${summaryCard('Negocios deben a plataforma (neto)', money(businessDebt), businessDebt ? 'border-danger' : '')}
+          ${summaryCard('Plataforma debe a repartidores', money(pendingCouriers))}
+          ${summaryCard('Repartidores deben (neto)', money(courierDebt), courierDebt ? 'border-danger' : '')}
           ${summaryCard('Transferencias por confirmar', money(pendingTransfers), pendingTransfers ? 'border-warning' : '')}
           ${summaryCard('Avances por aprobar', money(pendingAdvances), pendingAdvances ? 'border-warning' : '')}
-          ${summaryCard('Efectivo por conciliar', money(courierDebt), courierDebt ? 'border-danger' : '')}
           ${summaryCard('Liquidaciones listas', dueCount, dueCount ? 'border-success' : '')}
           ${summaryCard('Hoy', data.today)}
         </div>
@@ -594,6 +749,7 @@
         ${renderCouriers(couriers)}
         ${renderAdvances(advances)}
         ${renderTransfers(data.pending_transfers || [])}
+        ${renderPendingPayouts(history)}
         ${renderHistory(history)}`;
       content.classList.remove('d-none');
       loadReconciliation();
@@ -652,13 +808,58 @@
     } catch (ex) { showToast(ex.message, 'danger'); }
   }
 
-  async function markPaid(kind, id) {
-    if (!confirm('¿Marcar esta liquidación como pagada?')) return;
+  let payoutToConfirm = null;
+  let payoutPaidModal = null;
+
+  function openPayoutPaid(kind, id, direction, code) {
+    payoutToConfirm = { kind, id, direction, code };
+    const isCourierCash = kind === 'courier' && direction === 'to_platform';
+    document.getElementById('payoutPaidTitle').textContent = isCourierCash
+      ? 'Recibir efectivo del repartidor'
+      : (kind === 'courier' ? 'Confirmar pago al repartidor' : 'Confirmar pago al negocio');
+    document.getElementById('payoutPaidSummary').textContent = isCourierCash
+      ? 'Confirma que el repartidor ya te entregó el efectivo de su corte. Esta acción cierra la liquidación.'
+      : (kind === 'courier'
+        ? 'Confirma que ya le pagaste al repartidor. Esta acción cierra la liquidación.'
+        : 'Confirma que ya entregaste el pago al negocio. Esta acción cierra la liquidación.');
+    document.getElementById('payoutCodeBox').classList.toggle('d-none', !isCourierCash);
+    document.getElementById('payoutCodeInput').value = '';
+    document.getElementById('payoutPaidError').classList.add('d-none');
+    const button = document.getElementById('payoutPaidBtn');
+    button.className = 'btn btn-sm ' + (isCourierCash ? 'btn-warning' : 'btn-success');
+    button.textContent = isCourierCash ? 'Sí, ya me lo entregó' : 'Sí, ya se pagó';
+    button.disabled = false;
+    payoutPaidModal = payoutPaidModal || new bootstrap.Modal(document.getElementById('payoutPaidModal'));
+    payoutPaidModal.show();
+  }
+
+  async function confirmPayoutPaid() {
+    if (!payoutToConfirm) return;
+    const { kind, id, direction } = payoutToConfirm;
+    const code = direction === 'to_platform'
+      ? document.getElementById('payoutCodeInput').value.trim()
+      : '';
+    const error = document.getElementById('payoutPaidError');
+    if (kind === 'courier' && direction === 'to_platform' && !code) {
+      error.textContent = 'Escribe el código de 6 dígitos que muestra el repartidor.';
+      error.classList.remove('d-none');
+      return;
+    }
+    const button = document.getElementById('payoutPaidBtn');
+    button.disabled = true;
     try {
-      await markPayoutPaid(kind, id);
-      showToast('Liquidación marcada como pagada');
+      await markPayoutPaid(kind, id, code);
+      payoutPaidModal.hide();
+      payoutToConfirm = null;
+      showToast(kind === 'courier' && direction === 'to_platform'
+        ? 'Efectivo recibido. Corte del repartidor cerrado.'
+        : 'Liquidación marcada como pagada');
       loadPayouts();
-    } catch (ex) { showToast(ex.message, 'danger'); }
+    } catch (ex) {
+      error.textContent = ex.message;
+      error.classList.remove('d-none');
+      button.disabled = false;
+    }
   }
 
   async function confirmTransfer(id) {

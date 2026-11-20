@@ -96,7 +96,7 @@ class BusinessTypeUpdate(BaseModel):
     )
 
 
-def _affiliation_row(restaurant: Restaurant, today: date | None = None) -> dict:
+def _affiliation_row(restaurant: Restaurant, today: date | None = None, email: str | None = None) -> dict:
     today = today or date.today()
     expires = restaurant.affiliation_expires_at
     days_left = (expires - today).days if expires else None
@@ -104,6 +104,7 @@ def _affiliation_row(restaurant: Restaurant, today: date | None = None) -> dict:
         "id": str(restaurant.id),
         "name": restaurant.name,
         "cuisine": restaurant.cuisine,
+        "email": email or "",
         "status": restaurant.status,
         "affiliation_expires_at": expires.isoformat() if expires else None,
         "days_left": days_left,
@@ -158,11 +159,15 @@ async def list_affiliations(
     current_user: User = Depends(require_superuser),
 ):
     result = await db.execute(
-        select(Restaurant)
+        select(Restaurant, User.email)
+        .outerjoin(User, User.id == Restaurant.owner_id)
         .where(Restaurant.status == "active")
         .order_by(Restaurant.name)
     )
-    return [_affiliation_row(row, today=await local_today(db)) for row in result.scalars().all()]
+    return [
+        _affiliation_row(row, email=email, today=await local_today(db))
+        for row, email in result.all()
+    ]
 
 
 @router.patch("/affiliations/{restaurant_id}")

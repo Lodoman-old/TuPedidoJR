@@ -135,6 +135,7 @@ async def restaurant_balance(db: AsyncSession, restaurant_id) -> dict:
     cash_debt += adjustment_charge
 
     pending = max(earned - requested - cash_debt, Decimal("0"))
+    net = earned - requested - cash_debt
 
     return {
         "orders": payable_orders,
@@ -143,6 +144,7 @@ async def restaurant_balance(db: AsyncSession, restaurant_id) -> dict:
         "earned": earned,
         "requested": requested,
         "cash_debt": cash_debt,
+        "net": net,
         "shipment_credit": shipment_credit,
         "shipment_charge": shipment_charge,
         "adjustments": adjustments,

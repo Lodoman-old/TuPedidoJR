@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -159,6 +159,10 @@ async def get_store_request(
 @store_router.get("/{store_id}/requests", response_model=list[StoreRequestOut])
 async def list_store_requests(
     store_id: str,
+    q: str | None = None,
+    status_filter: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -166,11 +170,28 @@ async def list_store_requests(
         db, _uuid(store_id), current_user, ORDER_ROLES
     ):
         raise HTTPException(status_code=403, detail="No puedes ver estas solicitudes")
+    conditions = [StoreRequest.store_id == _uuid(store_id)]
+    term = (q or "").strip()
+    if term:
+        like = f"%{term}%"
+        conditions.append(or_(
+            User.name.ilike(like),
+            User.phone.ilike(like),
+            StoreRequest.description.ilike(like),
+            StoreRequest.notes.ilike(like),
+            StoreRequest.delivery_address.ilike(like),
+        ))
+    if status_filter in ("pending", "quoted", "converted", "rejected", "cancelled"):
+        conditions.append(StoreRequest.status == status_filter)
+    page_size = min(max(int(limit or 20), 1), 100)
+    page_offset = max(int(offset or 0), 0)
     result = await db.execute(
         select(StoreRequest, User)
         .join(User, User.id == StoreRequest.user_id)
-        .where(StoreRequest.store_id == _uuid(store_id))
+        .where(*conditions)
         .order_by(StoreRequest.created_at.desc())
+        .limit(page_size)
+        .offset(page_offset)
     )
     store = await db.get(Restaurant, _uuid(store_id))
     return [_out(request, store, user) for request, user in result.all()]

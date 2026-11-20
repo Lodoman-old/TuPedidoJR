@@ -15,7 +15,7 @@ from app.models.restaurant import Restaurant
 from app.models.restaurant_user import RestaurantUser
 from app.models.user import User
 from app.schemas.restaurant import RestaurantRegistrationCreate
-from app.services.email_service import send_restaurant_welcome
+from app.services.email_service import send_restaurant_welcome, email_typo_suggestion
 from app.services.push_service import schedule_new_restaurant_registration
 
 router = APIRouter()
@@ -49,6 +49,15 @@ async def register_restaurant(
         raise HTTPException(
             status_code=409,
             detail="Ese correo ya tiene una cuenta. Inicia sesión o usa otro correo.",
+        )
+    suggestion = email_typo_suggestion(body.email)
+    if suggestion:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"El correo parece tener un error de escritura. "
+                f"¿Quisiste decir {suggestion}?"
+            ),
         )
 
     user = User(

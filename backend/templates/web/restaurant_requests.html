@@ -11,8 +11,32 @@
   </div>
 </div>
 <div id="requestsError" class="alert alert-danger d-none"></div>
+<div class="card p-2 mb-3">
+  <div class="row g-2 align-items-center">
+    <div class="col-12 col-md">
+      <input id="requestsSearch" class="form-control form-control-sm" autocomplete="off"
+             placeholder="Buscar cliente, teléfono o producto...">
+    </div>
+    <div class="col-7 col-md-auto">
+      <select id="requestsStatus" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        <option value="pending">Pendientes</option>
+        <option value="quoted">Cotizadas</option>
+        <option value="converted">Con pedido</option>
+        <option value="rejected">Rechazadas</option>
+        <option value="cancelled">Canceladas</option>
+      </select>
+    </div>
+    <div class="col-5 col-md-auto">
+      <button class="btn btn-sm btn-outline-secondary w-100" onclick="clearRequestFilters()">
+        <i class="bi bi-x-circle"></i> Limpiar
+      </button>
+    </div>
+  </div>
+</div>
 <div id="requestsLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
 <div id="requestsList"></div>
+<div id="requestsMore" class="text-center mt-3"></div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -111,14 +135,54 @@
     } catch (e) { /* se queda el texto por defecto */ }
   }
 
-  async function loadRequests() {
+  const REQUESTS_PAGE_SIZE = 12;
+  let requestsRows = [];
+  let requestsOffset = 0;
+  let requestsSearchTimer = null;
+
+  function clearRequestFilters() {
+    document.getElementById('requestsSearch').value = '';
+    document.getElementById('requestsStatus').value = '';
+    loadRequests(true);
+  }
+
+  function renderRequests() {
+    const list = document.getElementById('requestsList');
+    list.innerHTML = requestsRows.length
+      ? requestsRows.map(card).join('')
+      : `<div class="card p-4 text-center text-muted">${requestsAreStore ? 'No hay solicitudes que coincidan con la búsqueda.' : 'No hay pedidos especiales que coincidan con la búsqueda.'}</div>`;
+    const more = document.getElementById('requestsMore');
+    if (requestsRows.length && requestsRows.length % REQUESTS_PAGE_SIZE === 0) {
+      more.innerHTML = '<button class="btn btn-sm btn-outline-primary" onclick="loadRequests(false)"><i class="bi bi-chevron-down"></i> Mostrar más</button>';
+    } else {
+      more.innerHTML = requestsRows.length
+        ? '<span class="small text-muted">No hay más resultados.</span>'
+        : '';
+    }
+  }
+
+  async function loadRequests(reset = true) {
     const loading = document.getElementById('requestsLoading');
-    loading.classList.remove('d-none');
+    const list = document.getElementById('requestsList');
+    const search = document.getElementById('requestsSearch').value.trim();
+    const status = document.getElementById('requestsStatus').value;
+    if (reset) {
+      requestsRows = [];
+      requestsOffset = 0;
+      loading.classList.remove('d-none');
+      list.innerHTML = '';
+    }
     try {
-      const rows = await apiRequest('GET', `/restaurants/${RID}/requests`);
-      document.getElementById('requestsList').innerHTML = rows.length
-        ? rows.map(card).join('')
-        : `<div class="card p-4 text-center text-muted">${requestsAreStore ? 'Todavía no hay solicitudes de producto.' : 'Todavía no hay pedidos especiales.'}</div>`;
+      const params = new URLSearchParams({
+        limit: String(REQUESTS_PAGE_SIZE),
+        offset: String(requestsOffset),
+      });
+      if (search) params.set('q', search);
+      if (status) params.set('status_filter', status);
+      const rows = await apiRequest('GET', `/restaurants/${RID}/requests?${params.toString()}`);
+      requestsRows = reset ? rows : requestsRows.concat(rows);
+      requestsOffset = requestsRows.length;
+      renderRequests();
       document.getElementById('requestsError').classList.add('d-none');
     } catch (e) {
       const box = document.getElementById('requestsError');
@@ -127,8 +191,19 @@
       loading.classList.add('d-none');
     }
   }
+
+  document.getElementById('requestsSearch').addEventListener('input', () => {
+    clearTimeout(requestsSearchTimer);
+    requestsSearchTimer = setTimeout(() => loadRequests(true), 350);
+  });
+  document.getElementById('requestsStatus').addEventListener('change', () => loadRequests(true));
+
   loadRequestsHeader();
-  loadRequests();
-  setInterval(loadRequests, 30000);
+  loadRequests(true);
+  setInterval(() => {
+    const hasFilters = document.getElementById('requestsSearch').value.trim()
+      || document.getElementById('requestsStatus').value;
+    if (!hasFilters && requestsOffset <= REQUESTS_PAGE_SIZE) loadRequests(true);
+  }, 30000);
 </script>
 {% endblock %}

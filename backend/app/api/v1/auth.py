@@ -27,7 +27,7 @@ from app.schemas.auth import (
     UserOut,
 )
 from app.services import totp_service
-from app.services.email_service import send_password_reset
+from app.services.email_service import send_password_reset, email_typo_suggestion
 from app.services.order_service import get_setting_value
 from app.services.security_service import security_guard
 
@@ -79,6 +79,15 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == body.email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email ya registrado")
+    suggestion = email_typo_suggestion(body.email)
+    if suggestion:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"El correo parece tener un error de escritura. "
+                f"¿Quisiste decir {suggestion}?"
+            ),
+        )
 
     referred_by = None
     if body.referral_code:

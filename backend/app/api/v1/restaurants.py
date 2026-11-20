@@ -41,7 +41,7 @@ from app.services.cancellation_service import apply_cancellation
 from app.services.file_service import delete_upload, save_upload
 from app.services.geo_service import get_nearby_restaurants
 from app.services.loyalty_service import award_on_delivery
-from app.services.push_service import schedule_available_order, schedule_courier_ready, schedule_order_status
+from app.services.push_service import schedule_available_order, schedule_courier_preparing, schedule_courier_ready, schedule_order_status
 from app.services.schedule_service import (
     get_schedules,
     get_timezone,
@@ -808,12 +808,16 @@ async def update_restaurant_order_status(
     schedule_order_status(str(order.id), final_status)
     if final_status == "awaiting_courier":
         schedule_available_order(str(order.id), False)
-    elif (
-        final_status in ("confirmed", "ready")
-        and order.delivery_mode == "platform"
-        and not order.delivery_person_id
-    ):
-        schedule_available_order(str(order.id), final_status == "ready")
+    elif final_status in ("confirmed", "preparing"):
+        if order.delivery_person_id:
+            schedule_courier_preparing(str(order.id))
+        elif order.delivery_mode == "platform":
+            schedule_available_order(str(order.id), False)
+    elif final_status == "ready":
+        if order.delivery_person_id:
+            schedule_courier_ready(str(order.id))
+        elif order.delivery_mode == "platform":
+            schedule_available_order(str(order.id), True)
     elif final_status == "in_delivery" and order.requires_courier_approval:
         schedule_courier_ready(str(order.id))
     return order_out(order, can_see_refund=bool(current_user.is_superuser))

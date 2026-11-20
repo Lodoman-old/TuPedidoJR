@@ -128,6 +128,30 @@ async def test_admin_marks_affiliation_paid(
     assert removed.json()["affiliated"] is False
 
 
+async def test_admin_registers_short_plan_in_cash(
+    client: AsyncClient, db_session, owner_token, superuser_token
+):
+    restaurant = await _make_restaurant(db_session, owner_token, None)
+
+    plans = await client.get(
+        "/api/v1/admin/affiliation-plans", headers=_headers(superuser_token)
+    )
+    assert plans.status_code == 200
+    assert [p["months"] for p in plans.json()] == [1, 3, 6, 12]
+
+    resp = await client.patch(
+        f"/api/v1/admin/affiliations/{restaurant.id}",
+        json={"paid": True, "months": 3, "method": "cash"},
+        headers=_headers(superuser_token),
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["affiliated"] is True
+    assert data["plan_months"] == 3
+    assert data["payment_method"] == "cash"
+    assert data["affiliation_expires_at"] == (date.today() + timedelta(days=90)).isoformat()
+
+
 async def test_reminder_is_sent_once_per_day(
     db_session, owner_token, monkeypatch
 ):

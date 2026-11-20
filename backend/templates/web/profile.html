@@ -2,6 +2,24 @@
 {% block head_extra %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  .addr-row { gap: .75rem; }
+  .addr-actions .btn {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    line-height: 1;
+  }
+  .addr-actions .btn i { font-size: .95rem; line-height: 1; }
+  @media (max-width: 359.98px) {
+    .addr-actions .btn { width: 30px; height: 30px; }
+    .addr-actions .btn i { font-size: .85rem; }
+  }
+</style>
 {% endblock %}
 {% block content %}
 <h4 class="mb-3">Mi perfil</h4>
@@ -103,12 +121,12 @@
       } else {
         addresses.forEach(a => {
           html += `
-            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid #eee;">
+            <div class="d-flex justify-content-between align-items-center py-2 addr-row" style="border-bottom:1px solid #eee;">
               <div class="min-w-0">
                 <strong>${esc(a.name)}</strong>${a.is_default ? ' <span class="badge bg-primary">Predeterminada</span>' : ''}
                 <p class="mb-0 small text-muted">${esc(a.address)}</p>
               </div>
-              <div class="d-flex gap-1">
+              <div class="d-flex gap-1 addr-actions flex-shrink-0">
                 <button class="btn btn-sm btn-outline-secondary edit-addr"
                         data-id="${a.id}" data-name="${esc(a.name)}" data-addr="${esc(a.address)}"
                         data-lat="${a.location?.lat || 0}" data-lng="${a.location?.lng || 0}"

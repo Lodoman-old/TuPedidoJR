@@ -33,7 +33,7 @@
     .floating-cart {
       position: fixed;
       right: 16px;
-      bottom: 18px;
+      bottom: 80px;
       z-index: 1055;
       width: 58px;
       height: 58px;
@@ -48,6 +48,12 @@
       box-shadow: 0 8px 20px rgba(15, 27, 61, 0.28);
     }
     .floating-cart:hover { color: #fff; background: #15254f; }
+    @media (min-width: 1320px) {
+      /* En pantallas grandes, pegado al borde de las tarjetas y no al de la ventana. */
+      .floating-cart {
+        right: calc((100vw - 1140px) / 2 - 68px);
+      }
+    }
     .floating-cart-count {
       position: absolute;
       top: -4px;
@@ -106,7 +112,7 @@
     }
     body { padding-top: env(safe-area-inset-top, 0px); }
     html.capacitor-app body { padding-top: 30px; padding-bottom: 34px; }
-    html.capacitor-app .floating-cart { bottom: 46px; }
+    html.capacitor-app .floating-cart { bottom: 96px; }
     html.capacitor-app .modal-dialog { margin-top: 42px; margin-bottom: 42px; }
     html.capacitor-app .toast-container { bottom: 44px !important; }
     html.capacitor-app #downloadAppNav { display: none !important; }
@@ -146,6 +152,7 @@
       #mobileUserArea {
         flex: 1 1 auto;
         min-width: 0;
+        gap: .85rem !important;
         justify-content: flex-end;
       }
       #cartTopMobile {
@@ -190,7 +197,7 @@
       }
       #userNameTop .bi { font-size: .85rem; }
       #cartTopMobile .bi { font-size: .95rem; }
-      #mobileUserArea { gap: .35rem !important; }
+      #mobileUserArea { gap: .65rem !important; }
     }
   </style>
   {% block head_extra %}{% endblock %}
@@ -550,8 +557,9 @@ async function generateRestaurantPayout(id) {
 async function generateCourierPayout(id) {
   return await apiRequest('POST', `/admin/payouts/couriers/${id}`);
 }
-async function markPayoutPaid(kind, id) {
-  return await apiRequest('POST', `/admin/payouts/${kind}/${id}/mark-paid`);
+async function markPayoutPaid(kind, id, confirmationCode) {
+  return await apiRequest('POST', `/admin/payouts/${kind}/${id}/mark-paid`,
+    confirmationCode ? { confirmation_code: confirmationCode } : {});
 }
 async function confirmTransferReceived(orderId) {
   return await apiRequest('POST', `/admin/payouts/transfers/${orderId}/confirm`);
@@ -747,9 +755,9 @@ function addToCart(item) {
     || (cart.find(i => i.restaurant_id) || {}).restaurant_id;
   if (cart.length && item.restaurant_id && currentRid && currentRid !== item.restaurant_id) {
     const ok = window.confirm(
-      'Tu carrito tiene productos de otro negocio. ' +
-      'Cada pedido va a un solo negocio.\\n\\n' +
-      '¿Quieres vaciar el carrito y empezar uno nuevo con este negocio?'
+      `Tu carrito tiene productos de otro negocio. Cada pedido va a un solo negocio.
+
+¿Quieres vaciar el carrito y empezar uno nuevo con este negocio?`
     );
     if (!ok) return false;
     cart = [];
@@ -785,9 +793,9 @@ function setCartQuantity(menuItemId, qty, meta) {
     && currentRid && currentRid !== meta.restaurant_id
   ) {
     const ok = window.confirm(
-      'Tu carrito tiene productos de otro negocio. ' +
-      'Cada pedido va a un solo negocio.\\n\\n' +
-      '¿Quieres vaciar el carrito y empezar uno nuevo con este negocio?'
+      `Tu carrito tiene productos de otro negocio. Cada pedido va a un solo negocio.
+
+¿Quieres vaciar el carrito y empezar uno nuevo con este negocio?`
     );
     if (!ok) return 0;
     cart = [];
@@ -1134,6 +1142,12 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
           }
         });
         Push.addListener('registrationError', (e) => capLog('push: error registro', JSON.stringify(e)));
+        Push.addListener('pushNotificationReceived', (notification) => {
+          const n = notification || {};
+          const extra = n.body ? `: ${n.body}` : '';
+          showToast(`${n.title || 'Notificación'}${extra}`, 'info');
+          window.dispatchEvent(new CustomEvent('push-received', { detail: n }));
+        });
         Push.addListener('pushNotificationActionPerformed', (action) => {
           const data = (action.notification && action.notification.data) || {};
           let target = '/web/orders';

@@ -18,9 +18,30 @@
     Elige el plan (1, 3, 6 o 12 meses) y la forma de pago antes de registrar. Aplica también a solicitudes viejas sin plan definido.
     El recordatorio se envía automáticamente 10 días antes del vencimiento.
   </p>
+  <div class="row g-2 mb-2">
+    <div class="col-12 col-md">
+      <input id="affSearch" class="form-control form-control-sm" autocomplete="off"
+             placeholder="Buscar negocio, giro o correo...">
+    </div>
+    <div class="col-7 col-md-auto">
+      <select id="affStatus" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        <option value="active">Vigentes</option>
+        <option value="unpaid">Sin pago</option>
+        <option value="cash">Solicitó efectivo</option>
+        <option value="expiring">Vencen en 10 días</option>
+      </select>
+    </div>
+    <div class="col-5 col-md-auto">
+      <button class="btn btn-sm btn-outline-secondary w-100" onclick="clearAffiliationFilters()">
+        <i class="bi bi-x-circle"></i> Limpiar
+      </button>
+    </div>
+  </div>
   <div id="affiliationsBody" class="table-responsive">
     <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>
   </div>
+  <div id="affiliationsMore" class="text-center mt-2"></div>
 </div>
 
 <div class="modal fade" id="approveModal" tabindex="-1" aria-hidden="true">
@@ -99,8 +120,24 @@
   function modal(id) { return bootstrap.Modal.getOrCreateInstance(document.getElementById(id)); }
   const TYPE_LABELS = {
     restaurant: 'Restaurante', store: 'Tienda', grocery: 'Abarrotes',
-    pharmacy: 'Farmacia', hardware: 'Ferretería', other: 'Otro',
+    pharmacy: 'Farmacia', hardware: 'Ferretería', services: 'Servicios',
+    rental: 'Rentas', other: 'Otro',
   };
+  const EMAIL_TYPOS = {
+    'oulook.com': 'outlook.com', 'outlok.com': 'outlook.com',
+    'outlook.con': 'outlook.com', 'hotmal.com': 'hotmail.com',
+    'hotmai.com': 'hotmail.com', 'hotmail.con': 'hotmail.com',
+    'gmail.con': 'gmail.com', 'gmail.cm': 'gmail.com',
+    'yahoo.con': 'yahoo.com', 'yaho.com': 'yahoo.com',
+    'icloud.con': 'icloud.com', 'protonmai.com': 'protonmail.com',
+  };
+  function emailSuggestion(email) {
+    const value = String(email || '').toLowerCase();
+    if (!value.includes('@')) return null;
+    const [local, domain] = value.split('@');
+    const fixed = EMAIL_TYPOS[domain];
+    return fixed ? `${local}@${fixed}` : null;
+  }
   function typeBadge(type) {
     return `<span class="badge bg-light text-dark border">${TYPE_LABELS[type] || 'Negocio'}</span>`;
   }
@@ -134,7 +171,7 @@
                 </select>
                 <small class="text-muted">${esc(r.cuisine || '')}</small><br><small>${esc(r.address)}</small></td>
               <td>${esc(r.owner_name)}</td>
-              <td><small>${esc(r.owner_email)}<br>${esc(r.phone || '')}</small></td>
+              <td><small>${esc(r.owner_email)}${emailSuggestion(r.owner_email) ? `<br><span class="text-danger">¿Quisiste decir ${esc(emailSuggestion(r.owner_email))}?</span>` : ''}<br>${esc(r.phone || '')}</small></td>
               <td>${badge(r.status)}${r.rejection_reason ? `<br><small class="text-danger">${esc(r.rejection_reason)}</small>` : ''}</td>
               <td class="small">${r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
               <td class="text-nowrap">
@@ -271,6 +308,92 @@
   }
 
   let affiliationPlansAdmin = [];
+  let affiliationRows = [];
+  let affiliationVisible = 15;
+  const AFF_PAGE_SIZE = 15;
+
+  function clearAffiliationFilters() {
+    document.getElementById('affSearch').value = '';
+    document.getElementById('affStatus').value = '';
+    affiliationVisible = AFF_PAGE_SIZE;
+    renderAffiliations();
+  }
+
+  function filteredAffiliations() {
+    const term = document.getElementById('affSearch').value.trim().toLowerCase();
+    const status = document.getElementById('affStatus').value;
+    return affiliationRows.filter(r => {
+      if (term) {
+        const haystack = [r.name, r.cuisine, r.email].join(' ').toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+      if (status === 'active' && !r.affiliated) return false;
+      if (status === 'unpaid' && r.affiliated) return false;
+      if (status === 'cash' && !(r.payment_requested_at && r.payment_method === 'cash')) return false;
+      if (status === 'expiring') {
+        if (r.days_left === null || r.days_left === undefined) return false;
+        if (r.days_left < 0 || r.days_left > 10) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderAffiliations() {
+    const body = document.getElementById('affiliationsBody');
+    const more = document.getElementById('affiliationsMore');
+    const rows = filteredAffiliations();
+    const visible = rows.slice(0, affiliationVisible);
+    const planByMonths = Object.fromEntries(affiliationPlansAdmin.map(p => [String(p.months), p]));
+    body.innerHTML = `<table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Negocio</th><th>Estado</th><th>Plan</th><th>Monto</th><th>Pagado hasta</th><th>Días</th><th class="text-end">Acciones</th></tr></thead>
+      <tbody>${visible.map(r => {
+        const active = Boolean(r.affiliated);
+        const cashRequested = Boolean(r.payment_requested_at) && r.payment_method === 'cash';
+        let badge = active
+          ? '<span class="badge bg-success">Vigente</span>'
+          : '<span class="badge bg-danger">Sin pago</span>';
+        if (cashRequested) {
+          badge += '<br><span class="badge bg-warning text-dark mt-1">Solicitó efectivo</span>';
+        }
+        let until = '—';
+        if (r.affiliation_expires_at) {
+          const d = new Date(r.affiliation_expires_at + 'T12:00:00');
+          until = d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+        let days = '—';
+        if (r.days_left !== null && r.days_left !== undefined) {
+          const cls = r.days_left < 0 ? 'text-danger fw-bold' : (r.days_left <= 10 ? 'text-warning fw-bold' : 'text-muted');
+          days = `<span class="${cls}">${r.days_left} día(s)</span>`;
+        }
+        const months = Number(r.plan_months || 12);
+        const options = affiliationPlansAdmin.map(p => (
+          `<option value="${p.months}"${Number(p.months) === months ? ' selected' : ''}>${esc(p.label)} · ${money0(p.price)}</option>`
+        )).join('');
+        const method = r.payment_method === 'cash' ? 'cash' : 'transfer';
+        return `<tr>
+          <td><strong>${esc(r.name)}</strong><br><small class="text-muted">${esc(r.cuisine || '')}</small>${r.email ? `<br><small class="text-muted">${esc(r.email)}</small>` : ''}</td>
+          <td>${badge}</td>
+          <td>
+            <select class="form-select form-select-sm" id="affPlan_${r.id}" onchange="updateAffPlanAmount('${r.id}')" style="min-width:150px">${options}</select>
+          </td>
+          <td class="text-nowrap" id="affAmount_${r.id}">${money0(planByMonths[String(months)]?.price ?? 0)}</td>
+          <td>${until}</td>
+          <td>${days}</td>
+          <td class="text-end text-nowrap">
+            <select class="form-select form-select-sm d-inline-block me-1" id="affMethod_${r.id}" style="width:130px">
+              <option value="cash"${method === 'cash' ? ' selected' : ''}>Efectivo</option>
+              <option value="transfer"${method === 'transfer' ? ' selected' : ''}>Transferencia</option>
+            </select>
+            <button class="btn btn-sm btn-success" onclick="markAffiliation('${r.id}', true, this)">Registrar pago</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="markAffiliation('${r.id}', false, this)">Quitar</button>
+          </td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="7" class="text-center text-muted">No hay negocios que coincidan con la búsqueda.</td></tr>'}</tbody>
+    </table>`;
+    more.innerHTML = rows.length > affiliationVisible
+      ? `<button class="btn btn-sm btn-outline-primary" onclick="affiliationVisible += ${AFF_PAGE_SIZE}; renderAffiliations()"><i class="bi bi-chevron-down"></i> Mostrar más (${rows.length - affiliationVisible} restantes)</button>`
+      : (rows.length ? '<span class="small text-muted">Fin de la lista.</span>' : '');
+  }
 
   async function loadAffiliations() {
     const body = document.getElementById('affiliationsBody');
@@ -279,58 +402,22 @@
       if (!affiliationPlansAdmin.length) {
         affiliationPlansAdmin = await apiRequest('GET', '/admin/affiliation-plans');
       }
-      const rows = await apiRequest('GET', '/admin/affiliations');
-      const planByMonths = Object.fromEntries(affiliationPlansAdmin.map(p => [String(p.months), p]));
-      body.innerHTML = `<table class="table table-sm align-middle mb-0">
-        <thead><tr><th>Negocio</th><th>Estado</th><th>Plan</th><th>Monto</th><th>Pagado hasta</th><th>Días</th><th class="text-end">Acciones</th></tr></thead>
-        <tbody>${rows.map(r => {
-          const active = Boolean(r.affiliated);
-          const cashRequested = Boolean(r.payment_requested_at) && r.payment_method === 'cash';
-          let badge = active
-            ? '<span class="badge bg-success">Vigente</span>'
-            : '<span class="badge bg-danger">Sin pago</span>';
-          if (cashRequested) {
-            badge += '<br><span class="badge bg-warning text-dark mt-1">Solicitó efectivo</span>';
-          }
-          let until = '—';
-          if (r.affiliation_expires_at) {
-            const d = new Date(r.affiliation_expires_at + 'T12:00:00');
-            until = d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-          }
-          let days = '—';
-          if (r.days_left !== null && r.days_left !== undefined) {
-            const cls = r.days_left < 0 ? 'text-danger fw-bold' : (r.days_left <= 10 ? 'text-warning fw-bold' : 'text-muted');
-            days = `<span class="${cls}">${r.days_left} día(s)</span>`;
-          }
-          const months = Number(r.plan_months || 12);
-          const options = affiliationPlansAdmin.map(p => (
-            `<option value="${p.months}"${Number(p.months) === months ? ' selected' : ''}>${esc(p.label)} · ${money0(p.price)}</option>`
-          )).join('');
-          const method = r.payment_method === 'cash' ? 'cash' : 'transfer';
-          return `<tr>
-            <td><strong>${esc(r.name)}</strong><br><small class="text-muted">${esc(r.cuisine || '')}</small></td>
-            <td>${badge}</td>
-            <td>
-              <select class="form-select form-select-sm" id="affPlan_${r.id}" onchange="updateAffPlanAmount('${r.id}')" style="min-width:150px">${options}</select>
-            </td>
-            <td class="text-nowrap" id="affAmount_${r.id}">${money0(planByMonths[String(months)]?.price ?? 0)}</td>
-            <td>${until}</td>
-            <td>${days}</td>
-            <td class="text-end text-nowrap">
-              <select class="form-select form-select-sm d-inline-block me-1" id="affMethod_${r.id}" style="width:130px">
-                <option value="cash"${method === 'cash' ? ' selected' : ''}>Efectivo</option>
-                <option value="transfer"${method === 'transfer' ? ' selected' : ''}>Transferencia</option>
-              </select>
-              <button class="btn btn-sm btn-success" onclick="markAffiliation('${r.id}', true, this)">Registrar pago</button>
-              <button class="btn btn-sm btn-outline-danger" onclick="markAffiliation('${r.id}', false, this)">Quitar</button>
-            </td>
-          </tr>`;
-        }).join('') || '<tr><td colspan="7" class="text-center text-muted">Sin negocios activos.</td></tr>'}</tbody>
-      </table>`;
+      affiliationRows = await apiRequest('GET', '/admin/affiliations');
+      affiliationVisible = AFF_PAGE_SIZE;
+      renderAffiliations();
     } catch (e) {
       body.innerHTML = `<div class="alert alert-danger mb-0">${esc(e.message)}</div>`;
     }
   }
+
+  document.getElementById('affSearch').addEventListener('input', () => {
+    affiliationVisible = AFF_PAGE_SIZE;
+    renderAffiliations();
+  });
+  document.getElementById('affStatus').addEventListener('change', () => {
+    affiliationVisible = AFF_PAGE_SIZE;
+    renderAffiliations();
+  });
 
   function updateAffPlanAmount(id) {
     const select = document.getElementById(`affPlan_${id}`);

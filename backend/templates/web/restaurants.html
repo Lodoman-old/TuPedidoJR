@@ -15,11 +15,12 @@
     word-break: break-word;
   }
   .business-card .business-cuisine {
-    display: block;
+    display: inline-block;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    vertical-align: middle;
   }
   .business-card .card-body { min-width: 0; }
 </style>
@@ -111,7 +112,7 @@
     const isRental = r.business_type === 'rental' || PAGE_TYPE === 'rental';
     const isAgenda = Boolean(r.appointments_enabled) && PAGE_TYPE === 'services' && !isRental;
     const cuisine = r.cuisine
-      ? `<div class="small fw-bold text-body business-cuisine mb-1" title="${r.cuisine}">${r.cuisine}</div>`
+      ? `<div class="mb-1"><span class="badge bg-dark business-cuisine" title="${r.cuisine}">${r.cuisine}</span></div>`
       : '';
     const openBadge = r.is_open_now === false
       ? '<span class="badge bg-secondary ms-1">Cerrado</span>'

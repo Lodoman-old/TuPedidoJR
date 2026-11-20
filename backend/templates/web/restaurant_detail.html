@@ -1,10 +1,27 @@
 {% extends "base.html" %}
+{% block head_extra %}
+<style>
+  #restaurantCartBtn {
+    background: linear-gradient(135deg, #F58220 0%, #E85D04 100%);
+    border: 0;
+    color: #fff;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(232, 93, 4, .35);
+  }
+  #restaurantCartBtn:hover,
+  #restaurantCartBtn:focus {
+    background: linear-gradient(135deg, #FF9A3C 0%, #F06A0A 100%);
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(232, 93, 4, .45);
+  }
+</style>
+{% endblock %}
 {% block content %}
 <div class="d-flex align-items-center gap-2 mb-2" id="restaurantTopBar">
   <a href="/web/restaurants" class="btn btn-sm btn-outline-secondary" id="restaurantBackBtn">
     <i class="bi bi-arrow-left"></i> Volver
   </a>
-  <a href="/web/cart" class="btn btn-sm btn-outline-primary ms-auto" id="restaurantCartBtn">
+  <a href="/web/cart" class="btn btn-sm ms-auto" id="restaurantCartBtn">
     <i class="bi bi-cart"></i> Ver carrito
   </a>
 </div>

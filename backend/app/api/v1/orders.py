@@ -36,7 +36,7 @@ from app.services.estimation_service import calculate_estimated_time
 from app.services.order_service import calculate_order_totals, get_approval_timeout_min, get_setting_value, resolve_item_options
 from app.services.order_serialization import order_out
 from app.services.loyalty_service import apply_redemption, preview_redemption, award_on_delivery
-from app.services.push_service import schedule_available_order, schedule_courier_ready, schedule_new_order, schedule_order_status
+from app.services.push_service import schedule_available_order, schedule_courier_preparing, schedule_courier_ready, schedule_new_order, schedule_order_status
 from app.services.schedule_service import restaurant_open_state
 from app.services.tracking_service import build_tracking
 from app.ws.manager import ConnectionManager
@@ -765,12 +765,16 @@ async def update_order_status(
     schedule_order_status(str(order.id), final_status)
     if final_status == "awaiting_courier":
         schedule_available_order(str(order.id), False)
-    elif (
-        final_status in ("confirmed", "ready")
-        and order.delivery_mode == "platform"
-        and not order.delivery_person_id
-    ):
-        schedule_available_order(str(order.id), final_status == "ready")
+    elif final_status in ("confirmed", "preparing"):
+        if order.delivery_person_id:
+            schedule_courier_preparing(str(order.id))
+        elif order.delivery_mode == "platform":
+            schedule_available_order(str(order.id), False)
+    elif final_status == "ready":
+        if order.delivery_person_id:
+            schedule_courier_ready(str(order.id))
+        elif order.delivery_mode == "platform":
+            schedule_available_order(str(order.id), True)
     elif final_status == "in_delivery" and order.requires_courier_approval:
         schedule_courier_ready(str(order.id))
     return order

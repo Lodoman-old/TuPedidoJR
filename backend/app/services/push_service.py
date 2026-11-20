@@ -1293,6 +1293,34 @@ async def notify_courier_order_ready(order_id: str) -> None:
         logger.exception("Push courier-ready notification failed for %s", order_id)
 
 
+async def notify_courier_preparing(order_id: str) -> None:
+    """Avisa al repartidor asignado que el negocio confirmó y prepara el pedido."""
+    try:
+        async with async_session() as db:
+            result = await db.execute(select(Order).where(Order.id == order_id))
+            order = result.scalar_one_or_none()
+            if not order or not order.delivery_person_id:
+                return
+            dp = await db.get(DeliveryPerson, order.delivery_person_id)
+            if not dp:
+                return
+            resto = await db.execute(
+                select(Restaurant).where(Restaurant.id == order.restaurant_id)
+            )
+            restaurant = resto.scalar_one_or_none()
+            name = restaurant.name if restaurant else "Negocio"
+            await send_to_user(
+                db,
+                dp.user_id,
+                "Pedido en preparación",
+                f"{name}: el negocio confirmó el pedido y ya lo está preparando.",
+                {"type": "assigned_order", "order_id": str(order.id)},
+                "amber",
+            )
+    except Exception:
+        logger.exception("Push courier-preparing notification failed for %s", order_id)
+
+
 def schedule_order_status(order_id: str, status: str) -> None:
     try:
         asyncio.create_task(notify_order_status(order_id, status))
@@ -1317,6 +1345,13 @@ def schedule_courier_assigned(order_id: str) -> None:
 def schedule_courier_ready(order_id: str) -> None:
     try:
         asyncio.create_task(notify_courier_order_ready(order_id))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
+def schedule_courier_preparing(order_id: str) -> None:
+    try:
+        asyncio.create_task(notify_courier_preparing(order_id))
     except RuntimeError:
         logger.debug("No event loop for push notification")
 

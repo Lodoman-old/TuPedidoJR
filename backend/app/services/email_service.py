@@ -15,6 +15,33 @@ from app.services.order_service import get_setting_value
 
 logger = logging.getLogger(__name__)
 
+# Dominios que suelen escribirse mal y que no existen o no son de correo.
+COMMON_EMAIL_TYPOS = {
+    "oulook.com": "outlook.com",
+    "outlok.com": "outlook.com",
+    "outlook.con": "outlook.com",
+    "hotmal.com": "hotmail.com",
+    "hotmai.com": "hotmail.com",
+    "hotmail.con": "hotmail.com",
+    "gmail.con": "gmail.com",
+    "gmail.cm": "gmail.com",
+    "yahoo.con": "yahoo.com",
+    "yaho.com": "yahoo.com",
+    "icloud.con": "icloud.com",
+    "protonmai.com": "protonmail.com",
+}
+
+
+def email_typo_suggestion(email: str) -> str | None:
+    """Devuelve el correo corregido si el dominio es un error típico."""
+    value = (email or "").strip().lower()
+    if "@" not in value:
+        return None
+    local, domain = value.rsplit("@", 1)
+    fixed = COMMON_EMAIL_TYPOS.get(domain)
+    return f"{local}@{fixed}" if fixed else None
+
+
 MANUALS = [
     ("Manual general del negocio", "/manuales/restaurante"),
     ("Manual de menú/catálogo y precios", "/manuales/menu"),
@@ -53,6 +80,12 @@ async def send_email(
         return False, "El envío de correos está desactivado"
     if not config["host"] or not config["from_email"]:
         return False, "Falta configurar el servidor SMTP y el correo remitente"
+    suggestion = email_typo_suggestion(to)
+    if suggestion:
+        return False, (
+            f"El correo {to} parece tener un error de escritura. "
+            f"¿Quisiste decir {suggestion}? Corrígelo y vuelve a enviar."
+        )
 
     message = EmailMessage()
     message["Subject"] = subject

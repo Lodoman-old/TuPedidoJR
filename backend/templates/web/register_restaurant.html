@@ -51,7 +51,7 @@
             </select>
           </div>
           <div class="col-12">
-            <div class="alert alert-light border small mb-0" id="businessTypeHelp"></div>
+            <div class="alert alert-info border small mb-0" id="businessTypeHelp"></div>
           </div>
           <div class="col-md-6"><label class="form-label">Giro / categoría</label><input id="restCuisine" class="form-control" placeholder="Tacos, pizza, abarrotes..."></div>
           <div class="col-md-4">
@@ -372,33 +372,63 @@
 
   const BUSINESS_TYPE_INFO = {
     restaurant: {
+      icon: 'bi-shop',
       title: 'Comida',
       text: 'Para restaurantes, fondas, puestos y negocios que venden comida preparada.',
+      bullets: [
+        'Menú con fotos, precios y categorías.',
+        'Pedidos a domicilio o para recoger.',
+        'Panel de pedidos y reparto.',
+      ],
       examples: 'Ej. tacos, pizza, mariscos, desayunos, postres.',
       placeholder: 'Tacos, pizza, mariscos...',
     },
     store: {
+      icon: 'bi-bag',
       title: 'Tiendas',
       text: 'Para negocios que venden productos y reciben pedidos a domicilio o para recoger.',
+      bullets: [
+        'Catálogo de productos con precio y existencia.',
+        'Pedidos a domicilio o para recoger.',
+        'Solicitudes de productos que no estén publicados.',
+      ],
       examples: 'Ej. abarrotes, farmacia, ferretería, boutique, papelería.',
       placeholder: 'Abarrotes, farmacia, ferretería...',
     },
     services: {
+      icon: 'bi-calendar-week',
       title: 'Servicios',
-      text: 'Para negocios que trabajan con citas y profesionales. También puedes vender productos, como una barbería con gel o shampoo.',
+      text: 'Para negocios que trabajan con citas y profesionales. También pueden vender productos.',
+      bullets: [
+        'Agenda de citas con profesionales y horarios.',
+        'Servicios con duración y precio.',
+        'Catálogo de productos como gel, cera o shampoo.',
+      ],
       examples: 'Ej. barbería, salón de belleza, consultorio, taller.',
       placeholder: 'Barbería, salón, consultorio...',
     },
     rental: {
+      icon: 'bi-box2-heart',
       title: 'Rentas',
-      text: 'Para negocios que rentan artículos por fecha y manejan existencias.',
+      text: 'Para negocios que rentan artículos por fecha y controlan existencias.',
+      bullets: [
+        'Artículos con precio, duración y existencia.',
+        'Reservas por fecha y hora.',
+        'Dirección del evento cuando hay entrega.',
+      ],
       examples: 'Ej. salón de eventos, inflables, sillas, manteles, sonido, música.',
       placeholder: 'Salón de eventos, inflables...',
     },
     other: {
-      title: 'Otro / negocio mixto',
-      text: 'Para negocios que combinan venta y renta, o que no encajan en las categorías anteriores.',
-      examples: 'Ej. tienda que también renta sillas y mesas.',
+      icon: 'bi-grid',
+      title: 'Otro / mixto',
+      text: 'Para negocios que combinan varias actividades o no encajan en una sola categoría.',
+      bullets: [
+        'Catálogo de productos.',
+        'Agenda de citas.',
+        'Ideal para varios giros en un mismo negocio.',
+      ],
+      examples: 'Ej. papelería que también da clases, tienda que también agenda servicios.',
       placeholder: 'Describe tu giro',
     },
   };
@@ -406,10 +436,17 @@
   function updateBusinessTypeHelp() {
     const type = $('restBusinessType').value;
     const info = BUSINESS_TYPE_INFO[type] || BUSINESS_TYPE_INFO.other;
+    const bullets = info.bullets.map(item => `<li>${item}</li>`).join('');
     $('businessTypeHelp').innerHTML = `
-      <strong>${info.title}</strong><br>
-      ${info.text}<br>
-      <span class="text-muted">${info.examples}</span>`;
+      <div class="d-flex gap-2">
+        <i class="bi ${info.icon} fs-5 text-primary"></i>
+        <div>
+          <strong>${info.title}</strong>
+          <div class="mt-1">${info.text}</div>
+          <ul class="mb-0 mt-1 ps-3">${bullets}</ul>
+          <div class="text-muted mt-1">${info.examples}</div>
+        </div>
+      </div>`;
     $('restCuisine').placeholder = info.placeholder;
   }
 

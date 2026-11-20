@@ -134,6 +134,29 @@
       .navbar-nav .dropdown-divider {
         border-color: rgba(255, 255, 255, .15);
       }
+      /* Mantiene logo, carrito, nombre y menú en un solo renglón. */
+      .navbar-brand { flex: 0 0 auto; margin-right: .25rem; }
+      .navbar-brand .logo-wrapper img { height: 34px; }
+      #mobileUserArea {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        justify-content: flex-end;
+      }
+      #userNameTop {
+        max-width: 105px !important;
+        min-width: 0;
+        flex: 0 1 auto;
+        font-size: .82rem;
+      }
+      #userNameTop .bi { font-size: .95rem; }
+      #userNameTopText {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .navbar-toggler { flex: 0 0 auto; padding: .25rem .4rem; }
     }
   </style>
   {% block head_extra %}{% endblock %}
@@ -145,7 +168,7 @@
       <a class="navbar-brand d-flex align-items-center" href="/web/restaurants">
         <span class="logo-wrapper"><img src="/static/logo.png" alt="TuPedidoJR" height="40"></span>
       </a>
-      <div class="d-flex align-items-center gap-2 ms-auto me-2 d-lg-none">
+      <div class="d-flex align-items-center gap-2 ms-auto me-2 d-lg-none" id="mobileUserArea">
         <a href="/web/cart" class="nav-link text-white p-1 position-relative nav-delivery-hide nav-customer-hide" id="cartTopMobile" aria-label="Carrito">
           <i class="bi bi-cart fs-5"></i>
           <span id="cartBadgeMobile" class="badge rounded-pill bg-warning text-dark d-none" style="position:absolute;top:-2px;right:-8px;font-size:.62rem;">0</span>

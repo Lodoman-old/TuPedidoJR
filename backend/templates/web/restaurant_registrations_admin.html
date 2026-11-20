@@ -119,10 +119,13 @@
   }
   function modal(id) { return bootstrap.Modal.getOrCreateInstance(document.getElementById(id)); }
   const TYPE_LABELS = {
-    restaurant: 'Restaurante', store: 'Tienda', grocery: 'Abarrotes',
-    pharmacy: 'Farmacia', hardware: 'Ferretería', services: 'Servicios',
-    rental: 'Rentas', other: 'Otro',
+    restaurant: 'Comida', store: 'Tiendas', services: 'Servicios',
+    rental: 'Rentas', other: 'Otro / mixto',
   };
+  function normalizedType(type) {
+    if (['grocery', 'pharmacy', 'hardware'].includes(type)) return 'store';
+    return TYPE_LABELS[type] ? type : 'other';
+  }
   const EMAIL_TYPOS = {
     'oulook.com': 'outlook.com', 'outlok.com': 'outlook.com',
     'outlook.con': 'outlook.com', 'hotmal.com': 'hotmail.com',
@@ -166,7 +169,7 @@
                 <select class="form-select form-select-sm mt-1" style="max-width:150px"
                         onchange="changeBusinessType('${r.id}', this.value)">
                   ${Object.entries(TYPE_LABELS).map(([value, label]) =>
-                    `<option value="${value}" ${r.business_type === value ? 'selected' : ''}>${label}</option>`
+                    `<option value="${value}" ${normalizedType(r.business_type) === value ? 'selected' : ''}>${label}</option>`
                   ).join('')}
                 </select>
                 <small class="text-muted">${esc(r.cuisine || '')}</small><br><small>${esc(r.address)}</small></td>

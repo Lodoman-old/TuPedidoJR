@@ -136,7 +136,13 @@
       }
       /* Mantiene logo, carrito, nombre y menú en un solo renglón. */
       .navbar-brand { flex: 0 0 auto; margin-right: .25rem; }
-      .navbar-brand .logo-wrapper img { height: 34px; }
+      .navbar-brand .logo-wrapper { width: 96px; height: 32px; }
+      .navbar-brand .logo-wrapper img {
+        max-width: 88px;
+        max-height: 26px;
+        width: auto;
+        height: 26px;
+      }
       #mobileUserArea {
         flex: 1 1 auto;
         min-width: 0;
@@ -172,7 +178,12 @@
       .navbar-toggler { flex: 0 0 auto; padding: .25rem .4rem; }
     }
     @media (max-width: 359.98px) {
-      .navbar-brand .logo-wrapper img { height: 26px; }
+      .navbar-brand .logo-wrapper { width: 76px; height: 30px; }
+      .navbar-brand .logo-wrapper img {
+        max-width: 68px;
+        max-height: 24px;
+        height: 24px;
+      }
       #userNameTop {
         max-width: 78px !important;
         font-size: .78rem;

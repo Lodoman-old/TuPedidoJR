@@ -150,7 +150,9 @@
           <i class="bi bi-cart fs-5"></i>
           <span id="cartBadgeMobile" class="badge rounded-pill bg-warning text-dark d-none" style="position:absolute;top:-2px;right:-8px;font-size:.62rem;">0</span>
         </a>
-        <a href="/web/profile" class="navbar-text text-white text-truncate mb-0" id="userNameTop" style="max-width: 130px;"></a>
+        <a href="/web/profile" class="navbar-text text-white text-truncate mb-0 d-inline-flex align-items-center gap-1" id="userNameTop" style="max-width: 150px;" title="Mi perfil">
+          <i class="bi bi-person-circle"></i><span id="userNameTopText" class="text-truncate">Mi perfil</span>
+        </a>
       </div>
       <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
@@ -222,6 +224,7 @@
               <i class="bi bi-person-circle"></i> <span id="userNameText">Mi cuenta</span>
             </a>
           </li>
+          <li class="nav-item d-lg-none"><a class="nav-link" href="/web/profile" id="userNameNavMobile"><i class="bi bi-person-circle"></i> Mi perfil</a></li>
           <li class="nav-item"><a class="nav-link" href="#" id="logoutBtn"><i class="bi bi-box-arrow-right"></i> Salir</a></li>
         </ul>
       </div>
@@ -771,7 +774,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         const displayName = me.name || me.email || 'Mi cuenta';
         sessionStorage.setItem('user_name', displayName);
         applyAdminNav(me.is_superuser);
-        const top = document.getElementById('userNameTop');
+        const top = document.getElementById('userNameTopText');
         const nav = document.getElementById('userNameText');
         if (top) top.textContent = displayName;
         if (nav) nav.textContent = displayName;
@@ -1021,12 +1024,10 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
       document.querySelectorAll('.nav-customer-hide').forEach(el => {
         el.classList.toggle('d-none', Boolean(isStaff));
       });
-      const top = document.getElementById('userNameTop');
       const nav = document.getElementById('userNameNav');
       const profileUrl = canManage && restaurantId
         ? `/web/restaurants/${restaurantId}/profile`
         : '/web/profile';
-      if (top) top.href = profileUrl;
       if (nav) {
         nav.href = profileUrl;
         nav.title = canManage && restaurantId ? 'Perfil del negocio' : 'Mi perfil';
@@ -1198,7 +1199,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
       }
       const cachedName = sessionStorage.getItem('user_name');
       if (cachedName) {
-        const top = document.getElementById('userNameTop');
+        const top = document.getElementById('userNameTopText');
         const nav = document.getElementById('userNameText');
         if (top) top.textContent = cachedName;
         if (nav) nav.textContent = cachedName;

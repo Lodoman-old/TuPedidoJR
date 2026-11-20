@@ -495,12 +495,18 @@
 
         <div class="pricing reveal">
           <div>
-            <span class="eyebrow">Afiliación anual</span>
+            <span class="eyebrow">Planes de afiliación</span>
             <div class="price">${{ '%.0f'|format(affiliation_fee|float) }} <small>MXN / año</small></div>
             <p class="small text-muted mb-2">Equivale a <strong>${{ '%.2f'|format(affiliation_daily|float) }}</strong> al día. Menos que un café, con presencia en línea todo el año.</p>
+            <p class="small mb-2">
+              También disponible:
+              <strong>1 mes ${{ '%.0f'|format(affiliation_plan_1|float) }}</strong> ·
+              <strong>3 meses ${{ '%.0f'|format(affiliation_plan_3|float) }}</strong> ·
+              <strong>6 meses ${{ '%.0f'|format(affiliation_plan_6|float) }}</strong>.
+            </p>
             <p style="color:var(--muted);margin:0 0 8px">
-              Un solo pago anual para mantener tu negocio activo en TuPedidoJR,
-              con presencia digital y respaldo de reparto.
+              Elige el plan que prefieras. El anual tiene el mejor precio por mes y mantiene
+              tu negocio activo en TuPedidoJR, con presencia digital y respaldo de reparto.
             </p>
             <p class="fine">
               Además se aplican las cuotas por pedido configuradas. Te mostramos todo
@@ -649,8 +655,11 @@
             <p>
               <strong>Negocios:</strong> la afiliación anual es de
               <strong>${{ '%.0f'|format(affiliation_fee|float) }} MXN</strong>
-              (≈ <strong>${{ '%.2f'|format(affiliation_daily|float) }} al día</strong>)
-              y mantiene tu negocio en línea con menú/catálogo, QR, panel de pedidos,
+              (≈ <strong>${{ '%.2f'|format(affiliation_daily|float) }} al día</strong>).
+              También hay planes de 1 mes (${{ '%.0f'|format(affiliation_plan_1|float) }}),
+              3 meses (${{ '%.0f'|format(affiliation_plan_3|float) }}) y
+              6 meses (${{ '%.0f'|format(affiliation_plan_6|float) }}).
+              Mantiene tu negocio en línea con menú/catálogo, QR, panel de pedidos,
               reparto, liquidaciones y soporte. Además, por cada pedido se aplica una
               cuota de <strong>${{ '%.2f'|format(business_fee|float) }}</strong>.
             </p>

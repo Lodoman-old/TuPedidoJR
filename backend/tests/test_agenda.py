@@ -143,6 +143,22 @@ async def test_availability_lists_open_day(client, business, service, staff):
 
 
 @pytest.mark.asyncio
+async def test_availability_for_specific_professional(client, business, service, staff):
+    resto, target = business
+    resp = await client.get(
+        f"/api/v1/agenda/{resto.id}/availability",
+        params={
+            "month": target.strftime("%Y-%m"),
+            "service_id": service["id"],
+            "staff_id": staff["id"],
+        },
+    )
+    assert resp.status_code == 200
+    days = {d["date"]: d["count"] for d in resp.json()["days"]}
+    assert days.get(target.isoformat(), 0) > 0
+
+
+@pytest.mark.asyncio
 async def test_customer_books_cash_appointment(
     client, customer_token, business, service, staff
 ):
@@ -616,6 +632,43 @@ async def test_listing_includes_services_filter(
     match = next((r for r in rows if r["id"] == str(resto.id)), None)
     assert match is not None
     assert match["appointments_enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_affiliation_plans_and_quarterly_extension(
+    client, owner_token, superuser_token, business, db_session
+):
+    resto, _ = business
+    listing = await client.get(
+        f"/api/v1/restaurants/{resto.id}/affiliation-proof",
+        headers=_headers(owner_token),
+    )
+    assert listing.status_code == 200
+    plans = {row["months"]: row["price"] for row in listing.json()["plans"]}
+    assert plans == {1: "60.0", 3: "160.0", 6: "290.0", 12: "500.0"}
+
+    original = resto.affiliation_expires_at
+    record = ReceiptValidation(
+        entity_type="affiliation_payment",
+        entity_id=resto.id,
+        file_url="/static/uploads/afiliacion.jpg",
+        expected_kind="transfer_receipt",
+        expected_amount=160,
+        plan_months=3,
+        status="review",
+    )
+    db_session.add(record)
+    await db_session.commit()
+    await db_session.refresh(record)
+
+    approved = await client.post(
+        f"/api/v1/admin/receipts/{record.id}/approve",
+        headers=_headers(superuser_token),
+    )
+    assert approved.status_code == 200, approved.text
+
+    await db_session.refresh(resto)
+    assert (resto.affiliation_expires_at - original).days == 90
 
 
 @pytest.mark.asyncio

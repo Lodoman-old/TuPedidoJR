@@ -41,6 +41,9 @@ async def _manual_values(db: AsyncSession) -> dict:
     shipment_return_percent = await number("SHIPMENT_RETURN_PERCENT", "50")
     affiliation_fee = await number("AFFILIATION_ANNUAL_FEE", "500.0")
     affiliation_daily = (affiliation_fee / Decimal("365")).quantize(Decimal("0.01"))
+    plan_1 = await number("AFFILIATION_PRICE_1", "60.0")
+    plan_3 = await number("AFFILIATION_PRICE_3", "160.0")
+    plan_6 = await number("AFFILIATION_PRICE_6", "290.0")
     contact_email = (await get_setting_value(db, "CONTACT_EMAIL", "tupedidojr@gmail.com")).strip()
     peak_enabled = (await get_setting_value(db, "PEAK_BONUS_ENABLED", "false")).lower() == "true"
     peak_amount = await number("PEAK_BONUS_AMOUNT", "5.0")
@@ -58,6 +61,9 @@ async def _manual_values(db: AsyncSession) -> dict:
         "shipment_return_percent": shipment_return_percent,
         "affiliation_fee": affiliation_fee,
         "affiliation_daily": affiliation_daily,
+        "affiliation_plan_1": plan_1,
+        "affiliation_plan_3": plan_3,
+        "affiliation_plan_6": plan_6,
         "contact_email": contact_email,
         "peak_enabled": peak_enabled,
         "peak_amount": peak_amount,

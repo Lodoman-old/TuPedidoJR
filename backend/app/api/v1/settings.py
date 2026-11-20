@@ -41,6 +41,21 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Costo anual para mantener el negocio activo. Incluye menú/catálogo digital, fotos, QR, materiales, capacitación, panel de pedidos, reparto, liquidaciones y soporte.",
         "type": "money", "default": "500.0",
     },
+    "AFFILIATION_PRICE_1": {
+        "group": "Afiliación", "label": "Plan mensual (1 mes)",
+        "description": "Precio del plan de 1 mes. Se paga por transferencia y la IA valida el comprobante.",
+        "type": "money", "default": "60.0",
+    },
+    "AFFILIATION_PRICE_3": {
+        "group": "Afiliación", "label": "Plan trimestral (3 meses)",
+        "description": "Precio del plan de 3 meses.",
+        "type": "money", "default": "160.0",
+    },
+    "AFFILIATION_PRICE_6": {
+        "group": "Afiliación", "label": "Plan semestral (6 meses)",
+        "description": "Precio del plan de 6 meses.",
+        "type": "money", "default": "290.0",
+    },
     "DELIVERY_BASE_FEE": {
         "group": "Envíos", "label": "Tarifa base de envío",
         "description": "Costo de envío para distancias dentro del radio incluido.",

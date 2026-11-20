@@ -15,9 +15,16 @@
 </ol>
 <div class="note">La solicitud queda pendiente de revisión. Cuando sea aprobada podrás iniciar sesión y recibir pedidos. El tipo de negocio define las secciones que ves: las reservaciones solo aplican a restaurantes y los pedidos especiales se activan desde el perfil. En tiendas, la pestaña Solicitudes siempre está disponible.</div>
 
-<h3>1.1 Afiliación anual</h3>
-<p>La afiliación de tu negocio tiene un costo de <strong>${{ '%.0f'|format(affiliation_fee|float) }} MXN al año</strong> e incluye:</p>
-<p class="small text-muted">Equivale a <strong>${{ '%.2f'|format(affiliation_daily|float) }} al día</strong>. Menos que un café, con presencia en línea todo el año.</p>
+<h3>1.1 Afiliación por planes</h3>
+<p>Puedes pagar la afiliación de tu negocio por el periodo que prefieras:</p>
+<table>
+  <tr><th>Plan</th><th>Precio</th></tr>
+  <tr><td>1 mes</td><td>${{ '%.0f'|format(affiliation_plan_1|float) }} MXN</td></tr>
+  <tr><td>3 meses</td><td>${{ '%.0f'|format(affiliation_plan_3|float) }} MXN</td></tr>
+  <tr><td>6 meses</td><td>${{ '%.0f'|format(affiliation_plan_6|float) }} MXN</td></tr>
+  <tr><td>12 meses</td><td>${{ '%.0f'|format(affiliation_fee|float) }} MXN</td></tr>
+</table>
+<p class="small text-muted">El plan anual equivale a <strong>${{ '%.2f'|format(affiliation_daily|float) }} al día</strong> y es el de mejor precio por mes. Incluye:</p>
 <ul>
   <li>Menú o catálogo digital con fotos, precios, categorías y opciones.</li>
   <li>Página propia, enlace y QR para mostrador, mesa y volantes.</li>
@@ -29,7 +36,7 @@
 <div class="note">
   Además de la afiliación, se aplican las cuotas por pedido configuradas. En tu panel y en la configuración de la plataforma puedes consultar los montos vigentes.
 </div>
-<p>Para pagar por transferencia entra a <strong>Perfil del negocio → Afiliación</strong>, transfiere a la cuenta de TuPedidoJR y sube tu comprobante. La plataforma lo valida con IA: si la certeza es alta, la afiliación se activa o renueva automáticamente; si no, el administrador lo revisa.</p>
+<p>Para pagar por transferencia entra a <strong>Perfil del negocio → Afiliación</strong>, elige el plan, transfiere el monto a la cuenta de TuPedidoJR y sube tu comprobante. La plataforma lo valida con IA: si la certeza es alta, la afiliación se activa o renueva automáticamente; si no, el administrador lo revisa.</p>
 
 <h3>2. Inicio de sesión</h3>
 <p>Entra en <a href="/web/login">/web/login</a> con el correo y contraseña del dueño o de un usuario del equipo.</p>

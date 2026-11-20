@@ -191,7 +191,10 @@ def _day_slots(
     rows = [r for r in schedule if r.day_of_week == weekday and not r.is_closed]
     if not rows or not staff:
         return []
-    selected_staff = [s for s in staff if not staff_id or s.id == staff_id]
+    selected_staff = [
+        s for s in staff
+        if not staff_id or str(s.id) == str(staff_id)
+    ]
     if not selected_staff:
         return []
     now = datetime.now(LOCAL_TZ)
@@ -211,7 +214,7 @@ def _day_slots(
             if candidate > now:
                 if staff_id:
                     free = not any(
-                        sid == staff_id and _overlaps(candidate, end, s, e)
+                        str(sid) == str(staff_id) and _overlaps(candidate, end, s, e)
                         for sid, s, e in busy
                     )
                     if free:
@@ -219,7 +222,7 @@ def _day_slots(
                 else:
                     for person in selected_staff:
                         if not any(
-                            sid == person.id and _overlaps(candidate, end, s, e)
+                            str(sid) == str(person.id) and _overlaps(candidate, end, s, e)
                             for sid, s, e in busy
                         ):
                             slots.append(candidate)

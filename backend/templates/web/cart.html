@@ -9,7 +9,7 @@
 <div id="cartEmpty" class="text-center py-5 d-none">
   <i class="bi bi-cart" style="font-size:3rem;color:#ccc;"></i>
   <p class="mt-2 text-muted">Carrito vacío</p>
-  <a href="/web/restaurants" class="btn btn-primary">Ver restaurantes</a>
+  <a href="/web/restaurants" class="btn btn-primary">Ver negocios</a>
 </div>
 
 <div class="modal fade" id="mapPickerModal" tabindex="-1" aria-hidden="true">
@@ -187,8 +187,8 @@ let scheduleState = { enabled: false, value: '' };
     if (restaurantIds.length > 1) {
       container.innerHTML = `<div class="card p-4 text-center">
         <i class="bi bi-shop" style="font-size:2.5rem;color:#F58220"></i>
-        <h5 class="mt-2">Tu carrito tiene productos de varios restaurantes</h5>
-        <p class="text-muted mb-3">Cada pedido se envía a un solo restaurante y el envío se calcula desde ese negocio. Vuelve a armar el carrito con productos de un solo restaurante.</p>
+        <h5 class="mt-2">Tu carrito tiene productos de varios negocios</h5>
+        <p class="text-muted mb-3">Cada pedido se envía a un solo negocio y el envío se calcula desde ese negocio. Vuelve a armar el carrito con productos de un solo negocio.</p>
         <button class="btn btn-primary" onclick="clearMixedCart()">Vaciar carrito y empezar de nuevo</button>
       </div>`;
       return;
@@ -234,7 +234,7 @@ let scheduleState = { enabled: false, value: '' };
         </div>
         <div class="form-check">
           <input class="form-check-input" type="radio" name="fulfillment" id="fulPickup" value="pickup" ${fulfillment === 'pickup' ? 'checked' : ''}>
-          <label class="form-check-label" for="fulPickup"><i class="bi bi-shop"></i> Recoger en el restaurante</label>
+          <label class="form-check-label" for="fulPickup"><i class="bi bi-shop"></i> Recoger en el negocio</label>
         </div>
         <div class="form-text">Si recoges, no hay costo de envío ni propina.</div>
       </div>`;
@@ -287,7 +287,7 @@ let scheduleState = { enabled: false, value: '' };
     </div>`;
 
     html += `<div class="card p-3 mb-3 d-none" id="pickupInfoCard">
-      <div class="alert alert-info py-2 mb-2"><i class="bi bi-shop"></i> Recoger en el restaurante</div>
+      <div class="alert alert-info py-2 mb-2"><i class="bi bi-shop"></i> Recoger en el negocio</div>
       <div class="small"><strong>${esc(restaurantInfo?.name || '')}</strong><br>${esc(restaurantInfo?.address || '')}</div>
       <div class="form-text">Te avisaremos cuando el pedido esté listo. No se cobra envío ni propina.</div>
     </div>`;
@@ -855,8 +855,8 @@ function updateApprovalUi() {
       ? ` Si ningún repartidor lo acepta en <strong>${mins} minutos</strong>, el pedido se cancelará automáticamente y se te devolverá el dinero${selectedPaymentMethod() === 'transfer' ? ' a la cuenta que captures abajo' : ''}.`
       : '';
     if (notice) {
-      notice.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Tu pedido está a ${km} del restaurante. ` +
-        `<strong>Primero un repartidor debe aceptarlo antes de que el restaurante lo prepare.</strong> ` +
+      notice.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Tu pedido está a ${km} del negocio. ` +
+        `<strong>Primero un repartidor debe aceptarlo antes de que el negocio lo prepare.</strong> ` +
         `Así evitamos que se gasten ingredientes si nadie puede llevarlo.${timeoutText}`;
     }
   }
@@ -986,7 +986,7 @@ async function refreshEstimate() {
           ? `Distancia estimada: ${parseFloat(res.distance_km).toFixed(2)} km.`
           : '';
         if (res.delivery_mode === 'own') {
-          estimateMsg.textContent = (estimateMsg.textContent + ' Entrega propia del restaurante.').trim();
+          estimateMsg.textContent = (estimateMsg.textContent + ' Entrega propia del negocio.').trim();
         }
       }
     } catch (e) {
@@ -1162,7 +1162,7 @@ async function refreshEstimate() {
           sessionStorage.setItem('cartRestaurantId', rid);
         }
       }
-      if (!rid) { showToast('Error: no se encontró el restaurante', 'danger'); return; }
+      if (!rid) { showToast('Error: no se encontró el negocio', 'danger'); return; }
 
       const pickup = fulfillment === 'pickup';
       let fullAddress = '';

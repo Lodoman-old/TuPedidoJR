@@ -203,12 +203,12 @@
             ? '<span class="badge bg-info text-dark">También para recoger</span>'
             : (r.delivery_mode === 'own' ? '' : '')));
       const pickupBadge = (!agendaOnly && r.pickup_enabled)
-        ? '<span class="badge bg-primary">Recoger en restaurante</span>'
+        ? '<span class="badge bg-primary">Recoger en el negocio</span>'
         : '';
       const deliveryLabel = agendaOnly
         ? 'Agenda de servicios'
         : (r.pickup_enabled
-          ? 'Envío o recoger en restaurante'
+          ? 'Envío o recoger en el negocio'
           : (r.delivery_mode === 'own'
             ? (Number(r.delivery_fee || 0) > 0
               ? `Envío ${money0(r.delivery_fee)}`
@@ -296,7 +296,7 @@
           buttons.push('<a href="/manuales/restaurante" target="_blank" class="btn btn-sm btn-nav-manual"><i class="bi bi-book"></i> Manual</a>');
           ownerPanel.innerHTML = `
             <div class="card p-3">
-              <h6>${isStore ? 'Panel de la tienda' : 'Panel del restaurante'}</h6>
+              <h6>Panel del negocio</h6>
               <div class="d-flex gap-2 flex-wrap">${buttons.join('')}</div>
               ${canManage ? '<div class="form-text mt-2">Los datos, el logo, el horario y la ubicación se editan en el perfil del negocio.</div>' : ''}
               <input type="file" id="logoFile" accept="image/jpeg,image/png,image/webp" class="d-none">
@@ -675,13 +675,13 @@
             <label class="form-label small mb-1">Tipo de entrega</label>
             <select class="form-select" id="bizDeliveryMode">
               <option value="platform" ${r.delivery_mode !== 'own' ? 'selected' : ''}>Repartidor de TuPedidoJR</option>
-              <option value="own" ${r.delivery_mode === 'own' ? 'selected' : ''}>Repartidor propio del restaurante</option>
+              <option value="own" ${r.delivery_mode === 'own' ? 'selected' : ''}>Repartidor propio del negocio</option>
             </select>
           </div>
           <div class="col-12">
             <div class="form-check">
               <input class="form-check-input" type="checkbox" id="bizPickup" ${r.pickup_enabled ? 'checked' : ''}>
-              <label class="form-check-label" for="bizPickup">Permitir que el cliente recoja en el restaurante</label>
+              <label class="form-check-label" for="bizPickup">Permitir que el cliente recoja en el negocio</label>
             </div>
             <div class="form-text">El pedido no lleva envío ni propina. El cliente pasa cuando esté listo.</div>
           </div>

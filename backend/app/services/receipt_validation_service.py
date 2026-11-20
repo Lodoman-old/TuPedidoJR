@@ -418,6 +418,7 @@ async def create_and_validate(
     expected_amount=None,
     expected_date=None,
     expected_recipient: str | None = None,
+    plan_months: int | None = None,
 ) -> ReceiptValidation | None:
     """Crea el registro de validación y lo evalúa en la sesión del llamador.
 
@@ -432,6 +433,7 @@ async def create_and_validate(
         expected_amount=expected_amount,
         expected_date=expected_date,
         expected_recipient=expected_recipient,
+        plan_months=plan_months,
         status="review",
     )
     db.add(record)

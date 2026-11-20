@@ -29,7 +29,12 @@ from app.schemas.restaurant import (CategoryCreate, EarningsOrderItem, EarningsO
                                     RestaurantScheduleUpdate, ScheduleEntry,
                                     AffiliationProof)
 from app.models.receipt_validation import ReceiptValidation
-from app.services.affiliation_payment_service import affiliation_fee, schedule_affiliation_validation
+from app.services.affiliation_payment_service import (
+    affiliation_fee,
+    affiliation_plans,
+    affiliation_price,
+    schedule_affiliation_validation,
+)
 from app.services.geocode_service import geocode_structured
 from app.schemas.order import CancelOrderRequest, OrderOut, OrderStatusUpdate
 from app.services.cancellation_service import apply_cancellation
@@ -1205,8 +1210,10 @@ async def get_affiliation_proof(
     record = latest.scalar_one_or_none()
     return {
         "fee": str(await affiliation_fee(db)),
+        "plans": await affiliation_plans(db),
         "expires_at": restaurant.affiliation_expires_at.isoformat() if restaurant.affiliation_expires_at else None,
         "status": record.status if record else None,
+        "plan_months": record.plan_months if record else None,
         "confidence": record.confidence if record else None,
         "summary": record.summary if record else None,
         "issues": record.issues if record else [],
@@ -1231,8 +1238,16 @@ async def upload_affiliation_proof(
         raise HTTPException(status_code=404, detail="Restaurante no encontrado")
     if not await have_role(db, restaurant.id, current_user, MANAGE_ROLES):
         raise HTTPException(status_code=403, detail="No puedes editar esta afiliación")
-    schedule_affiliation_validation(str(restaurant.id), body.proof_url.strip())
-    return {"status": "review", "message": "Recibimos tu comprobante. La plataforma lo está validando."}
+    if body.months not in (1, 3, 6, 12):
+        raise HTTPException(status_code=400, detail="Elige un plan de 1, 3, 6 o 12 meses")
+    amount = await affiliation_price(db, body.months)
+    schedule_affiliation_validation(str(restaurant.id), body.proof_url.strip(), body.months)
+    return {
+        "status": "review",
+        "months": body.months,
+        "amount": str(amount),
+        "message": "Recibimos tu comprobante. La plataforma lo está validando.",
+    }
 
 
 @router.get("/{restaurant_id}/payouts", response_model=list[RestaurantPayoutOut])

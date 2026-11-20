@@ -30,4 +30,5 @@ class ReceiptValidation(TimestampMixin, Base):
 
     provider = Column(String(20), default="gemini", nullable=False)
     model = Column(String(60), nullable=True)
+    plan_months = Column(Integer, nullable=True)
     error = Column(Text, nullable=True)

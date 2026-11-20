@@ -65,6 +65,9 @@ async def web_landing(request: Request, db: AsyncSession = Depends(get_db)):
     except (TypeError, ValueError):
         affiliation_fee = 500.0
     delivery_base = await setting_float("DELIVERY_BASE_FEE", "25.0")
+    plan_1 = await setting_float("AFFILIATION_PRICE_1", "60.0")
+    plan_3 = await setting_float("AFFILIATION_PRICE_3", "160.0")
+    plan_6 = await setting_float("AFFILIATION_PRICE_6", "290.0")
     free_radius = await setting_float("DELIVERY_FREE_RADIUS_KM", "6.0")
     extra_km = await setting_float("DELIVERY_EXTRA_FEE_PER_KM", "5.0")
     flat_fee = await setting_float("APP_FLAT_USAGE_FEE", "5.0")
@@ -79,6 +82,9 @@ async def web_landing(request: Request, db: AsyncSession = Depends(get_db)):
             "whatsapp": whatsapp,
             "affiliation_fee": affiliation_fee,
             "affiliation_daily": affiliation_fee / 365,
+            "affiliation_plan_1": plan_1,
+            "affiliation_plan_3": plan_3,
+            "affiliation_plan_6": plan_6,
             "contact_email": contact_email,
             "delivery_base": delivery_base,
             "free_radius": free_radius,

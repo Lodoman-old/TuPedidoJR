@@ -31,9 +31,9 @@
 <body>
 {% if not restaurant %}
   <div class="container py-5 text-center">
-    <h1 class="h3">Restaurante no disponible</h1>
+    <h1 class="h3">Negocio no disponible</h1>
     <p class="text-muted">Esta página no existe o fue desactivada.</p>
-    <a class="btn btn-dark" href="/web/restaurants">Ver restaurantes</a>
+    <a class="btn btn-dark" href="/web/restaurants">Ver negocios</a>
   </div>
 {% else %}
   {% set commission_rate = restaurant.effective_commission_percentage|float %}
@@ -52,7 +52,7 @@
             <span class="badge bg-info text-dark">Entrega propia</span>
           {% endif %}
           {% if restaurant.pickup_enabled %}
-            <span class="badge bg-primary">Recoger en restaurante</span>
+            <span class="badge bg-primary">Recoger en el negocio</span>
           {% endif %}
         </div>
         <div class="small opacity-75">{{ restaurant.address }}</div>
@@ -81,7 +81,7 @@
       Servicios y productos son públicos. Puedes agendar una cita o pedir productos a domicilio; solo necesitas iniciar sesión.
       {% else %}
       El menú es público y no necesitas cuenta para verlo. Para pedir, inicia sesión o crea una cuenta;
-      al terminar regresas automáticamente a este restaurante para completar tu pedido.
+      al terminar regresas automáticamente a este negocio para completar tu pedido.
       {% endif %}
     </div>
     <div class="d-flex gap-2 flex-wrap mb-3">
@@ -192,7 +192,7 @@
     {% endif %}
 
     <div class="footer text-center">
-      <a href="/web/restaurants" class="text-decoration-none">Ver todos los restaurantes</a>
+      <a href="/web/restaurants" class="text-decoration-none">Ver todos los negocios</a>
       <br>Pedidos con TuPedidoJR
     </div>
   </div>

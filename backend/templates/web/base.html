@@ -684,9 +684,9 @@ function addToCart(item) {
     || (cart.find(i => i.restaurant_id) || {}).restaurant_id;
   if (cart.length && item.restaurant_id && currentRid && currentRid !== item.restaurant_id) {
     const ok = window.confirm(
-      'Tu carrito tiene productos de otro restaurante. ' +
-      'Cada pedido va a un solo restaurante.\\n\\n' +
-      '¿Quieres vaciar el carrito y empezar uno nuevo con este restaurante?'
+      'Tu carrito tiene productos de otro negocio. ' +
+      'Cada pedido va a un solo negocio.\\n\\n' +
+      '¿Quieres vaciar el carrito y empezar uno nuevo con este negocio?'
     );
     if (!ok) return false;
     cart = [];
@@ -722,9 +722,9 @@ function setCartQuantity(menuItemId, qty, meta) {
     && currentRid && currentRid !== meta.restaurant_id
   ) {
     const ok = window.confirm(
-      'Tu carrito tiene productos de otro restaurante. ' +
-      'Cada pedido va a un solo restaurante.\\n\\n' +
-      '¿Quieres vaciar el carrito y empezar uno nuevo con este restaurante?'
+      'Tu carrito tiene productos de otro negocio. ' +
+      'Cada pedido va a un solo negocio.\\n\\n' +
+      '¿Quieres vaciar el carrito y empezar uno nuevo con este negocio?'
     );
     if (!ok) return 0;
     cart = [];

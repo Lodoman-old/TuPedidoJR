@@ -52,6 +52,7 @@ def _row(record: ReceiptValidation) -> dict:
         "expected_kind": record.expected_kind,
         "expected_kind_label": KIND_LABELS.get(record.expected_kind, record.expected_kind),
         "expected_amount": str(record.expected_amount) if record.expected_amount is not None else None,
+        "plan_months": record.plan_months,
         "expected_date": record.expected_date.isoformat() if record.expected_date else None,
         "expected_recipient": record.expected_recipient,
         "document_type": record.document_type,
@@ -122,6 +123,8 @@ async def _settle_affiliation(db: AsyncSession, record: ReceiptValidation, appro
     if not restaurant:
         return
     extracted = dict(record.extracted or {})
+    months = int(record.plan_months or 12)
+    days = 365 if months == 12 else months * 30
     if approved:
         if not extracted.get("applied"):
             base = date.today()
@@ -129,9 +132,10 @@ async def _settle_affiliation(db: AsyncSession, record: ReceiptValidation, appro
             if current and current >= base:
                 base = current
             extracted["previous_expires_at"] = current.isoformat() if current else None
-            restaurant.affiliation_expires_at = base + timedelta(days=365)
+            restaurant.affiliation_expires_at = base + timedelta(days=days)
             restaurant.affiliation_reminder_on = None
             extracted["applied"] = True
+            extracted["applied_months"] = months
     else:
         if extracted.get("applied"):
             previous = extracted.get("previous_expires_at")

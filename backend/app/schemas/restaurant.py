@@ -107,6 +107,7 @@ class CategoryCreate(BaseModel):
 
 class AffiliationProof(BaseModel):
     proof_url: str = Field(min_length=1)
+    months: int = Field(default=12, ge=1, le=12)
 
 
 class RestaurantOut(BaseModel):

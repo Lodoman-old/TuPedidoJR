@@ -81,9 +81,9 @@
           <div class="col-12">
             <div class="border rounded p-3" id="affiliationPayBox">
               <div class="fw-semibold small mb-1">Pagar afiliación por transferencia</div>
-              <div class="small text-muted mb-2" id="affiliationPayHelp">
-                Transfiere a la cuenta de TuPedidoJR y sube tu comprobante. La plataforma lo valida.
-              </div>
+              <label class="form-label small mb-1" for="affiliationPlan">Plan</label>
+              <select class="form-select form-select-sm mb-2" id="affiliationPlan" onchange="updateAffiliationHelp()"></select>
+              <div class="small text-muted mb-2" id="affiliationPayHelp"></div>
               <div class="small mb-2" id="affiliationBank"></div>
               <div class="d-flex gap-2 flex-wrap align-items-center">
                 <input type="file" id="affiliationProofFile" class="form-control form-control-sm" style="max-width:280px" accept="image/*,application/pdf">
@@ -235,6 +235,7 @@
   let cpCenter = null;
   let canManage = false;
   let coordsReady = false;
+  let affiliationPlans = [];
 
   function el(id) { return document.getElementById(id); }
 
@@ -345,6 +346,15 @@
     await loadAffiliationPayment();
   }
 
+  function updateAffiliationHelp() {
+    const select = el('affiliationPlan');
+    const plan = affiliationPlans.find((row) => String(row.months) === String(select?.value))
+      || affiliationPlans[affiliationPlans.length - 1];
+    const help = el('affiliationPayHelp');
+    if (!plan || !help) return;
+    help.innerHTML = `Transfiere <strong>${money(plan.price)}</strong> por el plan de <strong>${esc(plan.label)}</strong> a la cuenta de TuPedidoJR y sube tu comprobante. La plataforma lo valida.`;
+  }
+
   async function loadAffiliationPayment() {
     try {
       const data = await apiRequest('GET', `/restaurants/${RID}/affiliation-proof`);
@@ -352,8 +362,16 @@
       if (data.bank_name) bank.push(`<div><strong>Banco:</strong> ${esc(data.bank_name)}</div>`);
       if (data.bank_holder) bank.push(`<div><strong>Titular:</strong> ${esc(data.bank_holder)}</div>`);
       if (data.bank_clabe) bank.push(`<div><strong>CLABE:</strong> ${esc(data.bank_clabe)}</div>`);
-      const fee = Number(data.fee || 0);
-      el('affiliationPayHelp').innerHTML = `Transfiere <strong>${money(fee)}</strong> a la cuenta de TuPedidoJR y sube tu comprobante. La plataforma lo valida.`;
+      affiliationPlans = data.plans || [];
+      const select = el('affiliationPlan');
+      if (select && affiliationPlans.length) {
+        const current = select.value;
+        select.innerHTML = affiliationPlans.map((plan) => (
+          `<option value="${plan.months}">${esc(plan.label)} · ${money(plan.price)}</option>`
+        )).join('');
+        select.value = current || '12';
+      }
+      updateAffiliationHelp();
       el('affiliationBank').innerHTML = bank.length
         ? bank.join('')
         : '<span class="text-muted">La plataforma todavía no publica sus datos bancarios.</span>';
@@ -387,7 +405,8 @@
     try {
       const uploaded = await uploadDocument(file);
       const url = uploaded.url || uploaded.file_url || uploaded.path;
-      await apiRequest('POST', `/restaurants/${RID}/affiliation-proof`, { proof_url: url });
+      const months = Number(el('affiliationPlan')?.value || 12);
+      await apiRequest('POST', `/restaurants/${RID}/affiliation-proof`, { proof_url: url, months });
       el('affiliationProofFile').value = '';
       showToast('Comprobante recibido. La plataforma lo está validando.');
       await loadAffiliationPayment();

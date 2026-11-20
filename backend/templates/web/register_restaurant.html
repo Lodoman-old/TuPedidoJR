@@ -43,30 +43,17 @@
           <div class="col-md-6">
             <label class="form-label">Tipo de negocio</label>
             <select id="restBusinessType" class="form-select">
-              <option value="restaurant">Restaurante / comida preparada</option>
-              <option value="store">Tienda de productos</option>
-              <option value="grocery">Abarrotes</option>
-              <option value="pharmacy">Farmacia</option>
-              <option value="hardware">Ferretería</option>
-              <option value="services">Servicios con agenda (barbería, salón, consultorio)</option>
-              <option value="rental">Renta de artículos para eventos (salón, inflables, sillas, sonido)</option>
+              <option value="restaurant">Comida</option>
+              <option value="store">Tiendas</option>
+              <option value="services">Servicios</option>
+              <option value="rental">Rentas</option>
               <option value="other">Otro / negocio mixto</option>
             </select>
           </div>
           <div class="col-12">
-            <div class="alert alert-light border small mb-0">
-              <strong>¿Qué giro elijo?</strong>
-              <ul class="mb-1 mt-1 ps-3">
-                <li><strong>Restaurante:</strong> vendes comida preparada.</li>
-                <li><strong>Tienda, abarrotes, farmacia o ferretería:</strong> vendes productos.</li>
-                <li><strong>Servicios:</strong> barbería, salón de belleza, consultorio; trabajas con citas y profesionales.</li>
-                <li><strong>Renta:</strong> salones, inflables, sillas, manteles, sonido o música; manejas fechas y existencias.</li>
-                <li><strong>Otro:</strong> vendes y también rentas, o tu giro no encaja en los anteriores.</li>
-              </ul>
-              <span class="text-muted">Si eliges Servicios o Renta, el panel se adapta para agenda o artículos en renta.</span>
-            </div>
+            <div class="alert alert-light border small mb-0" id="businessTypeHelp"></div>
           </div>
-          <div class="col-md-6"><label class="form-label">Giro / categoría</label><input id="restCuisine" class="form-control" placeholder="Barbería, salón, eventos, pizza, abarrotes..."></div>
+          <div class="col-md-6"><label class="form-label">Giro / categoría</label><input id="restCuisine" class="form-control" placeholder="Tacos, pizza, abarrotes..."></div>
           <div class="col-md-4">
             <label class="form-label">Código postal</label>
             <input id="postalCode" class="form-control" maxlength="5" inputmode="numeric" placeholder="Ej. 38240" required>
@@ -382,6 +369,52 @@
     );
     timer = setTimeout(finish, 7000);
   }
+
+  const BUSINESS_TYPE_INFO = {
+    restaurant: {
+      title: 'Comida',
+      text: 'Para restaurantes, fondas, puestos y negocios que venden comida preparada.',
+      examples: 'Ej. tacos, pizza, mariscos, desayunos, postres.',
+      placeholder: 'Tacos, pizza, mariscos...',
+    },
+    store: {
+      title: 'Tiendas',
+      text: 'Para negocios que venden productos y reciben pedidos a domicilio o para recoger.',
+      examples: 'Ej. abarrotes, farmacia, ferretería, boutique, papelería.',
+      placeholder: 'Abarrotes, farmacia, ferretería...',
+    },
+    services: {
+      title: 'Servicios',
+      text: 'Para negocios que trabajan con citas y profesionales.',
+      examples: 'Ej. barbería, salón de belleza, consultorio, taller.',
+      placeholder: 'Barbería, salón, consultorio...',
+    },
+    rental: {
+      title: 'Rentas',
+      text: 'Para negocios que rentan artículos por fecha y manejan existencias.',
+      examples: 'Ej. salón de eventos, inflables, sillas, manteles, sonido, música.',
+      placeholder: 'Salón de eventos, inflables...',
+    },
+    other: {
+      title: 'Otro / negocio mixto',
+      text: 'Para negocios que combinan venta y renta, o que no encajan en las categorías anteriores.',
+      examples: 'Ej. tienda que también renta sillas y mesas.',
+      placeholder: 'Describe tu giro',
+    },
+  };
+
+  function updateBusinessTypeHelp() {
+    const type = $('restBusinessType').value;
+    const info = BUSINESS_TYPE_INFO[type] || BUSINESS_TYPE_INFO.other;
+    $('businessTypeHelp').innerHTML = `
+      <strong>${info.title}</strong><br>
+      ${info.text}<br>
+      <span class="text-muted">${info.examples}</span>`;
+    $('restCuisine').placeholder = info.placeholder;
+  }
+
+  $('restBusinessType').addEventListener('change', updateBusinessTypeHelp);
+  updateBusinessTypeHelp();
 
   $('postalCode').addEventListener('input', async (e) => {
     e.target.value = e.target.value.replace(/\D/g, '').slice(0, 5);

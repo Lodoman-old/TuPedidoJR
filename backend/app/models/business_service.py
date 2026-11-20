@@ -17,5 +17,8 @@ class BusinessService(TimestampMixin, Base):
     description = Column(Text, nullable=True)
     duration_min = Column(Integer, default=30, nullable=False)
     price = Column(Numeric(10, 2), default=0, nullable=False)
+    stock = Column(Integer, default=1, nullable=False)
+    requires_address = Column(Boolean, default=False, nullable=False)
+    is_rental = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     sort_order = Column(Integer, default=0, nullable=False)

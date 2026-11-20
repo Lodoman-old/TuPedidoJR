@@ -208,6 +208,21 @@ async def web_restaurant_agenda_book(request: Request, restaurant_id: str):
     return templates.TemplateResponse(request, "agenda_book.html", {"restaurant_id": restaurant_id})
 
 
+@router.get("/restaurants/{restaurant_id}/rentals")
+async def web_restaurant_rentals(request: Request, restaurant_id: str):
+    return templates.TemplateResponse(request, "rentals_manage.html", {"restaurant_id": restaurant_id})
+
+
+@router.get("/restaurants/{restaurant_id}/rentals/book")
+async def web_restaurant_rentals_book(request: Request, restaurant_id: str):
+    return templates.TemplateResponse(request, "rental_book.html", {"restaurant_id": restaurant_id})
+
+
+@router.get("/my-rentals")
+async def web_my_rentals(request: Request):
+    return templates.TemplateResponse(request, "my_rentals.html")
+
+
 @router.get("/reservations")
 async def web_my_reservations(request: Request):
     return templates.TemplateResponse(request, "reservations.html")

@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<style>
+  .rental-row { display: flex; gap: .75rem; align-items: center; padding: .7rem .9rem; border-top: 1px solid #f0f3f7; }
+  .rental-row:first-child { border-top: 0; }
+  .rental-time { min-width: 64px; font-weight: 700; color: #1B2F6B; }
+  @media (max-width: 575.98px) {
+    .rental-row { flex-wrap: wrap; }
+    .rental-row .rental-actions { width: 100%; margin-left: 0 !important; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+  <a href="/web/restaurants/{{ restaurant_id }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <h5 class="mb-0 ms-1" id="rentalsTitle">Rentas</h5>
+  <a href="/web/restaurants/{{ restaurant_id }}/rentals/book" class="btn btn-sm btn-warning ms-auto">
+    <i class="bi bi-box2-heart"></i> Ver como cliente
+  </a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header d-flex align-items-center gap-2">
+    <strong>Artículos y paquetes</strong>
+    <button class="btn btn-sm btn-outline-primary ms-auto" onclick="openItemForm()">
+      <i class="bi bi-plus-lg"></i> Artículo
+    </button>
+  </div>
+  <div id="itemsList" class="card-body p-0"></div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex flex-wrap align-items-center gap-2">
+    <strong>Reservas del día</strong>
+    <input type="date" id="rentalsDate" class="form-control form-control-sm ms-auto" style="max-width:170px;">
+    <button class="btn btn-sm btn-outline-secondary" onclick="loadBookings()">
+      <i class="bi bi-arrow-clockwise"></i>
+    </button>
+  </div>
+  <div id="bookingsList" class="card-body p-0"></div>
+</div>
+
+<div class="modal fade" id="itemModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="itemModalTitle">Artículo en renta</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="itemId">
+        <div class="mb-2">
+          <label class="form-label small mb-1">Nombre</label>
+          <input class="form-control" id="itemName" maxlength="120" placeholder="Inflable castillo 5 horas">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Descripción</label>
+          <textarea class="form-control" id="itemDescription" rows="2"></textarea>
+        </div>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small mb-1">Duración (horas)</label>
+            <input type="number" class="form-control" id="itemHours" min="0.25" max="24" step="0.25" value="5">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">Precio</label>
+            <input type="number" class="form-control" id="itemPrice" min="0" step="1" value="0">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">Existencia</label>
+            <input type="number" class="form-control" id="itemStock" min="0" step="1" value="1">
+          </div>
+          <div class="col-6 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="itemRequiresAddress">
+              <label class="form-check-label small" for="itemRequiresAddress">Requiere dirección de entrega</label>
+            </div>
+          </div>
+        </div>
+        <div class="text-danger small mt-2 d-none" id="itemError"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-sm btn-primary" id="saveItemBtn" onclick="saveItem()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  const money = (v) => '$' + Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  let items = [];
+  let restaurant = null;
+
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  async function loadRestaurant() {
+    restaurant = await apiRequest('GET', `/restaurants/${RID}`);
+    document.getElementById('rentalsTitle').textContent = `Rentas · ${restaurant.name}`;
+  }
+
+  async function loadItems() {
+    items = await apiRequest('GET', `/rentals/${RID}/items`);
+    const box = document.getElementById('itemsList');
+    if (!items.length) {
+      box.innerHTML = '<div class="p-3 text-muted small">Aún no hay artículos. Agrega el primero, por ejemplo “Salón día completo” o “Inflable 5 horas”.</div>';
+      return;
+    }
+    box.innerHTML = items.map((item) => `
+      <div class="rental-row">
+        <div class="flex-grow-1 min-w-0">
+          <div class="fw-semibold ${item.is_active ? '' : 'text-muted text-decoration-line-through'}">${esc(item.name)}</div>
+          <div class="small text-muted">${Math.round(item.duration_min / 6) / 10} h · ${money(item.price)} · ${item.stock} disponible(s)${item.requires_address ? ' · entrega a domicilio' : ' · en el salón'}</div>
+        </div>
+        <div class="rental-actions ms-auto d-flex gap-1">
+          <button class="btn btn-sm btn-outline-secondary" onclick="openItemForm('${item.id}')"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-${item.is_active ? 'danger' : 'success'}" onclick="toggleItem('${item.id}', ${!item.is_active})">
+            <i class="bi bi-${item.is_active ? 'pause' : 'play'}"></i>
+          </button>
+        </div>
+      </div>`).join('');
+  }
+
+  function openItemForm(id) {
+    const item = items.find((row) => row.id === id);
+    document.getElementById('itemModalTitle').textContent = item ? 'Editar artículo' : 'Nuevo artículo';
+    document.getElementById('itemId').value = item ? item.id : '';
+    document.getElementById('itemName').value = item ? item.name : '';
+    document.getElementById('itemDescription').value = item ? (item.description || '') : '';
+    document.getElementById('itemHours').value = item ? item.duration_min / 60 : 5;
+    document.getElementById('itemPrice').value = item ? Number(item.price) : 0;
+    document.getElementById('itemStock').value = item ? item.stock : 1;
+    document.getElementById('itemRequiresAddress').checked = item ? item.requires_address : false;
+    document.getElementById('itemError').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('itemModal')).show();
+  }
+
+  async function saveItem() {
+    const id = document.getElementById('itemId').value;
+    const name = document.getElementById('itemName').value.trim();
+    const errorBox = document.getElementById('itemError');
+    if (!name) {
+      errorBox.textContent = 'Escribe un nombre.';
+      errorBox.classList.remove('d-none');
+      return;
+    }
+    const payload = {
+      name,
+      description: document.getElementById('itemDescription').value.trim() || null,
+      duration_min: Math.max(15, Math.round(Number(document.getElementById('itemHours').value || 1) * 60)),
+      price: Number(document.getElementById('itemPrice').value || 0),
+      stock: Number(document.getElementById('itemStock').value || 0),
+      requires_address: document.getElementById('itemRequiresAddress').checked,
+    };
+    const button = document.getElementById('saveItemBtn');
+    button.disabled = true;
+    try {
+      if (id) await apiRequest('PATCH', `/rentals/${RID}/items/${id}`, payload);
+      else await apiRequest('POST', `/rentals/${RID}/items`, payload);
+      bootstrap.Modal.getInstance(document.getElementById('itemModal')).hide();
+      await loadItems();
+      showToast('Artículo guardado');
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.classList.remove('d-none');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function toggleItem(id, active) {
+    try {
+      await apiRequest('PATCH', `/rentals/${RID}/items/${id}`, { is_active: active });
+      await loadItems();
+    } catch (err) { showToast(err.message, 'danger'); }
+  }
+
+  function statusBadge(status) {
+    const map = {
+      confirmed: ['bg-primary', 'Confirmada'],
+      completed: ['bg-success', 'Completada'],
+      cancelled: ['bg-secondary', 'Cancelada'],
+      no_show: ['bg-danger', 'No asistió'],
+    };
+    const [cls, label] = map[status] || ['bg-secondary', status];
+    return `<span class="badge ${cls}">${label}</span>`;
+  }
+
+  function paymentBadge(booking) {
+    const map = {
+      cash_pending: ['bg-warning text-dark', 'Efectivo pendiente'],
+      proof_pending: ['bg-warning text-dark', 'Falta comprobante'],
+      proof_review: ['bg-warning text-dark', 'Comprobante en revisión'],
+      deposit_paid: ['bg-success', 'Anticipo pagado'],
+      paid: ['bg-success', 'Pagado en línea'],
+      proof_rejected: ['bg-danger', 'Comprobante rechazado'],
+    };
+    const [cls, label] = map[booking.payment_status] || ['bg-secondary', booking.payment_status];
+    return `<span class="badge ${cls}">${label}</span>`;
+  }
+
+  async function loadBookings() {
+    const date = document.getElementById('rentalsDate').value;
+    const box = document.getElementById('bookingsList');
+    if (!date) return;
+    box.innerHTML = '<div class="p-3 text-center"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+    try {
+      const rows = await apiRequest('GET', `/rentals/${RID}/bookings?date=${date}`);
+      if (!rows.length) {
+        box.innerHTML = '<div class="p-3 text-muted small">No hay reservas para ese día.</div>';
+        return;
+      }
+      box.innerHTML = rows.map((booking) => {
+        const itemsText = booking.items.map((item) => {
+          const time = new Date(item.start_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+          return `${item.quantity} × ${item.name} (${time})`;
+        }).join(' · ');
+        const actions = [];
+        if (booking.status === 'confirmed') {
+          actions.push(`<button class="btn btn-sm btn-outline-success" onclick="setBookingStatus('${booking.id}', 'completed')">Completada</button>`);
+          actions.push(`<button class="btn btn-sm btn-outline-danger" onclick="setBookingStatus('${booking.id}', 'no_show')">No asistió</button>`);
+          actions.push(`<button class="btn btn-sm btn-outline-secondary" onclick="setBookingStatus('${booking.id}', 'cancelled')">Cancelar</button>`);
+        }
+        const total = booking.payment_mode === 'cash'
+          ? booking.cash_due
+          : booking.online_amount;
+        return `<div class="rental-row">
+          <div class="flex-grow-1 min-w-0">
+            <div class="fw-semibold">${esc(booking.client_name)} ${statusBadge(booking.status)}</div>
+            <div class="small text-muted">${esc(itemsText)}</div>
+            ${booking.address ? `<div class="small text-muted"><i class="bi bi-geo-alt"></i> ${esc(booking.address)}</div>` : ''}
+            <div class="small">${paymentBadge(booking)} <span class="text-muted">Total: ${money(total)}</span></div>
+          </div>
+          <div class="rental-actions ms-auto d-flex gap-1 flex-wrap">${actions.join('')}</div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      box.innerHTML = `<div class="p-3 text-danger small">${esc(err.message)}</div>`;
+    }
+  }
+
+  async function setBookingStatus(id, status) {
+    const labels = { completed: 'completada', no_show: 'no asistió', cancelled: 'cancelar' };
+    if (!confirm(`¿Marcar esta reserva como ${labels[status]}?`)) return;
+    try {
+      await apiRequest('PATCH', `/rentals/${RID}/bookings/${id}`, { status });
+      await loadBookings();
+      showToast('Reserva actualizada');
+    } catch (err) { showToast(err.message, 'danger'); }
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('rentalsDate').value = new Date().toISOString().slice(0, 10);
+    try {
+      await loadRestaurant();
+      await loadItems();
+      await loadBookings();
+    } catch (err) { showToast(err.message, 'danger'); }
+  });
+</script>
+{% endblock %}

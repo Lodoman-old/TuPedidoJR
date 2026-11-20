@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<style>
+  .rental-item { border: 1px solid #e6ebf2; border-radius: .9rem; padding: .85rem .95rem; background: #fff; }
+  .rental-item .price { font-weight: 700; color: #1B2F6B; }
+  .rental-line { border-top: 1px solid #f0f3f7; padding: .7rem 0; }
+  .rental-line:first-child { border-top: 0; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+  <a href="/web/restaurants/{{ restaurant_id }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Volver
+  </a>
+  <h5 class="mb-0 ms-1" id="rentalBusinessName">Rentar</h5>
+</div>
+
+<div id="rentalUnavailable" class="alert alert-info d-none"></div>
+
+<div id="rentalFlow" class="d-none">
+  <div class="alert alert-light border small py-2" id="salonAddress"></div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">1</span> Elige qué rentar</div>
+      <div id="rentalItems" class="row g-2"></div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">2</span> Fecha y hora</div>
+      <label class="form-label small mb-1" for="rentalDate">Fecha del evento</label>
+      <input type="date" id="rentalDate" class="form-control mb-3" style="max-width:220px" onchange="refreshTimes()">
+      <div id="timeRows" class="small text-muted">Primero elige al menos un artículo.</div>
+    </div>
+  </div>
+
+  <div class="card mb-3 d-none" id="addressCard">
+    <div class="card-body">
+      <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">3</span> Dirección de entrega</div>
+      <div class="small text-muted mb-2">Alguno de los artículos se entrega en domicilio.</div>
+      <label class="form-label small mb-1">Calle, número y colonia</label>
+      <input class="form-control mb-2" id="rentalAddress" maxlength="250">
+      <div class="d-flex gap-2 flex-wrap align-items-center">
+        <button class="btn btn-sm btn-outline-secondary" onclick="useMyLocation()">
+          <i class="bi bi-geo-alt"></i> Usar mi ubicación
+        </button>
+        <span class="small text-muted" id="locationStatus"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">4</span> Confirma tu renta</div>
+      <div id="rentalSummary" class="alert alert-light border small"></div>
+      <div class="mb-2">
+        <div class="fw-semibold small mb-1">Forma de pago</div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="rentalPayMode" id="rentalPayCash" value="cash" checked onchange="updateRentalPayment()">
+          <label class="form-check-label" for="rentalPayCash">Efectivo al entregar</label>
+        </div>
+        <div class="form-check" id="rentalDepositOption">
+          <input class="form-check-input" type="radio" name="rentalPayMode" id="rentalPayDeposit" value="deposit" onchange="updateRentalPayment()">
+          <label class="form-check-label" for="rentalPayDeposit">Anticipo por transferencia</label>
+        </div>
+        <div class="form-check" id="rentalFullOption">
+          <input class="form-check-input" type="radio" name="rentalPayMode" id="rentalPayFull" value="full" onchange="updateRentalPayment()">
+          <label class="form-check-label" for="rentalPayFull">Pago completo por transferencia</label>
+        </div>
+      </div>
+      <div class="border rounded p-2 small d-none mb-2" id="rentalTransferBox">
+        <div id="rentalBankInfo" class="mb-2"></div>
+        <label class="form-label small mb-1" for="rentalProof">Comprobante</label>
+        <input type="file" id="rentalProof" class="form-control form-control-sm" accept="image/*,application/pdf">
+      </div>
+      <div class="row g-2">
+        <div class="col-md-6">
+          <label class="form-label small mb-1" for="rentalClientName">Nombre</label>
+          <input class="form-control" id="rentalClientName" maxlength="120">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small mb-1" for="rentalClientPhone">Teléfono</label>
+          <input class="form-control" id="rentalClientPhone" maxlength="25" inputmode="tel">
+        </div>
+        <div class="col-12">
+          <label class="form-label small mb-1" for="rentalNotes">Notas</label>
+          <textarea class="form-control" id="rentalNotes" rows="2" maxlength="500"></textarea>
+        </div>
+      </div>
+      <div class="form-check mt-3">
+        <input class="form-check-input" type="checkbox" id="rentalConfirmCheck">
+        <label class="form-check-label small" for="rentalConfirmCheck">Confirmo los datos de mi renta.</label>
+      </div>
+      <div class="text-danger small mt-2 d-none" id="rentalError"></div>
+      <button class="btn btn-warning w-100 mt-3" id="rentalConfirmBtn" onclick="confirmRental()">
+        <i class="bi bi-box2-heart"></i> Confirmar renta
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="card d-none" id="rentalSuccess">
+  <div class="card-body text-center py-4">
+    <div class="display-5 text-success mb-2"><i class="bi bi-check-circle"></i></div>
+    <h5>Tu renta quedó apartada</h5>
+    <div id="rentalSuccessDetails" class="text-muted mb-3"></div>
+    <a href="/web/restaurants/{{ restaurant_id }}" class="btn btn-outline-primary">Volver al negocio</a>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  const money = (v) => '$' + Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  let info = null;
+  let items = [];
+  let selected = {};
+  let itemTimes = {};
+  let coords = { lat: null, lng: null };
+
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function todayKey() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+
+  function selectedItems() {
+    return items.filter((item) => (selected[item.id] || 0) > 0);
+  }
+
+  function subtotal() {
+    return selectedItems().reduce((sum, item) => sum + Number(item.price) * selected[item.id], 0);
+  }
+
+  function renderItems() {
+    const box = document.getElementById('rentalItems');
+    if (!items.length) {
+      box.innerHTML = '<div class="col-12 text-muted small">Este negocio todavía no publicó artículos.</div>';
+      return;
+    }
+    box.innerHTML = items.map((item) => {
+      const qty = selected[item.id] || 0;
+      return `<div class="col-md-6">
+        <div class="rental-item">
+          <div class="d-flex justify-content-between gap-2">
+            <div class="fw-semibold">${esc(item.name)}</div>
+            <div class="price">${money(item.price)}</div>
+          </div>
+          ${item.description ? `<div class="small text-muted">${esc(item.description)}</div>` : ''}
+          <div class="small text-muted">${item.duration_min} min · ${item.stock} disponible(s)${item.requires_address ? ' · a domicilio' : ' · en el salón'}</div>
+          <div class="d-flex align-items-center gap-2 mt-2">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-outline-secondary" onclick="changeQty('${item.id}', -1)">−</button>
+              <button class="btn btn-outline-secondary disabled">${qty}</button>
+              <button class="btn btn-outline-secondary" onclick="changeQty('${item.id}', 1)">+</button>
+            </div>
+            <span class="small text-muted">${qty > 0 ? 'Apartado' : 'Agregar'}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function changeQty(id, delta) {
+    const item = items.find((row) => row.id === id);
+    if (!item) return;
+    const next = Math.max(0, Math.min(Number(item.stock || 0), (selected[id] || 0) + delta));
+    if (next === 0) delete selected[id];
+    else selected[id] = next;
+    if (!selected[id]) delete itemTimes[id];
+    renderItems();
+    refreshTimes();
+    updateSummary();
+  }
+
+  async function refreshTimes() {
+    const date = document.getElementById('rentalDate').value;
+    const box = document.getElementById('timeRows');
+    const chosen = selectedItems();
+    document.getElementById('addressCard').classList.toggle(
+      'd-none', !chosen.some((item) => item.requires_address)
+    );
+    if (!date || !chosen.length) {
+      box.className = 'small text-muted';
+      box.innerHTML = 'Primero elige al menos un artículo.';
+      return;
+    }
+    box.className = '';
+    box.innerHTML = chosen.map((item) => `
+      <div class="rental-line">
+        <div class="fw-semibold small">${esc(item.name)} · ${selected[item.id]} pieza(s)</div>
+        <select class="form-select form-select-sm mt-1 rental-time" data-id="${item.id}">
+          <option value="">Cargando horarios...</option>
+        </select>
+      </div>`).join('');
+    for (const item of chosen) {
+      try {
+        const qty = selected[item.id];
+        const res = await apiRequest('GET', `/rentals/${RID}/items/${item.id}/slots?date=${date}&quantity=${qty}`);
+        const select = document.querySelector(`.rental-time[data-id="${item.id}"]`);
+        if (!select) continue;
+        select.innerHTML = '<option value="">Elige hora</option>' +
+          res.slots.map((slot) => `<option value="${slot}">${slot}</option>`).join('');
+        if (itemTimes[item.id]) select.value = itemTimes[item.id];
+        select.onchange = () => {
+          itemTimes[item.id] = select.value;
+          updateSummary();
+        };
+      } catch (err) {
+        const select = document.querySelector(`.rental-time[data-id="${item.id}"]`);
+        if (select) select.innerHTML = `<option value="">${esc(err.message)}</option>`;
+      }
+    }
+  }
+
+  function selectedPayMode() {
+    const checked = document.querySelector('input[name="rentalPayMode"]:checked');
+    return checked ? checked.value : 'cash';
+  }
+
+  function fees() {
+    return {
+      client: Number(info.payment.client_fee || 5),
+      percent: Number(info.payment.deposit_percent || 20),
+    };
+  }
+
+  function updateRentalPayment() {
+    const mode = selectedPayMode();
+    const transfer = mode !== 'cash';
+    document.getElementById('rentalTransferBox').classList.toggle('d-none', !transfer);
+    updateSummary();
+  }
+
+  function updateSummary() {
+    const box = document.getElementById('rentalSummary');
+    if (!box) return;
+    const chosen = selectedItems();
+    if (!chosen.length) {
+      box.textContent = 'Elige al menos un artículo para ver el resumen.';
+      return;
+    }
+    const base = subtotal();
+    const clientFee = fees().client;
+    const mode = selectedPayMode();
+    const lines = chosen.map((item) => `${selected[item.id]} × ${esc(item.name)} — ${money(Number(item.price) * selected[item.id])}`);
+    lines.push(`<div class="border-top pt-1 mt-1">Subtotal: <strong>${money(base)}</strong></div>`);
+    lines.push(`<div>Cuota de servicio (cliente): <strong>${money(clientFee)}</strong></div>`);
+    if (mode === 'deposit') {
+      const deposit = Math.round(base * fees().percent) / 100;
+      lines.push(`<div>Anticipo ${fees().percent}%: <strong>${money(deposit)}</strong></div>`);
+      lines.push(`<div>Pagas en línea: <strong>${money(deposit + clientFee)}</strong></div>`);
+      lines.push(`<div>Pagas al entregar: <strong>${money(base - deposit)}</strong></div>`);
+    } else if (mode === 'full') {
+      lines.push(`<div>Pagas en línea: <strong>${money(base + clientFee)}</strong></div>`);
+    } else {
+      lines.push(`<div>Total a pagar al entregar: <strong>${money(base + clientFee)}</strong></div>`);
+    }
+    box.innerHTML = lines.join('');
+  }
+
+  function useMyLocation() {
+    const status = document.getElementById('locationStatus');
+    if (!navigator.geolocation) {
+      status.textContent = 'Tu navegador no permite ubicación.';
+      return;
+    }
+    status.textContent = 'Obteniendo ubicación...';
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+        status.textContent = `Ubicación lista (${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)})`;
+      },
+      () => { status.textContent = 'No pudimos obtener la ubicación.'; },
+      { timeout: 8000 }
+    );
+  }
+
+  function fillBankInfo() {
+    const pay = info.payment || {};
+    const rows = [];
+    if (pay.bank_name) rows.push(`<div><strong>Banco:</strong> ${esc(pay.bank_name)}</div>`);
+    if (pay.bank_holder) rows.push(`<div><strong>Titular:</strong> ${esc(pay.bank_holder)}</div>`);
+    if (pay.bank_clabe) rows.push(`<div><strong>CLABE:</strong> ${esc(pay.bank_clabe)}</div>`);
+    if (!rows.length) rows.push('<div class="text-muted">La plataforma todavía no publica sus datos bancarios.</div>');
+    document.getElementById('rentalBankInfo').innerHTML = rows.join('');
+    if (!pay.bank_clabe) {
+      document.getElementById('rentalDepositOption').classList.add('d-none');
+      document.getElementById('rentalFullOption').classList.add('d-none');
+    }
+  }
+
+  async function confirmRental() {
+    const errorBox = document.getElementById('rentalError');
+    errorBox.classList.add('d-none');
+    const chosen = selectedItems();
+    if (!chosen.length) {
+      errorBox.textContent = 'Elige al menos un artículo.';
+      errorBox.classList.remove('d-none');
+      return;
+    }
+    const date = document.getElementById('rentalDate').value;
+    if (!date) {
+      errorBox.textContent = 'Elige la fecha.';
+      errorBox.classList.remove('d-none');
+      return;
+    }
+    if (chosen.some((item) => !itemTimes[item.id])) {
+      errorBox.textContent = 'Elige la hora de cada artículo.';
+      errorBox.classList.remove('d-none');
+      return;
+    }
+    if (!document.getElementById('rentalConfirmCheck').checked) {
+      errorBox.textContent = 'Confirma los datos de tu renta.';
+      errorBox.classList.remove('d-none');
+      return;
+    }
+    const needsAddress = chosen.some((item) => item.requires_address);
+    const address = document.getElementById('rentalAddress').value.trim();
+    if (needsAddress && !address) {
+      errorBox.textContent = 'Escribe la dirección de entrega.';
+      errorBox.classList.remove('d-none');
+      return;
+    }
+    const mode = selectedPayMode();
+    const button = document.getElementById('rentalConfirmBtn');
+    let proofUrl = null;
+    if (mode !== 'cash') {
+      const file = document.getElementById('rentalProof').files[0];
+      if (!file) {
+        errorBox.textContent = 'Sube el comprobante de tu transferencia.';
+        errorBox.classList.remove('d-none');
+        return;
+      }
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Subiendo...';
+      try {
+        const uploaded = await uploadDocument(file);
+        proofUrl = uploaded.url || uploaded.file_url || uploaded.path;
+      } catch (err) {
+        button.disabled = false;
+        button.innerHTML = '<i class="bi bi-box2-heart"></i> Confirmar renta';
+        errorBox.textContent = err.message;
+        errorBox.classList.remove('d-none');
+        return;
+      }
+    }
+    button.disabled = true;
+    try {
+      const payload = {
+        client_name: document.getElementById('rentalClientName').value.trim(),
+        client_phone: document.getElementById('rentalClientPhone').value.trim() || null,
+        items: chosen.map((item) => ({
+          service_id: item.id,
+          quantity: selected[item.id],
+          start_at: `${date}T${itemTimes[item.id]}:00`,
+        })),
+        address: needsAddress ? address : null,
+        lat: needsAddress ? coords.lat : null,
+        lng: needsAddress ? coords.lng : null,
+        payment_mode: mode,
+        proof_url: proofUrl,
+        notes: document.getElementById('rentalNotes').value.trim() || null,
+      };
+      if (!payload.client_name) {
+        errorBox.textContent = 'Escribe tu nombre.';
+        errorBox.classList.remove('d-none');
+        return;
+      }
+      const res = await apiRequest('POST', `/rentals/${RID}/bookings`, payload);
+      const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+      const total = mode === 'cash' ? res.cash_due : res.online_amount;
+      document.getElementById('rentalSuccessDetails').innerHTML = `
+        <div>${dateLabel}</div>
+        <div>${res.items.map((item) => `${item.quantity} × ${esc(item.name)}`).join(' · ')}</div>
+        <div>${mode === 'cash' ? 'Paga al entregar' : 'Pagaste en línea'}: <strong>${money(total)}</strong></div>`;
+      document.getElementById('rentalFlow').classList.add('d-none');
+      document.getElementById('rentalSuccess').classList.remove('d-none');
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.classList.remove('d-none');
+      await refreshTimes();
+    } finally {
+      button.disabled = false;
+      button.innerHTML = '<i class="bi bi-box2-heart"></i> Confirmar renta';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('rentalDate').value = todayKey();
+    document.getElementById('rentalDate').min = todayKey();
+    try {
+      info = await apiRequest('GET', `/rentals/${RID}/info`);
+      items = info.items || [];
+      document.getElementById('rentalBusinessName').textContent = `Rentar · ${info.restaurant.name}`;
+      const address = info.restaurant.address || 'Dirección no publicada';
+      document.getElementById('salonAddress').innerHTML = `<i class="bi bi-geo-alt"></i> Dirección del salón: <strong>${esc(address)}</strong>`;
+      if (!items.length) {
+        document.getElementById('rentalUnavailable').classList.remove('d-none');
+        document.getElementById('rentalUnavailable').textContent = 'Este negocio todavía no publicó artículos en renta.';
+        return;
+      }
+      document.getElementById('rentalFlow').classList.remove('d-none');
+      document.getElementById('rentalClientName').value = sessionStorage.getItem('user_name') || '';
+      fillBankInfo();
+      const preselect = new URLSearchParams(location.search).get('item');
+      if (preselect && items.some((item) => item.id === preselect)) {
+        selected[preselect] = 1;
+      }
+      renderItems();
+      updateRentalPayment();
+      updateSummary();
+      if (Object.keys(selected).length) await refreshTimes();
+    } catch (err) {
+      document.getElementById('rentalUnavailable').classList.remove('d-none');
+      document.getElementById('rentalUnavailable').textContent = err.message;
+    }
+  });
+</script>
+{% endblock %}

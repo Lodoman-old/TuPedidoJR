@@ -104,7 +104,7 @@
             <button class="btn btn-sm btn-outline-secondary" onclick="revalidate('${v.id}')">
               <i class="bi bi-arrow-repeat"></i> Validar de nuevo
             </button>
-            ${['appointment_payment', 'affiliation_payment'].includes(v.entity_type) && v.status !== 'approved' && v.status !== 'rejected' ? `
+            ${['appointment_payment', 'rental_payment', 'affiliation_payment'].includes(v.entity_type) && v.status !== 'approved' && v.status !== 'rejected' ? `
               <button class="btn btn-sm btn-success" onclick="settle('${v.id}', 'approve')">
                 <i class="bi bi-check2-circle"></i> Aprobar pago
               </button>

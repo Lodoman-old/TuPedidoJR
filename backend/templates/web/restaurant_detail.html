@@ -133,6 +133,46 @@
     </div>`;
   }
 
+  async function loadRentalItems() {
+    const box = document.getElementById('agendaServicesBox');
+    try {
+      const info = await apiRequest('GET', `/rentals/${RID}/info`);
+      const list = info.items || [];
+      if (!list.length) {
+        box.innerHTML = '';
+        return;
+      }
+      const address = info.restaurant?.address
+        ? `<div class="small text-muted mb-2"><i class="bi bi-geo-alt"></i> ${esc(info.restaurant.address)}</div>`
+        : '';
+      box.innerHTML = `
+        <div class="card p-3">
+          <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+            <h6 class="mb-0"><i class="bi bi-box2-heart"></i> Renta de artículos</h6>
+            <a class="btn btn-sm btn-primary ms-auto" href="/web/restaurants/${RID}/rentals/book">
+              Rentar
+            </a>
+          </div>
+          ${address}
+          <div class="row g-2">
+            ${list.map((item) => `
+              <div class="col-md-6">
+                <div class="border rounded p-2 h-100 d-flex gap-2 align-items-center">
+                  <div class="flex-grow-1 min-w-0">
+                    <div class="fw-semibold">${esc(item.name)}</div>
+                    <div class="small text-muted">${item.duration_min} min · ${item.stock} disponible(s)</div>
+                    <div class="fw-bold">${money0(item.price)}</div>
+                  </div>
+                  <a class="btn btn-sm btn-outline-dark" href="/web/restaurants/${RID}/rentals/book?item=${item.id}">Rentar</a>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    } catch (e) {
+      box.innerHTML = '';
+    }
+  }
+
   async function loadAgendaServices() {
     const box = document.getElementById('agendaServicesBox');
     try {
@@ -175,45 +215,51 @@
     try {
       const r = await getRestaurant(RID);
       restaurantData = r;
-      const isAgenda = Boolean(r.appointments_enabled);
+      const isRental = r.business_type === 'rental';
+      const isAgenda = Boolean(r.appointments_enabled) && !isRental;
       const agendaOnly = isAgenda && r.catalog_enabled === false;
-      const isStore = Boolean(r.business_type && r.business_type !== 'restaurant') && !agendaOnly;
+      const isStore = Boolean(r.business_type && r.business_type !== 'restaurant') && !agendaOnly && !isRental;
       businessIsStore = isStore;
       commissionRate = Number(r.effective_commission_percentage || 0);
       loading.classList.add('d-none');
-      if (agendaOnly) {
+      if (agendaOnly || isRental) {
         document.getElementById('restaurantCartBtn')?.classList.add('d-none');
       }
-      if (r.appointments_enabled) await loadAgendaServices();
+      if (isRental) await loadRentalItems();
+      else if (r.appointments_enabled) await loadAgendaServices();
 
       const cuisine = r.cuisine
         ? `<span class="badge bg-dark ms-1">${esc(r.cuisine)}</span>`
         : '';
-      const businessBadge = isAgenda
-        ? '<span class="badge bg-info text-dark ms-1">Servicios y productos</span>'
-        : (isStore ? '<span class="badge bg-info text-dark ms-1">Tienda</span>' : '');
+      const businessBadge = isRental
+        ? '<span class="badge bg-warning text-dark ms-1">Rentas</span>'
+        : (isAgenda
+          ? '<span class="badge bg-info text-dark ms-1">Servicios y productos</span>'
+          : (isStore ? '<span class="badge bg-info text-dark ms-1">Tienda</span>' : ''));
       const openBadge = r.is_open_now === false
         ? '<span class="badge bg-secondary">Cerrado</span>'
         : '<span class="badge bg-success">Abierto</span>';
-      const deliveryBadge = agendaOnly
+      const deliveryBadge = (agendaOnly || isRental)
         ? ''
         : (r.delivery_mode === 'own'
           ? '<span class="badge bg-info text-dark">Entrega propia</span>'
           : (r.pickup_enabled
             ? '<span class="badge bg-info text-dark">También para recoger</span>'
             : (r.delivery_mode === 'own' ? '' : '')));
-      const pickupBadge = (!agendaOnly && r.pickup_enabled)
+      const pickupBadge = (!agendaOnly && !isRental && r.pickup_enabled)
         ? '<span class="badge bg-primary">Recoger en el negocio</span>'
         : '';
-      const deliveryLabel = agendaOnly
-        ? 'Agenda de servicios'
-        : (r.pickup_enabled
-          ? 'Envío o recoger en el negocio'
-          : (r.delivery_mode === 'own'
-            ? (Number(r.delivery_fee || 0) > 0
-              ? `Envío ${money0(r.delivery_fee)}`
-              : 'Envío gratis')
-            : 'Envío calculado por distancia'));
+      const deliveryLabel = isRental
+        ? 'Renta de artículos'
+        : (agendaOnly
+          ? 'Agenda de servicios'
+          : (r.pickup_enabled
+            ? 'Envío o recoger en el negocio'
+            : (r.delivery_mode === 'own'
+              ? (Number(r.delivery_fee || 0) > 0
+                ? `Envío ${money0(r.delivery_fee)}`
+                : 'Envío gratis')
+              : 'Envío calculado por distancia')));
 
       header.innerHTML = `
         <div class="card p-3 restaurant-head">
@@ -274,8 +320,11 @@
           if (!isStore && !r.appointments_enabled) {
             buttons.push(`<a href="/web/restaurants/${RID}/reservations" class="btn btn-sm btn-nav-reservations"><i class="bi bi-calendar-check"></i> Reservaciones</a>`);
           }
-          if (canManage) {
+          if (canManage && !isRental) {
             buttons.push(`<a href="/web/restaurants/${RID}/agenda" class="btn btn-sm btn-nav-agenda"><i class="bi bi-calendar-week"></i> Agenda</a>`);
+          }
+          if (canManage && isRental) {
+            buttons.push(`<a href="/web/restaurants/${RID}/rentals" class="btn btn-sm btn-nav-rentals"><i class="bi bi-box2-heart"></i> Rentas</a>`);
           }
           if (isStore || r.accepts_custom_requests) {
             buttons.push(`<a href="/web/restaurants/${RID}/requests" class="btn btn-sm btn-nav-requests"><i class="bi bi-chat-square-text"></i> ${isStore ? 'Solicitudes' : 'Pedidos especiales'}</a>`);

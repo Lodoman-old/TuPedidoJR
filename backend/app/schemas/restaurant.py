@@ -260,7 +260,7 @@ class RestaurantRegistrationCreate(BaseModel):
     password: str = Field(..., min_length=6, max_length=128)
     restaurant_name: str = Field(..., min_length=2, max_length=150)
     cuisine: str | None = Field(default=None, max_length=100)
-    business_type: str = Field(default="restaurant", pattern="^(restaurant|store|pharmacy|grocery|hardware|other)$")
+    business_type: str = Field(default="restaurant", pattern="^(restaurant|store|pharmacy|grocery|hardware|rental|other)$")
     address: str = Field(..., min_length=5)
     lat: float
     lng: float

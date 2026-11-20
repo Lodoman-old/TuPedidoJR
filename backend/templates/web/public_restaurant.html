@@ -75,7 +75,9 @@
   <div class="container py-3">
     <div class="alert alert-light border small py-2 mb-3">
       <i class="bi bi-info-circle"></i>
-      {% if restaurant.appointments_enabled and not restaurant.catalog_enabled %}
+      {% if restaurant.business_type == 'rental' %}
+      Los artículos y precios de renta son públicos. Aparta tu fecha y hora; solo necesitas iniciar sesión o crear una cuenta.
+      {% elif restaurant.appointments_enabled and not restaurant.catalog_enabled %}
       Los servicios y precios son públicos. Para agendar solo necesitas iniciar sesión o crear una cuenta.
       {% elif restaurant.appointments_enabled and restaurant.catalog_enabled %}
       Servicios y productos son públicos. Puedes agendar una cita o pedir productos a domicilio; solo necesitas iniciar sesión.
@@ -85,7 +87,11 @@
       {% endif %}
     </div>
     <div class="d-flex gap-2 flex-wrap mb-3">
-      {% if restaurant.appointments_enabled %}
+      {% if restaurant.business_type == 'rental' %}
+      <a class="btn btn-warning" href="/web/restaurants/{{ restaurant.id }}/rentals/book">
+        <i class="bi bi-box2-heart"></i> Rentar
+      </a>
+      {% elif restaurant.appointments_enabled %}
       <a class="btn btn-primary" href="/web/restaurants/{{ restaurant.id }}/agenda/book">
         <i class="bi bi-calendar-week"></i> Agendar cita
       </a>
@@ -112,31 +118,42 @@
 
     {% if restaurant.appointments_enabled %}
       {% if services %}
-      <h2 class="h5 mt-4 mb-2">Servicios</h2>
+      <h2 class="h5 mt-4 mb-2">{{ 'Renta de artículos' if restaurant.business_type == 'rental' else 'Servicios' }}</h2>
+      {% if restaurant.business_type == 'rental' %}
+      <div class="alert alert-light border small py-2">
+        <i class="bi bi-geo-alt"></i> Dirección del salón: <strong>{{ restaurant.address }}</strong>
+      </div>
+      {% endif %}
       <div class="row g-2">
         {% for service in services %}
         <div class="col-md-6">
           <div class="item d-flex gap-3 align-items-center h-100">
             <div class="menu-thumb d-flex align-items-center justify-content-center text-muted">
-              <i class="bi bi-scissors"></i>
+              <i class="bi bi-box2-heart"></i>
             </div>
             <div class="flex-grow-1">
               <div class="fw-bold">{{ service.name }}</div>
               {% if service.description %}<div class="small text-muted">{{ service.description }}</div>{% endif %}
-              <div class="small text-muted">{{ service.duration_min }} min</div>
+              <div class="small text-muted">{{ service.duration_min }} min{% if service.is_rental %} · {{ service.stock }} disponible(s){% endif %}</div>
               <div class="price">${{ '%.2f'|format(service.price|float) }}</div>
             </div>
+            {% if restaurant.business_type == 'rental' %}
+            <a class="btn btn-sm btn-warning" href="/web/restaurants/{{ restaurant.id }}/rentals/book?item={{ service.id }}">
+              Rentar
+            </a>
+            {% else %}
             <a class="btn btn-sm btn-dark" href="/web/restaurants/{{ restaurant.id }}/agenda/book?s={{ service.id }}">
               Agendar
             </a>
+            {% endif %}
           </div>
         </div>
         {% endfor %}
       </div>
-      <div class="small text-muted mt-2">Precio del servicio. Al agendar se suma $5 de cuota de servicio.</div>
+      <div class="small text-muted mt-2">{{ 'Precio de renta. Al apartar se suma $5 de cuota de servicio.' if restaurant.business_type == 'rental' else 'Precio del servicio. Al agendar se suma $5 de cuota de servicio.' }}</div>
       {% else %}
       <div class="card p-4 text-center text-muted mt-3">
-        Este negocio todavía no publicó sus servicios.
+        Este negocio todavía no publicó sus {{ 'artículos en renta' if restaurant.business_type == 'rental' else 'servicios' }}.
       </div>
       {% endif %}
     {% endif %}

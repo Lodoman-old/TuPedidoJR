@@ -35,6 +35,7 @@ from app.models.business_staff import BusinessStaff
 from app.models.appointment import Appointment
 from app.models.appointment_debt import AppointmentDebt
 from app.models.business_ledger import BusinessLedger
+from app.models.rental_booking import RentalBooking, RentalBookingItem
 
 __all__ = [
     "User",
@@ -77,4 +78,6 @@ __all__ = [
     "Appointment",
     "AppointmentDebt",
     "BusinessLedger",
+    "RentalBooking",
+    "RentalBookingItem",
 ]

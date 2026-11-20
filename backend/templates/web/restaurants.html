@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block head_extra %}
 <style>
-  #tabRestaurants.active, #tabStores.active, #tabServices.active {
+  #tabRestaurants.active, #tabStores.active, #tabServices.active, #tabRentals.active {
     background: #1B2F6B;
     border-color: #1B2F6B;
     color: #fff;
@@ -10,11 +10,12 @@
 {% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-  <h4 class="m-0" id="pageTitle">Restaurantes</h4>
+  <h4 class="m-0" id="pageTitle">Negocios</h4>
   <div class="d-flex gap-2 flex-wrap">
-    <a class="btn btn-sm btn-outline-primary" id="tabRestaurants" href="/web/restaurants">Restaurantes</a>
+    <a class="btn btn-sm btn-outline-primary" id="tabRestaurants" href="/web/restaurants">Comida</a>
     <a class="btn btn-sm btn-outline-primary" id="tabStores" href="/web/restaurants?type=store">Tiendas</a>
     <a class="btn btn-sm btn-outline-primary" id="tabServices" href="/web/restaurants?type=services">Servicios</a>
+    <a class="btn btn-sm btn-outline-primary" id="tabRentals" href="/web/restaurants?type=rental">Rentas</a>
     <a class="btn btn-sm btn-outline-primary" id="tabMandados" href="/web/mandados">Mandados</a>
   </div>
 </div>
@@ -54,6 +55,7 @@
     const type = new URLSearchParams(window.location.search).get('type');
     if (type === 'store') return 'store';
     if (type === 'services') return 'services';
+    if (type === 'rental') return 'rental';
     return 'restaurant';
   })();
   let searchTimer = null;
@@ -61,43 +63,56 @@
   function applyPageType() {
     const isStore = PAGE_TYPE === 'store';
     const isServices = PAGE_TYPE === 'services';
-    document.getElementById('pageTitle').textContent = isServices
-      ? 'Servicios'
-      : (isStore ? 'Tiendas' : 'Restaurantes');
-    document.getElementById('searchInput').placeholder = isServices
-      ? 'Buscar barbería, salón o servicio...'
-      : (isStore
-        ? 'Buscar tienda, giro o producto...'
-        : 'Buscar restaurante, giro o platillo (ej. sushi, taco, pizza)...');
+    const isRental = PAGE_TYPE === 'rental';
+    document.getElementById('pageTitle').textContent = isRental
+      ? 'Rentas'
+      : (isServices ? 'Servicios' : (isStore ? 'Tiendas' : 'Negocios'));
+    document.getElementById('searchInput').placeholder = isRental
+      ? 'Buscar salón, inflable, sillas, sonido...'
+      : (isServices
+        ? 'Buscar barbería, salón o servicio...'
+        : (isStore
+          ? 'Buscar tienda, giro o producto...'
+          : 'Buscar comida, giro o platillo (ej. sushi, taco, pizza)...'));
     document.getElementById('tabRestaurants').classList.toggle('active', PAGE_TYPE === 'restaurant');
     document.getElementById('tabStores').classList.toggle('active', isStore);
     document.getElementById('tabServices').classList.toggle('active', isServices);
-    document.getElementById('emptyText').textContent = isServices
-      ? 'No hay negocios con servicios para agendar'
-      : (isStore ? 'No hay tiendas con esos filtros' : 'No hay restaurantes cerca de tu ubicación');
-    document.getElementById('showAllBtn').textContent = isServices
-      ? 'Ver todos los servicios'
-      : (isStore ? 'Ver todas las tiendas' : 'Ver todos los restaurantes');
-    document.getElementById('filterFree').closest('.form-check')?.classList.toggle('d-none', isServices);
+    document.getElementById('tabRentals').classList.toggle('active', isRental);
+    document.getElementById('emptyText').textContent = isRental
+      ? 'No hay negocios de renta con esos filtros'
+      : (isServices
+        ? 'No hay negocios con servicios para agendar'
+        : (isStore ? 'No hay tiendas con esos filtros' : 'No hay negocios de comida cerca de tu ubicación'));
+    document.getElementById('showAllBtn').textContent = isRental
+      ? 'Ver todas las rentas'
+      : (isServices
+        ? 'Ver todos los servicios'
+        : (isStore ? 'Ver todas las tiendas' : 'Ver todos los negocios de comida'));
+    document.getElementById('filterFree').closest('.form-check')?.classList.toggle('d-none', isServices || isRental);
   }
 
   function restaurantCard(r) {
-    const isAgenda = Boolean(r.appointments_enabled) && PAGE_TYPE === 'services';
+    const isRental = r.business_type === 'rental' || PAGE_TYPE === 'rental';
+    const isAgenda = Boolean(r.appointments_enabled) && PAGE_TYPE === 'services' && !isRental;
     const cuisine = r.cuisine
       ? `<span class="badge bg-dark ms-1">${r.cuisine}</span>`
       : '';
     const openBadge = r.is_open_now === false
       ? '<span class="badge bg-secondary ms-1">Cerrado</span>'
       : '<span class="badge bg-success ms-1">Abierto</span>';
-    const deliveryBadge = isAgenda
-      ? '<span class="badge bg-primary ms-1">Cita en línea</span>'
-      : (r.delivery_mode === 'own'
-        ? '<span class="badge bg-info text-dark ms-1">Entrega propia</span>'
-        : '');
+    const deliveryBadge = isRental
+      ? '<span class="badge bg-warning text-dark ms-1">Renta en línea</span>'
+      : (isAgenda
+        ? '<span class="badge bg-primary ms-1">Cita en línea</span>'
+        : (r.delivery_mode === 'own'
+          ? '<span class="badge bg-info text-dark ms-1">Entrega propia</span>'
+          : ''));
     const distance = r.distance_m ? `${Math.round(r.distance_m)} m` : '';
     const estimated = r.estimated_delivery_fee != null ? Number(r.estimated_delivery_fee) : null;
     let deliveryText = '';
-    if (isAgenda) {
+    if (isRental) {
+      deliveryText = 'Aparta salón, inflables, sillas y más';
+    } else if (isAgenda) {
       deliveryText = 'Reserva tu cita en línea';
     } else if (r.delivery_mode === 'own') {
       if (estimated != null) {
@@ -109,9 +124,11 @@
       deliveryText = 'Envío según distancia';
     }
     const meta = [deliveryText, distance].filter(Boolean).join(' · ');
-    const target = isAgenda
-      ? `/web/restaurants/${r.id}/agenda/book`
-      : `/web/restaurants/${r.id}`;
+    const target = isRental
+      ? `/web/restaurants/${r.id}/rentals/book`
+      : (isAgenda
+        ? `/web/restaurants/${r.id}/agenda/book`
+        : `/web/restaurants/${r.id}`);
     return `
       <div class="col-6 col-md-4 col-lg-3">
         <div class="card h-100" role="button" onclick="window.location='${target}'">
@@ -146,8 +163,7 @@
   function getFilters() {
     const filters = PAGE_TYPE === 'services'
       ? { business_type: 'all', services: 'true' }
-      : { business_type: PAGE_TYPE };
-    const sort = document.getElementById('filterSort')?.value;
+      : { business_type: PAGE_TYPE };    const sort = document.getElementById('filterSort')?.value;
     if (sort) filters.sort = sort;
     if (document.getElementById('filterOpen')?.checked) filters.open_now = 'true';
     if (document.getElementById('filterFree')?.checked && PAGE_TYPE !== 'services') filters.free_delivery = 'true';
@@ -204,7 +220,9 @@
         if (seq !== loadSeq) return;
         emptyText.textContent = PAGE_TYPE === 'services'
           ? `No encontramos servicios para “${query}”`
-          : `No encontramos restaurantes para “${query}”`;
+          : (PAGE_TYPE === 'rental'
+            ? `No encontramos rentas para “${query}”`
+            : `No encontramos comida para “${query}”`);
         showAll.classList.add('d-none');
         spinner.classList.add('d-none');
         renderRestaurants(data);
@@ -224,7 +242,9 @@
       if (seq !== loadSeq) return;
       emptyText.textContent = PAGE_TYPE === 'services'
         ? 'No hay negocios con servicios para agendar'
-        : (PAGE_TYPE === 'store' ? 'No hay tiendas con esos filtros' : 'No hay restaurantes con esos filtros');
+        : (PAGE_TYPE === 'rental'
+          ? 'No hay negocios de renta con esos filtros'
+          : (PAGE_TYPE === 'store' ? 'No hay tiendas con esos filtros' : 'No hay negocios de comida con esos filtros'));
       showAll.classList.toggle('d-none', data.length > 0);
       spinner.classList.add('d-none');
       renderRestaurants(data);

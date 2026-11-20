@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_superuser
 from app.db.session import get_db
 from app.models.appointment import Appointment
+from app.models.rental_booking import RentalBooking
 from app.models.receipt_validation import ReceiptValidation
 from app.models.restaurant import Restaurant
 from app.models.user import User
@@ -20,6 +21,7 @@ ENTITY_LABELS = {
     "mandado_purchase": "Ticket de compra de mandado",
     "reservation_deposit": "Depósito de reservación",
     "appointment_payment": "Pago de cita",
+    "rental_payment": "Pago de renta",
     "affiliation_payment": "Afiliación anual",
 }
 KIND_LABELS = {
@@ -98,6 +100,8 @@ async def revalidate(
 async def _settle_entity(db: AsyncSession, record: ReceiptValidation, approved: bool) -> None:
     if record.entity_type == "appointment_payment":
         await _settle_appointment(db, record, approved)
+    elif record.entity_type == "rental_payment":
+        await _settle_rental(db, record, approved)
     elif record.entity_type == "affiliation_payment":
         await _settle_affiliation(db, record, approved)
 
@@ -116,6 +120,22 @@ async def _settle_appointment(db: AsyncSession, record: ReceiptValidation, appro
         appointment.receipt_status = "rejected"
         appointment.payment_status = "proof_rejected"
         appointment.paid_at = None
+
+
+async def _settle_rental(db: AsyncSession, record: ReceiptValidation, approved: bool) -> None:
+    booking = await db.get(RentalBooking, record.entity_id)
+    if not booking:
+        return
+    if approved:
+        booking.receipt_status = "approved"
+        booking.payment_status = (
+            "paid" if booking.payment_mode == "full" else "deposit_paid"
+        )
+        booking.paid_at = datetime.now(timezone.utc)
+    else:
+        booking.receipt_status = "rejected"
+        booking.payment_status = "proof_rejected"
+        booking.paid_at = None
 
 
 async def _settle_affiliation(db: AsyncSession, record: ReceiptValidation, approved: bool) -> None:

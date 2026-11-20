@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-0"><i class="bi bi-box2-heart"></i> Mis rentas</h4>
+    <small class="text-muted">Salones, inflables, sillas, sonido y otros artículos que apartaste.</small>
+  </div>
+  <button class="btn btn-sm btn-outline-secondary" onclick="loadRentals()">
+    <i class="bi bi-arrow-clockwise"></i> Actualizar
+  </button>
+</div>
+
+<div id="rentalsError" class="alert alert-danger d-none"></div>
+<div id="rentalsLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="rentalsList"></div>
+<div id="rentalsEmpty" class="text-center py-5 d-none">
+  <i class="bi bi-box2-heart" style="font-size:3rem;color:#ccc;"></i>
+  <p class="text-muted mt-2">Todavía no tienes rentas.</p>
+  <a href="/web/restaurants?type=rental" class="btn btn-warning">Ver rentas</a>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const money = (v) => '$' + Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function statusBadge(status) {
+    const map = {
+      confirmed: ['bg-primary', 'Confirmada'],
+      completed: ['bg-success', 'Completada'],
+      cancelled: ['bg-secondary', 'Cancelada'],
+      no_show: ['bg-danger', 'No asistió'],
+    };
+    const [cls, label] = map[status] || ['bg-secondary', status];
+    return `<span class="badge ${cls}">${label}</span>`;
+  }
+
+  function paymentText(booking) {
+    if (booking.payment_mode === 'cash') return `Pago al entregar: ${money(booking.cash_due)}`;
+    if (booking.payment_mode === 'deposit') return `Anticipo: ${money(booking.online_amount)} · Al entregar: ${money(booking.cash_due)}`;
+    return `Pagado en línea: ${money(booking.online_amount)}`;
+  }
+
+  async function loadRentals() {
+    const loading = document.getElementById('rentalsLoading');
+    const error = document.getElementById('rentalsError');
+    const list = document.getElementById('rentalsList');
+    const empty = document.getElementById('rentalsEmpty');
+    loading.classList.remove('d-none');
+    try {
+      const rows = await apiRequest('GET', '/rentals/my-bookings');
+      error.classList.add('d-none');
+      loading.classList.add('d-none');
+      if (!rows.length) {
+        list.innerHTML = '';
+        empty.classList.remove('d-none');
+        return;
+      }
+      empty.classList.add('d-none');
+      list.innerHTML = rows.map((booking) => {
+        const dateLabel = new Date(booking.start_at).toLocaleDateString('es-MX', {
+          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+        });
+        const items = booking.items.map((item) => {
+          const time = new Date(item.start_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+          return `<div class="small">${item.quantity} × ${esc(item.name)} · ${time}</div>`;
+        }).join('');
+        const refund = Number(booking.refund_amount || 0) > 0
+          ? `<div class="small text-info mt-1"><i class="bi bi-arrow-counterclockwise"></i> Reembolso pendiente: ${money(booking.refund_amount)}</div>`
+          : '';
+        return `<div class="card mb-3">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+              <div>
+                <div class="fw-bold">${esc(booking.restaurant_name || 'Renta')}</div>
+                <div class="small text-muted">${dateLabel}</div>
+              </div>
+              <div>${statusBadge(booking.status)}</div>
+            </div>
+            <div class="mt-2">${items}</div>
+            ${booking.address ? `<div class="small text-muted mt-2"><i class="bi bi-geo-alt"></i> ${esc(booking.address)}</div>` : ''}
+            <div class="small text-muted mt-2">${paymentText(booking)}</div>
+            ${refund}
+          </div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      loading.classList.add('d-none');
+      error.textContent = err.message;
+      error.classList.remove('d-none');
+    }
+  }
+
+  loadRentals();
+</script>
+{% endblock %}

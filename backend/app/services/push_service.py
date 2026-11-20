@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.models.delivery_person import DeliveryPerson
 from app.models.mandado import Mandado
 from app.models.order import Order
+from app.models.rental_booking import RentalBooking
 from app.models.appointment import Appointment
 from app.models.business_service import BusinessService
 from app.models.business_staff import BusinessStaff
@@ -789,6 +790,144 @@ def schedule_reassign_result(appointment_id: str, accepted: bool) -> None:
         asyncio.create_task(_notify_reassign_result(str(appointment_id), bool(accepted)))
     except RuntimeError:
         logger.debug("No event loop for reassign result")
+
+
+def _rental_summary(booking: RentalBooking) -> str:
+    return ", ".join(
+        f"{row.quantity} × {row.name}" for row in booking.items
+    ) or "Renta"
+
+
+async def _rental_context(db, booking_id: str):
+    booking = await db.get(RentalBooking, uuid.UUID(str(booking_id)))
+    if not booking:
+        return None
+    restaurant = await db.get(Restaurant, booking.restaurant_id)
+    client = await db.get(User, booking.client_user_id) if booking.client_user_id else None
+    return booking, restaurant, client
+
+
+async def _notify_new_rental(booking_id: str) -> None:
+    try:
+        async with async_session() as db:
+            ctx = await _rental_context(db, booking_id)
+            if not ctx:
+                return
+            booking, restaurant, client = ctx
+            if not restaurant:
+                return
+            members_result = await db.execute(
+                select(RestaurantUser.user_id).where(
+                    RestaurantUser.restaurant_id == restaurant.id,
+                    RestaurantUser.is_active.is_(True),
+                    RestaurantUser.role.in_(ORDER_ROLES),
+                )
+            )
+            user_ids = {restaurant.owner_id, *members_result.scalars().all()}
+            name = client.name if client else booking.client_name
+            place = booking.address or "En el salón"
+            body = f"{name}: {_rental_summary(booking)} · {_appointment_when(booking)} · {place}"
+            for user_id in user_ids:
+                await send_to_user(
+                    db,
+                    user_id,
+                    "Nueva renta",
+                    body,
+                    {
+                        "type": "restaurant_rental",
+                        "booking_id": str(booking.id),
+                        "restaurant_id": str(restaurant.id),
+                    },
+                    "green",
+                )
+    except Exception:
+        logger.exception("Push new-rental notification failed for %s", booking_id)
+
+
+async def _notify_rental_client_reminder(booking_id: str) -> None:
+    try:
+        async with async_session() as db:
+            ctx = await _rental_context(db, booking_id)
+            if not ctx:
+                return
+            booking, restaurant, client = ctx
+            if not booking.client_user_id:
+                return
+            start = booking.start_at
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=timezone.utc)
+            hour = start.astimezone(LOCAL_TZ).strftime("%H:%M")
+            await send_to_user(
+                db,
+                booking.client_user_id,
+                "Tu renta es en 30 minutos",
+                f"{_rental_summary(booking)} a las {hour}. ¡Te esperamos!",
+                {
+                    "type": "rental_reminder",
+                    "booking_id": str(booking.id),
+                    "restaurant_id": str(restaurant.id) if restaurant else None,
+                },
+                "amber",
+            )
+    except Exception:
+        logger.exception("Push rental client reminder failed for %s", booking_id)
+
+
+async def _notify_rental_business_now(booking_id: str) -> None:
+    try:
+        async with async_session() as db:
+            ctx = await _rental_context(db, booking_id)
+            if not ctx:
+                return
+            booking, restaurant, client = ctx
+            if not restaurant:
+                return
+            members_result = await db.execute(
+                select(RestaurantUser.user_id).where(
+                    RestaurantUser.restaurant_id == restaurant.id,
+                    RestaurantUser.is_active.is_(True),
+                    RestaurantUser.role.in_(ORDER_ROLES),
+                )
+            )
+            user_ids = {restaurant.owner_id, *members_result.scalars().all()}
+            name = client.name if client else booking.client_name
+            body = f"{name}: {_rental_summary(booking)} · {_appointment_when(booking)} · {booking.address or 'En el salón'}"
+            for user_id in user_ids:
+                await send_to_user(
+                    db,
+                    user_id,
+                    "Renta ahora",
+                    body,
+                    {
+                        "type": "restaurant_rental_now",
+                        "booking_id": str(booking.id),
+                        "restaurant_id": str(restaurant.id),
+                    },
+                    "amber",
+                )
+    except Exception:
+        logger.exception("Push rental business reminder failed for %s", booking_id)
+
+
+def schedule_new_rental(booking_id: str) -> None:
+    try:
+        asyncio.create_task(_notify_new_rental(str(booking_id)))
+    except RuntimeError:
+        logger.debug("No event loop for rental notification")
+
+
+def schedule_rental_client_reminder(booking_id: str) -> None:
+    try:
+        asyncio.create_task(_notify_rental_client_reminder(str(booking_id)))
+    except RuntimeError:
+        logger.debug("No event loop for rental reminder")
+
+
+def schedule_rental_business_now(booking_id: str) -> None:
+    try:
+        asyncio.create_task(_notify_rental_business_now(str(booking_id)))
+    except RuntimeError:
+        logger.debug("No event loop for rental reminder")
 
 
 def schedule_reservation_status(reservation_id: str) -> None:

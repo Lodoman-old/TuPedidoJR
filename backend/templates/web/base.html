@@ -157,9 +157,10 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
-          <li class="nav-item nav-delivery-hide nav-customer-hide" id="publicRestaurantsNav"><a class="nav-link" href="/web/restaurants"><i class="bi bi-shop"></i> Restaurantes</a></li>
+          <li class="nav-item nav-delivery-hide nav-customer-hide" id="publicRestaurantsNav"><a class="nav-link" href="/web/restaurants"><i class="bi bi-shop"></i> Comida</a></li>
           <li class="nav-item nav-delivery-hide nav-customer-hide" id="publicStoresNav"><a class="nav-link" href="/web/restaurants?type=store"><i class="bi bi-bag"></i> Tiendas</a></li>
           <li class="nav-item nav-delivery-hide nav-customer-hide" id="publicServicesNav"><a class="nav-link" href="/web/restaurants?type=services"><i class="bi bi-calendar-week"></i> Servicios</a></li>
+          <li class="nav-item nav-delivery-hide nav-customer-hide" id="publicRentalsNav"><a class="nav-link" href="/web/restaurants?type=rental"><i class="bi bi-box2-heart"></i> Rentas</a></li>
           <li class="nav-item dropdown d-none" id="myRestaurantNav">
             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
               <i class="bi bi-shop-window"></i> Mi negocio
@@ -167,6 +168,7 @@
             <ul class="dropdown-menu dropdown-menu-end">
               <li><a class="dropdown-item" data-rnav="panel" href="#"><i class="bi bi-speedometer2"></i> Panel</a></li>
               <li><a class="dropdown-item" data-rnav="orders" href="#"><i class="bi bi-receipt"></i> Pedidos <span id="restaurantPendingBadge" class="badge rounded-pill bg-danger d-none">0</span></a></li>
+              <li class="rnav-rental-only"><a class="dropdown-item" data-rnav="rentals" href="#"><i class="bi bi-box2-heart"></i> Rentas</a></li>
               <li><a class="dropdown-item rnav-restaurant-only" data-rnav="reservations" href="#"><i class="bi bi-calendar-check"></i> Reservaciones</a></li>
               <li class="rnav-requests"><a class="dropdown-item" data-rnav="requests" href="#"><i class="bi bi-chat-square-text"></i> <span id="requestsNavLabel">Solicitudes</span></a></li>
               <li><a class="dropdown-item" data-rnav="shipments" href="#"><i class="bi bi-box-seam"></i> Envíos</a></li>
@@ -182,6 +184,7 @@
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/orders"><i class="bi bi-list-check"></i> Pedidos</a></li>
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/reservations"><i class="bi bi-calendar-check"></i> Reservaciones</a></li>
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/my-appointments"><i class="bi bi-calendar2-check"></i> Mis citas</a></li>
+          <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/my-rentals"><i class="bi bi-box2-heart"></i> Mis rentas</a></li>
           <li class="nav-item d-none" id="deliveryNav"><a class="nav-link" href="/web/delivery"><i class="bi bi-bicycle"></i> Repartidor</a></li>
           <li class="nav-item" id="downloadAppNav"><a class="nav-link" href="/web/app"><i class="bi bi-phone"></i> Descargar app</a></li>
           <li class="nav-item dropdown d-none" id="adminNav">
@@ -988,6 +991,9 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
       menu?.querySelectorAll('.rnav-restaurant-only').forEach(el => {
         el.classList.toggle('d-none', businessType !== 'restaurant' || appointmentsEnabled);
       });
+      menu?.querySelectorAll('.rnav-rental-only').forEach(el => {
+        el.classList.toggle('d-none', businessType !== 'rental');
+      });
       const acceptsRequests = sessionStorage.getItem('my_accepts_requests') === 'true';
       menu?.querySelectorAll('.rnav-requests').forEach(el => {
         el.classList.toggle('d-none', businessType === 'restaurant' && !acceptsRequests);
@@ -998,7 +1004,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
       }
       if (menu && restaurantId) {
         const routes = {
-          panel: '', orders: '/orders', reservations: '/reservations', requests: '/requests', shipments: '/shipments', earnings: '/earnings',
+          panel: '', orders: '/orders', reservations: '/reservations', rentals: '/rentals', requests: '/requests', shipments: '/shipments', earnings: '/earnings',
           team: '/team', profile: '/profile', location: '/location',
         };
         menu.querySelectorAll('[data-rnav]').forEach(link => {

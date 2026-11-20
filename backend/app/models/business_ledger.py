@@ -24,6 +24,11 @@ class BusinessLedger(TimestampMixin, Base):
         ForeignKey("appointments.id", ondelete="SET NULL"),
         nullable=True,
     )
+    rental_booking_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("rental_bookings.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     kind = Column(String(10), nullable=False)
     amount = Column(Numeric(10, 2), default=0, nullable=False)
     status = Column(String(20), default="pending", nullable=False, index=True)

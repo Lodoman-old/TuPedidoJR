@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import re
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, text, update
@@ -11,6 +12,7 @@ from app.api.deps import get_current_user
 from app.core.constants import OrderStatus
 from app.db.session import get_db
 from app.models.delivery_person import DeliveryPerson
+from app.models.appointment import Appointment
 from app.models.menu_item import MenuItem
 from app.models.order import Order
 from app.models.order_item import OrderItem
@@ -298,7 +300,24 @@ async def create_order(
     if restaurant.status != "active" and not current_user.is_superuser:
         raise HTTPException(status_code=409, detail="El restaurante todavía no está activo")
 
-    if not current_user.is_superuser:
+    appointment_link = None
+    if body.appointment_id:
+        try:
+            appointment_uuid = uuid.UUID(str(body.appointment_id))
+        except (ValueError, AttributeError, TypeError) as exc:
+            raise HTTPException(status_code=400, detail="Cita inválida") from exc
+        appointment = await db.get(Appointment, appointment_uuid)
+        if (
+            not appointment
+            or appointment.restaurant_id != restaurant.id
+            or appointment.client_user_id != current_user.id
+        ):
+            raise HTTPException(status_code=400, detail="La cita no pertenece a este negocio")
+        if appointment.status not in ("pending", "confirmed"):
+            raise HTTPException(status_code=400, detail="La cita ya está cerrada")
+        appointment_link = appointment.id
+
+    if not current_user.is_superuser and not appointment_link:
         open_state = await restaurant_open_state(db, restaurant)
         if not open_state["is_open_now"]:
             raise HTTPException(
@@ -311,6 +330,11 @@ async def create_order(
         raise HTTPException(status_code=400, detail="Este restaurante no permite recoger pedidos")
     if not pickup and (not body.delivery_address or body.delivery_location is None):
         raise HTTPException(status_code=400, detail="Falta la dirección o ubicación de entrega")
+    if appointment_link and not pickup:
+        raise HTTPException(
+            status_code=400,
+            detail="Los productos de una cita se recogen en el negocio",
+        )
     tip_amount = Decimal("0") if pickup else round_half_down(body.tip_amount or Decimal("0"))
     if pickup:
         pickup_lat, pickup_lng = await _restaurant_coords(db, restaurant)
@@ -459,6 +483,7 @@ async def create_order(
     order = Order(
         user_id=current_user.id,
         restaurant_id=restaurant.id,
+        appointment_id=appointment_link,
         status="pending",
         delivery_mode="pickup" if pickup else restaurant.delivery_mode,
         fulfillment_type=body.fulfillment_type,

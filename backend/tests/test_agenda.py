@@ -9,6 +9,7 @@ from httpx import AsyncClient
 from app.core.security import decode_access_token
 from app.models.appointment import Appointment
 from app.models.appointment_debt import AppointmentDebt
+from app.models.menu_item import MenuItem
 from app.models.receipt_validation import ReceiptValidation
 from app.models.restaurant import Restaurant
 from app.models.restaurant_schedule import RestaurantSchedule
@@ -685,6 +686,60 @@ async def test_balance_breaks_down_by_staff(
         (row for row in after.json()["by_staff"] if row["name"] == "Ana"), None
     )
     assert ana_after is None or float(ana_after["debit"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_products_can_be_reserved_with_appointment(
+    client, customer_token, business, service, staff, db_session
+):
+    resto, target = business
+    resto.pickup_enabled = True
+    resto.is_open = True
+    db_session.add(resto)
+    today = date.today()
+    open_today = await db_session.execute(
+        RestaurantSchedule.__table__.select().where(
+            RestaurantSchedule.restaurant_id == resto.id,
+            RestaurantSchedule.day_of_week == today.weekday(),
+        )
+    )
+    if not open_today.first():
+        db_session.add(RestaurantSchedule(
+            id=uuid.uuid4(),
+            restaurant_id=resto.id,
+            day_of_week=today.weekday(),
+            open_time=datetime.strptime("00:00", "%H:%M").time(),
+            close_time=datetime.strptime("23:59", "%H:%M").time(),
+            is_closed=False,
+        ))
+    item = MenuItem(
+        id=uuid.uuid4(),
+        restaurant_id=resto.id,
+        name="Shampoo",
+        description="Shampoo de prueba",
+        price=100,
+        is_available=True,
+    )
+    db_session.add(item)
+    await db_session.commit()
+
+    created = await _book(client, resto, service, staff, customer_token, target)
+    assert created.status_code == 201, created.text
+    appointment_id = created.json()["id"]
+
+    order = await client.post(
+        "/api/v1/orders",
+        headers=_headers(customer_token),
+        json={
+            "restaurant_id": str(resto.id),
+            "items": [{"menu_item_id": str(item.id), "quantity": 1}],
+            "payment_method": "cash",
+            "fulfillment_type": "pickup",
+            "appointment_id": appointment_id,
+        },
+    )
+    assert order.status_code == 201, order.text
+    assert order.json()["appointment_id"] == appointment_id
 
 
 @pytest.mark.asyncio

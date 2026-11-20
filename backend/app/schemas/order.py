@@ -27,6 +27,7 @@ class OrderCreate(BaseModel):
     points_to_redeem: int = Field(default=0, ge=0, le=100000)
     fulfillment_type: str = Field(default="delivery", pattern="^(delivery|pickup)$")
     refund_account_holder: str | None = Field(default=None, max_length=150)
+    appointment_id: str | None = None
     refund_bank: str | None = Field(default=None, max_length=100)
     refund_clabe: str | None = Field(default=None, max_length=18)
     debt_payment_mode: str | None = Field(default=None, pattern="^(full|installments)$")
@@ -61,6 +62,7 @@ class OrderOut(BaseModel):
     id: UUID
     user_id: UUID
     restaurant_id: UUID
+    appointment_id: UUID | None = None
     delivery_person_id: UUID | None
     status: str
     subtotal: Decimal

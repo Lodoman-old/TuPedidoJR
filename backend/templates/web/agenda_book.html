@@ -94,6 +94,15 @@
     <div class="card-body">
       <div class="fw-bold mb-2"><span class="badge text-bg-primary me-1">5</span> Confirma tu cita</div>
       <div id="summaryBox" class="alert alert-light border small"></div>
+      <div id="productsBox" class="border rounded p-2 mb-3 d-none">
+        <div class="fw-semibold small mb-1">Agrega productos (opcional)</div>
+        <div class="small text-muted mb-2">Se apartan y los pagas al recoger en el negocio.</div>
+        <div id="productList"></div>
+        <div class="d-flex justify-content-between small mt-2">
+          <span>Productos</span>
+          <strong id="productsSubtotal">$0.00</strong>
+        </div>
+      </div>
       <div class="mb-3">
         <div class="fw-semibold small mb-2">Forma de pago</div>
         <div class="form-check">
@@ -172,6 +181,8 @@
   let selectedTime = null;
   let selectedEnd = null;
   let viewerDebt = 0;
+  let business = null;
+  let selectedProducts = {};
 
   function esc(v) {
     return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -420,6 +431,64 @@
     document.getElementById('bankInfo').innerHTML = rows.join('');
   }
 
+  function productClientPrice(item) {
+    const rate = Number(business?.effective_commission_percentage || 0);
+    return Math.round(Number(item.price || 0) * (1 + rate / 100) * 100) / 100;
+  }
+
+  function renderProducts() {
+    const wrap = document.getElementById('productsBox');
+    if (!wrap || !business || business.pickup_enabled === false) {
+      wrap?.classList.add('d-none');
+      return;
+    }
+    const items = (business.menu || []).filter((item) => item.is_available);
+    if (!items.length) {
+      wrap.classList.add('d-none');
+      return;
+    }
+    wrap.classList.remove('d-none');
+    document.getElementById('productList').innerHTML = items.map((item) => {
+      const qty = selectedProducts[item.id] || 0;
+      return `<div class="d-flex align-items-center gap-2 border-top py-2">
+        <div class="flex-grow-1 small min-w-0">
+          <div class="fw-semibold">${esc(item.name)}</div>
+          <div class="text-muted">${money(productClientPrice(item))}</div>
+        </div>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-secondary" onclick="changeProduct('${item.id}', -1)">−</button>
+          <button class="btn btn-outline-secondary disabled">${qty}</button>
+          <button class="btn btn-outline-secondary" onclick="changeProduct('${item.id}', 1)">+</button>
+        </div>
+      </div>`;
+    }).join('');
+    updateProductsSubtotal();
+  }
+
+  function changeProduct(itemId, delta) {
+    const next = Math.max(0, Math.min(20, (selectedProducts[itemId] || 0) + delta));
+    if (next === 0) delete selectedProducts[itemId];
+    else selectedProducts[itemId] = next;
+    renderProducts();
+  }
+
+  function updateProductsSubtotal() {
+    const items = (business?.menu || []);
+    let total = 0;
+    Object.entries(selectedProducts).forEach(([id, qty]) => {
+      const item = items.find((row) => row.id === id);
+      if (item) total += productClientPrice(item) * qty;
+    });
+    const box = document.getElementById('productsSubtotal');
+    if (box) box.textContent = money(total);
+  }
+
+  function selectedProductItems() {
+    return Object.entries(selectedProducts)
+      .filter(([, qty]) => qty > 0)
+      .map(([menu_item_id, quantity]) => ({ menu_item_id, quantity }));
+  }
+
   async function confirmAppointment() {
     const errorBox = document.getElementById('bookingError');
     errorBox.classList.add('d-none');
@@ -474,6 +543,24 @@
         proof_url: proofUrl,
       };
       const res = await apiRequest('POST', `/agenda/${RID}/appointments`, payload);
+      let productOrder = null;
+      let productError = '';
+      const productItems = selectedProductItems();
+      if (productItems.length) {
+        try {
+          productOrder = await apiRequest('POST', '/orders', {
+            restaurant_id: RID,
+            items: productItems,
+            payment_method: 'cash',
+            fulfillment_type: 'pickup',
+            appointment_id: res.id,
+            scheduled_for: new Date(`${selectedDate}T${selectedTime}:00`).toISOString(),
+            notes: `Productos apartados para la cita del ${selectedDate} ${selectedTime}`,
+          });
+        } catch (e) {
+          productError = e.message;
+        }
+      }
       const dateLabel = new Date(`${selectedDate}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
       let paymentLine = '';
       if (mode === 'cash') {
@@ -487,7 +574,9 @@
         <div><strong>${esc(res.service_name || '')}</strong></div>
         <div>Profesional asignado: <strong>${esc(res.staff_name || 'por confirmar')}</strong></div>
         <div>${dateLabel} a las ${selectedTime}</div>
-        ${paymentLine}`;
+        ${paymentLine}
+        ${productOrder ? `<div>Productos apartados: <strong>${money(productOrder.total)}</strong> · se pagan al recoger</div>` : ''}
+        ${productError ? `<div class="text-warning small">Tu cita quedó, pero no pudimos apartar los productos: ${esc(productError)}. Puedes comprarlos por separado.</div>` : ''}`;
       document.getElementById('bookingFlow').classList.add('d-none');
       document.getElementById('successCard').classList.remove('d-none');
     } catch (err) {
@@ -530,6 +619,11 @@
   document.addEventListener('DOMContentLoaded', async () => {
     try {
       info = await apiRequest('GET', `/agenda/${RID}/info`);
+      try {
+        business = await apiRequest('GET', `/restaurants/${RID}`);
+      } catch (e) {
+        business = null;
+      }
       document.getElementById('businessName').textContent = `Agendar cita · ${info.restaurant.name}`;
       if (!info.restaurant.booking_active) {
         document.getElementById('agendaUnavailable').classList.remove('d-none');
@@ -566,6 +660,7 @@
         document.getElementById('transferBox').classList.add('d-none');
       }
       fillBankInfo();
+      renderProducts();
       const today = new Date();
       viewYear = today.getFullYear();
       viewMonth = today.getMonth();

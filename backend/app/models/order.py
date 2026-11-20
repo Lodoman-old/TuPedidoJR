@@ -13,6 +13,7 @@ class Order(TimestampMixin, Base):
 
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=False)
+    appointment_id = Column(UUID(as_uuid=True), ForeignKey("appointments.id", ondelete="SET NULL"), nullable=True, index=True)
     delivery_person_id = Column(UUID(as_uuid=True), ForeignKey("delivery_persons.id"), nullable=True)
     status = Column(String(20), default="pending", nullable=False)
     subtotal = Column(DECIMAL(10, 2), nullable=False)

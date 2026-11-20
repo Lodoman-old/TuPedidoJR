@@ -27,7 +27,7 @@ from app.schemas.restaurant import (CategoryCreate, EarningsOrderItem, EarningsO
                                     RestaurantOpenStatus, RestaurantProfileUpdate,
                                     RestaurantCommissionUpdate,
                                     RestaurantScheduleUpdate, ScheduleEntry,
-                                    AffiliationProof)
+                                    AffiliationProof, AffiliationMethod)
 from app.models.receipt_validation import ReceiptValidation
 from app.services.affiliation_payment_service import (
     affiliation_fee,
@@ -1214,6 +1214,12 @@ async def get_affiliation_proof(
         "expires_at": restaurant.affiliation_expires_at.isoformat() if restaurant.affiliation_expires_at else None,
         "status": record.status if record else None,
         "plan_months": record.plan_months if record else None,
+        "payment_method": restaurant.affiliation_payment_method,
+        "selected_plan_months": restaurant.affiliation_plan_months,
+        "payment_requested_at": (
+            restaurant.affiliation_payment_requested_at.isoformat()
+            if restaurant.affiliation_payment_requested_at else None
+        ),
         "confidence": record.confidence if record else None,
         "summary": record.summary if record else None,
         "issues": record.issues if record else [],
@@ -1222,6 +1228,37 @@ async def get_affiliation_proof(
         "bank_name": (await get_setting_value(db, "BANK_NAME", "")).strip(),
         "bank_holder": (await get_setting_value(db, "BANK_ACCOUNT_HOLDER", "")).strip(),
         "bank_clabe": (await get_setting_value(db, "BANK_CLABE", "")).strip(),
+    }
+
+
+@router.patch("/{restaurant_id}/affiliation-method")
+async def set_affiliation_method(
+    restaurant_id: str,
+    body: AffiliationMethod,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
+    restaurant = result.scalar_one_or_none()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurante no encontrado")
+    if not await have_role(db, restaurant.id, current_user, MANAGE_ROLES):
+        raise HTTPException(status_code=403, detail="No puedes editar esta afiliación")
+    if body.months not in (1, 3, 6, 12):
+        raise HTTPException(status_code=400, detail="Elige un plan de 1, 3, 6 o 12 meses")
+    restaurant.affiliation_payment_method = body.method
+    restaurant.affiliation_plan_months = body.months
+    restaurant.affiliation_payment_requested_at = (
+        datetime.now(timezone.utc) if body.method == "cash" else None
+    )
+    await db.commit()
+    return {
+        "method": restaurant.affiliation_payment_method,
+        "months": restaurant.affiliation_plan_months,
+        "requested_at": (
+            restaurant.affiliation_payment_requested_at.isoformat()
+            if restaurant.affiliation_payment_requested_at else None
+        ),
     }
 
 

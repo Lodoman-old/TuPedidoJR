@@ -110,6 +110,11 @@ class AffiliationProof(BaseModel):
     months: int = Field(default=12, ge=1, le=12)
 
 
+class AffiliationMethod(BaseModel):
+    method: str = Field(pattern="^(transfer|cash)$")
+    months: int = Field(default=12, ge=1, le=12)
+
+
 class RestaurantOut(BaseModel):
     id: UUID
     owner_id: UUID
@@ -128,6 +133,9 @@ class RestaurantOut(BaseModel):
     affiliated: bool = False
     affiliation_expires_at: date | None = None
     affiliation_days_left: int | None = None
+    affiliation_payment_method: str = "transfer"
+    affiliation_plan_months: int = 12
+    affiliation_payment_requested_at: datetime | None = None
     reservations_enabled: bool = True
     reservation_deposit_percent: Decimal = Decimal("20")
     reservation_min_advance_min: int = 120
@@ -260,7 +268,7 @@ class RestaurantRegistrationCreate(BaseModel):
     password: str = Field(..., min_length=6, max_length=128)
     restaurant_name: str = Field(..., min_length=2, max_length=150)
     cuisine: str | None = Field(default=None, max_length=100)
-    business_type: str = Field(default="restaurant", pattern="^(restaurant|store|pharmacy|grocery|hardware|rental|other)$")
+    business_type: str = Field(default="restaurant", pattern="^(restaurant|store|pharmacy|grocery|hardware|services|rental|other)$")
     address: str = Field(..., min_length=5)
     lat: float
     lng: float

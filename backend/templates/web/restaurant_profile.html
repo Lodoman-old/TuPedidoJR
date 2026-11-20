@@ -80,18 +80,39 @@
           </div>
           <div class="col-12">
             <div class="border rounded p-3" id="affiliationPayBox">
-              <div class="fw-semibold small mb-1">Pagar afiliación por transferencia</div>
+              <div class="fw-semibold small mb-1">Pagar afiliación</div>
               <label class="form-label small mb-1" for="affiliationPlan">Plan</label>
               <select class="form-select form-select-sm mb-2" id="affiliationPlan" onchange="updateAffiliationHelp()"></select>
               <div class="small text-muted mb-2" id="affiliationPayHelp"></div>
-              <div class="small mb-2" id="affiliationBank"></div>
-              <div class="d-flex gap-2 flex-wrap align-items-center">
-                <input type="file" id="affiliationProofFile" class="form-control form-control-sm" style="max-width:280px" accept="image/*,application/pdf">
-                <button class="btn btn-sm btn-outline-primary" id="affiliationProofBtn" onclick="uploadAffiliationProof()">
-                  <i class="bi bi-upload"></i> Subir comprobante
-                </button>
+              <label class="form-label small mb-1">Forma de pago</label>
+              <div class="btn-group btn-group-sm d-block mb-2" role="group" aria-label="Forma de pago de la afiliación">
+                <input type="radio" class="btn-check" name="affiliationMethod" id="affMethodTransfer" value="transfer" checked onchange="updateAffiliationMethod()">
+                <label class="btn btn-outline-primary" for="affMethodTransfer"><i class="bi bi-bank"></i> Transferencia</label>
+                <input type="radio" class="btn-check" name="affiliationMethod" id="affMethodCash" value="cash" onchange="updateAffiliationMethod()">
+                <label class="btn btn-outline-primary" for="affMethodCash"><i class="bi bi-cash-coin"></i> Efectivo</label>
               </div>
-              <div class="small mt-2" id="affiliationProofStatus"></div>
+
+              <div id="affiliationTransferBox">
+                <div class="small mb-2" id="affiliationBank"></div>
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                  <input type="file" id="affiliationProofFile" class="form-control form-control-sm" style="max-width:280px" accept="image/*,application/pdf">
+                  <button class="btn btn-sm btn-outline-primary" id="affiliationProofBtn" onclick="uploadAffiliationProof()">
+                    <i class="bi bi-upload"></i> Subir comprobante
+                  </button>
+                </div>
+                <div class="small mt-2" id="affiliationProofStatus"></div>
+              </div>
+
+              <div id="affiliationCashBox" class="d-none">
+                <div class="alert alert-light border small mb-2">
+                  Paga en efectivo en la oficina de TuPedidoJR o pide que un repartidor pase a cobrar.
+                  El administrador registra el pago y activa tu plan el mismo día.
+                </div>
+                <button class="btn btn-sm btn-primary" id="affiliationCashBtn" onclick="requestCashPayment()">
+                  <i class="bi bi-cash-coin"></i> Solicitar pago en efectivo
+                </button>
+                <div class="small mt-2" id="affiliationCashStatus"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -355,7 +376,40 @@
     const physical = plan.physical
       ? ' Incluye <strong>flyers impresos y QR en acrílico</strong>.'
       : ' Incluye QR digital. Los flyers impresos y el acrílico solo se incluyen en el plan anual.';
-    help.innerHTML = `Transfiere <strong>${money(plan.price)}</strong> por el plan de <strong>${esc(plan.label)}</strong> a la cuenta de TuPedidoJR y sube tu comprobante. La plataforma lo valida.${physical}`;
+    help.innerHTML = `Plan de <strong>${esc(plan.label)}</strong> por <strong>${money(plan.price)}</strong>.${physical}`;
+  }
+
+  function updateAffiliationMethod() {
+    const method = document.querySelector('input[name="affiliationMethod"]:checked')?.value || 'transfer';
+    el('affiliationTransferBox')?.classList.toggle('d-none', method !== 'transfer');
+    el('affiliationCashBox')?.classList.toggle('d-none', method !== 'cash');
+    const status = el('affiliationCashStatus');
+    if (status && method === 'cash') {
+      const requested = status.dataset.requested === '1';
+      status.className = 'small mt-2 ' + (requested ? 'text-success' : 'text-muted');
+      status.textContent = requested
+        ? 'Solicitud enviada. La plataforma se pondrá en contacto para recibir tu pago.'
+        : 'Al solicitar el pago en efectivo, la plataforma se pone en contacto contigo para recibirlo.';
+    }
+  }
+
+  async function requestCashPayment() {
+    const btn = el('affiliationCashBtn');
+    const months = Number(el('affiliationPlan')?.value || 12);
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+    try {
+      await apiRequest('PATCH', `/restaurants/${RID}/affiliation-method`, { method: 'cash', months });
+      const status = el('affiliationCashStatus');
+      status.dataset.requested = '1';
+      showToast('Solicitud enviada. La plataforma te contactará para recibir el efectivo.');
+      await loadAffiliationPayment();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-cash-coin"></i> Solicitar pago en efectivo';
+    }
   }
 
   async function loadAffiliationPayment() {
@@ -372,8 +426,15 @@
         select.innerHTML = affiliationPlans.map((plan) => (
           `<option value="${plan.months}">${esc(plan.label)} · ${money(plan.price)}${plan.physical ? ' · material impreso' : ''}</option>`
         )).join('');
-        select.value = current || '12';
+        const preferred = String(data.selected_plan_months || current || 12);
+        select.value = affiliationPlans.some(p => String(p.months) === preferred) ? preferred : '12';
       }
+      const method = data.payment_method === 'cash' ? 'cash' : 'transfer';
+      const radio = document.getElementById(method === 'cash' ? 'affMethodCash' : 'affMethodTransfer');
+      if (radio) radio.checked = true;
+      const cashStatus = el('affiliationCashStatus');
+      if (cashStatus) cashStatus.dataset.requested = data.payment_requested_at ? '1' : '0';
+      updateAffiliationMethod();
       updateAffiliationHelp();
       el('affiliationBank').innerHTML = bank.length
         ? bank.join('')
@@ -409,6 +470,7 @@
       const uploaded = await uploadDocument(file);
       const url = uploaded.url || uploaded.file_url || uploaded.path;
       const months = Number(el('affiliationPlan')?.value || 12);
+      await apiRequest('PATCH', `/restaurants/${RID}/affiliation-method`, { method: 'transfer', months });
       await apiRequest('POST', `/restaurants/${RID}/affiliation-proof`, { proof_url: url, months });
       el('affiliationProofFile').value = '';
       showToast('Comprobante recibido. La plataforma lo está validando.');

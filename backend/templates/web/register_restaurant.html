@@ -43,16 +43,30 @@
           <div class="col-md-6">
             <label class="form-label">Tipo de negocio</label>
             <select id="restBusinessType" class="form-select">
-              <option value="restaurant">Restaurante</option>
-              <option value="store">Tienda</option>
+              <option value="restaurant">Restaurante / comida preparada</option>
+              <option value="store">Tienda de productos</option>
               <option value="grocery">Abarrotes</option>
               <option value="pharmacy">Farmacia</option>
               <option value="hardware">Ferretería</option>
-              <option value="rental">Renta (salones, inflables, sillas, sonido)</option>
-              <option value="other">Otro</option>
+              <option value="services">Servicios con agenda (barbería, salón, consultorio)</option>
+              <option value="rental">Renta de artículos para eventos (salón, inflables, sillas, sonido)</option>
+              <option value="other">Otro / negocio mixto</option>
             </select>
           </div>
-          <div class="col-md-6"><label class="form-label">Giro / categoría</label><input id="restCuisine" class="form-control" placeholder="Pizza, abarrotes, farmacia..."></div>
+          <div class="col-12">
+            <div class="alert alert-light border small mb-0">
+              <strong>¿Qué giro elijo?</strong>
+              <ul class="mb-1 mt-1 ps-3">
+                <li><strong>Restaurante:</strong> vendes comida preparada.</li>
+                <li><strong>Tienda, abarrotes, farmacia o ferretería:</strong> vendes productos.</li>
+                <li><strong>Servicios:</strong> barbería, salón de belleza, consultorio; trabajas con citas y profesionales.</li>
+                <li><strong>Renta:</strong> salones, inflables, sillas, manteles, sonido o música; manejas fechas y existencias.</li>
+                <li><strong>Otro:</strong> vendes y también rentas, o tu giro no encaja en los anteriores.</li>
+              </ul>
+              <span class="text-muted">Si eliges Servicios o Renta, el panel se adapta para agenda o artículos en renta.</span>
+            </div>
+          </div>
+          <div class="col-md-6"><label class="form-label">Giro / categoría</label><input id="restCuisine" class="form-control" placeholder="Barbería, salón, eventos, pizza, abarrotes..."></div>
           <div class="col-md-4">
             <label class="form-label">Código postal</label>
             <input id="postalCode" class="form-control" maxlength="5" inputmode="numeric" placeholder="Ej. 38240" required>

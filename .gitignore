@@ -58,3 +58,8 @@ htmlcov/
 Thumbs.db
 .vscode/
 .idea/
+
+# Presentaciones y video: solo locales, no se suben al repositorio
+docs/video/
+docs/presentacion/TuPedidoJR_Patrocinio_Comercio_Local_2026.*
+docs/presentacion/build_sponsor_deck.py

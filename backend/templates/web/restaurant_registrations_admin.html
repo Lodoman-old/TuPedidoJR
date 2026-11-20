@@ -10,11 +10,12 @@
 
 <div class="card p-3 mt-3">
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-    <h6 class="m-0"><i class="bi bi-patch-check"></i> Afiliaciones anuales</h6>
+    <h6 class="m-0"><i class="bi bi-patch-check"></i> Afiliaciones</h6>
     <button class="btn btn-sm btn-outline-secondary" onclick="loadAffiliations()"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
   </div>
   <p class="small text-muted mb-2 mt-1">
     Solo los negocios con la afiliación vigente aparecen en los listados y en su página pública.
+    Elige el plan (1, 3, 6 o 12 meses) y la forma de pago antes de registrar. Aplica también a solicitudes viejas sin plan definido.
     El recordatorio se envía automáticamente 10 días antes del vencimiento.
   </p>
   <div id="affiliationsBody" class="table-responsive">
@@ -269,18 +270,28 @@
     }
   }
 
+  let affiliationPlansAdmin = [];
+
   async function loadAffiliations() {
     const body = document.getElementById('affiliationsBody');
     if (!body) return;
     try {
+      if (!affiliationPlansAdmin.length) {
+        affiliationPlansAdmin = await apiRequest('GET', '/admin/affiliation-plans');
+      }
       const rows = await apiRequest('GET', '/admin/affiliations');
+      const planByMonths = Object.fromEntries(affiliationPlansAdmin.map(p => [String(p.months), p]));
       body.innerHTML = `<table class="table table-sm align-middle mb-0">
-        <thead><tr><th>Negocio</th><th>Estado</th><th>Pagado hasta</th><th>Días</th><th class="text-end">Acciones</th></tr></thead>
+        <thead><tr><th>Negocio</th><th>Estado</th><th>Plan</th><th>Monto</th><th>Pagado hasta</th><th>Días</th><th class="text-end">Acciones</th></tr></thead>
         <tbody>${rows.map(r => {
           const active = Boolean(r.affiliated);
-          const badge = active
+          const cashRequested = Boolean(r.payment_requested_at) && r.payment_method === 'cash';
+          let badge = active
             ? '<span class="badge bg-success">Vigente</span>'
             : '<span class="badge bg-danger">Sin pago</span>';
+          if (cashRequested) {
+            badge += '<br><span class="badge bg-warning text-dark mt-1">Solicitó efectivo</span>';
+          }
           let until = '—';
           if (r.affiliation_expires_at) {
             const d = new Date(r.affiliation_expires_at + 'T12:00:00');
@@ -291,31 +302,57 @@
             const cls = r.days_left < 0 ? 'text-danger fw-bold' : (r.days_left <= 10 ? 'text-warning fw-bold' : 'text-muted');
             days = `<span class="${cls}">${r.days_left} día(s)</span>`;
           }
+          const months = Number(r.plan_months || 12);
+          const options = affiliationPlansAdmin.map(p => (
+            `<option value="${p.months}"${Number(p.months) === months ? ' selected' : ''}>${esc(p.label)} · ${money0(p.price)}</option>`
+          )).join('');
+          const method = r.payment_method === 'cash' ? 'cash' : 'transfer';
           return `<tr>
             <td><strong>${esc(r.name)}</strong><br><small class="text-muted">${esc(r.cuisine || '')}</small></td>
             <td>${badge}</td>
+            <td>
+              <select class="form-select form-select-sm" id="affPlan_${r.id}" onchange="updateAffPlanAmount('${r.id}')" style="min-width:150px">${options}</select>
+            </td>
+            <td class="text-nowrap" id="affAmount_${r.id}">${money0(planByMonths[String(months)]?.price ?? 0)}</td>
             <td>${until}</td>
             <td>${days}</td>
             <td class="text-end text-nowrap">
-              <button class="btn btn-sm btn-success" onclick="markAffiliation('${r.id}', true, this)">Marcar pagado (1 año)</button>
+              <select class="form-select form-select-sm d-inline-block me-1" id="affMethod_${r.id}" style="width:130px">
+                <option value="cash"${method === 'cash' ? ' selected' : ''}>Efectivo</option>
+                <option value="transfer"${method === 'transfer' ? ' selected' : ''}>Transferencia</option>
+              </select>
+              <button class="btn btn-sm btn-success" onclick="markAffiliation('${r.id}', true, this)">Registrar pago</button>
               <button class="btn btn-sm btn-outline-danger" onclick="markAffiliation('${r.id}', false, this)">Quitar</button>
             </td>
           </tr>`;
-        }).join('') || '<tr><td colspan="5" class="text-center text-muted">Sin negocios activos.</td></tr>'}</tbody>
+        }).join('') || '<tr><td colspan="7" class="text-center text-muted">Sin negocios activos.</td></tr>'}</tbody>
       </table>`;
     } catch (e) {
       body.innerHTML = `<div class="alert alert-danger mb-0">${esc(e.message)}</div>`;
     }
   }
 
+  function updateAffPlanAmount(id) {
+    const select = document.getElementById(`affPlan_${id}`);
+    const box = document.getElementById(`affAmount_${id}`);
+    const plan = affiliationPlansAdmin.find(p => String(p.months) === String(select?.value));
+    if (box) box.textContent = money0(plan?.price ?? 0);
+  }
+
   async function markAffiliation(id, paid, btn) {
-    const label = paid ? 'Marcar pagado (1 año)' : 'Quitar afiliación';
+    const label = paid ? 'Registrar pago' : 'Quitar afiliación';
     if (!paid && !confirm('¿Quitar la afiliación? El negocio dejará de aparecer en los listados.')) return;
+    const months = Number(document.getElementById(`affPlan_${id}`)?.value || 12);
+    const method = document.getElementById(`affMethod_${id}`)?.value || 'cash';
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     try {
-      await apiRequest('PATCH', `/admin/affiliations/${id}`, { paid });
-      showToast(paid ? 'Afiliación renovada por un año' : 'Afiliación retirada');
+      const payload = paid ? { paid, months, method } : { paid };
+      await apiRequest('PATCH', `/admin/affiliations/${id}`, payload);
+      const plan = affiliationPlansAdmin.find(p => Number(p.months) === months);
+      showToast(paid
+        ? `Pago registrado: ${plan?.label || months + ' meses'} · ${method === 'cash' ? 'efectivo' : 'transferencia'}`
+        : 'Afiliación retirada');
       await loadAffiliations();
     } catch (e) {
       showToast(e.message, 'danger');

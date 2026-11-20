@@ -234,7 +234,9 @@
       const businessBadge = isRental
         ? '<span class="badge bg-warning text-dark ms-1">Rentas</span>'
         : (isAgenda
-          ? '<span class="badge bg-info text-dark ms-1">Servicios y productos</span>'
+          ? (r.catalog_enabled === false
+            ? '<span class="badge bg-info text-dark ms-1">Servicios</span>'
+            : '<span class="badge bg-info text-dark ms-1">Servicios y productos</span>')
           : (isStore ? '<span class="badge bg-info text-dark ms-1">Tienda</span>' : ''));
       const openBadge = r.is_open_now === false
         ? '<span class="badge bg-secondary">Cerrado</span>'

@@ -15,6 +15,7 @@ from app.models.restaurant import Restaurant
 from app.models.restaurant_user import RestaurantUser
 from app.models.user import User
 from app.schemas.restaurant import RestaurantApprovalRequest, RestaurantRegistrationOut
+from app.services.affiliation_payment_service import affiliation_plans
 from app.services.audit_service import log_action
 from app.services.schedule_service import local_today
 from app.services.email_service import send_email, send_restaurant_rejected, send_restaurant_welcome
@@ -84,12 +85,14 @@ async def pending_restaurant_registrations(
 class AffiliationUpdate(BaseModel):
     paid: bool | None = None
     expires_at: date | None = None
+    months: int | None = Field(default=None, ge=1, le=12)
+    method: str | None = Field(default=None, pattern="^(transfer|cash)$")
 
 
 class BusinessTypeUpdate(BaseModel):
     business_type: str = Field(
         ...,
-        pattern="^(restaurant|store|pharmacy|grocery|hardware|other)$",
+        pattern="^(restaurant|store|pharmacy|grocery|hardware|services|rental|other)$",
     )
 
 
@@ -105,6 +108,12 @@ def _affiliation_row(restaurant: Restaurant, today: date | None = None) -> dict:
         "affiliation_expires_at": expires.isoformat() if expires else None,
         "days_left": days_left,
         "affiliated": bool(expires and expires >= today),
+        "payment_method": restaurant.affiliation_payment_method,
+        "plan_months": restaurant.affiliation_plan_months,
+        "payment_requested_at": (
+            restaurant.affiliation_payment_requested_at.isoformat()
+            if restaurant.affiliation_payment_requested_at else None
+        ),
     }
 
 
@@ -133,6 +142,14 @@ async def update_business_type(
     await db.refresh(restaurant)
     owner = await db.get(User, restaurant.owner_id)
     return _row(restaurant, owner)
+
+
+@router.get("/affiliation-plans")
+async def list_affiliation_plans(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    return await affiliation_plans(db)
 
 
 @router.get("/affiliations")
@@ -165,7 +182,13 @@ async def update_affiliation(
         current = restaurant.affiliation_expires_at
         if current and current >= base:
             base = current
-        restaurant.affiliation_expires_at = base + timedelta(days=365)
+        months = body.months if body.months in (1, 3, 6, 12) else restaurant.affiliation_plan_months or 12
+        days_by_plan = {1: 30, 3: 90, 6: 180, 12: 365}
+        restaurant.affiliation_expires_at = base + timedelta(days=days_by_plan[months])
+        restaurant.affiliation_plan_months = months
+        if body.method == "cash":
+            restaurant.affiliation_payment_method = "cash"
+            restaurant.affiliation_payment_requested_at = datetime.now(timezone.utc)
     elif body.paid is False:
         restaurant.affiliation_expires_at = None
     elif body.expires_at is not None:
@@ -176,7 +199,11 @@ async def update_affiliation(
     restaurant.affiliation_reminder_on = None
     await log_action(
         db, current_user.id, "affiliation.update", "restaurant", restaurant.id,
-        {"expires_at": restaurant.affiliation_expires_at.isoformat() if restaurant.affiliation_expires_at else None},
+        {
+            "expires_at": restaurant.affiliation_expires_at.isoformat() if restaurant.affiliation_expires_at else None,
+            "months": restaurant.affiliation_plan_months,
+            "method": body.method or restaurant.affiliation_payment_method,
+        },
     )
     await db.commit()
     await db.refresh(restaurant)
@@ -210,7 +237,7 @@ async def approve_restaurant(
     restaurant.rejection_reason = None
     restaurant.approved_at = datetime.now(timezone.utc)
     restaurant.approved_by = current_user.id
-    if restaurant.business_type == "rental":
+    if restaurant.business_type in ("services", "rental"):
         restaurant.appointments_enabled = True
         restaurant.catalog_enabled = False
         restaurant.accepts_custom_requests = False

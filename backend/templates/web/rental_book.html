@@ -93,6 +93,15 @@
         <input class="form-check-input" type="checkbox" id="rentalConfirmCheck">
         <label class="form-check-label small" for="rentalConfirmCheck">Confirmo los datos de mi renta.</label>
       </div>
+      <div class="alert alert-light border small mt-3 mb-2">
+        La plataforma solo agenda la renta y no responde por daños o pérdidas del artículo. El contrato es con el negocio.
+        Para rentas de <strong>$2,000 o más</strong> se firma contrato y se pide identificación al entregar.
+        <a href="/politica-no-entrega" target="_blank">Ver política</a>.
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="rentalTermsCheck">
+        <label class="form-check-label small" for="rentalTermsCheck">Acepto los términos del negocio y la política de rentas.</label>
+      </div>
       <div class="text-danger small mt-2 d-none" id="rentalError"></div>
       <button class="btn btn-warning w-100 mt-3" id="rentalConfirmBtn" onclick="confirmRental()">
         <i class="bi bi-box2-heart"></i> Confirmar renta
@@ -317,6 +326,11 @@
     }
     if (!document.getElementById('rentalConfirmCheck').checked) {
       errorBox.textContent = 'Confirma los datos de tu renta.';
+      errorBox.classList.remove('d-none');
+      return;
+    }
+    if (!document.getElementById('rentalTermsCheck').checked) {
+      errorBox.textContent = 'Acepta los términos del negocio y la política de rentas.';
       errorBox.classList.remove('d-none');
       return;
     }

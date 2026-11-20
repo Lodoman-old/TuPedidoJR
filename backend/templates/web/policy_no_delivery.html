@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Política de no entrega y rentas | TuPedidoJR{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="/web/inicio" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
+  <h4 class="mb-0 ms-1">Política de no entrega y rentas</h4>
+</div>
+
+<div class="alert alert-light border small">
+  Esta política aplica a pedidos de comida, tiendas, envíos, citas y rentas. Busca que el cliente reciba lo que pagó y que cada responsable asuma su parte.
+</div>
+
+<h5>1. Principio general</h5>
+<p>Solo se paga lo que se entregó. La plataforma revisa la evidencia y decide. Si no hubo entrega, el cliente recibe reembolso o saldo a favor según el caso.</p>
+
+<h5>2. Pedidos de comida y tiendas</h5>
+<table class="table table-sm table-bordered align-middle">
+  <thead><tr><th>Caso</th><th>Cliente</th><th>Negocio</th><th>Repartidor</th></tr></thead>
+  <tbody>
+    <tr><td>Falla del repartidor o de la plataforma</td><td>Reembolso total, incluida cuota y propina</td><td>Cobra completo</td><td>No paga; aplica seguro</td></tr>
+    <tr><td>El negocio no preparó, cerró o mandó otro producto</td><td>Reembolso total</td><td>No cobra</td><td>Cobra su viaje</td></tr>
+    <tr><td>El cliente no estaba, dio mal la dirección o rechazó</td><td>Sin reembolso; en efectivo queda saldo</td><td>Cobra si ya preparó</td><td>Cobra su viaje</td></tr>
+    <tr><td>Faltó un producto</td><td>Reembolso del producto y parte de la cuota</td><td>Cobra lo entregado</td><td>Cobra su viaje</td></tr>
+  </tbody>
+</table>
+
+<h5>3. Seguro del repartidor</h5>
+<ul>
+  <li>Cobertura de hasta <strong>$500 por entrega</strong>.</li>
+  <li>Hasta $500 el repartidor no paga; responde el seguro.</li>
+  <li>El exceso sobre $500 se divide <strong>50% plataforma y 50% negocio</strong>.</li>
+  <li>No aplica si hay dolo o negligencia grave comprobada.</li>
+</ul>
+
+<h5>4. Plazos para reclamar</h5>
+<ul>
+  <li>Comida: <strong>2 horas</strong>.</li>
+  <li>Productos no perecederos: <strong>24 horas</strong>.</li>
+  <li>Envíos: <strong>48 horas</strong>.</li>
+  <li>Rentas: <strong>24 horas</strong> solo para doble reserva, cancelación del negocio o cobro incorrecto.</li>
+</ul>
+
+<h5>5. Envíos</h5>
+<p>La cobertura máxima es de <strong>$1,500</strong> por envío o el valor declarado, el menor. No hay cobertura para artículos prohibidos, ilegales, peligrosos o no declarados.</p>
+
+<h5>6. Citas y servicios</h5>
+<ul>
+  <li>Si cancela el negocio o el profesional no llega: reembolso total, incluida la cuota.</li>
+  <li>Si el cliente no asiste: se cobran $10 y se acumulan para el bloqueo de 3 no-shows.</li>
+</ul>
+
+<h5>7. Rentas de salones, inflables, sillas, sonido y música</h5>
+<div class="alert alert-warning small">
+  La plataforma solo agenda y cobra su cuota. <strong>No es aseguradora ni responde por daños, pérdidas o incumplimientos del contrato de renta.</strong> Su responsabilidad se limita al monto cobrado en línea.
+</div>
+<ul>
+  <li>El contrato de renta es entre el negocio y el cliente.</li>
+  <li>El negocio puede publicar sus términos; el cliente los acepta al reservar.</li>
+  <li>Para rentas de <strong>$2,000 o más</strong> se firma contrato con el negocio y se pide identificación al entregar.</li>
+  <li>Anticipo recomendado: <strong>20%</strong> al reservar.</li>
+  <li>El depósito en garantía, si existe, se paga <strong>directo al negocio</strong>.</li>
+  <li>Daños, retrasos, calidad o incumplimiento: se resuelven directamente con el negocio.</li>
+  <li>Si el negocio cancela o no entrega: se devuelve todo lo cobrado en línea, incluida la cuota de $10.</li>
+</ul>
+<table class="table table-sm table-bordered">
+  <thead><tr><th>Cancelación del cliente</th><th>Reembolso</th></tr></thead>
+  <tbody>
+    <tr><td>72 horas o más antes</td><td>100%</td></tr>
+    <tr><td>Entre 24 y 72 horas</td><td>50%</td></tr>
+    <tr><td>Menos de 24 horas</td><td>Sin reembolso</td></tr>
+  </tbody>
+</table>
+<p class="small text-muted">La cuota de $10 se devuelve solo cuando la cancelación es del negocio.</p>
+
+<h5>8. Cómo se devuelve el dinero</h5>
+<ul>
+  <li><strong>Efectivo:</strong> saldo a favor para el siguiente pedido, no efectivo.</li>
+  <li><strong>Transferencia:</strong> a la misma cuenta en 3 a 5 días hábiles.</li>
+  <li><strong>Pago en línea:</strong> reverso por la pasarela.</li>
+  <li>La cuota de servicio se devuelve si la falla fue de plataforma, negocio o repartidor; no si fue del cliente.</li>
+  <li>La propina se devuelve si el pedido no se entregó.</li>
+</ul>
+
+<h5>9. Restricciones y exclusiones</h5>
+<ul>
+  <li>Sin evidencia (foto, código, GPS, ticket) no hay cobertura.</li>
+  <li>Dirección incorrecta, cliente no localizable o zona insegura: sin reembolso.</li>
+  <li>Comida preparada o consumida por culpa del cliente: sin reembolso.</li>
+  <li>Productos personalizados o perecederos ya preparados: sin reembolso, salvo falla del negocio.</li>
+  <li>Reclamaciones fuera de plazo se revisan solo como cortesía.</li>
+  <li>Reclamaciones falsas o reincidentes pueden bloquear la cuenta.</li>
+</ul>
+
+<h5>10. Cómo reclamar</h5>
+<ol>
+  <li>Desde el pedido, cita o renta, usa <strong>Reportar problema</strong> o contacta a soporte.</li>
+  <li>Adjunta fotos, ticket o comprobante.</li>
+  <li>La plataforma responde en 24 a 48 horas.</li>
+  <li>Si aplica, se ofrece reentrega, saldo o reembolso.</li>
+</ol>
+<p class="small text-muted">Contacto: <a href="mailto:tupedidojr@gmail.com">tupedidojr@gmail.com</a> · WhatsApp 412 134 0765.</p>
+{% endblock %}

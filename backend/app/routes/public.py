@@ -72,6 +72,11 @@ async def _manual_values(db: AsyncSession) -> dict:
     }
 
 
+@router.get("/politica-no-entrega")
+async def public_no_delivery_policy(request: Request):
+    return templates.TemplateResponse(request, "policy_no_delivery.html")
+
+
 @router.get("/manuales")
 async def public_manuals_index(
     request: Request,

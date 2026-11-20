@@ -18,12 +18,15 @@
 <h3>1.1 Afiliación por planes</h3>
 <p>Puedes pagar la afiliación de tu negocio por el periodo que prefieras:</p>
 <table>
-  <tr><th>Plan</th><th>Precio</th></tr>
-  <tr><td>1 mes</td><td>${{ '%.0f'|format(affiliation_plan_1|float) }} MXN</td></tr>
-  <tr><td>3 meses</td><td>${{ '%.0f'|format(affiliation_plan_3|float) }} MXN</td></tr>
-  <tr><td>6 meses</td><td>${{ '%.0f'|format(affiliation_plan_6|float) }} MXN</td></tr>
-  <tr><td>12 meses</td><td>${{ '%.0f'|format(affiliation_fee|float) }} MXN</td></tr>
+  <tr><th>Plan</th><th>Precio</th><th>Material físico</th></tr>
+  <tr><td>1 mes</td><td>${{ '%.0f'|format(affiliation_plan_1|float) }} MXN</td><td>QR digital</td></tr>
+  <tr><td>3 meses</td><td>${{ '%.0f'|format(affiliation_plan_3|float) }} MXN</td><td>QR digital</td></tr>
+  <tr><td>6 meses</td><td>${{ '%.0f'|format(affiliation_plan_6|float) }} MXN</td><td>QR digital</td></tr>
+  <tr><td>12 meses</td><td>${{ '%.0f'|format(affiliation_fee|float) }} MXN</td><td>Flyers impresos + QR en acrílico</td></tr>
 </table>
+<div class="note">
+  Los <strong>flyers publicitarios impresos</strong> y el <strong>QR en acrílico</strong> se incluyen únicamente con el <strong>plan anual</strong>. En los planes de 1, 3 y 6 meses entregamos el QR digital listo para imprimir; el material físico se puede solicitar aparte con costo.
+</div>
 <p class="small text-muted">El plan anual equivale a <strong>${{ '%.2f'|format(affiliation_daily|float) }} al día</strong> y es el de mejor precio por mes. Incluye:</p>
 <ul>
   <li>Menú o catálogo digital con fotos, precios, categorías y opciones.</li>

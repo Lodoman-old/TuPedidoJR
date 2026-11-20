@@ -352,7 +352,10 @@
       || affiliationPlans[affiliationPlans.length - 1];
     const help = el('affiliationPayHelp');
     if (!plan || !help) return;
-    help.innerHTML = `Transfiere <strong>${money(plan.price)}</strong> por el plan de <strong>${esc(plan.label)}</strong> a la cuenta de TuPedidoJR y sube tu comprobante. La plataforma lo valida.`;
+    const physical = plan.physical
+      ? ' Incluye <strong>flyers impresos y QR en acrílico</strong>.'
+      : ' Incluye QR digital. Los flyers impresos y el acrílico solo se incluyen en el plan anual.';
+    help.innerHTML = `Transfiere <strong>${money(plan.price)}</strong> por el plan de <strong>${esc(plan.label)}</strong> a la cuenta de TuPedidoJR y sube tu comprobante. La plataforma lo valida.${physical}`;
   }
 
   async function loadAffiliationPayment() {
@@ -367,7 +370,7 @@
       if (select && affiliationPlans.length) {
         const current = select.value;
         select.innerHTML = affiliationPlans.map((plan) => (
-          `<option value="${plan.months}">${esc(plan.label)} · ${money(plan.price)}</option>`
+          `<option value="${plan.months}">${esc(plan.label)} · ${money(plan.price)}${plan.physical ? ' · material impreso' : ''}</option>`
         )).join('');
         select.value = current || '12';
       }

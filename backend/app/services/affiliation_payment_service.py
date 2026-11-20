@@ -64,6 +64,7 @@ async def affiliation_plans(db) -> list[dict]:
             "label": PLAN_LABELS[months],
             "price": str(price),
             "days": plan_days(months),
+            "physical": months == 12,
         })
     return plans
 

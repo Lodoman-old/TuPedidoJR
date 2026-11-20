@@ -1509,11 +1509,12 @@ class TestRestaurantRegistrationAndTeam:
 
 
 class TestRechargesPage:
-    async def test_recharges_coming_soon_page(self, client):
+    async def test_recharges_page_offers_transfer_request(self, client):
         resp = await client.get("/web/recargas")
         assert resp.status_code == 200
-        assert "Tiempo aire y pago de servicios" in resp.text
-        assert "Próximamente" in resp.text
+        assert "Solicitar recarga" in resp.text
+        assert "Sin comisión" in resp.text
+        assert "Pago de servicios" in resp.text
 
 
 class TestImageOptimization:
@@ -1737,7 +1738,7 @@ class TestSettingsApi:
 
 class TestReports:
     async def test_superuser_summary(
-        self, client, restaurant, customer_token, superuser_token,
+        self, client, restaurant, customer_token, superuser_token, db_session,
     ):
         resto, item = restaurant
         order = await _create_order(client, customer_token, resto, item)
@@ -1748,8 +1749,24 @@ class TestReports:
             headers=_headers(superuser_token),
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["totals"]["orders_total"] == 1
+        pending_data = resp.json()
+        assert pending_data["totals"]["orders_total"] == 1
+        assert pending_data["totals"]["orders_pending"] == 1
+        assert pending_data["totals"]["gross_subtotal"] == "0.00"
+
+        import uuid
+        from app.models.order import Order
+        row = await db_session.get(Order, uuid.UUID(order.json()["id"]))
+        row.status = "delivered"
+        await db_session.commit()
+
+        delivered = await client.get(
+            "/api/v1/reports/summary",
+            headers=_headers(superuser_token),
+        )
+        assert delivered.status_code == 200
+        data = delivered.json()
+        assert data["totals"]["orders_delivered"] == 1
         assert data["totals"]["gross_subtotal"] == "30.00"
         assert data["totals"]["commissions"] == "5.00"
         assert len(data["daily"]) >= 1

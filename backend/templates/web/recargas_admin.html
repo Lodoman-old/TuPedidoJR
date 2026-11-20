@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h4 class="m-0"><i class="bi bi-phone"></i> Recargas</h4>
+    <small class="text-muted">Control manual mientras se integra el proveedor. Aquí confirmas pagos y cierras recargas.</small>
+  </div>
+  <button class="btn btn-sm btn-outline-secondary" onclick="loadRecargas()">
+    <i class="bi bi-arrow-clockwise"></i> Actualizar
+  </button>
+</div>
+
+<div class="alert alert-info small">
+  Las recargas en efectivo ya cobradas por el repartidor quedan como <strong>pendientes de procesar</strong>.
+  Al completarlas, registra la referencia del proveedor. Si fallan, puedes reintentar o reembolsar.
+  El monto cobrado queda como deuda del repartidor y los <strong>$2</strong> como su comisión.
+</div>
+
+<div class="row g-2 mb-2 align-items-center">
+  <div class="col-12 col-md">
+    <input id="recAdminSearch" class="form-control form-control-sm" autocomplete="off"
+           placeholder="Buscar teléfono, compañía o referencia...">
+  </div>
+  <div class="col-12 col-md-auto">
+    <select id="recAdminStatus" class="form-select form-select-sm" onchange="loadRecargas()">
+      <option value="">Todas</option>
+      <option value="requested">Por confirmar pago</option>
+      <option value="pending">Pendientes de procesar</option>
+      <option value="completed">Completadas</option>
+      <option value="failed">Fallidas</option>
+      <option value="refunded">Reembolsadas</option>
+    </select>
+  </div>
+</div>
+
+<div id="recAdminError" class="alert alert-danger d-none"></div>
+<div id="recAdminLoading" class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+<div id="recAdminList"></div>
+
+<div class="modal fade" id="recCompleteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Completar recarga</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2" id="recCompleteSummary"></p>
+        <label class="form-label small mb-1" for="recReference">Referencia del proveedor (opcional)</label>
+        <input id="recReference" class="form-control form-control-sm" maxlength="100" placeholder="Folio o confirmación">
+        <div class="form-text">Si el proveedor no da folio, puedes dejarlo vacío.</div>
+        <div id="recCompleteError" class="text-danger small mt-2 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-sm btn-success" id="recCompleteBtn" onclick="confirmCompleteRecarga()">Marcar completada</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const REC_STATUS = {
+    requested: ['Por confirmar pago', 'warning text-dark'],
+    pending: ['Pendiente de procesar', 'info text-dark'],
+    completed: ['Completada', 'success'],
+    failed: ['Fallida', 'danger'],
+    refunded: ['Reembolsada', 'secondary'],
+  };
+  let recRows = [];
+  let recToComplete = null;
+
+  function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  const money = n => '$' + Number(n || 0).toFixed(2);
+
+  async function loadRecargas() {
+    const loading = document.getElementById('recAdminLoading');
+    const box = document.getElementById('recAdminList');
+    const error = document.getElementById('recAdminError');
+    error.classList.add('d-none'); loading.classList.remove('d-none');
+    const params = new URLSearchParams();
+    const status = document.getElementById('recAdminStatus').value;
+    const q = document.getElementById('recAdminSearch').value.trim();
+    if (status) params.set('status_filter', status);
+    if (q) params.set('q', q);
+    try {
+      recRows = await apiRequest('GET', '/admin/recargas?' + params.toString());
+      if (!recRows.length) {
+        box.innerHTML = '<div class="card p-4 text-center text-muted">No hay recargas con ese filtro.</div>';
+        return;
+      }
+      box.innerHTML = `<div class="card p-3"><div class="table-responsive"><table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Fecha</th><th>Cliente / Repartidor</th><th>Pedido</th><th>Compañía</th><th>Teléfono</th><th class="text-end">Monto</th><th class="text-end">Comisión</th><th class="text-end">Total</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${recRows.map(r => {
+          const [label, color] = REC_STATUS[r.status] || [r.status, 'secondary'];
+          const actions = [];
+          if (r.status === 'requested' && r.payment_method === 'transfer') {
+            actions.push(`<button class="btn btn-sm btn-outline-primary" onclick="confirmRecargaPayment('${r.id}')">Confirmar pago</button>`);
+          }
+          if (r.status === 'pending' || (r.status === 'requested' && r.payment_method === 'cash')) {
+            actions.push(`<button class="btn btn-sm btn-success" onclick="openCompleteRecarga('${r.id}')">Completar</button>`);
+          }
+          if (r.status === 'pending' || r.status === 'requested') {
+            actions.push(`<button class="btn btn-sm btn-outline-danger" onclick="failRecarga('${r.id}')">Falló</button>`);
+          }
+          if (r.status === 'failed') {
+            actions.push(`<button class="btn btn-sm btn-outline-primary" onclick="retryRecarga('${r.id}')">Reintentar</button>`);
+            actions.push(`<button class="btn btn-sm btn-outline-danger" onclick="refundRecarga('${r.id}')">Reembolsar</button>`);
+          }
+          return `<tr>
+            <td class="small">${new Date(r.created_at).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+            <td class="small">${esc(r.customer_name || 'Cliente')}<br><span class="text-muted">${esc(r.courier_name || 'Sin repartidor')}</span></td>
+            <td class="small">${r.order_code ? '#' + esc(r.order_code) : 'Suelta'}</td>
+            <td>${esc(r.company)}</td>
+            <td>${esc(r.phone)}</td>
+            <td class="text-end">${money(r.amount)}</td>
+            <td class="text-end text-success">${money(r.fee)}</td>
+            <td class="text-end fw-bold">${money(r.total)}</td>
+            <td><span class="badge bg-${color}">${label}</span>
+              ${r.provider_reference ? `<br><small class="text-muted">Ref: ${esc(r.provider_reference)}</small>` : ''}
+              ${r.error_message ? `<br><small class="text-danger">${esc(r.error_message)}</small>` : ''}
+            </td>
+            <td class="text-end text-nowrap">${actions.join(' ') || '—'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div></div>`;
+    } catch (e) {
+      error.textContent = e.message; error.classList.remove('d-none');
+    } finally { loading.classList.add('d-none'); }
+  }
+
+  function openCompleteRecarga(id) {
+    recToComplete = id;
+    const row = recRows.find(r => r.id === id);
+    document.getElementById('recCompleteSummary').textContent = row
+      ? `${row.company} · ${row.phone} · ${money(row.total)}`
+      : '';
+    document.getElementById('recReference').value = '';
+    document.getElementById('recCompleteError').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('recCompleteModal')).show();
+  }
+
+  async function confirmCompleteRecarga() {
+    if (!recToComplete) return;
+    const btn = document.getElementById('recCompleteBtn');
+    const error = document.getElementById('recCompleteError');
+    btn.disabled = true;
+    try {
+      await apiRequest('POST', `/admin/recargas/${recToComplete}/complete`, {
+        provider_reference: document.getElementById('recReference').value.trim() || null,
+      });
+      bootstrap.Modal.getInstance(document.getElementById('recCompleteModal')).hide();
+      showToast('Recarga completada');
+      recToComplete = null;
+      loadRecargas();
+    } catch (e) {
+      error.textContent = e.message; error.classList.remove('d-none');
+      btn.disabled = false;
+    }
+  }
+
+  async function confirmRecargaPayment(id) {
+    if (!confirm('¿Confirmas que la transferencia ya llegó?')) return;
+    try {
+      await apiRequest('POST', `/admin/recargas/${id}/confirm-payment`, {});
+      showToast('Pago confirmado. La recarga queda pendiente de procesar.');
+      loadRecargas();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
+  async function failRecarga(id) {
+    if (!confirm('¿Marcar la recarga como fallida? Podrás reintentarla o reembolsarla después.')) return;
+    try {
+      await apiRequest('POST', `/admin/recargas/${id}/fail`, { refund: false });
+      showToast('Recarga marcada como fallida');
+      loadRecargas();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
+  async function retryRecarga(id) {
+    try {
+      await apiRequest('POST', `/admin/recargas/${id}/retry`, {});
+      showToast('Recarga enviada de nuevo a procesar');
+      loadRecargas();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
+  async function refundRecarga(id) {
+    if (!confirm('¿Confirmas que ya devolviste el efectivo al cliente?')) return;
+    try {
+      await apiRequest('POST', `/admin/recargas/${id}/fail`, { refund: true });
+      showToast('Recarga reembolsada');
+      loadRecargas();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
+  document.getElementById('recAdminSearch').addEventListener('input', () => {
+    clearTimeout(window.__recTimer);
+    window.__recTimer = setTimeout(loadRecargas, 350);
+  });
+  loadRecargas();
+</script>
+{% endblock %}

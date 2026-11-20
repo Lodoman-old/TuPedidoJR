@@ -36,6 +36,7 @@ from app.models.appointment import Appointment
 from app.models.appointment_debt import AppointmentDebt
 from app.models.business_ledger import BusinessLedger
 from app.models.rental_booking import RentalBooking, RentalBookingItem
+from app.models.recarga_order import RecargaOrder
 
 __all__ = [
     "User",
@@ -80,4 +81,5 @@ __all__ = [
     "BusinessLedger",
     "RentalBooking",
     "RentalBookingItem",
+    "RecargaOrder",
 ]

@@ -57,6 +57,13 @@
           </div>
           <div class="col-12">
             <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="bizDeliveryEnabled">
+              <label class="form-check-label" for="bizDeliveryEnabled">También quiero reparto con motomandado</label>
+            </div>
+            <div class="form-text">Actívalo para aparecer en la cobertura de repartidores y recibir entregas a domicilio. Si lo desactivas, puedes seguir creando envíos cuando lo necesites.</div>
+          </div>
+          <div class="col-12">
+            <div class="form-check">
               <input class="form-check-input" type="checkbox" id="bizPickup">
               <label class="form-check-label" for="bizPickup">Permitir que el cliente recoja en el restaurante</label>
             </div>
@@ -273,6 +280,7 @@
     el('bizDescription').value = r.description || '';
     el('bizPhone').value = r.phone || '';
     el('bizDeliveryMode').value = r.delivery_mode === 'own' ? 'own' : 'platform';
+    el('bizDeliveryEnabled').checked = r.delivery_enabled !== false;
     el('bizPickup').checked = Boolean(r.pickup_enabled);
     el('bizReservationsEnabled').checked = r.reservations_enabled !== false;
     el('bizReservationDeposit').value = Number(r.reservation_deposit_percent ?? 20);
@@ -503,6 +511,7 @@
       is_open: el('bizIsOpen').checked,
       public_page_enabled: el('bizPublicPage').checked,
       delivery_mode: el('bizDeliveryMode').value,
+      delivery_enabled: el('bizDeliveryEnabled').checked,
       pickup_enabled: el('bizPickup').checked,
       reservations_enabled: el('bizReservationsEnabled').checked,
       reservation_deposit_percent: Number(el('bizReservationDeposit').value || 20),

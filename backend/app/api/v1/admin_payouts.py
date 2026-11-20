@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,6 +41,7 @@ router = APIRouter()
 
 class PayoutPaidBody(BaseModel):
     confirmation_code: str | None = None
+    method: str | None = Field(default=None, pattern="^(cash|transfer)$")
 
 
 def _money(value) -> str:
@@ -686,6 +687,8 @@ async def mark_payout_paid(
     payout.status = "paid"
     payout.paid_at = now
     payout.confirmed_at = now
+    if body and body.method:
+        payout.settlement_method = body.method
     await log_action(
         db, current_user.id, f"payout.{kind}.paid", f"{kind}_payout", payout.id,
         {
@@ -727,6 +730,7 @@ async def payout_history(
             "net_amount": _money(payout.net_payout),
             "direction": "to_restaurant",
             "payout_method": "transfer",
+            "settlement_method": payout.settlement_method,
             "confirmation_code": None,
             "status": payout.status,
             "period_start": payout.period_start.isoformat(),
@@ -746,6 +750,7 @@ async def payout_history(
             "advances": _money(payout.total_advances),
             "direction": payout.direction,
             "payout_method": payout.payout_method,
+            "settlement_method": payout.settlement_method,
             "confirmation_code": payout.confirmation_code,
             "status": payout.status,
             "period_start": payout.period_start.isoformat(),

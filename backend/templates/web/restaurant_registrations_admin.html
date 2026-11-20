@@ -6,7 +6,20 @@
 </div>
 <div id="regAdminError" class="alert alert-danger d-none"></div>
 <div id="regAdminLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
-<div id="regAdminContent" class="d-none"></div>
+<div id="regAdminContent" class="d-none">
+  <div class="card p-3">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+      <ul class="nav nav-pills gap-1" id="regTabs"></ul>
+      <input id="regSearch" class="form-control form-control-sm" autocomplete="off"
+             style="max-width:300px" placeholder="Buscar negocio, dueño, correo o teléfono...">
+    </div>
+    <div class="table-responsive"><table class="table table-sm align-middle">
+      <thead><tr><th>Negocio</th><th>Responsable</th><th>Contacto</th><th>Estado</th><th>Fecha</th><th></th></tr></thead>
+      <tbody id="regTableBody"></tbody>
+    </table></div>
+    <div id="regMore" class="text-center mt-2"></div>
+  </div>
+</div>
 
 <div class="card p-3 mt-3">
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -24,20 +37,12 @@
              placeholder="Buscar negocio, giro o correo...">
     </div>
     <div class="col-7 col-md-auto">
-      <select id="affStatus" class="form-select form-select-sm">
-        <option value="">Todos</option>
-        <option value="active">Vigentes</option>
-        <option value="unpaid">Sin pago</option>
-        <option value="cash">Solicitó efectivo</option>
-        <option value="expiring">Vencen en 10 días</option>
-      </select>
-    </div>
-    <div class="col-5 col-md-auto">
       <button class="btn btn-sm btn-outline-secondary w-100" onclick="clearAffiliationFilters()">
         <i class="bi bi-x-circle"></i> Limpiar
       </button>
     </div>
   </div>
+  <ul class="nav nav-pills gap-1 mb-2" id="affTabs"></ul>
   <div id="affiliationsBody" class="table-responsive">
     <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>
   </div>
@@ -145,53 +150,107 @@
     return `<span class="badge bg-light text-dark border">${TYPE_LABELS[type] || 'Negocio'}</span>`;
   }
 
+  let registrationRows = [];
+  let registrationTab = 'pending';
+  let registrationSearch = '';
+  let registrationVisible = 20;
+  const REG_PAGE_SIZE = 20;
+
+  function setRegistrationTab(tab) {
+    registrationTab = tab;
+    registrationVisible = REG_PAGE_SIZE;
+    renderRegistrations();
+  }
+
+  function registrationCounts() {
+    return {
+      pending: registrationRows.filter(r => r.status === 'pending').length,
+      active: registrationRows.filter(r => r.status === 'active').length,
+      rejected: registrationRows.filter(r => r.status === 'rejected').length,
+      all: registrationRows.length,
+    };
+  }
+
+  function filteredRegistrations() {
+    const term = registrationSearch.trim().toLowerCase();
+    return registrationRows.filter(r => {
+      if (registrationTab !== 'all' && r.status !== registrationTab) return false;
+      if (!term) return true;
+      return [r.name, r.owner_name, r.owner_email, r.phone, r.cuisine, r.address]
+        .join(' ').toLowerCase().includes(term);
+    });
+  }
+
+  function renderRegistrations() {
+    const counts = registrationCounts();
+    const tabs = [
+      ['pending', 'Pendientes', 'warning text-dark'],
+      ['active', 'Activos', 'success'],
+      ['rejected', 'Rechazados', 'secondary'],
+      ['all', 'Todos', 'secondary'],
+    ];
+    document.getElementById('regTabs').innerHTML = tabs.map(([value, label, color]) => `
+      <li class="nav-item">
+        <button type="button" class="nav-link btn-sm ${registrationTab === value ? 'active' : ''}"
+                onclick="setRegistrationTab('${value}')">
+          ${label} <span class="badge bg-${color}">${counts[value]}</span>
+        </button>
+      </li>`).join('');
+
+    const rows = filteredRegistrations();
+    const visible = rows.slice(0, registrationVisible);
+    document.getElementById('regTableBody').innerHTML = visible.map(r => `
+      <tr class="${r.status === 'pending' ? 'table-warning' : ''}">
+        <td><strong>${esc(r.name)}</strong><br>
+          <select class="form-select form-select-sm mt-1" style="max-width:150px"
+                  onchange="changeBusinessType('${r.id}', this.value)">
+            ${Object.entries(TYPE_LABELS).map(([value, label]) =>
+              `<option value="${value}" ${normalizedType(r.business_type) === value ? 'selected' : ''}>${label}</option>`
+            ).join('')}
+          </select>
+          <small class="text-muted">${esc(r.cuisine || '')}</small><br><small>${esc(r.address)}</small></td>
+        <td>${esc(r.owner_name)}</td>
+        <td><small>${esc(r.owner_email)}${emailSuggestion(r.owner_email) ? `<br><span class="text-danger">¿Quisiste decir ${esc(emailSuggestion(r.owner_email))}?</span>` : ''}<br>${esc(r.phone || '')}</small></td>
+        <td>${badge(r.status)}${r.rejection_reason ? `<br><small class="text-danger">${esc(r.rejection_reason)}</small>` : ''}</td>
+        <td class="small">${r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
+        <td class="text-nowrap">
+          ${r.status === 'pending' ? `
+            <button class="btn btn-sm btn-success" onclick="askApprove('${r.id}')">Aprobar</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="askReject('${r.id}')">Rechazar</button>`
+          : r.status === 'active' ? `
+            <button class="btn btn-sm btn-outline-secondary" onclick="askResend('${r.id}')">Reenviar correo</button>` : ''}
+        </td>
+      </tr>`).join('') || '<tr><td colspan="6" class="text-center text-muted">No hay solicitudes en esta pestaña.</td></tr>';
+
+    document.getElementById('regMore').innerHTML = rows.length > registrationVisible
+      ? `<button class="btn btn-sm btn-outline-primary" onclick="registrationVisible += ${REG_PAGE_SIZE}; renderRegistrations()">
+           <i class="bi bi-chevron-down"></i> Mostrar más (${rows.length - registrationVisible} restantes)
+         </button>`
+      : '';
+  }
+
   async function loadRegistrations() {
     const loading = document.getElementById('regAdminLoading');
     const content = document.getElementById('regAdminContent');
     const error = document.getElementById('regAdminError');
     error.classList.add('d-none'); loading.classList.remove('d-none');
     try {
-      const rows = await apiRequest('GET', '/admin/restaurant-registrations');
+      registrationRows = await apiRequest('GET', '/admin/restaurant-registrations');
       registrationsById = {};
-      rows.forEach(r => { registrationsById[r.id] = r; });
-      const pending = rows.filter(r => r.status === 'pending');
-      content.innerHTML = `
-        <div class="card p-3">
-          <h6 class="d-flex align-items-center gap-2">
-            Pendientes
-            <span class="badge rounded-pill ${pending.length ? 'bg-warning text-dark' : 'bg-secondary'}">${pending.length}</span>
-          </h6>
-          ${pending.length ? '<p class="small text-muted mb-2">Aprueba o rechaza las solicitudes. Al aprobar se envía el correo de bienvenida.</p>' : ''}
-          <div class="table-responsive"><table class="table table-sm align-middle">
-            <thead><tr><th>Negocio</th><th>Responsable</th><th>Contacto</th><th>Estado</th><th>Fecha</th><th></th></tr></thead>
-            <tbody>${rows.map(r => `<tr class="${r.status === 'pending' ? 'table-warning' : ''}">
-              <td><strong>${esc(r.name)}</strong><br>
-                <select class="form-select form-select-sm mt-1" style="max-width:150px"
-                        onchange="changeBusinessType('${r.id}', this.value)">
-                  ${Object.entries(TYPE_LABELS).map(([value, label]) =>
-                    `<option value="${value}" ${normalizedType(r.business_type) === value ? 'selected' : ''}>${label}</option>`
-                  ).join('')}
-                </select>
-                <small class="text-muted">${esc(r.cuisine || '')}</small><br><small>${esc(r.address)}</small></td>
-              <td>${esc(r.owner_name)}</td>
-              <td><small>${esc(r.owner_email)}${emailSuggestion(r.owner_email) ? `<br><span class="text-danger">¿Quisiste decir ${esc(emailSuggestion(r.owner_email))}?</span>` : ''}<br>${esc(r.phone || '')}</small></td>
-              <td>${badge(r.status)}${r.rejection_reason ? `<br><small class="text-danger">${esc(r.rejection_reason)}</small>` : ''}</td>
-              <td class="small">${r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
-              <td class="text-nowrap">
-                ${r.status === 'pending' ? `
-                  <button class="btn btn-sm btn-success" onclick="askApprove('${r.id}')">Aprobar</button>
-                  <button class="btn btn-sm btn-outline-danger" onclick="askReject('${r.id}')">Rechazar</button>`
-                : r.status === 'active' ? `
-                  <button class="btn btn-sm btn-outline-secondary" onclick="askResend('${r.id}')">Reenviar correo</button>` : ''}
-              </td>
-            </tr>`).join('') || '<tr><td colspan="6" class="text-center text-muted">Sin solicitudes.</td></tr>'}</tbody>
-          </table></div>
-        </div>`;
+      registrationRows.forEach(r => { registrationsById[r.id] = r; });
+      registrationVisible = REG_PAGE_SIZE;
+      renderRegistrations();
       content.classList.remove('d-none');
     } catch (ex) {
       error.textContent = ex.message; error.classList.remove('d-none');
     } finally { loading.classList.add('d-none'); }
   }
+
+  document.getElementById('regSearch').addEventListener('input', (e) => {
+    registrationSearch = e.target.value;
+    registrationVisible = REG_PAGE_SIZE;
+    renderRegistrations();
+  });
 
   async function changeBusinessType(id, value) {
     if (!confirm('¿Cambiar el tipo de negocio? Solo el administrador puede hacerlo.')) {
@@ -313,27 +372,61 @@
   let affiliationPlansAdmin = [];
   let affiliationRows = [];
   let affiliationVisible = 15;
+  let affStatusFilter = '';
   const AFF_PAGE_SIZE = 15;
 
-  function clearAffiliationFilters() {
-    document.getElementById('affSearch').value = '';
-    document.getElementById('affStatus').value = '';
+  function setAffStatus(value) {
+    affStatusFilter = value;
     affiliationVisible = AFF_PAGE_SIZE;
     renderAffiliations();
   }
 
+  function clearAffiliationFilters() {
+    document.getElementById('affSearch').value = '';
+    affStatusFilter = '';
+    affiliationVisible = AFF_PAGE_SIZE;
+    renderAffiliations();
+  }
+
+  function affiliationCounts() {
+    return {
+      all: affiliationRows.length,
+      active: affiliationRows.filter(r => r.affiliated).length,
+      unpaid: affiliationRows.filter(r => !r.affiliated).length,
+      cash: affiliationRows.filter(r => r.payment_requested_at && r.payment_method === 'cash').length,
+      expiring: affiliationRows.filter(r => r.days_left !== null && r.days_left !== undefined && r.days_left >= 0 && r.days_left <= 10).length,
+    };
+  }
+
+  function renderAffTabs() {
+    const counts = affiliationCounts();
+    const tabs = [
+      ['', 'Todos', 'secondary'],
+      ['active', 'Vigentes', 'success'],
+      ['unpaid', 'Sin pago', 'danger'],
+      ['cash', 'Solicitó efectivo', 'warning text-dark'],
+      ['expiring', 'Vencen 10 días', 'secondary'],
+    ];
+    document.getElementById('affTabs').innerHTML = tabs.map(([value, label, color]) => `
+      <li class="nav-item">
+        <button type="button" class="nav-link btn-sm ${affStatusFilter === value ? 'active' : ''}"
+                onclick="setAffStatus('${value}')">
+          ${label} <span class="badge bg-${color}">${counts[value]}</span>
+        </button>
+      </li>`).join('');
+  }
+
   function filteredAffiliations() {
     const term = document.getElementById('affSearch').value.trim().toLowerCase();
-    const status = document.getElementById('affStatus').value;
     return affiliationRows.filter(r => {
       if (term) {
         const haystack = [r.name, r.cuisine, r.email].join(' ').toLowerCase();
         if (!haystack.includes(term)) return false;
       }
-      if (status === 'active' && !r.affiliated) return false;
-      if (status === 'unpaid' && r.affiliated) return false;
-      if (status === 'cash' && !(r.payment_requested_at && r.payment_method === 'cash')) return false;
-      if (status === 'expiring') {
+      if (affStatusFilter === 'active' && !r.affiliated) return false;
+      if (affStatusFilter === 'unpaid' && r.affiliated) return false;
+      if (affStatusFilter === 'cash' && !(r.payment_requested_at && r.payment_method === 'cash')) return false;
+      if (affStatusFilter === 'expiring') {
         if (r.days_left === null || r.days_left === undefined) return false;
         if (r.days_left < 0 || r.days_left > 10) return false;
       }
@@ -342,6 +435,7 @@
   }
 
   function renderAffiliations() {
+    renderAffTabs();
     const body = document.getElementById('affiliationsBody');
     const more = document.getElementById('affiliationsMore');
     const rows = filteredAffiliations();
@@ -414,10 +508,6 @@
   }
 
   document.getElementById('affSearch').addEventListener('input', () => {
-    affiliationVisible = AFF_PAGE_SIZE;
-    renderAffiliations();
-  });
-  document.getElementById('affStatus').addEventListener('change', () => {
     affiliationVisible = AFF_PAGE_SIZE;
     renderAffiliations();
   });

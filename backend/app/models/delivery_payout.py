@@ -17,6 +17,7 @@ class DeliveryPayout(TimestampMixin, Base):
     net_amount = Column(DECIMAL(10, 2), default=0, nullable=False)
     direction = Column(String(15), default="to_courier", nullable=False)
     payout_method = Column(String(10), nullable=False)
+    settlement_method = Column(String(10), nullable=True)
     confirmation_code = Column(String(6), nullable=False)
     status = Column(String(15), default="pending", nullable=False)
     paid_at = Column(DateTime(timezone=True), nullable=True)

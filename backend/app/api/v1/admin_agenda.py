@@ -35,20 +35,24 @@ async def agenda_balances(
             Restaurant.name,
             BusinessLedger.kind,
             func.coalesce(func.sum(BusinessLedger.amount), 0),
+            func.count(BusinessLedger.id),
         )
         .join(BusinessLedger, BusinessLedger.restaurant_id == Restaurant.id)
         .where(BusinessLedger.status == "pending")
         .group_by(Restaurant.id, Restaurant.name, BusinessLedger.kind)
     )
     balances: dict[str, dict] = {}
-    for restaurant_id, name, kind, total in rows.all():
+    for restaurant_id, name, kind, total, count in rows.all():
         item = balances.setdefault(str(restaurant_id), {
             "restaurant_id": str(restaurant_id),
             "name": name,
             "credit": "0",
             "debit": "0",
+            "credit_count": 0,
+            "debit_count": 0,
         })
         item[kind] = str(total)
+        item[f"{kind}_count"] = int(count)
     for item in balances.values():
         item["net"] = str(Decimal(item["credit"]) - Decimal(item["debit"]))
         detail = await business_balance(db, item["restaurant_id"])

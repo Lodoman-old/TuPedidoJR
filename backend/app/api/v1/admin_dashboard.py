@@ -62,22 +62,29 @@ async def delivery_radius(
 
     rows = await db.execute(
         text("""
-            SELECT id, name, ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng
+            SELECT id, name, business_type, delivery_mode, delivery_enabled,
+                   ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng
             FROM restaurants
             WHERE status = 'active' AND location IS NOT NULL
             ORDER BY name
         """)
     )
-    centers = [
-        {
+    centers = []
+    excluded = []
+    for row in rows.mappings().all():
+        item = {
             "id": str(row["id"]),
             "name": row["name"],
+            "business_type": row["business_type"],
+            "delivery_mode": row["delivery_mode"],
             "lat": float(row["lat"]),
             "lng": float(row["lng"]),
         }
-        for row in rows.mappings().all()
-    ]
-    return {"radius_m": radius_m, "centers": centers}
+        if row["delivery_enabled"] and row["delivery_mode"] == "platform":
+            centers.append(item)
+        else:
+            excluded.append(item)
+    return {"radius_m": radius_m, "centers": centers, "excluded_centers": excluded}
 
 
 @router.get("/couriers/locations")

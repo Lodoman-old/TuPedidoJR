@@ -35,6 +35,18 @@
 <div class="card p-2">
   <div id="couriersMap" style="height:calc(100vh - 250px);min-height:540px;border-radius:10px;"></div>
 </div>
+<div class="card p-2 mt-2" id="noDeliveryCard">
+  <button class="btn btn-sm btn-link text-decoration-none text-start p-0" type="button"
+          data-bs-toggle="collapse" data-bs-target="#noDeliveryList" aria-expanded="false">
+    <i class="bi bi-shop-window"></i> Negocios sin reparto
+    <span class="badge bg-secondary" id="noDeliveryCount">0</span>
+    <i class="bi bi-chevron-down ms-1"></i>
+  </button>
+  <div class="collapse mt-2" id="noDeliveryList">
+    <p class="small text-muted mb-2">No aparecen en la cobertura porque no usan reparto. Pueden crear un envío cuando lo necesiten.</p>
+    <div class="d-flex flex-wrap gap-2" id="noDeliveryNames"></div>
+  </div>
+</div>
 
 <div class="modal fade" id="courierModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -163,7 +175,7 @@
   function populateCoverageFilter() {
     const select = document.getElementById('coverageFilter');
     if (!select) return;
-    const options = ['<option value="all">Todos los restaurantes</option>']
+    const options = ['<option value="all">Todos los negocios</option>']
       .concat(coverageData.centers.map(c => `<option value="${c.id}">${esc(c.name)}</option>`));
     select.innerHTML = options.join('');
     select.value = coverageData.centers.some(c => c.id === coverageFilter) ? coverageFilter : 'all';
@@ -200,6 +212,17 @@
     }
   }
 
+  function renderExcludedBusinesses() {
+    const list = coverageData.excluded_centers || [];
+    const card = document.getElementById('noDeliveryCard');
+    const count = document.getElementById('noDeliveryCount');
+    const names = document.getElementById('noDeliveryNames');
+    if (!card || !count || !names) return;
+    count.textContent = list.length;
+    card.classList.toggle('d-none', !list.length);
+    names.innerHTML = list.map(b => `<span class="badge bg-light text-dark border">${esc(b.name)}</span>`).join('');
+  }
+
   async function loadCoverage() {
     try {
       const info = await apiRequest('GET', '/admin/delivery-radius');
@@ -208,6 +231,7 @@
       if (note) note.textContent = `Cobertura de tarifa base: ${(info.radius_m / 1000).toFixed(1)} km`;
       populateCoverageFilter();
       renderCoverage();
+      renderExcludedBusinesses();
     } catch (e) { /* radio no disponible */ }
   }
 

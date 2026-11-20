@@ -45,36 +45,54 @@
 {% endblock %}
 {% block content %}
 <div class="recharge-hero p-4 mb-3">
-  <span class="badge bg-warning text-dark mb-2">Próximamente</span>
-  <h4 class="mb-1"><i class="bi bi-phone"></i> Tiempo aire y pago de servicios</h4>
+  <span class="badge bg-warning text-dark mb-2">Solicitud por transferencia</span>
+  <h4 class="mb-1"><i class="bi bi-phone"></i> Tiempo aire</h4>
   <p class="mb-0 opacity-75">
-    Estamos integrando el proveedor para que puedas recargar saldo y pagar servicios
-    desde TuPedidoJR, sin salir de la app.
+    Pide tu recarga desde el portal y págala por transferencia. El administrador confirma el pago
+    y procesa la recarga. Sin comisión adicional.
   </p>
 </div>
 
 <div class="row g-3">
-  <div class="col-md-6">
+  <div class="col-md-7">
     <div class="card p-3 recharge-card">
       <div class="d-flex gap-3 align-items-start mb-2">
         <div class="recharge-icon"><i class="bi bi-phone"></i></div>
         <div>
-          <h5 class="mb-1">Tiempo aire</h5>
-          <p class="small text-muted mb-0">Telcel, AT&amp;T, Movistar, Bait, Unefon y más.</p>
+          <h5 class="mb-1">Solicitar recarga</h5>
+          <p class="small text-muted mb-0">Para tu número o para otra persona. Pago por transferencia.</p>
         </div>
       </div>
-      <ul class="small text-muted mb-3">
-        <li>Recargas desde $20.</li>
-        <li>Confirmación inmediata.</li>
-        <li>Para tu número o para otra persona.</li>
-      </ul>
-      <button class="btn btn-outline-secondary mt-auto" disabled>
-        <i class="bi bi-clock"></i> Próximamente
+      <div class="row g-2">
+        <div class="col-12 col-md-4">
+          <label class="form-label small mb-1" for="recCompany">Compañía</label>
+          <input id="recCompany" class="form-control form-control-sm" list="recCompanies" placeholder="Telcel, AT&T...">
+          <datalist id="recCompanies">
+            <option value="Telcel"></option>
+            <option value="AT&T"></option>
+            <option value="Movistar"></option>
+            <option value="Bait"></option>
+            <option value="Unefon"></option>
+          </datalist>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small mb-1" for="recPhone">Número de celular</label>
+          <input id="recPhone" class="form-control form-control-sm" inputmode="numeric" maxlength="10" placeholder="10 dígitos">
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small mb-1" for="recAmount">Monto</label>
+          <input id="recAmount" type="number" min="1" step="0.01" class="form-control form-control-sm" placeholder="0.00">
+        </div>
+      </div>
+      <div id="recPortalMsg" class="small mt-2"></div>
+      <button class="btn btn-primary mt-3 align-self-start" id="recPortalBtn" onclick="submitPortalRecarga()">
+        <i class="bi bi-send"></i> Solicitar recarga
       </button>
+      <div class="small text-muted mt-2">No se cobra comisión. La recarga se procesa al confirmar tu transferencia.</div>
     </div>
   </div>
 
-  <div class="col-md-6">
+  <div class="col-md-5">
     <div class="card p-3 recharge-card">
       <div class="d-flex gap-3 align-items-start mb-2">
         <div class="recharge-icon"><i class="bi bi-receipt"></i></div>
@@ -86,7 +104,7 @@
       <ul class="small text-muted mb-3">
         <li>Paga tus recibos sin salir de casa.</li>
         <li>Comprobante digital.</li>
-        <li>Más servicios en camino.</li>
+        <li>Disponible cuando el proveedor esté integrado.</li>
       </ul>
       <button class="btn btn-outline-secondary mt-auto" disabled>
         <i class="bi bi-clock"></i> Próximamente
@@ -96,56 +114,57 @@
 </div>
 
 <div class="card p-3 mt-3">
-  <h6 class="mb-3">¿Cómo funcionará?</h6>
+  <h6 class="mb-3">¿Cómo funciona?</h6>
   <div class="row g-3 small">
     <div class="col-12 col-md-4 d-flex gap-2">
       <span class="recharge-step">1</span>
-      <span>Elige el servicio, la compañía y el monto.</span>
+      <span>Elige compañía, número y monto.</span>
     </div>
     <div class="col-12 col-md-4 d-flex gap-2">
       <span class="recharge-step">2</span>
-      <span>Paga con Mercado Pago, transferencia o saldo a favor.</span>
+      <span>El administrador te indica la cuenta para transferir.</span>
     </div>
     <div class="col-12 col-md-4 d-flex gap-2">
       <span class="recharge-step">3</span>
-      <span>Recibe la confirmación y tu comprobante al instante.</span>
+      <span>Al confirmar el pago, se procesa la recarga y recibes el comprobante.</span>
     </div>
   </div>
-</div>
-
-<div class="recharge-preview mt-3">
-  <h6 class="mb-2"><i class="bi bi-eye"></i> Vista previa</h6>
-  <div class="row g-2">
-    <div class="col-12 col-md-4">
-      <label class="form-label small mb-1">Compañía</label>
-      <select class="form-select form-select-sm" disabled>
-        <option>Telcel</option>
-        <option>AT&amp;T</option>
-        <option>Movistar</option>
-        <option>Bait</option>
-      </select>
-    </div>
-    <div class="col-12 col-md-4">
-      <label class="form-label small mb-1">Número de celular</label>
-      <input type="tel" class="form-control form-control-sm" placeholder="10 dígitos" disabled>
-    </div>
-    <div class="col-12 col-md-4">
-      <label class="form-label small mb-1">Monto</label>
-      <select class="form-select form-select-sm" disabled>
-        <option>$20</option>
-        <option>$50</option>
-        <option>$100</option>
-        <option>$200</option>
-      </select>
-    </div>
-  </div>
-  <div class="small text-muted mt-2">Los controles se habilitarán cuando termine la integración.</div>
 </div>
 
 <div class="alert alert-light border small mt-3 mb-0">
   <i class="bi bi-info-circle"></i>
-  Aún no se realizan cobros ni recargas. Estamos en la etapa de integración con el proveedor.
-  ¿Necesitas una recarga urgente?
-  <a href="https://wa.me/524121340765" target="_blank" rel="noopener">Escríbenos por WhatsApp</a>.
+  Las recargas desde el portal son por transferencia y no llevan comisión.
+  Si necesitas pagar en efectivo, pídesela al repartidor al entregar tu pedido; ahí se cobran <strong>$2</strong> de comisión.
+  ¿Dudas? <a href="https://wa.me/524121340765" target="_blank" rel="noopener">Escríbenos por WhatsApp</a>.
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+  async function submitPortalRecarga() {
+    const msg = document.getElementById('recPortalMsg');
+    const btn = document.getElementById('recPortalBtn');
+    const company = document.getElementById('recCompany').value.trim();
+    const phone = document.getElementById('recPhone').value.replace(/\D/g, '');
+    const amount = parseFloat(document.getElementById('recAmount').value || 0);
+    msg.className = 'small mt-2 text-danger';
+    if (!company || phone.length !== 10 || !(amount > 0)) {
+      msg.textContent = 'Completa compañía, teléfono de 10 dígitos y monto.';
+      return;
+    }
+    btn.disabled = true;
+    try {
+      const row = await apiRequest('POST', '/recargas', {
+        company, phone, amount, payment_method: 'transfer',
+      });
+      msg.className = 'small mt-2 text-success';
+      msg.innerHTML = `Solicitud creada por <strong>${money0(row.total)}</strong>. El administrador confirmará tu transferencia y procesará la recarga.`;
+      document.getElementById('recPhone').value = '';
+      document.getElementById('recAmount').value = '';
+    } catch (e) {
+      msg.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+</script>
 {% endblock %}

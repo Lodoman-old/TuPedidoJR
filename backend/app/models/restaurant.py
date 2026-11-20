@@ -15,6 +15,7 @@ class Restaurant(TimestampMixin, Base):
     cuisine = Column(String(100), nullable=True)
     slug = Column(String(120), unique=True, nullable=True, index=True)
     delivery_mode = Column(String(20), default="platform", nullable=False)
+    delivery_enabled = Column(Boolean, default=True, nullable=False)
     business_type = Column(String(30), default="restaurant", nullable=False, index=True)
     catalog_enabled = Column(Boolean, default=True, nullable=False)
     accepts_custom_requests = Column(Boolean, default=True, nullable=False)

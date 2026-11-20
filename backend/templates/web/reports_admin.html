@@ -104,18 +104,21 @@
       <div class="row g-2 mb-3">
         ${summaryCard('Pedidos', t.orders_total)}
         ${summaryCard('Entregados', t.orders_delivered)}
+        ${summaryCard('Pendientes', t.orders_pending || 0, (t.orders_pending || 0) ? 'border-warning' : '')}
         ${summaryCard('Cancelados', t.orders_cancelled)}
         ${summaryCard('Ticket promedio', money(t.average_ticket))}
-        ${summaryCard('Ventas (subtotal)', money(t.gross_subtotal))}
+        ${summaryCard('Ventas de productos', money(t.gross_subtotal))}
+        ${summaryCard('Total cobrado', money(t.total_collected || 0), 'border-success')}
         ${summaryCard('Comisiones', money(t.commissions), 'border-primary')}
         ${summaryCard('Cuotas fijas', money(t.flat_fees))}
         ${summaryCard('Ingreso plataforma', money(t.platform_revenue), 'border-success')}
-        ${summaryCard('Envíos cobrados', money(t.delivery_fees))}
-        ${summaryCard('Ganancia repartidores', money(t.delivery_earnings))}
-        ${summaryCard('Efectivo cobrado', money(t.cash_collected))}
+        ${summaryCard('Envíos cobrados al cliente', money(t.delivery_fees))}
+        ${summaryCard('Ganancia del repartidor (envío)', money(t.delivery_earnings))}
+        ${summaryCard('Efectivo recibido por repartidor', money(t.cash_collected))}
         ${summaryCard('Propinas', money(t.tips))}
         ${summaryCard('Reembolsos', money(t.refunds), 'border-danger')}
-      </div>`;
+      </div>
+      <p class="small text-muted">Los montos de dinero solo cuentan pedidos <strong>entregados</strong>. Pendientes y cancelados se muestran aparte para que no inflen las ventas.</p>`;
 
     html += `<div class="card p-3 mb-3">
       <h6>Liquidaciones</h6>
@@ -162,11 +165,12 @@
     html += `<div class="card p-3">
       <h6>Por día</h6>
       <div class="table-responsive"><table class="table table-sm mb-0">
-        <thead><tr><th>Fecha</th><th class="text-end">Pedidos</th><th class="text-end">Entregados</th><th class="text-end">Cancelados</th><th class="text-end">Subtotal</th><th class="text-end">Comisión</th><th class="text-end">Cuotas</th><th class="text-end">Total</th></tr></thead>
+        <thead><tr><th>Fecha</th><th class="text-end">Pedidos</th><th class="text-end">Entregados</th><th class="text-end">Pendientes</th><th class="text-end">Cancelados</th><th class="text-end">Subtotal</th><th class="text-end">Comisión</th><th class="text-end">Cuotas</th><th class="text-end">Total</th></tr></thead>
         <tbody>${(data.daily || []).slice().reverse().map(d => `<tr>
           <td>${d.date}</td>
           <td class="text-end">${d.orders}</td>
           <td class="text-end">${d.delivered}</td>
+          <td class="text-end">${d.pending || 0}</td>
           <td class="text-end">${d.cancelled}</td>
           <td class="text-end">${money(d.subtotal)}</td>
           <td class="text-end">${money(d.commissions)}</td>

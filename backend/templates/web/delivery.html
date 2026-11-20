@@ -60,6 +60,7 @@
       <span id="myordersActiveBadge" class="badge bg-primary d-none" title="En proceso">0</span>
     </button>
     <button class="dp-tab-btn text-center" data-tab="payouts" onclick="switchTab('payouts')">Ganancias</button>
+    <button class="dp-tab-btn text-center" data-tab="recargas" onclick="switchTab('recargas')">Recargas</button>
     <button class="dp-tab-btn text-center" data-tab="settings" onclick="switchTab('settings')">Ajustes</button>
   </div>
 
@@ -67,6 +68,7 @@
     <div class="tab-pane active" id="tab-available">Cargando...</div>
     <div class="tab-pane" id="tab-myorders"></div>
     <div class="tab-pane" id="tab-payouts"></div>
+    <div class="tab-pane" id="tab-recargas"></div>
     <div class="tab-pane" id="tab-settings"></div>
     <div class="tab-pane" id="tab-mandados"></div>
     <div class="tab-pane" id="tab-shipments"></div>
@@ -166,6 +168,7 @@ function switchTab(name) {
   if (name === 'available') loadAvailable(true);
   else if (name === 'myorders') loadMyOrders();
   else if (name === 'payouts') loadPayouts();
+  else if (name === 'recargas') loadCourierRecargas();
   else if (name === 'settings') loadSettings();
   else if (name === 'mandados') loadMandadosWeb();
   else if (name === 'shipments') loadShipmentsWeb();
@@ -565,6 +568,7 @@ function deliverOrder(oid) {
       } else {
         showToast('Pedido entregado');
       }
+      offerRecarga(order);
       loadMyOrders();
       refreshTabBadges();
     } catch (e) {
@@ -686,6 +690,184 @@ async function refreshProfileBadges() {
     const info = document.getElementById('dpInfo');
     if (info) info.textContent = `⭐ ${dpProfile.rating} · ${dpProfile.total_deliveries} repartos`;
   } catch (e) { /* silencioso */ }
+}
+
+// ===== TAB: Recargas =====
+const RECARGA_LABELS = {
+  requested: ['Por confirmar pago', 'warning text-dark'],
+  pending: ['Pendiente de procesar', 'info text-dark'],
+  completed: ['Completada', 'success'],
+  failed: ['Fallida', 'danger'],
+  refunded: ['Reembolsada', 'secondary'],
+};
+
+async function loadCourierRecargas() {
+  const el = document.getElementById('tab-recargas');
+  el.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
+  try {
+    const rows = await apiRequest('GET', '/recargas/my');
+    el.innerHTML = `
+      <div class="card p-3 mb-3">
+        <h6 class="mb-1">Ofrecer una recarga</h6>
+        <p class="small text-muted mb-2">Cobra el monto <strong>+ $2 de comisión</strong>. Los $2 son para ti; el monto queda como deuda con la plataforma.</p>
+        <div class="row g-2">
+          <div class="col-6 col-md-3">
+            <label class="form-label small mb-1">Compañía</label>
+            <input id="recCompany" class="form-control form-control-sm" placeholder="Telcel, AT&T...">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label small mb-1">Teléfono</label>
+            <input id="recPhone" class="form-control form-control-sm" inputmode="numeric" maxlength="10" placeholder="10 dígitos">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label small mb-1">Monto</label>
+            <input id="recAmount" type="number" min="1" step="0.01" class="form-control form-control-sm" placeholder="0.00">
+          </div>
+          <div class="col-6 col-md-2 d-flex align-items-end">
+            <div class="small text-muted">Total: <strong id="recTotal">$2.00</strong></div>
+          </div>
+          <div class="col-12 col-md-2 d-flex align-items-end">
+            <button class="btn btn-sm btn-success w-100" onclick="submitStandaloneRecarga(this)">Cobrar y recargar</button>
+          </div>
+        </div>
+        <div id="recError" class="text-danger small mt-2 d-none"></div>
+      </div>
+      <div class="card p-3">
+        <h6 class="mb-2">Mis recargas</h6>
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Fecha</th><th>Compañía</th><th>Teléfono</th><th class="text-end">Monto</th><th class="text-end">Comisión</th><th class="text-end">Total</th><th>Estado</th><th></th></tr></thead>
+          <tbody>${rows.map(r => {
+            const [label, color] = RECARGA_LABELS[r.status] || [r.status, 'secondary'];
+            return `<tr>
+              <td class="small">${new Date(r.created_at).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+              <td>${esc(r.company)}</td>
+              <td>${esc(r.phone)}</td>
+              <td class="text-end">${money0(r.amount)}</td>
+              <td class="text-end text-success">${money0(r.fee)}</td>
+              <td class="text-end fw-bold">${money0(r.total)}</td>
+              <td><span class="badge bg-${color}">${label}</span>${r.error_message ? `<br><small class="text-danger">${esc(r.error_message)}</small>` : ''}</td>
+              <td class="text-end">${r.status === 'failed' ? `<button class="btn btn-sm btn-outline-primary" onclick="retryMyRecarga('${r.id}')">Reintentar</button>` : ''}</td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="8" class="text-center text-muted">Todavía no tienes recargas.</td></tr>'}</tbody>
+        </table></div>
+      </div>`;
+    const amount = document.getElementById('recAmount');
+    amount?.addEventListener('input', () => {
+      const value = parseFloat(amount.value || 0);
+      document.getElementById('recTotal').textContent = money0((Number.isFinite(value) ? value : 0) + 2);
+    });
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`;
+  }
+}
+
+async function submitStandaloneRecarga(btn) {
+  const error = document.getElementById('recError');
+  error.classList.add('d-none');
+  const company = document.getElementById('recCompany').value.trim();
+  const phone = document.getElementById('recPhone').value.replace(/\D/g, '');
+  const amount = parseFloat(document.getElementById('recAmount').value || 0);
+  if (!company || phone.length !== 10 || !(amount > 0)) {
+    error.textContent = 'Completa compañía, teléfono de 10 dígitos y monto.';
+    error.classList.remove('d-none');
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const recarga = await apiRequest('POST', '/recargas', {
+      company, phone, amount, payment_method: 'cash',
+    });
+    showToast(`Recarga cobrada: ${money0(recarga.total)}. Queda pendiente de procesar.`);
+    loadCourierRecargas();
+  } catch (e) {
+    error.textContent = e.message;
+    error.classList.remove('d-none');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function retryMyRecarga(id) {
+  try {
+    await apiRequest('POST', `/recargas/${id}/retry`, {});
+    showToast('Recarga enviada de nuevo a procesar');
+    loadCourierRecargas();
+  } catch (e) { showToast(e.message, 'danger'); }
+}
+
+function offerRecarga(order) {
+  const modal = document.createElement('div');
+  modal.className = 'modal fade';
+  modal.innerHTML = `
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title">¿El cliente quiere una recarga?</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted">Ofrece saldo para su celular. Se cobra el monto + <strong>$2 de comisión</strong> para ti. El monto de la recarga queda como deuda con la plataforma.</p>
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label small mb-1">Compañía</label>
+              <input id="offerCompany" class="form-control form-control-sm" placeholder="Telcel, AT&T...">
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Teléfono</label>
+              <input id="offerPhone" class="form-control form-control-sm" inputmode="numeric" maxlength="10" placeholder="10 dígitos">
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Monto</label>
+              <input id="offerAmount" type="number" min="1" step="0.01" class="form-control form-control-sm" placeholder="0.00">
+            </div>
+            <div class="col-6 d-flex align-items-end">
+              <div class="small text-muted">Total a cobrar: <strong id="offerTotal">$2.00</strong></div>
+            </div>
+          </div>
+          <div id="offerError" class="text-danger small mt-2 d-none"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">No, gracias</button>
+          <button type="button" class="btn btn-sm btn-success" id="offerConfirmBtn">Cobrar y recargar</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  const bsModal = new bootstrap.Modal(modal);
+  bsModal.show();
+  const amountInput = modal.querySelector('#offerAmount');
+  const updateTotal = () => {
+    const value = parseFloat(amountInput.value || 0);
+    modal.querySelector('#offerTotal').textContent = money0((Number.isFinite(value) ? value : 0) + 2);
+  };
+  amountInput.addEventListener('input', updateTotal);
+  modal.querySelector('#offerConfirmBtn').addEventListener('click', async () => {
+    const error = modal.querySelector('#offerError');
+    error.classList.add('d-none');
+    const company = modal.querySelector('#offerCompany').value.trim();
+    const phone = modal.querySelector('#offerPhone').value.replace(/\D/g, '');
+    const amount = parseFloat(amountInput.value || 0);
+    if (!company || phone.length !== 10 || !(amount > 0)) {
+      error.textContent = 'Completa compañía, teléfono de 10 dígitos y monto.';
+      error.classList.remove('d-none');
+      return;
+    }
+    const btn = modal.querySelector('#offerConfirmBtn');
+    btn.disabled = true;
+    try {
+      const recarga = await apiRequest('POST', '/recargas', {
+        company, phone, amount, payment_method: 'cash', order_id: order.id,
+      });
+      bsModal.hide();
+      showToast(`Recarga cobrada: ${money0(recarga.total)}. Queda pendiente de procesar.`);
+      switchTab('recargas');
+    } catch (e) {
+      error.textContent = e.message;
+      error.classList.remove('d-none');
+      btn.disabled = false;
+    }
+  });
+  modal.addEventListener('hidden.bs.modal', () => modal.remove());
 }
 
 // ===== TAB: Ajustes =====

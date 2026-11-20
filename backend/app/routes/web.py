@@ -376,6 +376,11 @@ async def web_admin_payouts(request: Request):
     return templates.TemplateResponse(request, "payouts_admin.html")
 
 
+@router.get("/admin/recargas")
+async def web_admin_recargas(request: Request):
+    return templates.TemplateResponse(request, "recargas_admin.html")
+
+
 @router.get("/admin/receipts")
 async def web_admin_receipts(request: Request):
     return templates.TemplateResponse(request, "receipts_admin.html")

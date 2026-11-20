@@ -124,6 +124,7 @@ class RestaurantOut(BaseModel):
     slug: str | None = None
     public_page_enabled: bool = True
     delivery_mode: str = "platform"
+    delivery_enabled: bool = True
     business_type: str = "restaurant"
     catalog_enabled: bool = True
     accepts_custom_requests: bool = True
@@ -247,6 +248,7 @@ class RestaurantProfileUpdate(BaseModel):
     is_open: bool | None = None
     public_page_enabled: bool | None = None
     delivery_mode: str | None = Field(default=None, pattern="^(platform|own)$")
+    delivery_enabled: bool | None = None
     pickup_enabled: bool | None = None
     catalog_enabled: bool | None = None
     accepts_custom_requests: bool | None = None

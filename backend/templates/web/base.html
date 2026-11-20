@@ -261,7 +261,8 @@
             <ul class="dropdown-menu dropdown-menu-end admin-menu-scroll">
               <li><h6 class="dropdown-header">Operación</h6></li>
               <li><a class="dropdown-item" href="/web/admin/dashboard"><i class="bi bi-speedometer2"></i> Resumen operativo</a></li>
-              <li><a class="dropdown-item" href="/web/admin/restaurants"><i class="bi bi-shop"></i> Restaurantes <span id="pendingRestaurantsBadge" class="badge rounded-pill bg-danger d-none">0</span></a></li>
+              <li><a class="dropdown-item" href="/web/admin/restaurants"><i class="bi bi-shop"></i> Negocios <span id="pendingRestaurantsBadge" class="badge rounded-pill bg-danger d-none">0</span></a></li>
+              <li><a class="dropdown-item" href="/web/admin/recargas"><i class="bi bi-phone"></i> Recargas</a></li>
               <li><a class="dropdown-item" href="/web/admin/couriers"><i class="bi bi-bicycle"></i> Repartidores</a></li>
               <li><a class="dropdown-item" href="/web/admin/users"><i class="bi bi-people"></i> Usuarios</a></li>
               <li><hr class="dropdown-divider"></li>
@@ -557,9 +558,11 @@ async function generateRestaurantPayout(id) {
 async function generateCourierPayout(id) {
   return await apiRequest('POST', `/admin/payouts/couriers/${id}`);
 }
-async function markPayoutPaid(kind, id, confirmationCode) {
-  return await apiRequest('POST', `/admin/payouts/${kind}/${id}/mark-paid`,
-    confirmationCode ? { confirmation_code: confirmationCode } : {});
+async function markPayoutPaid(kind, id, confirmationCode, method) {
+  const payload = {};
+  if (confirmationCode) payload.confirmation_code = confirmationCode;
+  if (method) payload.method = method;
+  return await apiRequest('POST', `/admin/payouts/${kind}/${id}/mark-paid`, payload);
 }
 async function confirmTransferReceived(orderId) {
   return await apiRequest('POST', `/admin/payouts/transfers/${orderId}/confirm`);

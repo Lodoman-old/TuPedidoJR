@@ -82,6 +82,11 @@ async def estimate_time(
     pickup = _is_pickup(body)
     if pickup and not restaurant.pickup_enabled:
         raise HTTPException(status_code=400, detail="Este restaurante no permite recoger pedidos")
+    if not pickup and not getattr(restaurant, "delivery_enabled", True):
+        raise HTTPException(
+            status_code=400,
+            detail="Este negocio no tiene reparto a domicilio. Elige recoger en el negocio.",
+        )
     if not pickup and body.delivery_location is None:
         raise HTTPException(status_code=400, detail="Falta la ubicación de entrega")
     items_data = []
@@ -184,6 +189,11 @@ async def estimate_price(
     pickup = _is_pickup(body)
     if pickup and not restaurant.pickup_enabled:
         raise HTTPException(status_code=400, detail="Este restaurante no permite recoger pedidos")
+    if not pickup and not getattr(restaurant, "delivery_enabled", True):
+        raise HTTPException(
+            status_code=400,
+            detail="Este negocio no tiene reparto a domicilio. Elige recoger en el negocio.",
+        )
     if not pickup and body.delivery_location is None:
         raise HTTPException(status_code=400, detail="Falta la ubicación de entrega")
     items_data = []
@@ -328,6 +338,11 @@ async def create_order(
     pickup = _is_pickup(body)
     if pickup and not restaurant.pickup_enabled:
         raise HTTPException(status_code=400, detail="Este restaurante no permite recoger pedidos")
+    if not pickup and not getattr(restaurant, "delivery_enabled", True):
+        raise HTTPException(
+            status_code=400,
+            detail="Este negocio no tiene reparto a domicilio. Elige recoger en el negocio.",
+        )
     if not pickup and (not body.delivery_address or body.delivery_location is None):
         raise HTTPException(status_code=400, detail="Falta la dirección o ubicación de entrega")
     if appointment_link and not pickup:

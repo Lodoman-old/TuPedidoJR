@@ -150,6 +150,7 @@ def _summary(orders: list[Order]) -> dict:
         "orders_total": 0,
         "orders_delivered": 0,
         "orders_cancelled": 0,
+        "orders_pending": 0,
         "gross_subtotal": Decimal("0.00"),
         "commissions": Decimal("0.00"),
         "flat_fees": Decimal("0.00"),
@@ -159,14 +160,18 @@ def _summary(orders: list[Order]) -> dict:
         "tips": Decimal("0.00"),
         "refunds": Decimal("0.00"),
         "cash_collected": Decimal("0.00"),
+        "total_collected": Decimal("0.00"),
     }
     for order in orders:
         totals["orders_total"] += 1
         if order.status == "delivered":
             totals["orders_delivered"] += 1
-        if order.status == "cancelled":
+        elif order.status == "cancelled":
             totals["orders_cancelled"] += 1
             totals["refunds"] += _money(order.refund_amount)
+            continue
+        else:
+            totals["orders_pending"] += 1
             continue
 
         totals["gross_subtotal"] += _money(order.subtotal)
@@ -176,7 +181,8 @@ def _summary(orders: list[Order]) -> dict:
         totals["delivery_earnings"] += _money(order.delivery_earnings)
         totals["discounts"] += _money(order.discount_amount)
         totals["tips"] += _money(order.tip_amount)
-        if order.status == "delivered" and order.payment_method == "cash":
+        totals["total_collected"] += _money(order.total)
+        if order.payment_method == "cash":
             totals["cash_collected"] += _money(order.total)
 
     totals["platform_revenue"] = totals["commissions"] + totals["flat_fees"]
@@ -218,16 +224,18 @@ async def report_summary(
         placed = order.placed_at.astimezone(tz) if order.placed_at.tzinfo else order.placed_at
         day_key = placed.date().isoformat()
         day = daily.setdefault(day_key, {
-            "date": day_key, "orders": 0, "delivered": 0, "cancelled": 0,
+            "date": day_key, "orders": 0, "delivered": 0, "cancelled": 0, "pending": 0,
             "subtotal": Decimal("0.00"), "commissions": Decimal("0.00"),
             "flat_fees": Decimal("0.00"), "total": Decimal("0.00"),
         })
         day["orders"] += 1
         if order.status == "delivered":
             day["delivered"] += 1
-        if order.status == "cancelled":
+        elif order.status == "cancelled":
             day["cancelled"] += 1
-        if order.status != "cancelled":
+        else:
+            day["pending"] += 1
+        if order.status == "delivered":
             day["subtotal"] += _money(order.subtotal)
             day["commissions"] += _money(order.platform_commission)
             day["flat_fees"] += _money(order.flat_usage_fee)
@@ -244,7 +252,7 @@ async def report_summary(
             "total": Decimal("0.00"),
         })
         bucket["orders"] += 1
-        if order.status != "cancelled":
+        if order.status == "delivered":
             bucket["subtotal"] += _money(order.subtotal)
             bucket["commissions"] += _money(order.platform_commission)
             bucket["flat_fees"] += _money(order.flat_usage_fee)

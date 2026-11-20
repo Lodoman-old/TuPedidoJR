@@ -7,10 +7,24 @@
   </button>
 </div>
 <div id="payoutsError" class="alert alert-danger d-none"></div>
-<div id="refundsCard" class="mb-3"></div>
-<div id="reservationDepositsCard" class="mb-3"></div>
-<div id="mandadoPrepaymentsCard" class="mb-3"></div>
-<div id="mandadoAdvancesCard" class="mb-3"></div>
+<ul class="nav nav-pills gap-1 mb-3" id="financeTabs">
+  <li class="nav-item"><button type="button" class="nav-link active" data-pane="business" onclick="setFinanceTab('business')">
+    Negocios <span id="badgeBusiness" class="badge bg-secondary">0</span></button></li>
+  <li class="nav-item"><button type="button" class="nav-link" data-pane="couriers" onclick="setFinanceTab('couriers')">
+    Repartidores <span id="badgeCouriers" class="badge bg-secondary">0</span></button></li>
+  <li class="nav-item"><button type="button" class="nav-link" data-pane="refunds" onclick="setFinanceTab('refunds')">
+    Devoluciones <span id="badgeRefunds" class="badge bg-danger">0</span></button></li>
+  <li class="nav-item"><button type="button" class="nav-link" data-pane="other" onclick="setFinanceTab('other')">
+    Otros <span id="badgeOther" class="badge bg-secondary">0</span></button></li>
+</ul>
+<div data-finance-pane="refunds" class="d-none">
+  <div id="refundsCard" class="mb-3"></div>
+</div>
+<div data-finance-pane="other" class="d-none">
+  <div id="reservationDepositsCard" class="mb-3"></div>
+  <div id="mandadoPrepaymentsCard" class="mb-3"></div>
+  <div id="mandadoAdvancesCard" class="mb-3"></div>
+</div>
 <div id="payoutsLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
 <div id="payoutsContent" class="d-none"></div>
 
@@ -28,6 +42,14 @@
           <input id="payoutCodeInput" class="form-control" inputmode="numeric" maxlength="6"
                  autocomplete="off" placeholder="6 dígitos">
           <div class="form-text">Pídelo al repartidor. Confirma que el efectivo ya está en la plataforma.</div>
+        </div>
+        <div class="mt-3">
+          <label class="form-label small mb-1" for="payoutMethodSelect" id="payoutMethodLabel">Forma de pago</label>
+          <select id="payoutMethodSelect" class="form-select form-select-sm">
+            <option value="transfer">Transferencia</option>
+            <option value="cash">Efectivo</option>
+          </select>
+          <div class="form-text" id="payoutMethodHelp"></div>
         </div>
         <div id="payoutPaidError" class="text-danger small mt-2 d-none"></div>
       </div>
@@ -62,6 +84,25 @@
     return String(value ?? '').replace(/[&<>"']/g, (c) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
+  }
+
+  let financeTab = 'business';
+
+  function setFinanceTab(pane) {
+    financeTab = pane;
+    document.querySelectorAll('#financeTabs .nav-link').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.pane === pane);
+    });
+    document.querySelectorAll('[data-finance-pane]').forEach(el => {
+      el.classList.toggle('d-none', el.dataset.financePane !== pane);
+    });
+  }
+
+  function setFinanceBadge(id, count, color = 'secondary') {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = count;
+    el.className = `badge bg-${color}`;
   }
 
   function frequencyOptions(selected) {
@@ -289,8 +330,8 @@
     new bootstrap.Modal(document.getElementById('businessBalanceModal')).show();
   }
 
-  function renderPendingPayouts(history) {
-    const rows = history.filter(h => h.status === 'pending');
+  function renderPendingPayouts(history, kind = null) {
+    const rows = history.filter(h => h.status === 'pending' && (!kind || h.kind === kind));
     if (!rows.length) return '';
     return `<div class="card p-3 mb-3 border-warning">
       <h6 class="m-0"><i class="bi bi-hourglass-split"></i> Cortes pendientes de cerrar</h6>
@@ -312,8 +353,8 @@
             <td>${isCourier && h.confirmation_code ? `<strong>${esc(h.confirmation_code)}</strong>` : '—'}</td>
             <td class="text-end">
               ${isCourier
-                ? `<button class="btn btn-sm ${toPlatform ? 'btn-warning' : 'btn-success'}" onclick="openPayoutPaid('courier','${h.id}','${h.direction}','${esc(h.confirmation_code || '')}')">${toPlatform ? 'Recibí el efectivo' : 'Marcar pagada'}</button>`
-                : `<button class="btn btn-sm btn-success" onclick="openPayoutPaid('restaurant','${h.id}','to_restaurant','')">Marcar pagada</button>`}
+                ? `<button class="btn btn-sm ${toPlatform ? 'btn-warning' : 'btn-success'}" onclick="openPayoutPaid('courier','${h.id}','${h.direction}','${esc(h.confirmation_code || '')}','${h.settlement_method || h.payout_method || 'cash'}')">${toPlatform ? 'Recibí el efectivo' : 'Marcar pagada'}</button>`
+                : `<button class="btn btn-sm btn-success" onclick="openPayoutPaid('restaurant','${h.id}','to_restaurant','','${h.settlement_method || 'transfer'}')">Marcar pagada</button>`}
             </td>
           </tr>`;
         }).join('')}</tbody>
@@ -321,8 +362,9 @@
     </div>`;
   }
 
-  function renderHistory(history) {
-    if (!history.length) {
+  function renderHistory(history, kind = null) {
+    const rows = kind ? history.filter(h => h.kind === kind) : history;
+    if (!rows.length) {
       return '<div class="card p-3"><h6>Historial</h6><p class="small text-muted mb-0">Sin liquidaciones registradas.</p></div>';
     }
     const kindLabel = { restaurant: 'Restaurante', courier: 'Repartidor' };
@@ -332,7 +374,7 @@
       <p class="small text-muted">Los cortes de repartidor muestran si el efectivo lo entrega el repartidor o si la plataforma se lo paga.</p>
       <div class="table-responsive"><table class="table table-sm align-middle">
         <thead><tr><th>Tipo</th><th>Nombre</th><th>Período</th><th class="text-end">Monto</th><th>Concepto</th><th>Estado</th><th></th></tr></thead>
-        <tbody>${history.map(h => {
+        <tbody>${rows.map(h => {
           const isCourier = h.kind === 'courier';
           const toPlatform = isCourier && h.direction === 'to_platform';
           const concept = !isCourier
@@ -343,18 +385,24 @@
           const code = isCourier && h.confirmation_code
             ? `<div class="small text-muted mt-1">Código: <strong>${esc(h.confirmation_code)}</strong></div>`
             : '';
+          const methodLabel = h.settlement_method === 'cash'
+            ? 'Efectivo'
+            : (h.settlement_method === 'transfer' ? 'Transferencia' : '');
+          const methodLine = methodLabel
+            ? `<div class="small text-muted mt-1">Forma de pago: <strong>${methodLabel}</strong></div>`
+            : '';
           let action = '';
           if (h.status === 'pending') {
             action = isCourier
-              ? `<button class="btn btn-sm ${toPlatform ? 'btn-warning' : 'btn-success'}" onclick="openPayoutPaid('courier','${h.id}','${h.direction}','${esc(h.confirmation_code || '')}')">${toPlatform ? 'Recibí el efectivo' : 'Marcar pagada'}</button>`
-              : `<button class="btn btn-sm btn-success" onclick="openPayoutPaid('restaurant','${h.id}','to_restaurant','')">Marcar pagada</button>`;
+              ? `<button class="btn btn-sm ${toPlatform ? 'btn-warning' : 'btn-success'}" onclick="openPayoutPaid('courier','${h.id}','${h.direction}','${esc(h.confirmation_code || '')}','${h.settlement_method || h.payout_method || 'cash'}')">${toPlatform ? 'Recibí el efectivo' : 'Marcar pagada'}</button>`
+              : `<button class="btn btn-sm btn-success" onclick="openPayoutPaid('restaurant','${h.id}','to_restaurant','','${h.settlement_method || 'transfer'}')">Marcar pagada</button>`;
           }
           return `<tr>
             <td>${kindLabel[h.kind] || h.kind}</td>
             <td>${esc(h.name)}</td>
             <td class="small">${h.period_start} a ${h.period_end}</td>
             <td class="text-end fw-bold">${money(h.amount)}</td>
-            <td>${concept}${code}</td>
+            <td>${concept}${code}${methodLine}</td>
             <td><span class="badge bg-${h.status === 'paid' || h.status === 'confirmed' ? 'success' : h.status === 'cancelled' ? 'secondary' : 'warning'}">${statusLabel[h.status] || h.status}</span></td>
             <td class="text-end">${action}</td>
           </tr>`;
@@ -458,7 +506,11 @@
     if (!card) return;
     try {
       const rows = await apiRequest('GET', '/admin/refunds/pending');
-      if (!rows.length) { card.innerHTML = ''; return; }
+      setFinanceBadge('badgeRefunds', rows.length, rows.length ? 'danger' : 'secondary');
+      if (!rows.length) {
+        card.innerHTML = '<div class="card p-3"><h6 class="mb-1"><i class="bi bi-arrow-counterclockwise"></i> Devoluciones</h6><p class="small text-muted mb-0">No hay reembolsos pendientes.</p></div>';
+        return;
+      }
       card.innerHTML = `<div class="card p-3 border-warning">
         <h6 class="text-danger"><i class="bi bi-arrow-counterclockwise"></i> Reembolsos pendientes
           <span class="badge bg-danger">${rows.length}</span></h6>
@@ -733,25 +785,52 @@
       const pendingAdvances = (advances || []).filter(a => a.status === 'pending').reduce((s, a) => s + parseFloat(a.amount || 0), 0);
       const dueCount = [...restaurants, ...couriers].filter(x => x.status === 'due').length;
 
+      const pendingRestCount = history.filter(h => h.status === 'pending' && h.kind === 'restaurant').length;
+      const pendingCourCount = history.filter(h => h.status === 'pending' && h.kind === 'courier').length;
+      setFinanceBadge('badgeBusiness', pendingRestCount, pendingRestCount ? 'warning text-dark' : 'secondary');
+      setFinanceBadge('badgeCouriers', pendingCourCount, pendingCourCount ? 'warning text-dark' : 'secondary');
+      setFinanceBadge('badgeOther',
+        (data.pending_transfers || []).length + (advances || []).filter(a => a.status === 'pending').length,
+        ((data.pending_transfers || []).length + (advances || []).filter(a => a.status === 'pending').length) ? 'warning text-dark' : 'secondary'
+      );
+
       content.innerHTML = `
-        <div class="row g-2 mb-3">
-          ${summaryCard('Plataforma debe a negocios', money(pendingRestaurants), pendingRestaurants ? 'border-success' : '')}
-          ${summaryCard('Negocios deben a plataforma (neto)', money(businessDebt), businessDebt ? 'border-danger' : '')}
-          ${summaryCard('Plataforma debe a repartidores', money(pendingCouriers))}
-          ${summaryCard('Repartidores deben (neto)', money(courierDebt), courierDebt ? 'border-danger' : '')}
-          ${summaryCard('Transferencias por confirmar', money(pendingTransfers), pendingTransfers ? 'border-warning' : '')}
-          ${summaryCard('Avances por aprobar', money(pendingAdvances), pendingAdvances ? 'border-warning' : '')}
-          ${summaryCard('Liquidaciones listas', dueCount, dueCount ? 'border-success' : '')}
-          ${summaryCard('Hoy', data.today)}
+        <div data-finance-pane="business" class="${financeTab === 'business' ? '' : 'd-none'}">
+          <div class="row g-2 mb-3">
+            ${summaryCard('Plataforma debe a negocios', money(pendingRestaurants), pendingRestaurants ? 'border-success' : '')}
+            ${summaryCard('Negocios deben a plataforma (neto)', money(businessDebt), businessDebt ? 'border-danger' : '')}
+            ${summaryCard('Pagos de negocio pendientes', pendingRestCount)}
+            ${summaryCard('Hoy', data.today)}
+          </div>
+          ${renderRestaurants(restaurants)}
+          ${renderPendingPayouts(history, 'restaurant')}
+          ${renderHistory(history, 'restaurant')}
         </div>
-        ${reconciliationShell(data.today)}
-        ${renderRestaurants(restaurants)}
-        ${renderCouriers(couriers)}
-        ${renderAdvances(advances)}
-        ${renderTransfers(data.pending_transfers || [])}
-        ${renderPendingPayouts(history)}
-        ${renderHistory(history)}`;
+        <div data-finance-pane="couriers" class="${financeTab === 'couriers' ? '' : 'd-none'}">
+          <div class="row g-2 mb-3">
+            ${summaryCard('Plataforma debe a repartidores', money(pendingCouriers), pendingCouriers ? 'border-success' : '')}
+            ${summaryCard('Repartidores deben (neto)', money(courierDebt), courierDebt ? 'border-danger' : '')}
+            ${summaryCard('Cortes de repartidor pendientes', pendingCourCount)}
+            ${summaryCard('Avances por aprobar', money(pendingAdvances), pendingAdvances ? 'border-warning' : '')}
+          </div>
+          ${renderCouriers(couriers)}
+          ${renderPendingPayouts(history, 'courier')}
+          ${renderAdvances(advances)}
+          ${renderHistory(history, 'courier')}
+        </div>
+        <div data-finance-pane="other" class="${financeTab === 'other' ? '' : 'd-none'}">
+          <div class="row g-2 mb-3">
+            ${summaryCard('Transferencias por confirmar', money(pendingTransfers), pendingTransfers ? 'border-warning' : '')}
+            ${summaryCard('Avances por aprobar', money(pendingAdvances), pendingAdvances ? 'border-warning' : '')}
+            ${summaryCard('Liquidaciones listas', dueCount, dueCount ? 'border-success' : '')}
+            ${summaryCard('Hoy', data.today)}
+          </div>
+          ${reconciliationShell(data.today)}
+          ${renderTransfers(data.pending_transfers || [])}
+          ${renderHistory(history)}
+        </div>`;
       content.classList.remove('d-none');
+      setFinanceTab(financeTab);
       loadReconciliation();
     } catch (ex) {
       error.textContent = ex.message;
@@ -811,7 +890,7 @@
   let payoutToConfirm = null;
   let payoutPaidModal = null;
 
-  function openPayoutPaid(kind, id, direction, code) {
+  function openPayoutPaid(kind, id, direction, code, method) {
     payoutToConfirm = { kind, id, direction, code };
     const isCourierCash = kind === 'courier' && direction === 'to_platform';
     document.getElementById('payoutPaidTitle').textContent = isCourierCash
@@ -824,6 +903,14 @@
         : 'Confirma que ya entregaste el pago al negocio. Esta acción cierra la liquidación.');
     document.getElementById('payoutCodeBox').classList.toggle('d-none', !isCourierCash);
     document.getElementById('payoutCodeInput').value = '';
+    const methodSelect = document.getElementById('payoutMethodSelect');
+    methodSelect.value = method === 'cash' ? 'cash' : 'transfer';
+    document.getElementById('payoutMethodLabel').textContent = isCourierCash
+      ? '¿Cómo te entregó el dinero?'
+      : '¿Cómo se pagó?';
+    document.getElementById('payoutMethodHelp').textContent = isCourierCash
+      ? 'Selecciona cómo recibiste el efectivo o la transferencia del repartidor.'
+      : 'Selecciona la forma en que se realizó el pago para dejar el registro.';
     document.getElementById('payoutPaidError').classList.add('d-none');
     const button = document.getElementById('payoutPaidBtn');
     button.className = 'btn btn-sm ' + (isCourierCash ? 'btn-warning' : 'btn-success');
@@ -839,6 +926,7 @@
     const code = direction === 'to_platform'
       ? document.getElementById('payoutCodeInput').value.trim()
       : '';
+    const method = document.getElementById('payoutMethodSelect').value;
     const error = document.getElementById('payoutPaidError');
     if (kind === 'courier' && direction === 'to_platform' && !code) {
       error.textContent = 'Escribe el código de 6 dígitos que muestra el repartidor.';
@@ -848,7 +936,7 @@
     const button = document.getElementById('payoutPaidBtn');
     button.disabled = true;
     try {
-      await markPayoutPaid(kind, id, code);
+      await markPayoutPaid(kind, id, code, method);
       payoutPaidModal.hide();
       payoutToConfirm = null;
       showToast(kind === 'courier' && direction === 'to_platform'

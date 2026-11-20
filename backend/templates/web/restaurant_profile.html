@@ -281,18 +281,26 @@
     el('bizCatalogEnabled').checked = r.catalog_enabled !== false;
     el('bizAcceptsRequests').checked = r.accepts_custom_requests !== false;
     const isStoreProfile = Boolean(r.business_type && r.business_type !== 'restaurant');
+    const businessType = r.business_type || 'restaurant';
     const requestsSectionTitle = el('requestsSectionTitle');
     const requestsHelp = el('requestsHelp');
     const catalogEnabledRow = el('catalogEnabledRow');
     const acceptsRequestsLabel = el('acceptsRequestsLabel');
     const acceptsRequestsNote = el('acceptsRequestsNote');
     if (requestsSectionTitle) {
-      requestsSectionTitle.textContent = isStoreProfile ? 'Catálogo y solicitudes' : 'Catálogo y pedidos especiales';
+      requestsSectionTitle.textContent = businessType === 'services'
+        ? 'Catálogo y productos'
+        : (isStoreProfile ? 'Catálogo y solicitudes' : 'Catálogo y pedidos especiales');
     }
     if (requestsHelp) {
-      requestsHelp.textContent = isStoreProfile
-        ? 'Si eres tienda, puedes mostrar tu catálogo y recibir pedidos de productos que no estén publicados.'
-        : 'Activa los pedidos especiales para que tus clientes puedan solicitar platillos fuera del menú.';
+      const helpByType = {
+        restaurant: 'Activa los pedidos especiales para que tus clientes puedan solicitar platillos fuera del menú.',
+        store: 'Si eres tienda, puedes mostrar tu catálogo y recibir pedidos de productos que no estén publicados.',
+        services: 'Además de tus citas, puedes vender productos como gel, shampoo o accesorios. Activa el catálogo y agrégalos con el botón + Producto.',
+        rental: 'Los artículos en renta se administran en la pestaña Rentas. Activa el catálogo solo si además vendes productos.',
+        other: 'Activa el catálogo si vendes productos. Si también ofreces citas, aparecerá la agenda en tu panel.',
+      };
+      requestsHelp.textContent = helpByType[businessType] || helpByType.store;
     }
     if (catalogEnabledRow) catalogEnabledRow.classList.toggle('d-none', !isStoreProfile);
     if (acceptsRequestsLabel) {

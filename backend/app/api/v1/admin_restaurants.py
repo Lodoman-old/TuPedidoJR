@@ -242,10 +242,11 @@ async def approve_restaurant(
     restaurant.rejection_reason = None
     restaurant.approved_at = datetime.now(timezone.utc)
     restaurant.approved_by = current_user.id
-    if restaurant.business_type in ("services", "rental"):
+    if restaurant.business_type in ("services", "rental", "other"):
         restaurant.appointments_enabled = True
-        restaurant.catalog_enabled = False
         restaurant.accepts_custom_requests = False
+    if restaurant.business_type in ("services", "other"):
+        restaurant.catalog_enabled = True
 
     membership = await db.execute(
         select(RestaurantUser).where(

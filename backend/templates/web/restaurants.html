@@ -111,7 +111,7 @@
     const isRental = r.business_type === 'rental' || PAGE_TYPE === 'rental';
     const isAgenda = Boolean(r.appointments_enabled) && PAGE_TYPE === 'services' && !isRental;
     const cuisine = r.cuisine
-      ? `<div class="small text-muted business-cuisine mb-1" title="${r.cuisine}">${r.cuisine}</div>`
+      ? `<div class="small fw-bold text-body business-cuisine mb-1" title="${r.cuisine}">${r.cuisine}</div>`
       : '';
     const openBadge = r.is_open_now === false
       ? '<span class="badge bg-secondary ms-1">Cerrado</span>'

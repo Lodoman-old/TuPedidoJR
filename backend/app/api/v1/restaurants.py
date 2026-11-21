@@ -396,7 +396,7 @@ async def get_restaurant_qr(
     restaurant_id: str,
     format: str = "svg",
     download: bool = False,
-    scale: int = 10,
+    scale: int = 16,
     db: AsyncSession = Depends(get_db),
 ):
     """QR listo para imprimir con el enlace público del negocio."""
@@ -408,16 +408,16 @@ async def get_restaurant_qr(
     slug = restaurant.slug or str(restaurant.id)
     public_url = f"{settings.APP_URL.rstrip('/')}/r/{slug}"
     kind = "png" if format.lower() == "png" else "svg"
-    safe_scale = min(max(int(scale or 10), 4), 20)
-    qr = segno.make(public_url, error="m")
+    safe_scale = min(max(int(scale or 16), 4), 30)
+    qr = segno.make(public_url, error="q")
 
     buffer = io.BytesIO()
     qr.save(
         buffer,
         kind=kind,
         scale=safe_scale,
-        border=3,
-        dark="#0d1b2a",
+        border=4,
+        dark="#000000",
         light="#ffffff",
     )
     headers = {"Cache-Control": "public, max-age=3600"}

@@ -22,15 +22,15 @@ def restaurant_public_url(restaurant: Restaurant) -> str:
     return f"{settings.APP_URL.rstrip('/')}/r/{slug}"
 
 
-def build_qr_png(public_url: str, scale: int = 12) -> bytes:
-    qr = segno.make(public_url, error="m")
+def build_qr_png(public_url: str, scale: int = 16) -> bytes:
+    qr = segno.make(public_url, error="q")
     buffer = io.BytesIO()
     qr.save(
         buffer,
         kind="png",
         scale=scale,
-        border=3,
-        dark="#0d1b2a",
+        border=4,
+        dark="#000000",
         light="#ffffff",
     )
     return buffer.getvalue()

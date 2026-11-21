@@ -200,8 +200,8 @@ async def web_restaurant_qr(
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
     slug = restaurant.slug or str(restaurant.id)
     public_url = f"{settings.APP_URL.rstrip('/')}/r/{slug}"
-    qr_svg = segno.make(public_url, error="m").svg_inline(
-        scale=10, border=3, dark="#0d1b2a", light="#ffffff"
+    qr_svg = segno.make(public_url, error="q").svg_inline(
+        scale=12, border=4, dark="#000000", light="#ffffff"
     )
     return templates.TemplateResponse(
         request,

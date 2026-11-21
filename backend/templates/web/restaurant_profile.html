@@ -298,6 +298,8 @@
   let cpCenter = null;
   let canManage = false;
   let coordsReady = false;
+  let savedAddress = '';
+  let addressDirty = false;
   let affiliationPlans = [];
 
   function el(id) { return document.getElementById(id); }
@@ -756,30 +758,24 @@
     try {
       loc = await apiRequest('GET', `/restaurants/${RID}/location`);
     } catch (e) { /* sin ubicación */ }
+    savedAddress = (loc.address || '').trim();
+    addressDirty = false;
     el('currentLocationText').textContent = loc.lat != null
       ? `Ubicación actual: ${loc.address || 'Sin dirección'} · Lat ${loc.lat}, Lng ${loc.lng}`
       : 'El negocio todavía no tiene una ubicación guardada.';
     initMap(loc.lat != null ? loc.lat : 20.644, loc.lng != null ? loc.lng : -100.993);
-    if (loc.lat != null && loc.lng != null) {
-      movePin(loc.lat, loc.lng);
-      const found = await reverseFill(loc.lat, loc.lng);
-      if (!found.street && loc.address) {
-        el('street').value = loc.address;
-      }
-      if (!el('postalCode').value && loc.address) {
-        const cpMatch = loc.address.match(/\b(\d{5})\b/);
-        if (cpMatch) {
-          el('postalCode').value = cpMatch[1];
-          await loadColonias(cpMatch[1]);
-        }
-      }
-    } else if (loc.address) {
+    // La dirección guardada manda: solo se rellena lo que esté vacío.
+    if (loc.address) {
       el('street').value = loc.address;
       const cpMatch = loc.address.match(/\b(\d{5})\b/);
       if (cpMatch) {
         el('postalCode').value = cpMatch[1];
         await loadColonias(cpMatch[1]);
       }
+    }
+    if (loc.lat != null && loc.lng != null) {
+      movePin(loc.lat, loc.lng);
+      await reverseFill(loc.lat, loc.lng, true);
     }
     if (loc.lat == null || loc.lng == null || !el('street').value.trim()) {
       setGeoMsg('Buscando la ubicación del dispositivo para llenar la dirección...');
@@ -805,12 +801,13 @@
   el('postalCode').addEventListener('input', (e) => {
     e.target.value = e.target.value.replace(/\D/g, '').slice(0, 5);
     coordsReady = false;
+    addressDirty = true;
     if (e.target.value.length === 5) loadColonias(e.target.value);
   });
-  el('street').addEventListener('input', () => { coordsReady = false; });
-  el('coloniaSelect').addEventListener('change', () => { coordsReady = false; });
+  el('street').addEventListener('input', () => { coordsReady = false; addressDirty = true; });
+  el('coloniaSelect').addEventListener('change', () => { coordsReady = false; addressDirty = true; });
 
-  async function reverseFill(lat, lng) {
+  async function reverseFill(lat, lng, onlyEmpty = true) {
     let cp = '';
     let colonia = '';
     let street = '';
@@ -825,11 +822,16 @@
       cp = cp || String(rev.postcode || '');
       colonia = colonia || rev.suburb || rev.neighbourhood || '';
     } catch (e) { /* sin geocoder */ }
-    if (cp) {
+    const cpWasEmpty = !el('postalCode').value.trim();
+    const coloniaWasEmpty = !el('coloniaSelect').value;
+    const streetWasEmpty = !el('street').value.trim();
+    if (cp && (!onlyEmpty || cpWasEmpty)) {
       el('postalCode').value = cp;
+    }
+    if (cp && (!onlyEmpty || cpWasEmpty || coloniaWasEmpty)) {
       await loadColonias(cp, colonia);
     }
-    if (street) el('street').value = street;
+    if (street && (!onlyEmpty || streetWasEmpty)) el('street').value = street;
     return { cp, colonia, street };
   }
 
@@ -886,7 +888,9 @@
     const cp = el('postalCode').value.trim();
     const colonia = el('coloniaSelect').value;
     const street = el('street').value.trim();
-    const address = [street, colonia, cp ? `C.P. ${cp}` : ''].filter(Boolean).join(', ');
+    const streetPart = street.split(',')[0].trim();
+    const composed = [streetPart, colonia, cp ? `C.P. ${cp}` : ''].filter(Boolean).join(', ');
+    const address = addressDirty || !savedAddress ? composed : savedAddress;
     if (!address) {
       setGeoMsg('Escribe la calle, la colonia y el C.P., o usa tu ubicación.', 'danger');
       return;
@@ -926,6 +930,8 @@
         lat, lng, address,
       });
       pinMoved = false;
+      savedAddress = address;
+      addressDirty = false;
       el('currentLocationText').textContent = `Ubicación actual: ${address} · Lat ${lat}, Lng ${lng}`;
       setGeoMsg('Ubicación guardada.', 'success');
       showToast('Ubicación guardada');

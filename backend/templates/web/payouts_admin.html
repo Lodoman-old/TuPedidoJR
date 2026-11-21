@@ -116,6 +116,12 @@
     }[c]));
   }
 
+  function deliveryLabel(order) {
+    if (order.fulfillment_type === 'pickup' || order.delivery_mode === 'pickup') return 'Recoger en negocio';
+    if (order.delivery_mode === 'own') return 'Reparto del negocio';
+    return 'Repartidor TuPedidoJR';
+  }
+
   let financeTab = 'business';
 
   function setFinanceTab(pane) {
@@ -232,24 +238,25 @@
       <div class="row g-2 mb-3">
         ${summaryCard('Pedidos', row.orders)}
         ${summaryCard('Subtotal', money(row.subtotal))}
-        ${summaryCard('Comisión', money(row.commission))}
-        ${summaryCard('Cuota fija', money(row.flat_fee))}
+        ${summaryCard('Comisión al negocio', money(row.commission))}
+        ${summaryCard('Comisión al cliente', money(row.flat_fee))}
         ${summaryCard('Total cobrado', money(row.total))}
         ${summaryCard('Debe a plataforma', money(row.restaurant_owes), parseFloat(row.restaurant_owes) ? 'border-danger' : '')}
       </div>
       <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-        <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th class="text-end">Productos</th><th class="text-end">Comisión</th><th class="text-end">Cuota</th><th class="text-end">Envío</th><th class="text-end">Total</th><th class="text-end">Debe</th></tr></thead>
+        <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th>Entrega</th><th class="text-end">Productos</th><th class="text-end">Comisión negocio</th><th class="text-end">Comisión cliente</th><th class="text-end">Envío</th><th class="text-end">Total</th><th class="text-end">Debe</th></tr></thead>
         <tbody>${items.map(o => `<tr>
           <td>#${esc(String(o.id).slice(0, 8))}</td>
           <td class="small">${o.date ? new Date(o.date).toLocaleDateString('es-MX') : '—'}</td>
           <td>${o.payment_method === 'cash' ? 'Efectivo' : o.payment_method === 'transfer' ? 'Transferencia' : 'En línea'}</td>
+          <td class="small">${esc(deliveryLabel(o))}</td>
           <td class="text-end">${money(o.subtotal)}</td>
           <td class="text-end">${money(o.commission)}</td>
           <td class="text-end">${money(o.flat_fee)}</td>
           <td class="text-end">${money(o.delivery_fee)}</td>
           <td class="text-end fw-bold">${money(o.total)}</td>
           <td class="text-end text-danger">${money(o.owes)}</td>
-        </tr>`).join('') || '<tr><td colspan="9" class="text-center text-muted">Sin pedidos en el rango.</td></tr>'}</tbody>
+        </tr>`).join('') || '<tr><td colspan="10" class="text-center text-muted">Sin pedidos en el rango.</td></tr>'}</tbody>
       </table></div>
       <p class="small text-muted mt-3 mb-0">Cada fila es un pedido entregado. La comisión y la cuota se descuentan al negocio; el “Debe” es el efectivo que cobró por cuenta de la plataforma.</p>`;
     new bootstrap.Modal(document.getElementById('reconDetailModal')).show();
@@ -443,8 +450,8 @@
         <tbody>
           <tr><td>Ventas últimos 30 días</td><td class="text-end">${money(r.monthly_sales)}</td></tr>
           <tr><td>Ganancia neta acumulada</td><td class="text-end fw-bold">${money(r.earned_total)}</td></tr>
-          <tr><td>Comisión de la plataforma (ya descontada)</td><td class="text-end">${money(r.commission_total)}</td></tr>
-          <tr><td>Cuota fija por pedido (ya descontada)</td><td class="text-end">${money(r.flat_fee_total)}</td></tr>
+          <tr><td>Comisión al negocio (ya descontada)</td><td class="text-end">${money(r.commission_total)}</td></tr>
+          <tr><td>Comisión al cliente (ya incluida en el total)</td><td class="text-end">${money(r.flat_fee_total)}</td></tr>
           <tr><td>Envíos de negocio a favor</td><td class="text-end">${money(r.shipment_credit)}</td></tr>
           <tr><td>Envíos de negocio por cobrar</td><td class="text-end">${money(r.shipment_charge)}</td></tr>
           <tr><td>Ajustes a favor</td><td class="text-end">${money(r.adjustment_credit)}</td></tr>
@@ -455,17 +462,18 @@
       </table>
       <h6 class="small mt-3">Pedidos que forman el saldo</h6>
       <div class="table-responsive"><table class="table table-sm mb-0">
-        <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th class="text-end">Productos</th><th class="text-end">Comisión</th><th class="text-end">Cuota</th><th class="text-end">Total</th><th class="text-end">Debe</th></tr></thead>
+        <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th>Entrega</th><th class="text-end">Productos</th><th class="text-end">Comisión negocio</th><th class="text-end">Comisión cliente</th><th class="text-end">Total</th><th class="text-end">Debe</th></tr></thead>
         <tbody>${(r.pending_items || []).map(o => `<tr>
           <td>#${esc(String(o.id).slice(0, 8))}</td>
           <td class="small">${o.date ? new Date(o.date).toLocaleDateString('es-MX') : '—'}</td>
           <td>${o.payment_method === 'cash' ? 'Efectivo' : o.payment_method === 'transfer' ? 'Transferencia' : 'En línea'}</td>
+          <td class="small">${esc(deliveryLabel(o))}</td>
           <td class="text-end">${money(o.subtotal)}</td>
           <td class="text-end">${money(o.commission)}</td>
           <td class="text-end">${money(o.flat_fee)}</td>
           <td class="text-end fw-bold">${money(o.total)}</td>
           <td class="text-end text-danger">${money(o.owes)}</td>
-        </tr>`).join('') || '<tr><td colspan="8" class="text-center text-muted">Sin pedidos.</td></tr>'}</tbody>
+        </tr>`).join('') || '<tr><td colspan="9" class="text-center text-muted">Sin pedidos.</td></tr>'}</tbody>
       </table></div>
       <p class="small text-muted mt-3 mb-0">La ganancia neta ya incluye comisiones, envíos, ajustes y puntos. La plataforma le debe ${money(pending)} y el negocio debe ${money(debt)}. Al generar el pago se aplica el neto: ${net > 0 ? `se le pagan ${money(net)}` : net < 0 ? `se le cobran ${money(Math.abs(net))}` : 'no hay movimiento'}.</p>
     `;
@@ -580,8 +588,8 @@
       <div class="row g-2 mb-3">
         ${summaryCard('Pedidos entregados', t.orders || 0)}
         ${summaryCard('Ventas', money(t.total))}
-        ${summaryCard('Cuota por pedido', money(t.commission), 'border-success')}
-        ${summaryCard('Cuota fija', money(t.flat_fee), 'border-success')}
+        ${summaryCard('Comisión al negocio', money(t.commission), 'border-success')}
+        ${summaryCard('Comisión al cliente', money(t.flat_fee), 'border-success')}
         ${summaryCard('Puntos canjeados (los absorbe la plataforma)', money(t.loyalty_discount), parseFloat(t.loyalty_discount || 0) ? 'border-primary' : '')}
         ${summaryCard('Ingreso neto plataforma', money(netPlatform), netPlatform < 0 ? 'border-danger' : '')}
         ${summaryCard('Propinas', money(t.tips))}
@@ -593,7 +601,7 @@
         <table class="table table-sm align-middle">
           <thead><tr>
             <th>Restaurante</th><th class="text-end">Pedidos</th><th class="text-end">Subtotal</th>
-            <th class="text-end">Comisión</th><th class="text-end">Cuota fija</th>
+            <th class="text-end">Comisión negocio</th><th class="text-end">Comisión cliente</th>
             <th class="text-end">Puntos</th>
             <th class="text-end">Propinas</th><th class="text-end">Total cobrado</th>
             <th class="text-end">Debe a plataforma</th><th></th>

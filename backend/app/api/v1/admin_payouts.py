@@ -313,6 +313,8 @@ async def admin_payouts(
                     "total": _money(o.total),
                     "owes": _money(o.restaurant_owes_platform),
                     "payment_method": o.payment_method,
+                    "delivery_mode": o.delivery_mode,
+                    "fulfillment_type": o.fulfillment_type,
                 }
                 for o in (
                     list(balance.get("orders", []))
@@ -478,6 +480,8 @@ async def payout_reconciliation(
             "tips": _money(tips),
             "total": _money(total),
             "owes": _money(owes),
+            "delivery_mode": order.delivery_mode,
+            "fulfillment_type": order.fulfillment_type,
         })
         row["orders"] += 1
         row["subtotal"] += subtotal
@@ -657,7 +661,7 @@ async def courier_payout_detail(
             CashAdvance.delivery_person_id == dp.id,
             CashAdvance.status.in_(("approved", "pending")),
         )
-        .order_by(CashAdvance.created_at.desc())
+        .order_by(CashAdvance.taken_at.desc())
     )
     advances = [
         {
@@ -665,7 +669,7 @@ async def courier_payout_detail(
             "amount": _money(row.amount),
             "status": row.status,
             "pays_restaurant": row.pays_restaurant,
-            "date": row.created_at.isoformat() if row.created_at else None,
+            "date": row.taken_at.isoformat() if row.taken_at else None,
         }
         for row in advances_result.scalars().all()
     ]

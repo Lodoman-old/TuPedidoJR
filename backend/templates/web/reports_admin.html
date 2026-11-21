@@ -70,7 +70,7 @@
         ${summaryCard('Total cobrado', money(row.total))}
       </div>
       <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-        <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th class="text-end">Productos</th><th class="text-end">Comisión</th><th class="text-end">Cuota</th><th class="text-end">Total</th></tr></thead>
+        <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th>Entrega</th><th class="text-end">Productos</th><th class="text-end">Comisión negocio</th><th class="text-end">Comisión cliente</th><th class="text-end">Total</th></tr></thead>
         <tbody>${items.map(o => `<tr>
           <td>#${esc(String(o.id).slice(0, 8))}</td>
           <td class="small">${o.date ? new Date(o.date).toLocaleDateString('es-MX') : '—'}</td>
@@ -89,6 +89,12 @@
     return String(value ?? '').replace(/[&<>"']/g, (c) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
+  }
+
+  function deliveryLabel(order) {
+    if (order.fulfillment_type === 'pickup' || order.delivery_mode === 'pickup') return 'Recoger en negocio';
+    if (order.delivery_mode === 'own') return 'Reparto del negocio';
+    return 'Repartidor TuPedidoJR';
   }
 
   function setDefaultDates() {
@@ -155,8 +161,8 @@
         ${summaryCard('Ticket promedio', money(t.average_ticket))}
         ${summaryCard('Ventas de productos', money(t.gross_subtotal))}
         ${summaryCard('Total cobrado', money(t.total_collected || 0), 'border-success')}
-        ${summaryCard('Comisiones', money(t.commissions), 'border-primary')}
-        ${summaryCard('Cuotas fijas', money(t.flat_fees))}
+        ${summaryCard('Comisión al negocio', money(t.commissions), 'border-primary')}
+        ${summaryCard('Comisión al cliente', money(t.flat_fees))}
         ${summaryCard('Ingreso plataforma', money(t.platform_revenue), 'border-success')}
         ${summaryCard('Envíos cobrados al cliente', money(t.delivery_fees))}
         ${summaryCard('Ganancia del repartidor (envío)', money(t.delivery_earnings))}
@@ -180,7 +186,7 @@
       html += `<div class="card p-3 mb-3">
         <h6>Restaurantes que más venden</h6>
         <div class="table-responsive"><table class="table table-sm mb-0">
-          <thead><tr><th>Restaurante</th><th class="text-end">Pedidos</th><th class="text-end">Subtotal</th><th class="text-end">Comisión</th><th class="text-end">Cuotas</th><th class="text-end">Total</th><th></th></tr></thead>
+          <thead><tr><th>Restaurante</th><th class="text-end">Pedidos</th><th class="text-end">Subtotal</th><th class="text-end">Comisión negocio</th><th class="text-end">Comisión cliente</th><th class="text-end">Total</th><th></th></tr></thead>
           <tbody>${data.by_restaurant.map(r => `<tr>
             <td>${esc(r.restaurant_name)}</td>
             <td class="text-end">${r.orders}</td>
@@ -212,7 +218,7 @@
     html += `<div class="card p-3">
       <h6>Por día</h6>
       <div class="table-responsive"><table class="table table-sm mb-0">
-        <thead><tr><th>Fecha</th><th class="text-end">Pedidos</th><th class="text-end">Entregados</th><th class="text-end">Pendientes</th><th class="text-end">Cancelados</th><th class="text-end">Subtotal</th><th class="text-end">Comisión</th><th class="text-end">Cuotas</th><th class="text-end">Total</th></tr></thead>
+        <thead><tr><th>Fecha</th><th class="text-end">Pedidos</th><th class="text-end">Entregados</th><th class="text-end">Pendientes</th><th class="text-end">Cancelados</th><th class="text-end">Subtotal</th><th class="text-end">Comisión negocio</th><th class="text-end">Comisión cliente</th><th class="text-end">Total</th></tr></thead>
         <tbody>${(data.daily || []).slice().reverse().map(d => `<tr>
           <td>${d.date}</td>
           <td class="text-end">${d.orders}</td>

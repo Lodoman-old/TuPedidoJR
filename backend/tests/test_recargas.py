@@ -38,6 +38,21 @@ async def admin_account(client: AsyncClient, db_session):
     return token
 
 
+async def test_courier_payout_detail_works(
+    client: AsyncClient, db_session, courier_account, admin_account
+):
+    user_id = uuid.UUID(decode_access_token(courier_account)["sub"])
+    dp = (await db_session.execute(
+        DeliveryPerson.__table__.select().where(DeliveryPerson.user_id == user_id)
+    )).first()
+    resp = await client.get(
+        f"/api/v1/admin/payouts/couriers/{dp.id}/detail",
+        headers=_headers(admin_account),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["name"]
+
+
 async def test_cash_recarga_creates_debt_and_commission(
     client: AsyncClient, db_session, courier_account
 ):

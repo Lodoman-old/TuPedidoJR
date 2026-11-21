@@ -267,6 +267,8 @@ async def report_summary(
                 "flat_fee": _money(order.flat_usage_fee),
                 "total": _money(order.total),
                 "payment_method": order.payment_method,
+                "delivery_mode": order.delivery_mode,
+                "fulfillment_type": order.fulfillment_type,
             })
 
     # Payouts settled in the same window.

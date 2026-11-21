@@ -213,3 +213,27 @@ async def test_affiliation_payment_sends_qr_email(
     assert filename.endswith(".png")
     assert mime == "image/png"
     assert content.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+async def test_admin_resends_qr_email(
+    client: AsyncClient, db_session, owner_token, superuser_token, monkeypatch
+):
+    restaurant = await _make_restaurant(db_session, owner_token, None)
+    calls = []
+
+    async def fake_send(db, to, subject, html, text=None, attachments=None):
+        calls.append({"to": to, "attachments": attachments})
+        return True, "Correo enviado"
+
+    monkeypatch.setattr("app.services.affiliation_qr_service.send_email", fake_send)
+
+    resp = await client.post(
+        f"/api/v1/admin/affiliations/{restaurant.id}/qr-email",
+        headers=_headers(superuser_token),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["sent"] is True
+    assert calls[0]["to"] == "owner-aff@test.com"
+    assert calls[0]["attachments"][0][2] == "image/png"
+    # No modifica la afiliación.
+    assert restaurant.affiliation_expires_at is None

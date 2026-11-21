@@ -211,6 +211,9 @@
             <a class="btn btn-sm btn-outline-secondary" id="qrSvgLink" href="#">
               <i class="bi bi-download"></i> Descargar SVG
             </a>
+            <button class="btn btn-sm btn-outline-primary" id="qrEmailBtn" onclick="sendQrEmail()">
+              <i class="bi bi-envelope"></i> Enviar a mi correo
+            </button>
           </div>
         </div>
         <div class="small text-muted mt-3" id="qrUrl"></div>
@@ -410,6 +413,26 @@
     const urlBox = el('qrUrl');
     if (urlBox) {
       urlBox.innerHTML = `Enlace público: <a href="${publicUrl}" target="_blank" rel="noopener">${esc(publicUrl)}</a>`;
+    }
+  }
+
+  async function sendQrEmail() {
+    const btn = el('qrEmailBtn');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+    try {
+      const res = await apiRequest('POST', `/restaurants/${RID}/qr/email`, {});
+      if (res.sent) {
+        showToast('QR enviado al correo del dueño.');
+      } else {
+        showToast(`No se pudo enviar el QR: ${res.detail || 'revisa el correo del negocio'}`, 'warning');
+      }
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = original;
     }
   }
 

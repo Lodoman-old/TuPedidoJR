@@ -42,6 +42,7 @@ from app.services.affiliation_payment_service import (
 from app.services.geocode_service import geocode_structured
 from app.schemas.order import CancelOrderRequest, OrderOut, OrderStatusUpdate
 from app.services.cancellation_service import apply_cancellation
+from app.services.affiliation_qr_service import send_affiliation_qr_email
 from app.services.file_service import delete_upload, save_upload
 from app.services.geo_service import get_nearby_restaurants
 from app.services.loyalty_service import award_on_delivery
@@ -428,6 +429,26 @@ async def get_restaurant_qr(
         media_type="image/png" if kind == "png" else "image/svg+xml",
         headers=headers,
     )
+
+
+@router.post("/{restaurant_id}/qr/email")
+async def email_restaurant_qr(
+    restaurant_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reenvía el QR al correo del dueño del negocio."""
+    result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
+    restaurant = result.scalar_one_or_none()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Negocio no encontrado")
+    if not current_user.is_superuser and not await have_role(
+        db, restaurant.id, current_user, MANAGE_ROLES
+    ):
+        raise HTTPException(status_code=403, detail="No tienes acceso a este negocio")
+
+    sent, detail = await send_affiliation_qr_email(db, restaurant)
+    return {"sent": sent, "detail": None if sent else detail}
 
 
 @router.get("/{restaurant_id}/schedule", response_model=list[ScheduleEntry])

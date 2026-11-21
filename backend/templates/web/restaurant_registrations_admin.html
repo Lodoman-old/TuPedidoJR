@@ -478,6 +478,8 @@
           <td>${until}</td>
           <td>${days}</td>
           <td class="text-end text-nowrap">
+            <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="/web/restaurants/${r.id}/qr" title="Ver e imprimir QR">QR</a>
+            <button class="btn btn-sm btn-outline-secondary" onclick="resendQr('${r.id}', this)" title="Enviar QR por correo"><i class="bi bi-envelope"></i></button>
             <select class="form-select form-select-sm d-inline-block me-1" id="affMethod_${r.id}" style="width:130px">
               <option value="cash"${method === 'cash' ? ' selected' : ''}>Efectivo</option>
               <option value="transfer"${method === 'transfer' ? ' selected' : ''}>Transferencia</option>
@@ -518,6 +520,25 @@
     const box = document.getElementById(`affAmount_${id}`);
     const plan = affiliationPlansAdmin.find(p => String(p.months) === String(select?.value));
     if (box) box.textContent = money0(plan?.price ?? 0);
+  }
+
+  async function resendQr(id, btn) {
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    try {
+      const res = await apiRequest('POST', `/admin/affiliations/${id}/qr-email`, {});
+      if (res.sent) {
+        showToast('QR enviado por correo.');
+      } else {
+        showToast(`No se pudo enviar el QR: ${res.detail || 'revisa el correo del dueño'}`, 'warning');
+      }
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
   }
 
   async function markAffiliation(id, paid, btn) {

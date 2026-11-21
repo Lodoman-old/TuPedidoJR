@@ -223,6 +223,26 @@ async def update_affiliation(
     return row
 
 
+@router.post("/affiliations/{restaurant_id}/qr-email")
+async def resend_affiliation_qr(
+    restaurant_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    """Reenvía el QR al dueño sin modificar la afiliación."""
+    result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
+    restaurant = result.scalar_one_or_none()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Negocio no encontrado")
+    sent, detail = await send_affiliation_qr_email(db, restaurant)
+    await log_action(
+        db, current_user.id, "affiliation.qr_email", "restaurant", restaurant.id,
+        {"sent": sent},
+    )
+    await db.commit()
+    return {"sent": sent, "detail": None if sent else detail}
+
+
 @router.post("/restaurant-registrations/{restaurant_id}/approve")
 async def approve_restaurant(
     restaurant_id: str,

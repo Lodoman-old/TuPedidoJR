@@ -1875,3 +1875,33 @@ class TestRestaurantTeamOrderStatus:
             assert advanced.status_code == 200, (role, advanced.text)
             assert advanced.json()["status"] == "confirmed"
 
+
+
+class TestShowAddress:
+    async def test_hide_address_from_public_page(
+        self, client, restaurant, owner_token, db_session,
+    ):
+        resto, _ = restaurant
+        resto.slug = "negocio-oculto"
+        await db_session.commit()
+
+        detail = await client.get(f"/api/v1/restaurants/{resto.id}")
+        assert detail.status_code == 200
+        assert detail.json()["show_address"] is True
+
+        visible = await client.get("/r/negocio-oculto")
+        assert visible.status_code == 200
+        assert "Calle 5 de Mayo 209" in visible.text
+
+        hidden = await client.patch(
+            f"/api/v1/restaurants/{resto.id}/profile",
+            json={"show_address": False},
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert hidden.status_code == 200
+        assert hidden.json()["show_address"] is False
+
+        page = await client.get("/r/negocio-oculto")
+        assert page.status_code == 200
+        assert "Calle 5 de Mayo 209" not in page.text
+        assert '"address"' not in page.text

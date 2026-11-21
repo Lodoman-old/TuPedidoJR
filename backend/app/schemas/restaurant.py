@@ -144,6 +144,7 @@ class RestaurantOut(BaseModel):
     status: str = "active"
     viewer_role: str | None = None
     address: str
+    show_address: bool = True
     phone: str | None
     logo_url: str | None
     is_open: bool
@@ -181,6 +182,7 @@ class RestaurantListItem(BaseModel):
     is_open_now: bool | None = None
     open_message: str | None = None
     estimated_delivery_fee: Decimal | None = None
+    show_address: bool = True
 
     class Config:
         from_attributes = True
@@ -247,6 +249,7 @@ class RestaurantProfileUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=20)
     is_open: bool | None = None
     public_page_enabled: bool | None = None
+    show_address: bool | None = None
     delivery_mode: str | None = Field(default=None, pattern="^(platform|own)$")
     delivery_enabled: bool | None = None
     pickup_enabled: bool | None = None

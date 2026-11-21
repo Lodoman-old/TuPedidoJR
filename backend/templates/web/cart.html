@@ -288,7 +288,7 @@ let scheduleState = { enabled: false, value: '' };
 
     html += `<div class="card p-3 mb-3 d-none" id="pickupInfoCard">
       <div class="alert alert-info py-2 mb-2"><i class="bi bi-shop"></i> Recoger en el negocio</div>
-      <div class="small"><strong>${esc(restaurantInfo?.name || '')}</strong><br>${esc(restaurantInfo?.address || '')}</div>
+      <div class="small"><strong>${esc(restaurantInfo?.name || '')}</strong><br>${restaurantInfo?.show_address === false ? '<span class="text-muted">Dirección no publicada</span>' : esc(restaurantInfo?.address || '')}</div>
       <div class="form-text">Te avisaremos cuando el pedido esté listo. No se cobra envío ni propina.</div>
     </div>`;
 

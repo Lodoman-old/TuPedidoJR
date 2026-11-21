@@ -69,6 +69,13 @@
             </div>
             <div class="form-text">El pedido no lleva envío ni propina. El cliente pasa cuando esté listo.</div>
           </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="bizShowAddress" checked>
+              <label class="form-check-label" for="bizShowAddress">Mostrar domicilio en la página pública</label>
+            </div>
+            <div class="form-text">Si lo desactivas, el cliente no verá tu dirección ni el mapa. Útil si solo vendes en línea.</div>
+          </div>
           <div class="col-12 col-md-6">
             <div class="form-check">
               <input class="form-check-input" type="checkbox" id="bizIsOpen">
@@ -351,6 +358,7 @@
     }
     el('bizIsOpen').checked = Boolean(r.is_open);
     el('bizPublicPage').checked = Boolean(r.public_page_enabled);
+    el('bizShowAddress').checked = r.show_address !== false;
     const reservationsCard = el('reservationsCard');
     if (reservationsCard) {
       reservationsCard.classList.toggle(
@@ -579,6 +587,7 @@
       phone: el('bizPhone').value.trim() || null,
       is_open: el('bizIsOpen').checked,
       public_page_enabled: el('bizPublicPage').checked,
+      show_address: el('bizShowAddress').checked,
       delivery_mode: el('bizDeliveryMode').value,
       delivery_enabled: el('bizDeliveryEnabled').checked,
       pickup_enabled: el('bizPickup').checked,

@@ -28,6 +28,7 @@ class Restaurant(TimestampMixin, Base):
     public_page_enabled = Column(Boolean, default=True, nullable=False)
     location = Column(Geography(geometry_type="POINT", srid=4326), nullable=False)
     address = Column(Text, nullable=False)
+    show_address = Column(Boolean, default=True, nullable=False)
     phone = Column(String(20), nullable=True)
     logo_url = Column(Text, nullable=True)
     is_open = Column(Boolean, default=True, nullable=False)

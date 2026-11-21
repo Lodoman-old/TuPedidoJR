@@ -76,6 +76,21 @@
   </div>
 </div>
 
+<div class="modal fade" id="refundDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="refundDetailTitle">Detalle del reembolso</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="refundDetailBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="payoutHistoryModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -182,6 +197,7 @@
   let reconRowsById = {};
   let couriersById = {};
   let payoutHistoryById = {};
+  let refundRowsById = {};
 
   function openPayoutHistoryDetail(id) {
     const h = payoutHistoryById[String(id)];
@@ -541,6 +557,18 @@
           <td class="text-end text-danger">${money(o.owes)}</td>
         </tr>`).join('') || '<tr><td colspan="9" class="text-center text-muted">Sin pedidos.</td></tr>'}</tbody>
       </table></div>
+      ${(r.other_items || []).length ? `
+        <h6 class="small mt-3">Envíos y ajustes</h6>
+        <div class="table-responsive"><table class="table table-sm mb-0">
+          <thead><tr><th>Tipo</th><th>Fecha</th><th>Concepto</th><th class="text-end">A favor</th><th class="text-end">Por cobrar</th></tr></thead>
+          <tbody>${r.other_items.map(o => `<tr>
+            <td>${o.type === 'shipment' ? 'Envío' : 'Ajuste'}</td>
+            <td class="small">${o.date ? new Date(o.date).toLocaleDateString('es-MX') : '—'}</td>
+            <td class="small">${esc(o.description || '')}</td>
+            <td class="text-end text-success">${money(o.credit)}</td>
+            <td class="text-end text-danger">${money(o.charge)}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>` : ''}
       <p class="small text-muted mt-3 mb-0">La ganancia neta ya incluye comisiones, envíos, ajustes y puntos. Ganancia ${money(earned)} − deuda ${money(debt)} = neto ${money(net)}. ${net > 0 ? `Se le pagan ${money(net)}` : net < 0 ? `Se le cobran ${money(Math.abs(net))}` : 'No hay movimiento'}.</p>
     `;
     new bootstrap.Modal(document.getElementById('businessBalanceModal')).show();
@@ -720,11 +748,38 @@
     }
   }
 
+  function openRefundDetail(id) {
+    const r = refundRowsById[String(id)];
+    if (!r) return;
+    document.getElementById('refundDetailTitle').textContent = `Pedido #${String(r.id).slice(0, 8)}`;
+    document.getElementById('refundDetailBody').innerHTML = `
+      <div class="row g-2 mb-3">
+        ${summaryCard('Total del pedido', money(r.order_total))}
+        ${summaryCard('Productos', money(r.subtotal))}
+        ${summaryCard('Envío', money(r.delivery_fee))}
+        ${summaryCard('Comisión al cliente', money(r.flat_fee))}
+        ${summaryCard('Propina', money(r.tip))}
+        ${summaryCard('Descuento', money(r.discount))}
+        ${summaryCard('A devolver', money(r.total), 'border-danger')}
+      </div>
+      <table class="table table-sm mb-0"><tbody>
+        <tr><td>Cliente</td><td class="text-end">${esc(r.customer_name || '—')}<br><small class="text-muted">${esc(r.customer_email || '')}</small></td></tr>
+        <tr><td>Negocio</td><td class="text-end">${esc(r.restaurant_name || '—')}</td></tr>
+        <tr><td>Forma de pago original</td><td class="text-end">${r.payment_method === 'cash' ? 'Efectivo' : r.payment_method === 'transfer' ? 'Transferencia' : 'En línea'}</td></tr>
+        <tr><td>Motivo de cancelación</td><td class="text-end small">${esc(r.cancellation_reason || '—')}</td></tr>
+        <tr><td>Fecha de cancelación</td><td class="text-end">${r.cancelled_at ? new Date(r.cancelled_at).toLocaleString('es-MX') : '—'}</td></tr>
+        <tr><td>Cuenta para devolución</td><td class="text-end small">${esc(r.account_holder || 'Sin titular')}<br>${esc(r.bank || '—')} · ${esc(r.clabe || '—')}</td></tr>
+      </tbody></table>
+      <p class="small text-muted mt-3 mb-0">El monto a devolver puede ser el total pagado o el monto aprobado en la incidencia. Verifica la cuenta antes de transferir.</p>`;
+    new bootstrap.Modal(document.getElementById('refundDetailModal')).show();
+  }
+
   async function loadRefunds() {
     const card = document.getElementById('refundsCard');
     if (!card) return;
     try {
       const rows = await apiRequest('GET', '/admin/refunds/pending');
+      refundRowsById = Object.fromEntries(rows.map(r => [String(r.id), r]));
       setFinanceBadge('badgeRefunds', rows.length, rows.length ? 'danger' : 'secondary');
       if (!rows.length) {
         card.innerHTML = '<div class="card p-3"><h6 class="mb-1"><i class="bi bi-arrow-counterclockwise"></i> Devoluciones</h6><p class="small text-muted mb-0">No hay reembolsos pendientes.</p></div>';
@@ -743,7 +798,8 @@
             <td><small>${esc(r.account_holder || 'Sin capturar')}</small></td>
             <td><small>${esc(r.bank || '—')}</small></td>
             <td><small>${esc(r.clabe || '—')} ${r.clabe ? `<button class="btn btn-sm btn-link p-0" onclick="copyClabe('${esc(r.clabe)}')">copiar</button>` : ''}</small></td>
-            <td class="text-end"><button class="btn btn-sm btn-success" onclick="markRefunded('${r.id}', this)">Marcar reembolsado</button></td>
+            <td class="text-end"><button class="btn btn-sm btn-outline-secondary" onclick="openRefundDetail('${r.id}')">Detalle</button>
+              <button class="btn btn-sm btn-success" onclick="markRefunded('${r.id}', this)">Marcar reembolsado</button></td>
           </tr>`).join('')}</tbody>
         </table></div>
       </div>`;

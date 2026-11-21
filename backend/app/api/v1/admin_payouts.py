@@ -90,6 +90,14 @@ async def pending_refunds(
             "customer_name": customer.name if customer else "",
             "customer_email": customer.email if customer else "",
             "total": str(order.refund_amount or order.total or 0),
+            "order_total": _money(order.total),
+            "subtotal": _money(order.subtotal),
+            "delivery_fee": _money(order.delivery_fee),
+            "flat_fee": _money(order.flat_usage_fee),
+            "tip": _money(order.tip_amount),
+            "discount": _money(order.discount_amount),
+            "payment_method": order.payment_method,
+            "cancellation_reason": order.cancellation_reason,
             "account_holder": order.refund_account_holder,
             "bank": order.refund_bank,
             "clabe": order.refund_clabe,
@@ -326,6 +334,29 @@ async def admin_payouts(
                         and not extra.restaurant_charge_settled
                     ]
                 )[:100]
+            ],
+            "other_items": [
+                {
+                    "type": "shipment",
+                    "id": str(s.id),
+                    "date": s.created_at.isoformat() if s.created_at else None,
+                    "description": f"Envío {s.status}",
+                    "credit": _money(s.store_credit),
+                    "charge": _money(s.store_charge),
+                }
+                for s in balance.get("shipments", [])
+                if (s.status == "delivered" and not s.store_credit_settled)
+                or not s.store_charge_settled
+            ] + [
+                {
+                    "type": "adjustment",
+                    "id": str(a.id),
+                    "date": a.created_at.isoformat() if a.created_at else None,
+                    "description": a.notes or f"Ajuste {a.kind}",
+                    "credit": _money(a.amount) if a.kind == "credit" else "0.00",
+                    "charge": _money(a.amount) if a.kind == "charge" else "0.00",
+                }
+                for a in balance.get("adjustments", [])
             ],
             "commission_total": _money(sum(
                 (o.platform_commission or 0) for o in balance.get("all_orders", [])

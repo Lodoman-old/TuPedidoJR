@@ -41,7 +41,7 @@ from app.services.cancellation_service import apply_cancellation
 from app.services.file_service import delete_upload, save_upload
 from app.services.geo_service import get_nearby_restaurants
 from app.services.loyalty_service import award_on_delivery
-from app.services.push_service import schedule_available_order, schedule_courier_preparing, schedule_courier_ready, schedule_order_status
+from app.services.push_service import schedule_available_order, schedule_courier_preparing, schedule_courier_ready, schedule_order_status, schedule_admin_payout_request
 from app.services.schedule_service import (
     get_schedules,
     get_timezone,
@@ -1331,4 +1331,5 @@ async def request_restaurant_payout(
         payout = await create_restaurant_payout(db, restaurant.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    schedule_admin_payout_request("restaurant", restaurant.name, payout.net_payout)
     return payout

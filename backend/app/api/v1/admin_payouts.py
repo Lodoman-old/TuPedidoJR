@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_superuser
@@ -437,6 +437,36 @@ async def admin_payouts(
         "couriers": couriers,
         "pending_transfers": pending_transfers,
         "today": (await local_today(db)).isoformat(),
+    }
+
+
+@router.get("/payouts/pending-count")
+async def pending_payout_count(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    restaurant_count = await db.scalar(
+        select(func.count(RestaurantPayout.id)).where(RestaurantPayout.status == "pending")
+    )
+    courier_count = await db.scalar(
+        select(func.count(DeliveryPayout.id)).where(DeliveryPayout.status == "pending")
+    )
+    refund_count = await db.scalar(
+        select(func.count(Order.id)).where(Order.refund_status == "pending")
+    )
+    advance_count = await db.scalar(
+        select(func.count(CashAdvance.id)).where(CashAdvance.status == "pending")
+    )
+    restaurants = int(restaurant_count or 0)
+    couriers = int(courier_count or 0)
+    refunds = int(refund_count or 0)
+    advances = int(advance_count or 0)
+    return {
+        "restaurants": restaurants,
+        "couriers": couriers,
+        "refunds": refunds,
+        "advances": advances,
+        "total": restaurants + couriers + refunds + advances,
     }
 
 

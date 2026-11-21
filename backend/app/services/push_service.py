@@ -1120,6 +1120,45 @@ async def notify_mandado_status(mandado_id: str, status: str) -> None:
         logger.exception("Push mandado notification failed for %s", mandado_id)
 
 
+async def notify_admin_payout_request(
+    kind: str, name: str, amount, direction: str = "to_restaurant"
+) -> None:
+    """Avisa a los administradores que un negocio o repartidor pidió un pago."""
+    try:
+        async with async_session() as db:
+            result = await db.execute(
+                select(User).where(User.is_superuser.is_(True), User.is_active.is_(True))
+            )
+            admins = list(result.scalars().all())
+            if not admins:
+                return
+            title = "Solicitud de pago"
+            if kind == "courier" and direction == "to_platform":
+                title = "Solicitud de entrega de efectivo"
+                body = f"{name}: quiere entregar ${float(amount or 0):.2f} de su corte."
+            elif kind == "courier":
+                body = f"{name}: solicita el pago de su corte por ${float(amount or 0):.2f}."
+            else:
+                body = f"{name}: solicita el pago de su saldo por ${float(amount or 0):.2f}."
+            for admin in admins:
+                await send_to_user(
+                    db, admin.id, title, body,
+                    {"type": "payout_request", "kind": kind},
+                    "amber",
+                )
+    except Exception:
+        logger.exception("Push admin payout request notification failed")
+
+
+def schedule_admin_payout_request(
+    kind: str, name: str, amount, direction: str = "to_restaurant"
+) -> None:
+    try:
+        asyncio.create_task(notify_admin_payout_request(kind, name, amount, direction))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
 async def notify_new_restaurant_registration(restaurant_id: str) -> None:
     """Notify every active administrator that a restaurant is waiting for approval."""
     try:

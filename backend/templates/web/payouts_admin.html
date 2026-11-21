@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <h4 class="m-0"><i class="bi bi-wallet2"></i> Pagos a restaurantes y repartidores</h4>
+  <h4 class="m-0"><i class="bi bi-wallet2"></i> Pagos de negocios y repartidores</h4>
   <button class="btn btn-outline-secondary btn-sm" onclick="loadPayouts()">
     <i class="bi bi-arrow-clockwise"></i> Actualizar
   </button>
@@ -169,6 +169,27 @@
     if (!el) return;
     el.textContent = count;
     el.className = `badge bg-${color}`;
+  }
+
+  let businessTab = 'all';
+  let courierBalanceTab = 'all';
+
+  function filterBusinessRows(tab, btn) {
+    businessTab = tab;
+    document.querySelectorAll('#businessSubtabs .btn').forEach(b => b.classList.remove('active'));
+    btn?.classList.add('active');
+    document.querySelectorAll('.biz-row').forEach(row => {
+      row.classList.toggle('d-none', tab !== 'all' && !row.classList.contains(`biz-${tab}`));
+    });
+  }
+
+  function filterCourierBalanceRows(tab, btn) {
+    courierBalanceTab = tab;
+    document.querySelectorAll('#courierBalanceSubtabs .btn').forEach(b => b.classList.remove('active'));
+    btn?.classList.add('active');
+    document.querySelectorAll('.courier-balance-row').forEach(row => {
+      row.classList.toggle('d-none', tab !== 'all' && !row.classList.contains(`courier-${tab}`));
+    });
   }
 
   function frequencyOptions(selected) {
@@ -346,23 +367,43 @@
 
   function renderRestaurants(restaurants) {
     restaurantsById = Object.fromEntries(restaurants.map(r => [String(r.id), r]));
+    const owedCount = restaurants.filter(r => parseFloat(r.earned_total || 0) > 0).length;
+    const debtCount = restaurants.filter(r => parseFloat(r.restaurant_debt || 0) > 0).length;
+    const settledCount = restaurants.filter(r => parseFloat(r.earned_total || 0) <= 0 && parseFloat(r.restaurant_debt || 0) <= 0).length;
     return `<div class="card p-3 mb-3">
-      <h6>Restaurantes</h6>
+      <h6>Negocios</h6>
       <p class="small text-muted">La comisión individual reemplaza la comisión global. Si dejas el campo vacío, se usa la global.<br>
-        <strong>Se le debe</strong> es lo que la plataforma le pagará. <strong>Debe</strong> es el efectivo o los cargos que el negocio cobró por la plataforma. <strong>Neto</strong> es lo que realmente se paga o se cobra.</p>
+        <strong>Ganancia</strong> es lo que la plataforma le pagará antes de deudas. <strong>Debe</strong> es el efectivo o cargos que el negocio cobró por la plataforma. <strong>Neto</strong> es lo que realmente se paga o se cobra.</p>
+      <div class="d-flex flex-wrap gap-1 mb-2" id="businessSubtabs">
+        <button type="button" class="btn btn-sm btn-outline-secondary ${businessTab === 'all' ? 'active' : ''}" onclick="filterBusinessRows('all', this)">Todos <span class="badge bg-secondary">${restaurants.length}</span></button>
+        <button type="button" class="btn btn-sm btn-outline-success ${businessTab === 'owed' ? 'active' : ''}" onclick="filterBusinessRows('owed', this)">Se les debe <span class="badge bg-success">${owedCount}</span></button>
+        <button type="button" class="btn btn-sm btn-outline-danger ${businessTab === 'debt' ? 'active' : ''}" onclick="filterBusinessRows('debt', this)">Deben a plataforma <span class="badge bg-danger">${debtCount}</span></button>
+        <button type="button" class="btn btn-sm btn-outline-secondary ${businessTab === 'settled' ? 'active' : ''}" onclick="filterBusinessRows('settled', this)">Liquidados <span class="badge bg-secondary">${settledCount}</span></button>
+      </div>
       <div class="table-responsive"><table class="table table-sm align-middle" style="min-width:1220px">
         <thead><tr>
-          <th>Restaurante</th><th class="text-end">Ventas 30d</th><th class="text-end">Ganancia</th><th class="text-end">Debe a plataforma</th><th class="text-end">Neto a pagar</th><th>Comisión %</th>
+          <th>Negocio</th><th class="text-end">Ventas 30d</th><th class="text-end">Ganancia</th><th class="text-end">Debe a plataforma</th><th class="text-end">Neto a pagar</th><th>Comisión %</th>
           <th>Frecuencia</th><th>Próximo pago</th><th>Estado</th><th></th>
         </tr></thead>
         <tbody>${restaurants.map(r => {
           const net = parseFloat(r.net_amount || 0);
+          const earned = parseFloat(r.earned_total || 0);
+          const debt = parseFloat(r.restaurant_debt || 0);
+          const rowClasses = [
+            earned > 0 ? 'biz-owed' : '',
+            debt > 0 ? 'biz-debt' : '',
+            (earned <= 0 && debt <= 0) ? 'biz-settled' : '',
+          ];
+          const matches = businessTab === 'all'
+            || (businessTab === 'owed' && earned > 0)
+            || (businessTab === 'debt' && debt > 0)
+            || (businessTab === 'settled' && earned <= 0 && debt <= 0);
           const netLabel = net > 0
             ? `<span class="text-success fw-bold">Pagar ${money(net)}</span>`
             : (net < 0
               ? `<span class="text-danger fw-bold">Cobrar ${money(Math.abs(net))}</span>`
               : '<span class="text-muted">Sin saldo</span>');
-          return `<tr>
+          return `<tr class="biz-row ${rowClasses.join(' ')} ${matches ? '' : 'd-none'}">
             <td>${esc(r.name)}</td>
             <td class="text-end">${money(r.monthly_sales)}</td>
             <td class="text-end fw-bold">${money(r.earned_total)}</td>
@@ -396,16 +437,38 @@
 
   function renderCouriers(couriers) {
     couriersById = Object.fromEntries(couriers.map(c => [String(c.id), c]));
+    const owedCount = couriers.filter(c => parseFloat(c.pending_amount || 0) > 0 || parseFloat(c.net_amount || 0) > 0).length;
+    const debtCount = couriers.filter(c => parseFloat(c.pending_debt || 0) > 0 || parseFloat(c.pending_advances || 0) > 0 || parseFloat(c.net_amount || 0) < 0).length;
+    const settledCount = couriers.filter(c => parseFloat(c.pending_amount || 0) <= 0 && parseFloat(c.pending_debt || 0) <= 0 && parseFloat(c.pending_advances || 0) <= 0).length;
     return `<div class="card p-3 mb-3">
       <h6>Repartidores</h6>
       <p class="small text-muted">El bono por envío se suma a la ganancia base de cada pedido que acepte el repartidor.</p>
+      <div class="d-flex flex-wrap gap-1 mb-2" id="courierBalanceSubtabs">
+        <button type="button" class="btn btn-sm btn-outline-secondary ${courierBalanceTab === 'all' ? 'active' : ''}" onclick="filterCourierBalanceRows('all', this)">Todos <span class="badge bg-secondary">${couriers.length}</span></button>
+        <button type="button" class="btn btn-sm btn-outline-success ${courierBalanceTab === 'owed' ? 'active' : ''}" onclick="filterCourierBalanceRows('owed', this)">Se les debe <span class="badge bg-success">${owedCount}</span></button>
+        <button type="button" class="btn btn-sm btn-outline-danger ${courierBalanceTab === 'debt' ? 'active' : ''}" onclick="filterCourierBalanceRows('debt', this)">Deben a plataforma <span class="badge bg-danger">${debtCount}</span></button>
+        <button type="button" class="btn btn-sm btn-outline-secondary ${courierBalanceTab === 'settled' ? 'active' : ''}" onclick="filterCourierBalanceRows('settled', this)">Liquidados <span class="badge bg-secondary">${settledCount}</span></button>
+      </div>
       <div class="table-responsive"><table class="table table-sm align-middle" style="min-width:1400px">
         <thead><tr>
           <th>Repartidor</th><th class="text-end">Pendiente</th><th>Bono por envío</th>
           <th>Método de pago</th><th>Frecuencia</th><th class="text-end">Deuda</th><th class="text-end">Avances</th><th class="text-end">Saldo del corte</th><th>Próximo pago</th><th>Estado</th><th></th>
         </tr></thead>
-        <tbody>${couriers.map(c => `
-          <tr>
+        <tbody>${couriers.map(c => {
+          const credit = parseFloat(c.pending_amount || 0);
+          const debt = parseFloat(c.pending_debt || 0);
+          const advances = parseFloat(c.pending_advances || 0);
+          const net = parseFloat(c.net_amount || 0);
+          const rowClasses = [
+            (credit > 0 || net > 0) ? 'courier-owed' : '',
+            (debt > 0 || advances > 0 || net < 0) ? 'courier-debt' : '',
+            (credit <= 0 && debt <= 0 && advances <= 0) ? 'courier-settled' : '',
+          ];
+          const matches = courierBalanceTab === 'all'
+            || (courierBalanceTab === 'owed' && (credit > 0 || net > 0))
+            || (courierBalanceTab === 'debt' && (debt > 0 || advances > 0 || net < 0))
+            || (courierBalanceTab === 'settled' && credit <= 0 && debt <= 0 && advances <= 0);
+          return `<tr class="courier-balance-row ${rowClasses.join(' ')} ${matches ? '' : 'd-none'}">
             <td>${esc(c.name)}<br><small class="text-muted text-break">${esc(c.email || '')}</small></td>
             <td class="text-end fw-bold">${money(c.pending_amount)}</td>
             <td style="min-width:120px">
@@ -442,7 +505,8 @@
               <button class="btn btn-sm btn-success" onclick="payCourier('${c.id}')"
                       ${parseFloat(c.net_amount || 0) === 0 ? 'disabled' : ''}>Generar corte</button>
             </td>
-          </tr>`).join('')}</tbody>
+          </tr>`;
+        }).join('')}</tbody>
       </table></div>
     </div>`;
   }

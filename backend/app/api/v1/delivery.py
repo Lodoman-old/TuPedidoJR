@@ -36,7 +36,7 @@ from app.services.geo_service import find_nearby_delivery_persons
 from app.services.loyalty_service import award_on_delivery
 from app.services.order_service import get_setting_value
 from app.services.order_serialization import order_out
-from app.services.push_service import schedule_courier_assigned, schedule_order_status, schedule_arrival
+from app.services.push_service import schedule_courier_assigned, schedule_order_status, schedule_arrival, schedule_admin_payout_request
 from app.services.route_service import route_info
 from app.services.schedule_service import get_timezone
 from app.services.settlement_service import is_order_settleable
@@ -693,4 +693,10 @@ async def request_payout(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    schedule_admin_payout_request(
+        "courier",
+        current_user.name or current_user.email,
+        abs(payout.net_amount or 0),
+        payout.direction,
+    )
     return payout

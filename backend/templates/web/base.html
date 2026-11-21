@@ -267,7 +267,7 @@
               <li><a class="dropdown-item" href="/web/admin/users"><i class="bi bi-people"></i> Usuarios</a></li>
               <li><hr class="dropdown-divider"></li>
               <li><h6 class="dropdown-header">Finanzas</h6></li>
-              <li><a class="dropdown-item" href="/web/admin/payouts"><i class="bi bi-wallet2"></i> Pagos y reembolsos</a></li>
+              <li><a class="dropdown-item" href="/web/admin/payouts"><i class="bi bi-wallet2"></i> Pagos y cobros <span id="pendingPayoutsBadge" class="badge rounded-pill bg-danger d-none">0</span></a></li>
               <li><a class="dropdown-item" href="/web/admin/incidents"><i class="bi bi-exclamation-triangle"></i> Incidencias</a></li>
               <li><a class="dropdown-item" href="/web/admin/receipts"><i class="bi bi-patch-check"></i> Comprobantes</a></li>
               <li><a class="dropdown-item" href="/web/admin/agenda"><i class="bi bi-calendar-week"></i> Agenda y saldos</a></li>
@@ -299,6 +299,7 @@
 
   <main class="container py-3">
     <div id="affiliationBanner" class="alert alert-warning d-none" role="alert"></div>
+    <div id="adminPayoutAlert" class="alert alert-warning d-none" role="alert"></div>
     <div id="restaurantOrderAlert" class="alert alert-danger d-none" role="alert"></div>
     {% block content %}{% endblock %}
   </main>
@@ -1160,6 +1161,8 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
             target = '/web/orders';
           } else if (data.type === 'affiliation' && data.restaurant_id) {
             target = '/web/restaurants/' + data.restaurant_id + '/profile';
+          } else if (data.type === 'payout_request') {
+            target = '/web/admin/payouts';
           } else if (data.type === 'assigned_order') {
             target = '/web/delivery';
           } else if (data.type === 'reservation' && data.reservation_id) {
@@ -1189,8 +1192,49 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
 
     function applyAdminNav(isSuperuser) {
       document.getElementById('adminNav')?.classList.toggle('d-none', !isSuperuser);
-      if (isSuperuser) startPendingRestaurantWatch();
+      if (isSuperuser) {
+        startPendingRestaurantWatch();
+        startPendingPayoutWatch();
+      }
     }
+
+    let _pendingPayouts = null;
+    let _pendingPayoutTimer = null;
+
+    function startPendingPayoutWatch() {
+      refreshPendingPayouts();
+      if (_pendingPayoutTimer) return;
+      _pendingPayoutTimer = setInterval(refreshPendingPayouts, 60000);
+    }
+
+    async function refreshPendingPayouts() {
+      try {
+        const res = await apiRequest('GET', '/admin/payouts/pending-count');
+        const count = Number(res.total || 0);
+        const badge = document.getElementById('pendingPayoutsBadge');
+        if (badge) {
+          badge.textContent = count;
+          badge.classList.toggle('d-none', count === 0);
+        }
+        const alertBox = document.getElementById('adminPayoutAlert');
+        if (alertBox) {
+          if (count > 0) {
+            alertBox.innerHTML = `<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+              <span><i class="bi bi-cash-stack"></i> <strong>${count} movimiento(s) de pago o cobro pendientes.</strong></span>
+              <a class="btn btn-sm btn-dark" href="/web/admin/payouts">Ver pagos</a>
+            </div>`;
+            alertBox.classList.remove('d-none');
+          } else {
+            alertBox.classList.add('d-none');
+          }
+        }
+        if (_pendingPayouts !== null && count > _pendingPayouts) {
+          showToast('Nueva solicitud de pago o cobro pendiente', 'warning');
+        }
+        _pendingPayouts = count;
+      } catch (e) { /* solo aplica a administradores */ }
+    }
+    window.refreshPendingPayouts = refreshPendingPayouts;
 
     let _pendingRestaurants = null;
     let _pendingRestaurantTimer = null;

@@ -75,6 +75,36 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="courierDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="courierDetailTitle">Detalle del repartidor</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="courierDetailBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="reconDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="reconDetailTitle">Detalle por pedido</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="reconDetailBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -128,6 +158,102 @@
   }
 
   let restaurantsById = {};
+  let reconRowsById = {};
+  let couriersById = {};
+
+  async function openCourierDetail(id) {
+    try {
+      const data = await apiRequest('GET', `/admin/payouts/couriers/${id}/detail`);
+      const orders = data.orders || [];
+      const shipments = data.shipments || [];
+      const recargas = data.recargas || [];
+      const advances = data.advances_detail || [];
+      document.getElementById('courierDetailTitle').textContent = data.name || 'Repartidor';
+      document.getElementById('courierDetailBody').innerHTML = `
+        <div class="row g-2 mb-3">
+          ${summaryCard('Ganancia a favor', money(data.credit), 'border-success')}
+          ${summaryCard('Efectivo por entregar', money(data.debt), 'border-danger')}
+          ${summaryCard('Avances', money(data.advances))}
+          ${summaryCard('Neto del corte', money(data.net), parseFloat(data.net) < 0 ? 'border-danger' : 'border-success')}
+        </div>
+        <h6 class="small">Pedidos entregados</h6>
+        <div class="table-responsive mb-3"><table class="table table-sm mb-0">
+          <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th class="text-end">Total pedido</th><th class="text-end">Ganancia</th></tr></thead>
+          <tbody>${orders.map(o => `<tr>
+            <td>#${esc(String(o.id).slice(0, 8))}</td>
+            <td class="small">${o.date ? new Date(o.date).toLocaleDateString('es-MX') : '—'}</td>
+            <td>${o.payment_method === 'cash' ? 'Efectivo' : o.payment_method === 'transfer' ? 'Transferencia' : 'En línea'}</td>
+            <td class="text-end">${money(o.total)}</td>
+            <td class="text-end text-success">${money(o.earnings)}</td>
+          </tr>`).join('') || '<tr><td colspan="5" class="text-center text-muted">Sin pedidos.</td></tr>'}</tbody>
+        </table></div>
+        <h6 class="small">Envíos</h6>
+        <div class="table-responsive mb-3"><table class="table table-sm mb-0">
+          <thead><tr><th>Envío</th><th>Estado</th><th class="text-end">Ganancia</th><th class="text-end">Por cobrar</th></tr></thead>
+          <tbody>${shipments.map(s => `<tr>
+            <td>#${esc(String(s.id).slice(0, 8))}</td>
+            <td>${esc(s.status)}</td>
+            <td class="text-end text-success">${money(s.earnings)}</td>
+            <td class="text-end">${money(s.collect)}</td>
+          </tr>`).join('') || '<tr><td colspan="4" class="text-center text-muted">Sin envíos.</td></tr>'}</tbody>
+        </table></div>
+        <h6 class="small">Recargas</h6>
+        <div class="table-responsive mb-3"><table class="table table-sm mb-0">
+          <thead><tr><th>Fecha</th><th>Compañía</th><th>Teléfono</th><th class="text-end">Monto</th><th class="text-end">Comisión</th><th>Estado</th></tr></thead>
+          <tbody>${recargas.map(r => `<tr>
+            <td class="small">${r.date ? new Date(r.date).toLocaleDateString('es-MX') : '—'}</td>
+            <td>${esc(r.company)}</td>
+            <td>${esc(r.phone)}</td>
+            <td class="text-end">${money(r.amount)}</td>
+            <td class="text-end text-success">${money(r.fee)}</td>
+            <td>${esc(r.status)}</td>
+          </tr>`).join('') || '<tr><td colspan="6" class="text-center text-muted">Sin recargas.</td></tr>'}</tbody>
+        </table></div>
+        <h6 class="small">Avances</h6>
+        <div class="table-responsive"><table class="table table-sm mb-0">
+          <thead><tr><th>Fecha</th><th>Tipo</th><th class="text-end">Monto</th><th>Estado</th></tr></thead>
+          <tbody>${advances.map(a => `<tr>
+            <td class="small">${a.date ? new Date(a.date).toLocaleDateString('es-MX') : '—'}</td>
+            <td>${a.pays_restaurant ? 'Pago al negocio' : 'Préstamo'}</td>
+            <td class="text-end">${money(a.amount)}</td>
+            <td>${esc(a.status)}</td>
+          </tr>`).join('') || '<tr><td colspan="4" class="text-center text-muted">Sin avances.</td></tr>'}</tbody>
+        </table></div>`;
+      new bootstrap.Modal(document.getElementById('courierDetailModal')).show();
+    } catch (e) { showToast(e.message, 'danger'); }
+  }
+
+  function openReconDetail(id) {
+    const row = reconRowsById[String(id)];
+    if (!row) return;
+    const items = row.order_items || [];
+    document.getElementById('reconDetailTitle').textContent = row.name || 'Detalle';
+    document.getElementById('reconDetailBody').innerHTML = `
+      <div class="row g-2 mb-3">
+        ${summaryCard('Pedidos', row.orders)}
+        ${summaryCard('Subtotal', money(row.subtotal))}
+        ${summaryCard('Comisión', money(row.commission))}
+        ${summaryCard('Cuota fija', money(row.flat_fee))}
+        ${summaryCard('Total cobrado', money(row.total))}
+        ${summaryCard('Debe a plataforma', money(row.restaurant_owes), parseFloat(row.restaurant_owes) ? 'border-danger' : '')}
+      </div>
+      <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th class="text-end">Productos</th><th class="text-end">Comisión</th><th class="text-end">Cuota</th><th class="text-end">Envío</th><th class="text-end">Total</th><th class="text-end">Debe</th></tr></thead>
+        <tbody>${items.map(o => `<tr>
+          <td>#${esc(String(o.id).slice(0, 8))}</td>
+          <td class="small">${o.date ? new Date(o.date).toLocaleDateString('es-MX') : '—'}</td>
+          <td>${o.payment_method === 'cash' ? 'Efectivo' : o.payment_method === 'transfer' ? 'Transferencia' : 'En línea'}</td>
+          <td class="text-end">${money(o.subtotal)}</td>
+          <td class="text-end">${money(o.commission)}</td>
+          <td class="text-end">${money(o.flat_fee)}</td>
+          <td class="text-end">${money(o.delivery_fee)}</td>
+          <td class="text-end fw-bold">${money(o.total)}</td>
+          <td class="text-end text-danger">${money(o.owes)}</td>
+        </tr>`).join('') || '<tr><td colspan="9" class="text-center text-muted">Sin pedidos en el rango.</td></tr>'}</tbody>
+      </table></div>
+      <p class="small text-muted mt-3 mb-0">Cada fila es un pedido entregado. La comisión y la cuota se descuentan al negocio; el “Debe” es el efectivo que cobró por cuenta de la plataforma.</p>`;
+    new bootstrap.Modal(document.getElementById('reconDetailModal')).show();
+  }
 
   function renderRestaurants(restaurants) {
     restaurantsById = Object.fromEntries(restaurants.map(r => [String(r.id), r]));
@@ -180,6 +306,7 @@
   }
 
   function renderCouriers(couriers) {
+    couriersById = Object.fromEntries(couriers.map(c => [String(c.id), c]));
     return `<div class="card p-3 mb-3">
       <h6>Repartidores</h6>
       <p class="small text-muted">El bono por envío se suma a la ganancia base de cada pedido que acepte el repartidor.</p>
@@ -221,6 +348,7 @@
             <td>${c.next_payout_date || '—'}</td>
             <td>${statusBadge(c.status)}</td>
             <td class="text-end text-nowrap">
+              <button class="btn btn-sm btn-outline-secondary" onclick="openCourierDetail('${c.id}')">Detalle</button>
               <button class="btn btn-sm btn-outline-primary" onclick="saveCourier('${c.id}')">Guardar</button>
               <button class="btn btn-sm btn-success" onclick="payCourier('${c.id}')"
                       ${parseFloat(c.net_amount || 0) === 0 ? 'disabled' : ''}>Generar corte</button>
@@ -325,6 +453,20 @@
           <tr><td>Pedidos considerados</td><td class="text-end">${r.orders_count || 0}</td></tr>
         </tbody>
       </table>
+      <h6 class="small mt-3">Pedidos que forman el saldo</h6>
+      <div class="table-responsive"><table class="table table-sm mb-0">
+        <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th class="text-end">Productos</th><th class="text-end">Comisión</th><th class="text-end">Cuota</th><th class="text-end">Total</th><th class="text-end">Debe</th></tr></thead>
+        <tbody>${(r.pending_items || []).map(o => `<tr>
+          <td>#${esc(String(o.id).slice(0, 8))}</td>
+          <td class="small">${o.date ? new Date(o.date).toLocaleDateString('es-MX') : '—'}</td>
+          <td>${o.payment_method === 'cash' ? 'Efectivo' : o.payment_method === 'transfer' ? 'Transferencia' : 'En línea'}</td>
+          <td class="text-end">${money(o.subtotal)}</td>
+          <td class="text-end">${money(o.commission)}</td>
+          <td class="text-end">${money(o.flat_fee)}</td>
+          <td class="text-end fw-bold">${money(o.total)}</td>
+          <td class="text-end text-danger">${money(o.owes)}</td>
+        </tr>`).join('') || '<tr><td colspan="8" class="text-center text-muted">Sin pedidos.</td></tr>'}</tbody>
+      </table></div>
       <p class="small text-muted mt-3 mb-0">La ganancia neta ya incluye comisiones, envíos, ajustes y puntos. La plataforma le debe ${money(pending)} y el negocio debe ${money(debt)}. Al generar el pago se aplica el neto: ${net > 0 ? `se le pagan ${money(net)}` : net < 0 ? `se le cobran ${money(Math.abs(net))}` : 'no hay movimiento'}.</p>
     `;
     new bootstrap.Modal(document.getElementById('businessBalanceModal')).show();
@@ -432,6 +574,7 @@
 
   function renderReconciliation(data) {
     const t = data.totals || {};
+    reconRowsById = Object.fromEntries((data.restaurants || []).map(r => [String(r.restaurant_id), r]));
     const netPlatform = parseFloat(t.commission || 0) + parseFloat(t.flat_fee || 0) - parseFloat(t.loyalty_discount || 0);
     return `
       <div class="row g-2 mb-3">
@@ -453,7 +596,7 @@
             <th class="text-end">Comisión</th><th class="text-end">Cuota fija</th>
             <th class="text-end">Puntos</th>
             <th class="text-end">Propinas</th><th class="text-end">Total cobrado</th>
-            <th class="text-end">Debe a plataforma</th>
+            <th class="text-end">Debe a plataforma</th><th></th>
           </tr></thead>
           <tbody>${(data.restaurants || []).map(r => `<tr>
             <td>${esc(r.name)}</td>
@@ -465,7 +608,8 @@
             <td class="text-end">${money(r.tips)}</td>
             <td class="text-end fw-bold">${money(r.total)}</td>
             <td class="text-end text-danger">${money(r.restaurant_owes)}</td>
-          </tr>`).join('') || '<tr><td colspan="9" class="text-muted text-center">Sin pedidos entregados en el rango.</td></tr>'}</tbody>
+            <td class="text-end"><button class="btn btn-sm btn-outline-secondary" onclick="openReconDetail('${r.restaurant_id}')">Detalle</button></td>
+          </tr>`).join('') || '<tr><td colspan="10" class="text-muted text-center">Sin pedidos entregados en el rango.</td></tr>'}</tbody>
         </table>
       </div>
       <h6 class="small text-muted">Repartidores</h6>

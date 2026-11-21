@@ -32,6 +32,21 @@
     <div class="p-3 text-center"><div class="spinner-border spinner-border-sm text-primary"></div></div>
   </div>
 </div>
+
+<div class="modal fade" id="agendaDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="agendaDetailTitle">Detalle de movimientos</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="agendaDetailBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -46,12 +61,44 @@
     try {
       const data = await apiRequest('GET', '/admin/agenda/balances');
       error.classList.add('d-none');
+      agendaBalancesById = Object.fromEntries((data.businesses || []).map(b => [String(b.restaurant_id), b]));
       renderBalances(data.businesses || []);
       renderDebts(data.client_debts || []);
     } catch (err) {
       error.textContent = err.message;
       error.classList.remove('d-none');
     }
+  }
+
+  let agendaBalancesById = {};
+
+  function openAgendaDetail(id) {
+    const business = agendaBalancesById[String(id)];
+    if (!business) return;
+    const movements = business.movements || [];
+    document.getElementById('agendaDetailTitle').textContent = business.name || 'Detalle';
+    document.getElementById('agendaDetailBody').innerHTML = `
+      <div class="row g-2 mb-3">
+        <div class="col-6"><div class="border rounded p-2 text-center">
+          <small class="text-muted d-block">La plataforma le debe</small>
+          <strong class="text-success">${money(business.credit)}</strong>
+        </div></div>
+        <div class="col-6"><div class="border rounded p-2 text-center">
+          <small class="text-muted d-block">El negocio debe</small>
+          <strong class="text-danger">${money(business.debit)}</strong>
+        </div></div>
+      </div>
+      <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Fecha</th><th>Tipo</th><th class="text-end">Monto</th><th>Concepto</th></tr></thead>
+        <tbody>${movements.map(m => `<tr>
+          <td class="small">${m.created_at ? new Date(m.created_at).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+          <td>${m.kind === 'credit' ? '<span class="badge bg-success">A favor del negocio</span>' : '<span class="badge bg-danger">Cobro al negocio</span>'}</td>
+          <td class="text-end fw-bold">${money(m.amount)}</td>
+          <td class="small">${esc(m.notes || '')}</td>
+        </tr>`).join('') || '<tr><td colspan="4" class="text-center text-muted">Sin movimientos.</td></tr>'}</tbody>
+      </table></div>
+      <p class="small text-muted mt-3 mb-0">Cada fila es una comisión de cita u otro movimiento pendiente. Al liquidar, se marcan todos como pagados.</p>`;
+    new bootstrap.Modal(document.getElementById('agendaDetailModal')).show();
   }
 
   function renderBalances(businesses) {
@@ -84,6 +131,9 @@
           <div class="small text-muted">${net >= 0 ? 'Pagar al negocio' : 'Cobrar al negocio'}</div>
           <div class="fw-bold ${net >= 0 ? 'text-success' : 'text-danger'}">${money(Math.abs(net))}</div>
         </div>
+        <button class="btn btn-sm btn-outline-secondary" onclick="openAgendaDetail('${b.restaurant_id}')">
+          <i class="bi bi-list-ul"></i> Detalle
+        </button>
         <button class="btn btn-sm btn-outline-primary" onclick="settle('${b.restaurant_id}', '${esc(b.name)}')">
           <i class="bi bi-check2-square"></i> Liquidar todo
         </button>

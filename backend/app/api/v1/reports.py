@@ -250,6 +250,7 @@ async def report_summary(
             "commissions": Decimal("0.00"),
             "flat_fees": Decimal("0.00"),
             "total": Decimal("0.00"),
+            "order_items": [],
         })
         bucket["orders"] += 1
         if order.status == "delivered":
@@ -257,6 +258,16 @@ async def report_summary(
             bucket["commissions"] += _money(order.platform_commission)
             bucket["flat_fees"] += _money(order.flat_usage_fee)
             bucket["total"] += _money(order.total)
+            bucket["order_items"].append({
+                "id": str(order.id),
+                "date": (order.delivered_at or order.placed_at).isoformat()
+                if (order.delivered_at or order.placed_at) else None,
+                "subtotal": _money(order.subtotal),
+                "commission": _money(order.platform_commission),
+                "flat_fee": _money(order.flat_usage_fee),
+                "total": _money(order.total),
+                "payment_method": order.payment_method,
+            })
 
     # Payouts settled in the same window.
     payout_stmt = select(RestaurantPayout).where(

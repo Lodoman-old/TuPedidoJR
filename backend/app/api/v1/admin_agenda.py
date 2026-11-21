@@ -60,6 +60,25 @@ async def agenda_balances(
             row for row in detail["by_staff"]
             if Decimal(row["credit"]) != 0 or Decimal(row["debit"]) != 0
         ]
+        movements_result = await db.execute(
+            select(BusinessLedger)
+            .where(
+                BusinessLedger.restaurant_id == UUID(item["restaurant_id"]),
+                BusinessLedger.status == "pending",
+            )
+            .order_by(BusinessLedger.created_at.desc())
+            .limit(200)
+        )
+        item["movements"] = [
+            {
+                "id": str(movement.id),
+                "kind": movement.kind,
+                "amount": str(movement.amount or 0),
+                "notes": movement.notes,
+                "created_at": movement.created_at.isoformat() if movement.created_at else None,
+            }
+            for movement in movements_result.scalars().all()
+        ]
 
     debts = await db.execute(
         select(

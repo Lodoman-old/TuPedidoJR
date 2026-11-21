@@ -35,10 +35,55 @@
 <div id="reportError" class="alert alert-danger d-none"></div>
 <div id="reportLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
 <div id="reportContent" class="d-none"></div>
+
+<div class="modal fade" id="reportDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="reportDetailTitle">Detalle por pedido</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="reportDetailBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
   const money = n => '$' + parseFloat(n || 0).toFixed(2);
+  let reportRowsById = {};
+
+  function openReportDetail(id) {
+    const row = reportRowsById[String(id)];
+    if (!row) return;
+    const items = row.order_items || [];
+    document.getElementById('reportDetailTitle').textContent = row.restaurant_name || 'Detalle';
+    document.getElementById('reportDetailBody').innerHTML = `
+      <div class="row g-2 mb-3">
+        ${summaryCard('Pedidos', row.orders)}
+        ${summaryCard('Subtotal', money(row.subtotal))}
+        ${summaryCard('Comisión', money(row.commissions))}
+        ${summaryCard('Cuotas', money(row.flat_fees))}
+        ${summaryCard('Total cobrado', money(row.total))}
+      </div>
+      <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th class="text-end">Productos</th><th class="text-end">Comisión</th><th class="text-end">Cuota</th><th class="text-end">Total</th></tr></thead>
+        <tbody>${items.map(o => `<tr>
+          <td>#${esc(String(o.id).slice(0, 8))}</td>
+          <td class="small">${o.date ? new Date(o.date).toLocaleDateString('es-MX') : '—'}</td>
+          <td>${o.payment_method === 'cash' ? 'Efectivo' : o.payment_method === 'transfer' ? 'Transferencia' : 'En línea'}</td>
+          <td class="text-end">${money(o.subtotal)}</td>
+          <td class="text-end">${money(o.commission)}</td>
+          <td class="text-end">${money(o.flat_fee)}</td>
+          <td class="text-end fw-bold">${money(o.total)}</td>
+        </tr>`).join('') || '<tr><td colspan="7" class="text-center text-muted">Sin pedidos entregados.</td></tr>'}</tbody>
+      </table></div>
+      <p class="small text-muted mt-3 mb-0">Solo se incluyen pedidos entregados. Cada fila muestra cómo se forma el total del negocio.</p>`;
+    new bootstrap.Modal(document.getElementById('reportDetailModal')).show();
+  }
 
   function esc(value) {
     return String(value ?? '').replace(/[&<>"']/g, (c) => ({
@@ -95,6 +140,7 @@
     const t = data.totals;
     const rp = data.restaurant_payouts || {};
     const dp = data.delivery_payouts || {};
+    reportRowsById = Object.fromEntries((data.by_restaurant || []).map(r => [String(r.restaurant_id), r]));
 
     let html = `
       <div class="mb-2 small text-muted">
@@ -134,7 +180,7 @@
       html += `<div class="card p-3 mb-3">
         <h6>Restaurantes que más venden</h6>
         <div class="table-responsive"><table class="table table-sm mb-0">
-          <thead><tr><th>Restaurante</th><th class="text-end">Pedidos</th><th class="text-end">Subtotal</th><th class="text-end">Comisión</th><th class="text-end">Cuotas</th><th class="text-end">Total</th></tr></thead>
+          <thead><tr><th>Restaurante</th><th class="text-end">Pedidos</th><th class="text-end">Subtotal</th><th class="text-end">Comisión</th><th class="text-end">Cuotas</th><th class="text-end">Total</th><th></th></tr></thead>
           <tbody>${data.by_restaurant.map(r => `<tr>
             <td>${esc(r.restaurant_name)}</td>
             <td class="text-end">${r.orders}</td>
@@ -142,6 +188,7 @@
             <td class="text-end">${money(r.commissions)}</td>
             <td class="text-end">${money(r.flat_fees)}</td>
             <td class="text-end">${money(r.total)}</td>
+            <td class="text-end"><button class="btn btn-sm btn-outline-secondary" onclick="openReportDetail('${r.restaurant_id}')">Detalle</button></td>
           </tr>`).join('')}</tbody>
         </table></div>
       </div>`;

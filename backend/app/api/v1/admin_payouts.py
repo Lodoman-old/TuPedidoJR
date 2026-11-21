@@ -17,6 +17,8 @@ from app.models.order import Order
 from app.models.reservation import Reservation
 from app.models.restaurant import Restaurant
 from app.models.restaurant_payout import RestaurantPayout
+from app.models.recarga_order import RecargaOrder
+from app.models.shipment import Shipment
 from app.models.user import User
 from app.schemas.cash_advance import AdminCashAdvanceOut, CashAdvanceApprove
 from app.services.cash_advance_service import (
@@ -298,6 +300,22 @@ async def admin_payouts(
             "net_amount": _money(balance["net"]),
             "monthly_sales": _money(monthly_sales),
             "orders_count": len(balance.get("all_orders", [])),
+            "pending_items": [
+                {
+                    "type": "order",
+                    "id": str(o.id),
+                    "date": (o.delivered_at or o.placed_at).isoformat()
+                    if (o.delivered_at or o.placed_at) else None,
+                    "subtotal": _money(o.subtotal),
+                    "commission": _money(o.platform_commission),
+                    "flat_fee": _money(o.flat_usage_fee),
+                    "delivery_fee": _money(o.delivery_fee),
+                    "total": _money(o.total),
+                    "owes": _money(o.restaurant_owes_platform),
+                    "payment_method": o.payment_method,
+                }
+                for o in balance.get("all_orders", [])[:100]
+            ],
             "commission_total": _money(sum(
                 (o.platform_commission or 0) for o in balance.get("all_orders", [])
             )),
@@ -437,7 +455,20 @@ async def payout_reconciliation(
             "flat_fee": Decimal("0"), "tips": Decimal("0"),
             "delivery_fees": Decimal("0"), "total": Decimal("0"),
             "restaurant_owes": Decimal("0"), "courier_earnings": Decimal("0"),
-            "loyalty_discount": Decimal("0"),
+            "loyalty_discount": Decimal("0"), "order_items": [],
+        })
+        row["order_items"].append({
+            "id": str(order.id),
+            "date": (order.delivered_at or order.placed_at).isoformat()
+            if (order.delivered_at or order.placed_at) else None,
+            "payment_method": order.payment_method,
+            "subtotal": _money(subtotal),
+            "commission": _money(commission),
+            "flat_fee": _money(flat_fee),
+            "delivery_fee": _money(delivery_fee),
+            "tips": _money(tips),
+            "total": _money(total),
+            "owes": _money(owes),
         })
         row["orders"] += 1
         row["subtotal"] += subtotal
@@ -556,6 +587,91 @@ async def generate_courier_payout(
         "net_amount": _money(payout.net_amount),
         "direction": payout.direction,
         "status": payout.status,
+    }
+
+
+@router.get("/payouts/couriers/{dp_id}/detail")
+async def courier_payout_detail(
+    dp_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    dp = await db.get(DeliveryPerson, _uuid(dp_id))
+    if not dp:
+        raise HTTPException(status_code=404, detail="Repartidor no encontrado")
+    balance = await courier_balance(db, dp)
+    user = await db.get(User, dp.user_id)
+
+    orders = []
+    for order in balance["orders"]:
+        orders.append({
+            "id": str(order.id),
+            "date": (order.delivered_at or order.placed_at).isoformat()
+            if (order.delivered_at or order.placed_at) else None,
+            "total": _money(order.total),
+            "earnings": _money(order.delivery_earnings),
+            "payment_method": order.payment_method,
+        })
+
+    shipments = []
+    for shipment in balance["shipments"]:
+        shipments.append({
+            "id": str(shipment.id),
+            "status": shipment.status,
+            "earnings": _money(shipment.courier_earnings),
+            "collect": _money(shipment.amount_to_collect),
+        })
+
+    recargas_result = await db.execute(
+        select(RecargaOrder)
+        .where(RecargaOrder.delivery_person_id == dp.id)
+        .order_by(RecargaOrder.created_at.desc())
+        .limit(100)
+    )
+    recargas = [
+        {
+            "id": str(row.id),
+            "date": row.created_at.isoformat() if row.created_at else None,
+            "company": row.company,
+            "phone": row.phone,
+            "amount": _money(row.amount),
+            "fee": _money(row.fee),
+            "status": row.status,
+        }
+        for row in recargas_result.scalars().all()
+    ]
+
+    from app.models.cash_advance import CashAdvance
+    advances_result = await db.execute(
+        select(CashAdvance)
+        .where(
+            CashAdvance.delivery_person_id == dp.id,
+            CashAdvance.status.in_(("approved", "pending")),
+        )
+        .order_by(CashAdvance.created_at.desc())
+    )
+    advances = [
+        {
+            "id": str(row.id),
+            "amount": _money(row.amount),
+            "status": row.status,
+            "pays_restaurant": row.pays_restaurant,
+            "date": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in advances_result.scalars().all()
+    ]
+
+    return {
+        "id": str(dp.id),
+        "name": user.name if user else (user.email if user else "Repartidor"),
+        "credit": _money(balance["credit"]),
+        "debt": _money(balance["debt"]),
+        "advances": _money(balance["advances"]),
+        "net": _money(balance["net"]),
+        "orders": orders,
+        "shipments": shipments,
+        "recargas": recargas,
+        "advances_detail": advances,
     }
 
 

@@ -193,7 +193,7 @@
       <li class="nav-item">
         <button type="button" class="nav-link btn-sm ${registrationTab === value ? 'active' : ''}"
                 onclick="setRegistrationTab('${value}')">
-          ${label} <span class="badge bg-${color}">${counts[value]}</span>
+          ${label} <span class="badge bg-${color}">${counts[value || 'all']}</span>
         </button>
       </li>`).join('');
 
@@ -411,7 +411,7 @@
       <li class="nav-item">
         <button type="button" class="nav-link btn-sm ${affStatusFilter === value ? 'active' : ''}"
                 onclick="setAffStatus('${value}')">
-          ${label} <span class="badge bg-${color}">${counts[value]}</span>
+          ${label} <span class="badge bg-${color}">${counts[value || 'all']}</span>
         </button>
       </li>`).join('');
   }

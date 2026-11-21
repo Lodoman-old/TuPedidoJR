@@ -13,6 +13,7 @@ from app.models.receipt_validation import ReceiptValidation
 from app.models.restaurant import Restaurant
 from app.models.user import User
 from app.services.receipt_validation_service import revalidate_receipt
+from app.services.push_service import schedule_appointment_paid
 
 router = APIRouter()
 
@@ -116,6 +117,7 @@ async def _settle_appointment(db: AsyncSession, record: ReceiptValidation, appro
             "paid" if appointment.payment_mode == "full" else "deposit_paid"
         )
         appointment.paid_at = datetime.now(timezone.utc)
+        schedule_appointment_paid(str(appointment.id))
     else:
         appointment.receipt_status = "rejected"
         appointment.payment_status = "proof_rejected"

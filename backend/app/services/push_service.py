@@ -529,6 +529,49 @@ async def _appointment_context(db, appointment_id: str):
     return appointment, restaurant, service, staff, client
 
 
+async def notify_appointment_paid(appointment_id: str) -> None:
+    """Avisa al negocio y al equipo que una cita se pagó por transferencia."""
+    try:
+        async with async_session() as db:
+            appointment = await db.get(Appointment, appointment_id)
+            if not appointment or appointment.payment_status not in ("paid", "deposit_paid"):
+                return
+            restaurant = await db.get(Restaurant, appointment.restaurant_id)
+            if not restaurant:
+                return
+            members = await db.execute(
+                select(RestaurantUser.user_id).where(
+                    RestaurantUser.restaurant_id == restaurant.id,
+                    RestaurantUser.is_active.is_(True),
+                    RestaurantUser.role.in_(ORDER_ROLES),
+                )
+            )
+            user_ids = {restaurant.owner_id, *members.scalars().all()}
+            amount = float(appointment.online_amount or appointment.business_credit or 0)
+            for user_id in user_ids:
+                await send_to_user(
+                    db,
+                    user_id,
+                    "Cita pagada por transferencia",
+                    f"{restaurant.name}: el cliente pagó ${amount:.2f} de su cita. Ya puedes verla como pagada.",
+                    {
+                        "type": "appointment_payment",
+                        "appointment_id": str(appointment.id),
+                        "restaurant_id": str(restaurant.id),
+                    },
+                    "green",
+                )
+    except Exception:
+        logger.exception("Push appointment-paid notification failed for %s", appointment_id)
+
+
+def schedule_appointment_paid(appointment_id: str) -> None:
+    try:
+        asyncio.create_task(notify_appointment_paid(str(appointment_id)))
+    except RuntimeError:
+        logger.debug("No event loop for push notification")
+
+
 async def _notify_new_appointment(appointment_id: str) -> None:
     try:
         async with async_session() as db:

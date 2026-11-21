@@ -1163,6 +1163,8 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
             target = '/web/restaurants/' + data.restaurant_id + '/profile';
           } else if (data.type === 'payout_request') {
             target = '/web/admin/payouts';
+          } else if (data.type === 'appointment_payment' && data.restaurant_id) {
+            target = '/web/restaurants/' + data.restaurant_id + '/agenda';
           } else if (data.type === 'assigned_order') {
             target = '/web/delivery';
           } else if (data.type === 'reservation' && data.reservation_id) {

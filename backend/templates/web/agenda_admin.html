@@ -19,14 +19,21 @@
 
 <div id="agendaAdminError" class="alert alert-danger d-none"></div>
 
-<div class="card mb-4">
+<ul class="nav nav-pills gap-1 mb-3" id="agendaTabs">
+  <li class="nav-item"><button type="button" class="nav-link active" onclick="setAgendaTab('all', this)">Todos <span id="agendaAllCount" class="badge bg-secondary">0</span></button></li>
+  <li class="nav-item"><button type="button" class="nav-link" onclick="setAgendaTab('credit', this)">Por pagar a negocios <span id="agendaCreditCount" class="badge bg-success">0</span></button></li>
+  <li class="nav-item"><button type="button" class="nav-link" onclick="setAgendaTab('debit', this)">Negocios que deben <span id="agendaDebitCount" class="badge bg-danger">0</span></button></li>
+  <li class="nav-item"><button type="button" class="nav-link" onclick="setAgendaTab('clients', this)">Adeudos de clientes <span id="agendaClientCount" class="badge bg-warning text-dark">0</span></button></li>
+</ul>
+
+<div class="card mb-4" id="balancesCard">
   <div class="card-header fw-semibold">Saldos por negocio</div>
   <div class="card-body p-0" id="balanceList">
     <div class="p-3 text-center"><div class="spinner-border spinner-border-sm text-primary"></div></div>
   </div>
 </div>
 
-<div class="card">
+<div class="card" id="debtsCard">
   <div class="card-header fw-semibold">Adeudos de clientes por no-show</div>
   <div class="card-body p-0" id="debtList">
     <div class="p-3 text-center"><div class="spinner-border spinner-border-sm text-primary"></div></div>
@@ -43,6 +50,38 @@
       <div class="modal-body" id="agendaDetailBody"></div>
       <div class="modal-footer">
         <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="settleModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Liquidar saldo</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body"><p class="mb-0" id="settleModalBody"></p></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-sm btn-primary" id="settleConfirmBtn" onclick="confirmSettle()">Sí, liquidar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="debtModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Marcar adeudo pagado</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body"><p class="mb-0" id="debtModalBody"></p></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-sm btn-success" id="debtConfirmBtn" onclick="confirmDebt()">Sí, ya pagó</button>
       </div>
     </div>
   </div>
@@ -76,9 +115,16 @@
     try {
       const data = await apiRequest('GET', '/admin/agenda/balances');
       error.classList.add('d-none');
-      agendaBalancesById = Object.fromEntries((data.businesses || []).map(b => [String(b.restaurant_id), b]));
-      renderBalances(data.businesses || []);
-      renderDebts(data.client_debts || []);
+      agendaBusinesses = data.businesses || [];
+      agendaClientDebts = data.client_debts || [];
+      agendaBalancesById = Object.fromEntries(agendaBusinesses.map(b => [String(b.restaurant_id), b]));
+      document.getElementById('agendaAllCount').textContent = agendaBusinesses.length;
+      document.getElementById('agendaCreditCount').textContent = agendaBusinesses.filter(b => Number(b.credit || 0) > 0).length;
+      document.getElementById('agendaDebitCount').textContent = agendaBusinesses.filter(b => Number(b.debit || 0) > 0).length;
+      document.getElementById('agendaClientCount').textContent = agendaClientDebts.length;
+      renderBalances();
+      renderDebts(agendaClientDebts);
+      applyAgendaTab();
     } catch (err) {
       error.textContent = err.message;
       error.classList.remove('d-none');
@@ -86,6 +132,24 @@
   }
 
   let agendaBalancesById = {};
+  let agendaBusinesses = [];
+  let agendaClientDebts = [];
+  let agendaTab = 'all';
+
+  function setAgendaTab(tab, btn) {
+    agendaTab = tab;
+    document.querySelectorAll('#agendaTabs .nav-link').forEach(b => b.classList.remove('active'));
+    btn?.classList.add('active');
+    applyAgendaTab();
+    renderBalances();
+  }
+
+  function applyAgendaTab() {
+    const balancesCard = document.getElementById('balancesCard');
+    const debtsCard = document.getElementById('debtsCard');
+    balancesCard?.classList.toggle('d-none', agendaTab === 'clients');
+    debtsCard?.classList.toggle('d-none', agendaTab !== 'all' && agendaTab !== 'clients');
+  }
 
   async function openClientDebtDetail(userId, name) {
     try {
@@ -135,10 +199,22 @@
     new bootstrap.Modal(document.getElementById('agendaDetailModal')).show();
   }
 
-  function renderBalances(businesses) {
+  function renderBalances() {
     const box = document.getElementById('balanceList');
+    let businesses = agendaBusinesses;
+    if (agendaTab === 'credit') {
+      businesses = businesses.filter(b => Number(b.credit || 0) > 0);
+    } else if (agendaTab === 'debit') {
+      businesses = businesses.filter(b => Number(b.debit || 0) > 0);
+    } else if (agendaTab === 'clients') {
+      businesses = [];
+    }
     if (!businesses.length) {
-      box.innerHTML = '<div class="p-3 text-muted small">No hay saldos pendientes.</div>';
+      box.innerHTML = `<div class="p-3 text-muted small">${
+        agendaTab === 'credit' ? 'No hay negocios con saldo por pagar.'
+          : agendaTab === 'debit' ? 'No hay negocios que deban a la plataforma.'
+            : 'No hay saldos pendientes.'
+      }</div>`;
       return;
     }
     box.innerHTML = businesses.map((b) => {
@@ -147,7 +223,7 @@
         const staffNet = Number(s.net || 0);
         return `<div class="small d-flex justify-content-between align-items-center border-top pt-1 mt-1">
           <span>${esc(s.name)} · ${staffNet >= 0 ? 'le deben' : 'debe'} <strong class="${staffNet >= 0 ? 'text-success' : 'text-danger'}">${money(Math.abs(staffNet))}</strong></span>
-          <button class="btn btn-sm btn-outline-secondary py-0" onclick="settle('${b.restaurant_id}', '${esc(s.name)}', '${s.staff_id || ''}')">Liquidar</button>
+          <button class="btn btn-sm btn-outline-secondary py-0" onclick="openSettleModal('${b.restaurant_id}', '${esc(b.name)}', '${s.staff_id || ''}', '${esc(s.name)}')">Liquidar profesional</button>
         </div>`;
       }).join('');
       return `<div class="d-flex flex-wrap align-items-center gap-3 p-3 border-top">
@@ -168,8 +244,8 @@
         <button class="btn btn-sm btn-outline-secondary" onclick="openAgendaDetail('${b.restaurant_id}')">
           <i class="bi bi-list-ul"></i> Detalle
         </button>
-        <button class="btn btn-sm btn-outline-primary" onclick="settle('${b.restaurant_id}', '${esc(b.name)}')">
-          <i class="bi bi-check2-square"></i> Liquidar todo
+        <button class="btn btn-sm btn-outline-primary" onclick="openSettleModal('${b.restaurant_id}', '${esc(b.name)}', '', '')">
+          <i class="bi bi-check2-square"></i> Liquidar negocio
         </button>
       </div>`;
     }).join('');
@@ -191,38 +267,67 @@
         <button class="btn btn-sm btn-outline-secondary" onclick="openClientDebtDetail('${d.user_id}', '${esc(d.name)}')">
           <i class="bi bi-list-ul"></i> Detalle
         </button>
-        <button class="btn btn-sm btn-outline-secondary" onclick="settleDebt('${d.user_id}')">
+        <button class="btn btn-sm btn-outline-secondary" onclick="openDebtModal('${d.user_id}', '${esc(d.name)}')">
           <i class="bi bi-check2-circle"></i> Marcar pagado
         </button>
       </div>`).join('');
   }
 
-  async function settle(restaurantId, name, staffId) {
-    const target = staffId ? `de ${name}` : `del negocio ${name}`;
-    if (!confirm(`¿Marcar como liquidados todos los movimientos pendientes ${target}?`)) return;
+  let settlePayload = null;
+  let debtPayload = null;
+
+  function openSettleModal(restaurantId, name, staffId, staffName) {
+    settlePayload = { restaurantId, name, staffId };
+    const target = staffId ? `los movimientos de ${staffName}` : `todos los movimientos de ${name}`;
+    document.getElementById('settleModalBody').innerHTML = `¿Marcar como liquidados ${target}?<br><span class="text-muted small">Confirma que la plataforma ya pagó o cobró este saldo.</span>`;
+    new bootstrap.Modal(document.getElementById('settleModal')).show();
+  }
+
+  async function confirmSettle() {
+    if (!settlePayload) return;
+    const { restaurantId, name, staffId } = settlePayload;
+    const btn = document.getElementById('settleConfirmBtn');
+    btn.disabled = true;
     try {
       let url = `/admin/agenda/restaurants/${restaurantId}/settle`;
       if (staffId) url += `?staff_id=${encodeURIComponent(staffId)}`;
       const res = await apiRequest('POST', url, {});
+      bootstrap.Modal.getInstance(document.getElementById('settleModal'))?.hide();
+      settlePayload = null;
       showToast(`${res.settled} movimiento(s) liquidados`, 'success');
       loadAll();
     } catch (err) {
       showToast(err.message, 'danger');
+    } finally {
+      btn.disabled = false;
     }
   }
 
-  async function settleDebt(userId) {
-    if (!confirm('¿Marcar todos los adeudos de este cliente como pagados?')) return;
+  function openDebtModal(userId, name) {
+    debtPayload = userId;
+    document.getElementById('debtModalBody').innerHTML = `¿Confirmas que <strong>${esc(name)}</strong> ya pagó todos sus adeudos por no-show?`;
+    new bootstrap.Modal(document.getElementById('debtModal')).show();
+  }
+
+  async function confirmDebt() {
+    if (!debtPayload) return;
+    const userId = debtPayload;
+    const btn = document.getElementById('debtConfirmBtn');
+    btn.disabled = true;
     try {
       const debts = await apiRequest('GET', '/admin/agenda/client-debts');
       const rows = debts.filter((d) => d.user_id === userId);
       for (const row of rows) {
         await apiRequest('POST', `/admin/agenda/client-debts/${row.id}/settle`, {});
       }
+      bootstrap.Modal.getInstance(document.getElementById('debtModal'))?.hide();
+      debtPayload = null;
       showToast('Adeudos liquidados', 'success');
       loadAll();
     } catch (err) {
       showToast(err.message, 'danger');
+    } finally {
+      btn.disabled = false;
     }
   }
 

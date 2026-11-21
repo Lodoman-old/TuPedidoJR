@@ -8,6 +8,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from app.db.session import async_session
 from app.models.appointment import Appointment
+from app.services.push_service import schedule_appointment_paid
 from app.services.receipt_validation_service import TRANSFER, create_and_validate
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,8 @@ async def _run_validation(appointment_id: str) -> None:
             appointment.receipt_status = "review"
             appointment.payment_status = "proof_review"
         await db.commit()
+        if appointment.payment_status in ("paid", "deposit_paid"):
+            schedule_appointment_paid(str(appointment.id))
 
 
 def schedule_validation(appointment_id: str) -> None:

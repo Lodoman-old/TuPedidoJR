@@ -96,15 +96,13 @@
 </ol>
 
 <h3>8. Cobros y cuotas</h3>
-<p>El modelo puede combinar una comisión porcentual configurable con cuotas fijas por pedido.</p>
+<p><strong>Para recibir pedidos necesitas tener tu afiliación vigente.</strong> La afiliación se paga por plan (1, 3, 6 o 12 meses) y <strong>no es un costo por pedido</strong>.</p>
 <table>
   <tr><th>Concepto</th><th>Monto actual</th></tr>
-  <tr><td>Afiliación anual del negocio</td><td>${{ '%.0f'|format(affiliation_fee|float) }} MXN / año</td></tr>
-  <tr><td>Comisión de la plataforma</td><td>Según configuración (se descuenta al negocio)</td></tr>
   <tr><td>Cuota del negocio por pedido</td><td>${{ '%.2f'|format(business_fee|float) }}</td></tr>
   <tr><td>Cuota de servicio del cliente</td><td>${{ '%.2f'|format(flat_fee|float) }}</td></tr>
 </table>
-<p>El precio del platillo/producto es tu precio base; la comisión se descuenta de ahí. La cuota de servicio se le suma al cliente.</p>
+<p><strong>No hay comisión porcentual sobre el precio.</strong> Tú defines el precio base; al negocio se le descuentan ${{ '%.2f'|format(business_fee|float) }} por pedido y al cliente se le suman ${{ '%.2f'|format(flat_fee|float) }} de cuota de servicio. Con las cuotas actuales, un producto de $100 queda así: el cliente paga $105 y el negocio recibe $95.</p>
 <table>
   <tr><th>Forma de pago</th><th>Qué pasa</th></tr>
   <tr><td>Transferencia</td><td>La plataforma recibe y liquida al negocio su precio base.</td></tr>

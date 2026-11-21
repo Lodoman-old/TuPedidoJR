@@ -364,7 +364,7 @@ async function loadAvailable(silent = false) {
       return;
     }
     if (!gpsCoords) {
-      html += '<div class="alert alert-warning py-2 small">Activa <strong>Mi ubicación</strong> para ver la distancia y el tiempo al restaurante.</div>';
+      html += '<div class="alert alert-warning py-2 small">Activa <strong>Mi ubicación</strong> para ver la distancia y el tiempo al negocio.</div>';
     }
     for (const o of orders) {
       const badgeColor = statusBadgeColors[o.status] || 'secondary';
@@ -375,10 +375,10 @@ async function loadAvailable(silent = false) {
           <h6>#${o.id.slice(0, 8)} <span class="badge bg-${badgeColor}">${statusLabels[o.status] || "Desconocido"}</span></h6>
           <small>${money0(o.total)}</small>
         </div>
-        <small class="text-muted">${o.restaurant_name || 'Restaurante'}</small><br>
-        <small><i class="bi bi-geo-alt"></i> ${distance} al restaurante · <i class="bi bi-clock"></i> ${eta}</small><br>
+        <small class="text-muted">${o.restaurant_name || 'Negocio'}</small><br>
+        <small><i class="bi bi-geo-alt"></i> ${distance} al negocio · <i class="bi bi-clock"></i> ${eta}</small><br>
         <small>Artículos: ${(o.items || []).length}</small>
-        ${o.requires_courier_approval && ['pending', 'awaiting_courier'].includes(o.status) ? `<div class="small text-warning fw-bold mt-1">${o.status === 'pending' ? 'Pedido lejano: acéptalo para reservarlo. El restaurante todavía debe confirmarlo.' : 'Pedido lejano: si lo aceptas, el restaurante empezará a prepararlo y tú te comprometes a entregarlo.'}</div>` : ''}
+        ${o.requires_courier_approval && ['pending', 'awaiting_courier'].includes(o.status) ? `<div class="small text-warning fw-bold mt-1">${o.status === 'pending' ? 'Pedido lejano: acéptalo para reservarlo. El negocio todavía debe confirmarlo.' : 'Pedido lejano: si lo aceptas, el negocio empezará a prepararlo y tú te comprometes a entregarlo.'}</div>` : ''}
         <button class="btn btn-sm btn-success mt-2" onclick="acceptOrder('${o.id}')">Aceptar pedido</button>
       </div>`;
     }
@@ -437,11 +437,11 @@ async function loadMyOrders() {
       if (['ready', 'in_delivery'].includes(o.status)) {
         html += `<div class="mt-2 d-flex gap-2 flex-wrap">
           <button class="btn btn-sm btn-primary" onclick="pickupOrder('${o.id}')">Recoger pedido</button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="requestAdvance('${o.id}')">Pedir avance para restaurante</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="requestAdvance('${o.id}')">Pedir avance para el negocio</button>
           <button class="btn btn-sm btn-outline-danger" onclick="failOrder('${o.id}')">No se pudo entregar</button>
         </div>`;
       } else if (['preparing', 'confirmed', 'pending', 'awaiting_courier'].includes(o.status)) {
-        html += `<div class="mt-2"><small class="text-muted"><i class="bi bi-hourglass-split"></i> Esperando que el restaurante marque el pedido como listo.</small></div>`;
+        html += `<div class="mt-2"><small class="text-muted"><i class="bi bi-hourglass-split"></i> Esperando que el negocio marque el pedido como listo.</small></div>`;
       } else if (o.status === 'picked_up') {
         html += `<div class="mt-2 d-flex gap-2 flex-wrap">
           <button class="btn btn-sm btn-success" onclick="deliverOrder('${o.id}')">Entregar pedido</button>
@@ -509,7 +509,7 @@ function deliverOrder(oid) {
               <input type="number" step="0.01" min="0" class="form-control" id="cashReceived" placeholder="0.00">
             </div>
             <div class="d-flex justify-content-between"><span>Cambio</span><strong id="changeAmount">$0.00</strong></div>
-            <div class="form-text">Debes entregar ${money0(owed)} a la plataforma/restaurante.</div>
+            <div class="form-text">Debes entregar ${money0(owed)} a la plataforma/negocio.</div>
           ` : ''}
           <div id="deliverError" class="text-danger small mt-2"></div>
         </div>

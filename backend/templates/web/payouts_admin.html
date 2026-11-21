@@ -520,7 +520,7 @@
       let actions = '';
       if (a.status === 'pending') {
         actions = `
-          <button class="btn btn-sm btn-success" onclick="approveAdvanceUI('${a.id}', true)">Pagar restaurante</button>
+          <button class="btn btn-sm btn-success" onclick="approveAdvanceUI('${a.id}', true)">Pagar negocio</button>
           <button class="btn btn-sm btn-outline-warning" onclick="approveAdvanceUI('${a.id}', false)">Préstamo</button>
           <button class="btn btn-sm btn-outline-danger" onclick="rejectAdvanceUI('${a.id}')">Rechazar</button>`;
       } else if (a.status === 'approved' && !a.pays_restaurant) {
@@ -533,14 +533,14 @@
         <td>${a.order_id ? '#' + a.order_id.slice(0, 8) : '—'}<br><small class="text-muted">${esc(a.restaurant_name || '')}</small></td>
         <td class="text-end fw-bold">${money(a.amount)}</td>
         <td><span class="badge bg-${a.status === 'pending' ? 'warning' : a.status === 'approved' ? 'info' : a.status === 'settled' ? 'success' : 'secondary'}">${statusLabel[a.status] || a.status}</span></td>
-        <td class="small">${a.pays_restaurant ? 'Pago al restaurante' : 'Préstamo al repartidor'}</td>
+        <td class="small">${a.pays_restaurant ? 'Pago al negocio' : 'Préstamo al repartidor'}</td>
         <td class="text-end text-nowrap">${actions}</td>
       </tr>`;
     }).join('');
 
     return `<div class="card p-3 mb-3">
       <h6>Avances de efectivo</h6>
-      <p class="small text-muted">Si se entrega para pagar al restaurante, ese pedido se excluye de la liquidación del restaurante. Si es préstamo, se descuenta del pago del repartidor.</p>
+      <p class="small text-muted">Si se entrega para pagar al negocio, ese pedido se excluye de la liquidación del negocio. Si es préstamo, se descuenta del pago del repartidor.</p>
       ${rows ? `<div class="table-responsive"><table class="table table-sm align-middle">
         <thead><tr><th>Repartidor</th><th>Pedido</th><th class="text-end">Monto</th><th>Estado</th><th>Tipo</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
@@ -556,7 +556,7 @@
       <h6>Transferencias pendientes de confirmar</h6>
       <p class="small text-muted">Estas órdenes aún no cuentan para liquidaciones hasta que confirmes que el dinero llegó a la cuenta de la plataforma.</p>
       <div class="table-responsive"><table class="table table-sm align-middle">
-        <thead><tr><th>Pedido</th><th>Restaurante</th><th class="text-end">Monto</th><th>Fecha</th><th></th></tr></thead>
+        <thead><tr><th>Pedido</th><th>Negocio</th><th class="text-end">Monto</th><th>Fecha</th><th></th></tr></thead>
         <tbody>${transfers.map(t => `
           <tr>
             <td>#${t.id.slice(0, 8)}</td>
@@ -661,7 +661,7 @@
           const isCourier = h.kind === 'courier';
           const toPlatform = isCourier && h.direction === 'to_platform';
           return `<tr>
-            <td>${isCourier ? 'Repartidor' : 'Restaurante'}</td>
+            <td>${isCourier ? 'Repartidor' : 'Negocio'}</td>
             <td>${esc(h.name)}</td>
             <td class="text-end fw-bold">${money(h.amount)}</td>
             <td>${!isCourier
@@ -687,7 +687,7 @@
       return '<div class="card p-3"><h6>Historial</h6><p class="small text-muted mb-0">Sin liquidaciones registradas.</p></div>';
     }
     payoutHistoryById = Object.fromEntries(rows.map(h => [String(h.id), h]));
-    const kindLabel = { restaurant: 'Restaurante', courier: 'Repartidor' };
+    const kindLabel = { restaurant: 'Negocio', courier: 'Repartidor' };
     const statusLabel = { pending: 'Pendiente', paid: 'Pagada', confirmed: 'Confirmada', cancelled: 'Cancelada' };
     return `<div class="card p-3">
       <h6>Historial de liquidaciones</h6>
@@ -764,13 +764,13 @@
         ${summaryCard('Ingreso neto plataforma', money(netPlatform), netPlatform < 0 ? 'border-danger' : '')}
         ${summaryCard('Propinas', money(t.tips))}
         ${summaryCard('Ganancia repartidores', money(t.courier_earnings))}
-        ${summaryCard('Debe restaurante (efectivo)', money(t.restaurant_owes), parseFloat(t.restaurant_owes || 0) ? 'border-danger' : '')}
+        ${summaryCard('Debe el negocio (efectivo)', money(t.restaurant_owes), parseFloat(t.restaurant_owes || 0) ? 'border-danger' : '')}
         ${summaryCard('Pedidos efectivo / transferencia', `${t.cash_orders || 0} / ${t.transfer_orders || 0}`)}
       </div>
       <div class="table-responsive mb-3">
         <table class="table table-sm align-middle">
           <thead><tr>
-            <th>Restaurante</th><th class="text-end">Pedidos</th><th class="text-end">Subtotal</th>
+            <th>Negocio</th><th class="text-end">Pedidos</th><th class="text-end">Subtotal</th>
             <th class="text-end">Comisión negocio</th><th class="text-end">Comisión cliente</th>
             <th class="text-end">Puntos</th>
             <th class="text-end">Propinas</th><th class="text-end">Total cobrado</th>
@@ -921,7 +921,7 @@
       buttons.push(`<button class="btn btn-sm btn-success" onclick="resDepositAction('${r.id}','confirm')">Confirmar depósito</button>`);
     }
     if ((r.deposit_status === 'paid' || r.deposit_status === 'retained') && r.deposit_settlement_status === 'pending') {
-      buttons.push(`<button class="btn btn-sm btn-primary" onclick="resDepositAction('${r.id}','transfer')">Transferir al restaurante</button>`);
+      buttons.push(`<button class="btn btn-sm btn-primary" onclick="resDepositAction('${r.id}','transfer')">Transferir al negocio</button>`);
     }
     if (r.deposit_status === 'refund_pending') {
       buttons.push(`<button class="btn btn-sm btn-outline-danger" onclick="resDepositAction('${r.id}','refund')">Reembolsar</button>`);
@@ -964,13 +964,13 @@
             }) : '';
             const net = parseFloat(r.deposit_amount || 0) - parseFloat(r.commission_amount || 0);
             return `<tr>
-              <td><strong>${esc(r.restaurant_name || 'Restaurante')}</strong><br>
+              <td><strong>${esc(r.restaurant_name || 'Negocio')}</strong><br>
                 <small class="text-muted">${esc(when)} · ${r.party_size} persona(s)</small></td>
               <td><small>${esc(r.customer_name || 'Cliente')}<br>${esc(r.customer_email || '')}</small></td>
               <td><small>${parseFloat(r.preorder_subtotal || 0) > 0 ? 'Pre-pedido' : 'Solo mesa'}</small></td>
               <td class="text-end">${money(r.preorder_subtotal)}</td>
               <td class="text-end">${money(r.deposit_amount)}<br>
-                <small class="text-muted">Al restaurante: ${money(Math.max(net, 0))}</small></td>
+                <small class="text-muted">Al negocio: ${money(Math.max(net, 0))}</small></td>
               <td class="text-end">${money(r.commission_amount)}<br>
                 <small class="text-muted">${r.commission_status === 'settled' ? 'Liquidada' : 'Pendiente'}</small>
                 ${r.service_fee_cash ? `<br><small class="text-muted">Cuota cliente: ${r.service_fee_status === 'settled' ? 'Cobrada' : 'En efectivo'}</small>` : ''}</td>
@@ -990,7 +990,7 @@
   async function resDepositAction(id, action) {
     const labels = {
       confirm: '¿Confirmas que el depósito ya llegó a la cuenta?',
-      transfer: '¿Confirmas que ya transferiste el depósito al restaurante menos la comisión?',
+      transfer: '¿Confirmas que ya transferiste el depósito al negocio menos la comisión?',
       refund: '¿Confirmas que ya devolviste el depósito al cliente?',
     };
     if (!confirm(labels[action] || '¿Continuar?')) return;
@@ -1003,7 +1003,7 @@
   }
 
   async function settleReservationFee(id) {
-    if (!confirm('¿Confirmas que el restaurante pagó la cuota de servicio de esta reservación?')) return;
+    if (!confirm('¿Confirmas que el negocio pagó la cuota de servicio de esta reservación?')) return;
     try {
       await apiRequest('POST', `/admin/reservation-fees/${id}/settle`);
       showToast('Cuota marcada como cobrada');
@@ -1219,7 +1219,7 @@
   }
 
   async function payRestaurant(id) {
-    if (!confirm('¿Generar la liquidación de este restaurante?')) return;
+    if (!confirm('¿Generar la liquidación de este negocio?')) return;
     try {
       await generateRestaurantPayout(id);
       showToast('Liquidación generada');
@@ -1311,7 +1311,7 @@
 
   async function approveAdvanceUI(id, paysRestaurant) {
     const label = paysRestaurant
-      ? '¿Entregar el efectivo para pagar directamente al restaurante?'
+      ? '¿Entregar el efectivo para pagar directamente al negocio?'
       : '¿Entregar el efectivo como préstamo al repartidor? Se descontará de su próximo pago.';
     if (!confirm(label)) return;
     try {

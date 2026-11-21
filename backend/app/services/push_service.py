@@ -41,12 +41,12 @@ FCM_WEB_CONFIG_JSON = "FCM_WEB_CONFIG_JSON"
 FCM_VAPID_KEY = "FCM_VAPID_KEY"
 FCM_ANDROID_CONFIG_JSON = "FCM_ANDROID_CONFIG_JSON"
 
-STATUS_MESSAGES = {    "confirmed": ("Pedido confirmado", "El restaurante confirmó tu pedido."),
+STATUS_MESSAGES = {    "confirmed": ("Pedido confirmado", "El negocio confirmó tu pedido."),
     "awaiting_courier": (
         "Esperando repartidor",
-        "Tu pedido está lejos: un repartidor debe aceptarlo antes de que el restaurante lo prepare.",
+        "Tu pedido está lejos: un repartidor debe aceptarlo antes de que el negocio lo prepare.",
     ),
-    "preparing": ("Preparando tu pedido", "El restaurante está preparando tu pedido."),
+    "preparing": ("Preparando tu pedido", "El negocio está preparando tu pedido."),
     "ready": ("Pedido listo", "Tu pedido está listo y espera al repartidor."),
     "in_delivery": ("Repartidor en camino", "Tu pedido ya va en camino."),
     "picked_up": ("Pedido recogido", "El repartidor recogió tu pedido."),
@@ -1313,7 +1313,7 @@ async def notify_available_order(order_id: str, ready: bool = False) -> None:
                 people = list(couriers.scalars().all())
 
             title = "Pedido listo para recoger" if ready else "Pedido disponible"
-            name = restaurant.name if restaurant else "Restaurante"
+            name = restaurant.name if restaurant else "Negocio"
             earnings = float(order.delivery_earnings or 0)
             body = f"{name} · ${earnings:.2f} por el reparto"
             for dp in people:
@@ -1341,7 +1341,7 @@ async def notify_courier_assigned(order_id: str) -> None:
                 select(Restaurant).where(Restaurant.id == order.restaurant_id)
             )
             restaurant = resto.scalar_one_or_none()
-            name = restaurant.name if restaurant else "Restaurante"
+            name = restaurant.name if restaurant else "Negocio"
             dp = await db.get(DeliveryPerson, order.delivery_person_id)
             reserved = order.status in ("pending", "confirmed")
             if dp:
@@ -1350,10 +1350,10 @@ async def notify_courier_assigned(order_id: str) -> None:
                     dp.user_id,
                     "Pedido reservado" if reserved else "Pedido asignado",
                     (
-                        f"{name}: apartaste este pedido lejano. El restaurante todavía "
+                        f"{name}: apartaste este pedido lejano. El negocio todavía "
                         "debe confirmarlo; te avisaremos cuando puedas recogerlo."
                         if reserved
-                        else f"{name}: espera a que el restaurante termine de prepararlo. "
+                        else f"{name}: espera a que el negocio termine de prepararlo. "
                         "Te avisaremos cuando esté listo."
                     ),
                     {"type": "assigned_order", "order_id": str(order.id)},
@@ -1402,7 +1402,7 @@ async def notify_courier_order_ready(order_id: str) -> None:
                 select(Restaurant).where(Restaurant.id == order.restaurant_id)
             )
             restaurant = resto.scalar_one_or_none()
-            name = restaurant.name if restaurant else "Restaurante"
+            name = restaurant.name if restaurant else "Negocio"
             await send_to_user(
                 db,
                 dp.user_id,

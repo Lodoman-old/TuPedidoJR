@@ -52,7 +52,7 @@ async def get_policy(db: AsyncSession) -> dict:
         "window_min": max(window, 0),
         "refund_enabled": refund_enabled,
         "customer_message": (
-            "Puedes cancelar sin costo mientras el restaurante no acepte el pedido. "
+            "Puedes cancelar sin costo mientras el negocio no acepte el pedido. "
             f"Después de confirmado tienes {max(window, 0)} minutos. "
             "Si el pedido está esperando repartidor, puedes cancelarlo sin costo."
         ),
@@ -85,7 +85,7 @@ def can_cancel(order: Order, role: str, window_min: int, now: datetime | None = 
             return True, ""
         return False, (
             f"El pedido está {STATUS_LABELS.get(status, status)} y ya no puede "
-            "cancelarse desde el restaurante"
+            "cancelarse desde el negocio"
         )
 
     # Customer
@@ -98,11 +98,11 @@ def can_cancel(order: Order, role: str, window_min: int, now: datetime | None = 
             return True, ""
         return False, (
             "El pedido ya fue confirmado y pasó el tiempo de cancelación. "
-            "Contacta al restaurante para más ayuda."
+            "Contacta al negocio para más ayuda."
         )
     return False, (
         f"El pedido está {STATUS_LABELS.get(status, status)} y ya no puede cancelarse. "
-        "Contacta al restaurante para más ayuda."
+        "Contacta al negocio para más ayuda."
     )
 
 

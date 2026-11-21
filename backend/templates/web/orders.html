@@ -43,7 +43,7 @@
       loading.classList.add('d-none');
 
       if (myRestaurants.length > 0) {
-        let html = '<h5 class="mb-2">Pedidos de tu restaurante</h5>';
+        let html = '<h5 class="mb-2">Pedidos de tu negocio</h5>';
         let hasRestoOrders = false;
         for (const r of myRestaurants) {
           try {
@@ -55,7 +55,7 @@
                   <div class="d-flex justify-content-between align-items-center">
                     <div>
                       <strong>${r.name}</strong>
-                      <div class="small text-muted">#${o.id.slice(0, 8)}${o.fulfillment_type === 'pickup' ? ' · Recoger en restaurante' : ''}</div>
+                      <div class="small text-muted">#${o.id.slice(0, 8)}${o.fulfillment_type === 'pickup' ? ' · Recoger en el negocio' : ''}</div>
                     </div>
                     <div class="text-end">
                       <span class="status-pill ${STATUS_COLORS[o.status] || 'bg-secondary'}">${STATUS_LABELS[o.status] || o.status}</span>

@@ -1,8 +1,8 @@
-"""Opening-hours logic for restaurants.
+"""Opening-hours logic for businesses.
 
-A restaurant can define a weekly schedule. If it has no rows at all, the
-manual ``Restaurant.is_open`` switch is used (backwards compatible). If the
-manual switch is off, the restaurant is always considered closed.
+A business can define a weekly schedule. Without rows it is shown as not
+available (except rentals, which work by date and item availability). The
+manual ``Restaurant.is_open`` switch can always force the business closed.
 """
 import logging
 from datetime import date, datetime, time, timedelta
@@ -171,16 +171,27 @@ async def restaurant_open_state(
     if not restaurant.is_open:
         return {
             "is_open_now": False,
-            "message": "El restaurante no está recibiendo pedidos en este momento",
+            "message": "El negocio no está recibiendo pedidos en este momento",
             "today_hours": _today_hours(schedules, now),
             "has_schedule": bool(schedules),
             "next_open_at": None,
         }
 
     if not schedules:
+        # Las rentas trabajan por fecha y disponibilidad del artículo, no por
+        # horario de atención. Los demás giros no deben aparecer disponibles
+        # hasta publicar su horario.
+        if restaurant.business_type == "rental":
+            return {
+                "is_open_now": True,
+                "message": "Disponible para reservar",
+                "today_hours": [],
+                "has_schedule": False,
+                "next_open_at": None,
+            }
         return {
-            "is_open_now": True,
-            "message": "Abierto",
+            "is_open_now": False,
+            "message": "El negocio todavía no publica su horario de atención",
             "today_hours": [],
             "has_schedule": False,
             "next_open_at": None,

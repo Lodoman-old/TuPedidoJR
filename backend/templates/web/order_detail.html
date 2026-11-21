@@ -108,14 +108,14 @@
       </div>
       ${renderTimeline(t)}
       ${o.fulfillment_type === 'pickup'
-        ? `<div class="alert alert-info py-2 small"><i class="bi bi-shop"></i> Pedido para recoger en el restaurante</div>`
-        : (o.delivery_mode === 'own' ? '<div class="alert alert-info py-2 small"><i class="bi bi-shop"></i> Entrega propia del restaurante</div>' : '')}
+        ? `<div class="alert alert-info py-2 small"><i class="bi bi-shop"></i> Pedido para recoger en el negocio</div>`
+        : (o.delivery_mode === 'own' ? '<div class="alert alert-info py-2 small"><i class="bi bi-shop"></i> Entrega propia del negocio</div>' : '')}
       ${o.requires_courier_approval && ['pending', 'confirmed', 'awaiting_courier'].includes(o.status) ? `<div class="alert alert-warning py-2 small">
         <i class="bi bi-hourglass-split"></i>
         ${o.delivery_person_id
-          ? `<strong>Repartidor reservado.</strong> Un repartidor ya aceptó tu pedido; el restaurante debe confirmarlo para comenzar a prepararlo.`
-          : `<strong>Buscando repartidor.</strong> Tu pedido está lejos del restaurante. Primero debe aceptarlo un repartidor y hasta entonces
-             el restaurante no lo prepara, para no gastar ingredientes si nadie puede llevarlo.`}
+          ? `<strong>Repartidor reservado.</strong> Un repartidor ya aceptó tu pedido; el negocio debe confirmarlo para comenzar a prepararlo.`
+          : `<strong>Buscando repartidor.</strong> Tu pedido está lejos del negocio. Primero debe aceptarlo un repartidor y hasta entonces
+             el negocio no lo prepara, para no gastar ingredientes si nadie puede llevarlo.`}
         ${o.courier_approval_deadline
           ? ` Si no hay repartidor antes de las <strong>${new Date(o.courier_approval_deadline).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</strong>, el pedido se cancelará automáticamente y se te devolverá el dinero.`
           : ''}
@@ -159,7 +159,7 @@
       html += hasBank
         ? `<div class="alert alert-info mb-2"><i class="bi bi-bank"></i> Pago por transferencia a TuPedidoJR (plataforma)<br>
              <small>Banco: ${bankDetails.bank_name || '—'} · Titular: ${bankDetails.account_holder || '—'} · CLABE: ${bankDetails.clabe || '—'}${bankDetails.card ? ` · Tarjeta: ${bankDetails.card}` : ''}<br>
-             El dinero entra a la plataforma. TuPedidoJR liquida al restaurante y paga al repartidor; no pagas en efectivo al recibir.</small></div>`
+             El dinero entra a la plataforma. TuPedidoJR liquida al negocio y paga al repartidor; no pagas en efectivo al recibir.</small></div>`
         : `<div class="alert alert-warning mb-2"><i class="bi bi-bank"></i> Pago por transferencia. La plataforma aún no configuró la cuenta bancaria.</div>`;
     }
     if (
@@ -296,7 +296,7 @@
       block.className = 'mb-3 pb-3 border-bottom';
       if (alreadyRated) {
         block.innerHTML = `<div class="fw-bold small mb-1">${AddressUtils.escapeHtml(title)}</div>
-          <div class="text-success small"><i class="bi bi-check2-circle"></i> Ya calificaste ${target === 'restaurant' ? 'este restaurante' : 'a este repartidor'}.</div>`;
+          <div class="text-success small"><i class="bi bi-check2-circle"></i> Ya calificaste ${target === 'restaurant' ? 'este negocio' : 'a este repartidor'}.</div>`;
         div.appendChild(block);
         return;
       }
@@ -350,7 +350,7 @@
       div.appendChild(block);
     }
 
-    addBlock('restaurant', `Restaurante${restaurantName ? ': ' + restaurantName : ''}`, ratedRestaurant);
+    addBlock('restaurant', `Negocio${restaurantName ? ': ' + restaurantName : ''}`, ratedRestaurant);
     if (hasCourier) addBlock('courier', 'Repartidor', ratedCourier);
 
     document.getElementById('orderContent').prepend(div);
@@ -378,7 +378,7 @@
     }).addTo(map);
 
     if (t && t.restaurant) {
-      restaurantMarker = L.marker([t.restaurant.lat, t.restaurant.lng]).addTo(map).bindPopup('Restaurante');
+      restaurantMarker = L.marker([t.restaurant.lat, t.restaurant.lng]).addTo(map).bindPopup('Negocio');
     }
     if (t && t.destination) {
       destinationMarker = L.marker([t.destination.lat, t.destination.lng]).addTo(map).bindPopup('Tu dirección');

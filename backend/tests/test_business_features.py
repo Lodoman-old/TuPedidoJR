@@ -105,13 +105,27 @@ async def _create_order(client, token, restaurant, item, payment_method="cash", 
 
 
 class TestOpeningHours:
-    async def test_fallback_to_manual_switch(self, client, restaurant):
+    async def test_without_schedule_is_not_available(self, client, restaurant):
         resto, _ = restaurant
         resp = await client.get(f"/api/v1/restaurants/{resto.id}/open-status")
         assert resp.status_code == 200
         data = resp.json()
         assert data["has_schedule"] is False
+        assert data["is_open_now"] is False
+        assert "horario" in data["message"].lower()
+
+    async def test_rental_without_schedule_stays_available(
+        self, client, restaurant, db_session,
+    ):
+        resto, _ = restaurant
+        resto.business_type = "rental"
+        await db_session.commit()
+        resp = await client.get(f"/api/v1/restaurants/{resto.id}/open-status")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["has_schedule"] is False
         assert data["is_open_now"] is True
+        assert "disponible" in data["message"].lower()
 
     async def test_closed_schedule_blocks_order(
         self, client, restaurant, owner_token, customer_token,

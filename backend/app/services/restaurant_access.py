@@ -64,7 +64,7 @@ async def require_role(
     restaurant_id,
     user: User,
     allowed: set[str] | None = None,
-    detail: str = "No tienes acceso a este restaurante",
+    detail: str = "No tienes acceso a este negocio",
 ):
     if not await have_role(db, restaurant_id, user, allowed):
         raise HTTPException(status_code=403, detail=detail)

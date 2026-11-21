@@ -46,7 +46,7 @@
           {% if restaurant.cuisine %}<span class="badge bg-light text-dark">{{ restaurant.cuisine }}</span>{% endif %}
           <span class="badge bg-warning text-dark">{{ restaurant.rating or '0.0' }} ★</span>
           <span class="badge {{ 'badge-open' if open_state.is_open_now else 'badge-closed' }}">
-            {{ 'Abierto' if open_state.is_open_now else 'Cerrado' }}
+            {% if restaurant.business_type == 'rental' and not open_state.has_schedule %}Disponible{% elif open_state.is_open_now %}Abierto{% elif not open_state.has_schedule %}Sin horario{% else %}Cerrado{% endif %}
           </span>
           {% if restaurant.delivery_mode == 'own' %}
             <span class="badge bg-info text-dark">Entrega propia</span>

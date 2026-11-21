@@ -63,7 +63,7 @@
           ${card('Ventas de hoy', money(data.today.sales), 'border-success')}
           ${card('Pedidos hoy', `${data.today.delivered} entregados / ${data.today.orders}`, '')}
           ${card('Propinas hoy', money(data.today.tips), '')}
-          ${card('Restaurantes abiertos', `${data.restaurants.open} / ${data.restaurants.total}`, '')}
+          ${card('Negocios abiertos', `${data.restaurants.open} / ${data.restaurants.total}`, '')}
           ${card('Repartidores disponibles', `${data.couriers.available} / ${data.couriers.total}`, '')}
           ${card('Transferencias por confirmar', `${data.transfers.count} · ${money(data.transfers.amount)}`, data.transfers.count ? 'border-warning' : '')}
           ${card('Avances por aprobar', `${data.advances.count} · ${money(data.advances.amount)}`, data.advances.count ? 'border-warning' : '')}

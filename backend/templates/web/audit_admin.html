@@ -24,7 +24,7 @@
     <div class="col-7 col-md-3">
       <select class="form-select form-select-sm" id="auditCategory">
         <option value="">Todos los movimientos</option>
-        <option value="restaurant">Restaurantes</option>
+        <option value="restaurant">Negocios</option>
         <option value="money">Pagos y reembolsos</option>
         <option value="delivery">Repartidores</option>
         <option value="config">Configuración</option>
@@ -41,15 +41,15 @@
 {% block scripts %}
 <script>
   const ACTION_INFO = {
-    'restaurant.approve': ['Aprobó un restaurante', 'success', 'restaurant', 'bi-check-circle'],
-    'restaurant.reject': ['Rechazó un restaurante', 'danger', 'restaurant', 'bi-x-circle'],
+    'restaurant.approve': ['Aprobó un negocio', 'success', 'restaurant', 'bi-check-circle'],
+    'restaurant.reject': ['Rechazó un negocio', 'danger', 'restaurant', 'bi-x-circle'],
     'affiliation.update': ['Actualizó la afiliación', 'primary', 'restaurant', 'bi-patch-check'],
     'restaurant.commission': ['Cambió la comisión', 'warning', 'config', 'bi-percent'],
     'refund.marked': ['Marcó un reembolso como hecho', 'success', 'money', 'bi-arrow-counterclockwise'],
     'transfer.confirm': ['Confirmó una transferencia', 'success', 'money', 'bi-bank'],
-    'payout.restaurant.generate': ['Generó pago a restaurante', 'primary', 'money', 'bi-wallet2'],
+    'payout.restaurant.generate': ['Generó pago a negocio', 'primary', 'money', 'bi-wallet2'],
     'payout.courier.generate': ['Generó pago a repartidor', 'primary', 'money', 'bi-wallet2'],
-    'payout.restaurant.paid': ['Pagó a un restaurante', 'success', 'money', 'bi-cash-coin'],
+    'payout.restaurant.paid': ['Pagó a un negocio', 'success', 'money', 'bi-cash-coin'],
     'payout.courier.paid': ['Pagó a un repartidor', 'success', 'money', 'bi-cash-coin'],
     'advance.approve': ['Aprobó un avance de efectivo', 'success', 'money', 'bi-cash-stack'],
     'advance.reject': ['Rechazó un avance de efectivo', 'danger', 'money', 'bi-cash-stack'],
@@ -61,8 +61,8 @@
     'courier.create': ['Dio de alta un repartidor', 'success', 'delivery', 'bi-person-plus'],
   };
   const ENTITY_LABELS = {
-    order: 'Pedido', restaurant: 'Restaurante',
-    restaurant_payout: 'Pago a restaurante', delivery_payout: 'Pago a repartidor',
+    order: 'Pedido', restaurant: 'Negocio',
+    restaurant_payout: 'Pago a negocio', delivery_payout: 'Pago a repartidor',
     cash_advance: 'Avance de efectivo', settings: 'Configuración',
   };
   const DETAIL_LABELS = {
@@ -70,7 +70,7 @@
     amount: 'Monto', total: 'Total', commission_percentage: 'Comisión',
     payout_frequency_days: 'Días entre pagos', values: 'Valores cambiados',
     email: 'Correo', role: 'Rol', active: 'Activo',
-    pays_restaurant: 'Paga al restaurante',
+    pays_restaurant: 'Paga al negocio',
   };
   const MONEY_KEYS = new Set(['amount', 'total']);
   const SETTING_LABELS = {

@@ -139,9 +139,16 @@ async def list_restaurants(
             if state and state["has_schedule"] and item.is_open:
                 item.is_open_now = state["is_open_now"]
                 item.open_message = state["message"]
+            elif item.business_type == "rental" and not (state and state["has_schedule"]):
+                item.is_open_now = bool(item.is_open)
+                item.open_message = "Disponible para reservar" if item.is_open else "No disponible"
             else:
-                item.is_open_now = item.is_open
-                item.open_message = "Abierto" if item.is_open else "Cerrado"
+                item.is_open_now = False
+                item.open_message = (
+                    "Sin horario configurado"
+                    if state and not state["has_schedule"]
+                    else "Cerrado"
+                )
         base, free, extra = await _delivery_pricing(db)
         for item in items:
             item.estimated_delivery_fee = _estimate_delivery_fee(item, base, free, extra)
@@ -189,9 +196,18 @@ async def list_restaurants(
         if state and state["has_schedule"] and restaurant.is_open:
             restaurant.is_open_now = state["is_open_now"]
             restaurant.open_message = state["message"]
+        elif restaurant.business_type == "rental" and not (state and state["has_schedule"]):
+            restaurant.is_open_now = bool(restaurant.is_open)
+            restaurant.open_message = (
+                "Disponible para reservar" if restaurant.is_open else "No disponible"
+            )
         else:
-            restaurant.is_open_now = restaurant.is_open
-            restaurant.open_message = "Abierto" if restaurant.is_open else "Cerrado"
+            restaurant.is_open_now = False
+            restaurant.open_message = (
+                "Sin horario configurado"
+                if state and not state["has_schedule"]
+                else "Cerrado"
+            )
     items = [RestaurantListItem.model_validate(r) for r in restaurants]
     base, free, extra = await _delivery_pricing(db)
     for item in items:
@@ -252,9 +268,18 @@ async def list_my_restaurants(
         if state and state["has_schedule"] and restaurant.is_open:
             restaurant.is_open_now = state["is_open_now"]
             restaurant.open_message = state["message"]
+        elif restaurant.business_type == "rental" and not (state and state["has_schedule"]):
+            restaurant.is_open_now = bool(restaurant.is_open)
+            restaurant.open_message = (
+                "Disponible para reservar" if restaurant.is_open else "No disponible"
+            )
         else:
-            restaurant.is_open_now = restaurant.is_open
-            restaurant.open_message = "Abierto" if restaurant.is_open else "Cerrado"
+            restaurant.is_open_now = False
+            restaurant.open_message = (
+                "Sin horario configurado"
+                if state and not state["has_schedule"]
+                else "Cerrado"
+            )
     return [RestaurantListItem.model_validate(r) for r in restaurants]
 
 

@@ -329,10 +329,15 @@ async def create_order(
 
     if not current_user.is_superuser and not appointment_link:
         open_state = await restaurant_open_state(db, restaurant)
-        if not open_state["is_open_now"]:
+        if not restaurant.is_open:
             raise HTTPException(
                 status_code=409,
-                detail=f"El restaurante está cerrado. {open_state['message']}",
+                detail="El negocio no está recibiendo pedidos en este momento.",
+            )
+        if open_state["has_schedule"] and not open_state["is_open_now"]:
+            raise HTTPException(
+                status_code=409,
+                detail=f"El negocio está cerrado. {open_state['message']}",
             )
 
     pickup = _is_pickup(body)

@@ -790,7 +790,7 @@ class CashAdvanceAdmin(ModelView, model=CashAdvance):
         CashAdvance.mandado_id: "Mandado",
         CashAdvance.approved_by: "Aprobado por",
         CashAdvance.amount: "Monto",
-        CashAdvance.pays_restaurant: "Pago al restaurante",
+        CashAdvance.pays_restaurant: "Pago al negocio",
         CashAdvance.settlement_method: "Forma de liquidación",
         CashAdvance.status: "Estado",
         CashAdvance.taken_at: "Tomado",
@@ -809,7 +809,7 @@ class CashAdvanceAdmin(ModelView, model=CashAdvance):
         CashAdvance.settlement_method: [
             ("cash", "Efectivo"),
             ("payout", "Descontado del pago"),
-            ("restaurant_payment", "Pago al restaurante"),
+            ("restaurant_payment", "Pago al negocio"),
         ],
     }
     column_formatters = {

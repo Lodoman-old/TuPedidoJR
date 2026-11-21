@@ -12,7 +12,7 @@ MIN_ETA_MIN = 1
 # Status flow shown to the customer, in order.
 TRACKING_STEPS: list[tuple[str, str]] = [
     ("pending", "Pedido recibido"),
-    ("confirmed", "Confirmado por el restaurante"),
+    ("confirmed", "Confirmado por el negocio"),
     ("preparing", "En preparación"),
     ("ready", "Listo para recoger"),
     ("in_delivery", "Repartidor en camino"),
@@ -106,7 +106,7 @@ async def build_tracking(db: AsyncSession, order: Order) -> dict:
     if pickup:
         tracking_steps = [
             ("pending", "Pedido recibido"),
-            ("confirmed", "Confirmado por el restaurante"),
+            ("confirmed", "Confirmado por el negocio"),
             ("preparing", "En preparación"),
             ("ready", "Listo para recoger"),
             ("delivered", "Recogido"),
@@ -114,10 +114,10 @@ async def build_tracking(db: AsyncSession, order: Order) -> dict:
     elif order.delivery_mode == "own":
         tracking_steps = [
             ("pending", "Pedido recibido"),
-            ("confirmed", "Confirmado por el restaurante"),
+            ("confirmed", "Confirmado por el negocio"),
             ("preparing", "En preparación"),
             ("ready", "Listo"),
-            ("in_delivery", "En reparto por el restaurante"),
+            ("in_delivery", "En reparto por el negocio"),
             ("delivered", "Entregado"),
         ]
     keys = [key for key, _ in tracking_steps]

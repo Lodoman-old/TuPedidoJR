@@ -23,7 +23,7 @@ router = APIRouter()
 KNOWN_SETTINGS: dict[str, dict] = {
     "APP_COMMISSION_PERCENTAGE": {
         "group": "Comisiones", "label": "Comisión de la plataforma",
-        "description": "Porcentaje que absorbe el restaurante de cada pedido.",
+        "description": "Porcentaje que absorbe el negocio de cada pedido.",
         "type": "percent", "default": "15.0",
     },
     "APP_FLAT_USAGE_FEE": {
@@ -32,8 +32,8 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "type": "money", "default": "5.0",
     },
     "APP_FIXED_RESTAURANT_FEE": {
-        "group": "Comisiones", "label": "Cuota fija del restaurante",
-        "description": "Monto fijo por pedido que se descuenta al restaurante cuando trabaja con cuota fija.",
+        "group": "Comisiones", "label": "Cuota fija del negocio",
+        "description": "Monto fijo por pedido que se descuenta al negocio cuando trabaja con cuota fija.",
         "type": "money", "default": "5.0",
     },
     "AFFILIATION_ANNUAL_FEE": {
@@ -218,7 +218,7 @@ KNOWN_SETTINGS: dict[str, dict] = {
     },
     "CANCELLATION_WINDOW_MIN": {
         "group": "Cancelaciones", "label": "Minutos de gracia",
-        "description": "Tiempo que tiene el cliente para cancelar después de que el restaurante confirma.",
+        "description": "Tiempo que tiene el cliente para cancelar después de que el negocio confirma.",
         "type": "int", "default": "5",
     },
     "CANCELLATION_REFUND_ENABLED": {
@@ -228,7 +228,7 @@ KNOWN_SETTINGS: dict[str, dict] = {
     },
     "RESTAURANT_TIMEZONE": {
         "group": "Horarios", "label": "Zona horaria",
-        "description": "Zona horaria usada para los horarios de los restaurantes.",
+        "description": "Zona horaria usada para los horarios de los negocios.",
         "type": "text", "default": "America/Mexico_City",
     },
     "OSRM_URL": {
@@ -248,7 +248,7 @@ KNOWN_SETTINGS: dict[str, dict] = {
     },
     "BANK_NAME": {
         "group": "Pagos", "label": "Banco de la plataforma",
-        "description": "El cliente transfiere a TuPedidoJR, no al restaurante.",
+        "description": "El cliente transfiere a TuPedidoJR, no al negocio.",
         "type": "text", "default": "",
     },
     "BANK_ACCOUNT_HOLDER": {

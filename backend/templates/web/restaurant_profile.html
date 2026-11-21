@@ -52,7 +52,7 @@
             <label class="form-label small mb-1" for="bizDeliveryMode">Tipo de entrega</label>
             <select class="form-select" id="bizDeliveryMode">
               <option value="platform">Repartidor de TuPedidoJR</option>
-              <option value="own">Repartidor propio del restaurante</option>
+              <option value="own">Repartidor propio del negocio</option>
             </select>
           </div>
           <div class="col-12">
@@ -65,7 +65,7 @@
           <div class="col-12">
             <div class="form-check">
               <input class="form-check-input" type="checkbox" id="bizPickup">
-              <label class="form-check-label" for="bizPickup">Permitir que el cliente recoja en el restaurante</label>
+              <label class="form-check-label" for="bizPickup">Permitir que el cliente recoja en el negocio</label>
             </div>
             <div class="form-text">El pedido no lleva envío ni propina. El cliente pasa cuando esté listo.</div>
           </div>
@@ -172,8 +172,8 @@
           </div>
         </div>
         <div class="alert alert-light border small mt-3 mb-0">
-          <strong>Cuota de servicio:</strong> $5 al cliente. En reservación solo mesa se cobra en efectivo en el restaurante
-          y el restaurante paga $5 a TuPedidoJR. En pre-pedido, los $5 se pagan en línea y se descuentan del depósito.
+          <strong>Cuota de servicio:</strong> $5 al cliente. En reservación solo mesa se cobra en efectivo en el negocio
+          y el negocio paga $5 a TuPedidoJR. En pre-pedido, los $5 se pagan en línea y se descuentan del depósito.
         </div>
       </div>
 
@@ -194,7 +194,7 @@
       <div class="card p-3 mb-3">
         <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
           <h6 class="mb-0">Horario de atención</h6>
-          <small class="text-muted">Los días sin turnos se consideran cerrados.</small>
+          <small class="text-muted">Sin horario configurado tu negocio no aparece disponible. En rentas el horario es opcional.</small>
         </div>
         <div id="scheduleBody"></div>
         <button class="btn btn-primary mt-3" id="saveScheduleBtn"><i class="bi bi-clock"></i> Guardar horario</button>

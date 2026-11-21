@@ -20,7 +20,7 @@
         <input type="date" class="form-control form-control-sm" id="dateTo">
       </div>
       <div class="col-12 col-md-4 d-none" id="restaurantWrap">
-        <label class="form-label small mb-1">Restaurante</label>
+        <label class="form-label small mb-1">Negocio</label>
         <select class="form-select form-select-sm" id="restaurantFilter">
           <option value="">Todos</option>
         </select>
@@ -175,8 +175,8 @@
     html += `<div class="card p-3 mb-3">
       <h6>Liquidaciones</h6>
       <div class="row g-2 small">
-        <div class="col-6 col-md-3"><span class="text-muted">Restaurantes pendientes</span><br><strong>${money(rp.pending)}</strong></div>
-        <div class="col-6 col-md-3"><span class="text-muted">Restaurantes pagadas</span><br><strong class="text-success">${money(parseFloat(rp.paid || 0) + parseFloat(rp.confirmed || 0))}</strong></div>
+        <div class="col-6 col-md-3"><span class="text-muted">Negocios pendientes</span><br><strong>${money(rp.pending)}</strong></div>
+        <div class="col-6 col-md-3"><span class="text-muted">Negocios pagados</span><br><strong class="text-success">${money(parseFloat(rp.paid || 0) + parseFloat(rp.confirmed || 0))}</strong></div>
         <div class="col-6 col-md-3"><span class="text-muted">Repartidores pendientes</span><br><strong>${money(dp.pending)}</strong></div>
         <div class="col-6 col-md-3"><span class="text-muted">Repartidores pagadas</span><br><strong class="text-success">${money(parseFloat(dp.paid || 0) + parseFloat(dp.confirmed || 0))}</strong></div>
       </div>
@@ -184,9 +184,9 @@
 
     if ((data.by_restaurant || []).length > 1) {
       html += `<div class="card p-3 mb-3">
-        <h6>Restaurantes que más venden</h6>
+        <h6>Negocios que más venden</h6>
         <div class="table-responsive"><table class="table table-sm mb-0" style="min-width:900px">
-          <thead><tr><th>Restaurante</th><th class="text-end">Pedidos</th><th class="text-end">Subtotal</th><th class="text-end">Comisión negocio</th><th class="text-end">Comisión cliente</th><th class="text-end">Total</th><th></th></tr></thead>
+          <thead><tr><th>Negocio</th><th class="text-end">Pedidos</th><th class="text-end">Subtotal</th><th class="text-end">Comisión negocio</th><th class="text-end">Comisión cliente</th><th class="text-end">Total</th><th></th></tr></thead>
           <tbody>${data.by_restaurant.map(r => `<tr>
             <td>${esc(r.restaurant_name)}</td>
             <td class="text-end">${r.orders}</td>

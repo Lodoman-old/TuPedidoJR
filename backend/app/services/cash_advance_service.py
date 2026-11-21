@@ -44,7 +44,7 @@ async def create_advance_request(
 
     amount = restaurant_net(order)
     if amount <= 0:
-        raise ValueError("El pedido no tiene monto para pagar al restaurante")
+        raise ValueError("El pedido no tiene monto para pagar al negocio")
 
     advance = CashAdvance(
         delivery_person_id=dp.id,

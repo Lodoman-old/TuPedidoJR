@@ -2,8 +2,6 @@ import json
 import hashlib
 from pathlib import Path
 
-import segno
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -200,16 +198,12 @@ async def web_restaurant_qr(
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
     slug = restaurant.slug or str(restaurant.id)
     public_url = f"{settings.APP_URL.rstrip('/')}/r/{slug}"
-    qr_svg = segno.make(public_url, error="q").svg_inline(
-        scale=12, border=4, dark="#000000", light="#ffffff"
-    )
     return templates.TemplateResponse(
         request,
         "restaurant_qr.html",
         {
             "restaurant": restaurant,
             "public_url": public_url,
-            "qr_svg": qr_svg,
         },
     )
 

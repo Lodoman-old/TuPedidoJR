@@ -402,14 +402,14 @@
     const publicUrl = `${location.origin}/r/${slug}`;
     const preview = el('qrPreview');
     if (preview) {
-      preview.innerHTML = `<img src="${base}?format=svg" alt="QR de ${esc(restaurant.name || 'tu negocio')}" style="width:100%;height:100%;object-fit:contain">`;
+      preview.innerHTML = `<img src="${base}?format=svg&v=2" alt="QR de ${esc(restaurant.name || 'tu negocio')}" style="width:100%;height:100%;object-fit:contain">`;
     }
     const printLink = el('qrPrintLink');
     if (printLink) printLink.href = `/web/restaurants/${RID}/qr`;
     const pngLink = el('qrPngLink');
-    if (pngLink) pngLink.href = `${base}?format=png&download=1`;
+    if (pngLink) pngLink.href = `${base}?format=png&download=1&v=2`;
     const svgLink = el('qrSvgLink');
-    if (svgLink) svgLink.href = `${base}?format=svg&download=1`;
+    if (svgLink) svgLink.href = `${base}?format=svg&download=1&v=2`;
     const urlBox = el('qrUrl');
     if (urlBox) {
       urlBox.innerHTML = `Enlace público: <a href="${publicUrl}" target="_blank" rel="noopener">${esc(publicUrl)}</a>`;

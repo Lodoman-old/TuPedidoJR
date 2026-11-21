@@ -50,8 +50,8 @@
     <button class="btn-primary" type="button" onclick="window.print()">
       Imprimir o guardar PDF
     </button>
-    <a class="btn-light" href="/api/v1/restaurants/{{ restaurant.id }}/qr?format=png&download=1">Descargar PNG</a>
-    <a class="btn-light" href="/api/v1/restaurants/{{ restaurant.id }}/qr?format=svg&download=1">Descargar SVG</a>
+    <a class="btn-light" href="/api/v1/restaurants/{{ restaurant.id }}/qr?format=png&download=1&v=2">Descargar PNG</a>
+    <a class="btn-light" href="/api/v1/restaurants/{{ restaurant.id }}/qr?format=svg&download=1&v=2">Descargar SVG</a>
     <a class="btn-light" href="/web/restaurants/{{ restaurant.id }}/profile">Volver al panel</a>
   </div>
 
@@ -60,7 +60,7 @@
       <img class="logo" src="{{ restaurant.logo_url or '/static/logo.png' }}" alt="{{ restaurant.name }}" onerror="this.src='/static/logo.png'">
       <h1>{{ restaurant.name }}</h1>
       <p class="tagline">Pide en línea y recibe en casa</p>
-      <div class="qr">{{ qr_svg|safe }}</div>
+      <div class="qr"><img src="/api/v1/restaurants/{{ restaurant.id }}/qr?format=png&scale=24" alt="QR de {{ restaurant.name }}" style="width:100%;height:100%;object-fit:contain"></div>
       <p class="scan">Escanea y pide aquí</p>
       <p class="url">{{ public_url }}</p>
       <p class="print-hint">Imprime al 100% para conservar el tamaño del QR.</p>

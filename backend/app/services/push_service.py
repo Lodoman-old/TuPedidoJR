@@ -1203,32 +1203,68 @@ def schedule_admin_payout_request(
 
 
 async def notify_new_restaurant_registration(restaurant_id: str) -> None:
-    """Notify every active administrator that a restaurant is waiting for approval."""
+    """Avisa por push, panel y correo que hay un negocio esperando aprobación."""
     try:
+        from html import escape
+
+        from app.core.config import settings
+        from app.services.email_service import send_email
+
         async with async_session() as db:
             result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
             restaurant = result.scalar_one_or_none()
             if not restaurant:
                 return
-            admins = await db.execute(
-                select(User.id).where(
+            owner = await db.get(User, restaurant.owner_id)
+            admins = list((await db.execute(
+                select(User).where(
                     User.is_superuser.is_(True),
                     User.is_active.is_(True),
                 )
+            )).scalars().all())
+
+            subject = f"Nueva solicitud de negocio: {restaurant.name}"
+            panel_url = f"{(settings.APP_URL or '').rstrip('/')}/web/admin/restaurants"
+            text = (
+                f"{restaurant.name} está esperando aprobación.\n\n"
+                f"Responsable: {owner.name if owner else '—'}\n"
+                f"Correo: {owner.email if owner else '—'}\n"
+                f"Teléfono: {restaurant.phone or (owner.phone if owner else '—') or '—'}\n"
+                f"Dirección: {restaurant.address}\n"
+                f"Giro: {restaurant.cuisine or '—'}\n\n"
+                f"Revisar: {panel_url}"
             )
-            for admin_id in admins.scalars().all():
+            html = f"""
+              <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;background:#fff;border-radius:12px;padding:24px;border:1px solid #e5e7eb">
+                <h2 style="margin:0 0 8px;color:#1B2F6B">Nueva solicitud de negocio</h2>
+                <p style="margin:0 0 16px;color:#475569">Un negocio está esperando aprobación en TuPedidoJR.</p>
+                <table style="width:100%;font-size:14px;border-collapse:collapse">
+                  <tr><td style="padding:6px 0;color:#64748b">Negocio</td><td style="padding:6px 0"><strong>{escape(restaurant.name)}</strong></td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b">Responsable</td><td style="padding:6px 0">{escape(owner.name if owner else '—')}</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b">Correo</td><td style="padding:6px 0">{escape(owner.email if owner else '—')}</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b">Teléfono</td><td style="padding:6px 0">{escape(restaurant.phone or (owner.phone if owner else '') or '—')}</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b">Dirección</td><td style="padding:6px 0">{escape(restaurant.address)}</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b">Giro</td><td style="padding:6px 0">{escape(restaurant.cuisine or '—')}</td></tr>
+                </table>
+                <p style="margin:22px 0 0">
+                  <a href="{escape(panel_url)}" style="background:#1B2F6B;color:#fff;padding:11px 18px;border-radius:8px;text-decoration:none">Revisar solicitud</a>
+                </p>
+              </div>
+            """
+            for admin in admins:
                 await send_to_user(
                     db,
-                    admin_id,
-                    "Nueva solicitud de restaurante",
+                    admin.id,
+                    "Nueva solicitud de negocio",
                     f"{restaurant.name} está esperando aprobación.",
                     {
                         "type": "restaurant_registration",
                         "restaurant_id": str(restaurant.id),
                     },
                 )
+                await send_email(db, admin.email, subject, html, text)
     except Exception:
-        logger.exception("Push restaurant-registration notification failed for %s", restaurant_id)
+        logger.exception("Notificación de solicitud de negocio falló para %s", restaurant_id)
 
 
 async def notify_arrival(order_id: str) -> None:

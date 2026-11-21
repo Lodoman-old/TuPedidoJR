@@ -314,7 +314,16 @@ async def admin_payouts(
                     "owes": _money(o.restaurant_owes_platform),
                     "payment_method": o.payment_method,
                 }
-                for o in balance.get("all_orders", [])[:100]
+                for o in (
+                    list(balance.get("orders", []))
+                    + [
+                        extra for extra in balance.get("all_orders", [])
+                        if extra.id not in {o.id for o in balance.get("orders", [])}
+                        and extra.delivery_mode in ("own", "pickup")
+                        and extra.payment_method == "cash"
+                        and not extra.restaurant_charge_settled
+                    ]
+                )[:100]
             ],
             "commission_total": _money(sum(
                 (o.platform_commission or 0) for o in balance.get("all_orders", [])

@@ -331,7 +331,7 @@
         <strong>Se le debe</strong> es lo que la plataforma le pagará. <strong>Debe</strong> es el efectivo o los cargos que el negocio cobró por la plataforma. <strong>Neto</strong> es lo que realmente se paga o se cobra.</p>
       <div class="table-responsive"><table class="table table-sm align-middle" style="min-width:1220px">
         <thead><tr>
-          <th>Restaurante</th><th class="text-end">Ventas 30d</th><th class="text-end">Se le debe</th><th class="text-end">Debe a plataforma</th><th class="text-end">Neto</th><th>Comisión %</th>
+          <th>Restaurante</th><th class="text-end">Ventas 30d</th><th class="text-end">Ganancia</th><th class="text-end">Debe a plataforma</th><th class="text-end">Neto a pagar</th><th>Comisión %</th>
           <th>Frecuencia</th><th>Próximo pago</th><th>Estado</th><th></th>
         </tr></thead>
         <tbody>${restaurants.map(r => {
@@ -344,7 +344,7 @@
           return `<tr>
             <td>${esc(r.name)}</td>
             <td class="text-end">${money(r.monthly_sales)}</td>
-            <td class="text-end fw-bold">${money(r.pending_amount)}</td>
+            <td class="text-end fw-bold">${money(r.earned_total)}</td>
             <td class="text-end text-danger">${money(r.restaurant_debt || 0)}</td>
             <td class="text-end">${netLabel}</td>
             <td style="min-width:110px">
@@ -486,11 +486,11 @@
   function openBusinessBalance(id) {
     const r = restaurantsById[String(id)];
     if (!r) return;
-    const pending = parseFloat(r.pending_amount || 0);
+    const earned = parseFloat(r.earned_total || 0);
     const debt = parseFloat(r.restaurant_debt || 0);
     const net = parseFloat(r.net_amount || 0);
     const netBlock = net > 0
-      ? `<div class="alert alert-success mb-0"><strong>La plataforma le paga al negocio:</strong> ${money(net)}</div>`
+      ? `<div class="alert alert-success mb-0"><strong>Neto a pagar al negocio:</strong> ${money(net)}</div>`
       : (net < 0
         ? `<div class="alert alert-danger mb-0"><strong>El negocio debe entregar a la plataforma:</strong> ${money(Math.abs(net))}</div>`
         : '<div class="alert alert-secondary mb-0"><strong>Sin saldo pendiente.</strong></div>');
@@ -498,8 +498,8 @@
     document.getElementById('businessBalanceBody').innerHTML = `
       <div class="row g-2 mb-3">
         <div class="col-6"><div class="border rounded p-2 text-center">
-          <small class="text-muted d-block">Se le debe al negocio</small>
-          <strong class="text-success fs-5">${money(pending)}</strong>
+          <small class="text-muted d-block">Ganancia por pagar</small>
+          <strong class="text-success fs-5">${money(earned)}</strong>
         </div></div>
         <div class="col-6"><div class="border rounded p-2 text-center">
           <small class="text-muted d-block">El negocio debe</small>
@@ -536,7 +536,7 @@
           <td class="text-end text-danger">${money(o.owes)}</td>
         </tr>`).join('') || '<tr><td colspan="9" class="text-center text-muted">Sin pedidos.</td></tr>'}</tbody>
       </table></div>
-      <p class="small text-muted mt-3 mb-0">La ganancia neta ya incluye comisiones, envíos, ajustes y puntos. La plataforma le debe ${money(pending)} y el negocio debe ${money(debt)}. Al generar el pago se aplica el neto: ${net > 0 ? `se le pagan ${money(net)}` : net < 0 ? `se le cobran ${money(Math.abs(net))}` : 'no hay movimiento'}.</p>
+      <p class="small text-muted mt-3 mb-0">La ganancia neta ya incluye comisiones, envíos, ajustes y puntos. Ganancia ${money(earned)} − deuda ${money(debt)} = neto ${money(net)}. ${net > 0 ? `Se le pagan ${money(net)}` : net < 0 ? `Se le cobran ${money(Math.abs(net))}` : 'No hay movimiento'}.</p>
     `;
     new bootstrap.Modal(document.getElementById('businessBalanceModal')).show();
   }

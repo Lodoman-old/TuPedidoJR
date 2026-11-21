@@ -138,6 +138,13 @@
             <input type="number" class="form-control" id="itemPrice" min="0" step="1" value="0">
           </div>
         </div>
+        <div class="form-check mt-2 d-none" id="addressToggleBox">
+          <input class="form-check-input" type="checkbox" id="itemAtHome">
+          <label class="form-check-label small" for="itemAtHome">
+            Se presta en el domicilio del cliente
+            <span class="d-block text-muted">El cliente escribe su dirección al agendar. Incluye el traslado en el precio.</span>
+          </label>
+        </div>
         <div class="text-danger small mt-2 d-none" id="itemError"></div>
       </div>
       <div class="modal-footer">
@@ -251,7 +258,7 @@
       <div class="agenda-row">
         <div class="flex-grow-1 min-w-0">
           <div class="fw-semibold ${s.is_active ? '' : 'text-muted text-decoration-line-through'}">${esc(s.name)}</div>
-          <div class="small text-muted">${s.duration_min} min · ${money(s.price)}${s.description ? ' · ' + esc(s.description) : ''}</div>
+          <div class="small text-muted">${s.duration_min} min · ${money(s.price)}${s.requires_address ? ' · a domicilio' : ''}${s.description ? ' · ' + esc(s.description) : ''}</div>
         </div>
         <div class="agenda-actions ms-auto d-flex gap-1">
           <button class="btn btn-sm btn-outline-secondary" onclick="openServiceForm('${s.id}')"><i class="bi bi-pencil"></i></button>
@@ -299,12 +306,14 @@
     document.getElementById('descriptionBox').classList.remove('d-none');
     document.getElementById('durationBox').classList.remove('d-none');
     document.getElementById('priceBox').classList.remove('d-none');
+    document.getElementById('addressToggleBox').classList.remove('d-none');
     document.getElementById('itemDescription').placeholder = '';
     document.getElementById('itemId').value = item ? item.id : '';
     document.getElementById('itemName').value = item ? item.name : '';
     document.getElementById('itemDescription').value = item ? (item.description || '') : '';
     document.getElementById('itemDuration').value = item ? item.duration_min : 30;
     document.getElementById('itemPrice').value = item ? Number(item.price) : 0;
+    document.getElementById('itemAtHome').checked = item ? Boolean(item.requires_address) : false;
     document.getElementById('itemError').classList.add('d-none');
     new bootstrap.Modal(document.getElementById('agendaModal')).show();
   }
@@ -317,6 +326,7 @@
     document.getElementById('descriptionBox').classList.remove('d-none');
     document.getElementById('durationBox').classList.add('d-none');
     document.getElementById('priceBox').classList.add('d-none');
+    document.getElementById('addressToggleBox').classList.add('d-none');
     document.getElementById('itemDescription').value = item ? (item.role || '') : '';
     document.getElementById('itemDescription').placeholder = 'Puesto o especialidad (opcional)';
     document.getElementById('itemId').value = item ? item.id : '';
@@ -343,6 +353,7 @@
           description: document.getElementById('itemDescription').value.trim() || null,
           duration_min: Number(document.getElementById('itemDuration').value || 30),
           price: Number(document.getElementById('itemPrice').value || 0),
+          requires_address: document.getElementById('itemAtHome').checked,
         };
         if (id) await apiRequest('PATCH', `/agenda/${RID}/services/${id}`, payload);
         else await apiRequest('POST', `/agenda/${RID}/services`, payload);
@@ -462,11 +473,12 @@
         return `<span class="badge ${cls}">${label}</span>`;
       };
       const paymentLine = (a) => {
+        const place = a.service_address ? 'en el domicilio' : 'en el negocio';
         if (a.payment_mode === 'cash') {
-          return `Cobra en el negocio: ${money(a.cash_due || (Number(a.price) + 5))}`;
+          return `Cobra ${place}: ${money(a.cash_due || (Number(a.price) + 5))}`;
         }
         if (a.payment_mode === 'deposit') {
-          return `Anticipo en línea: ${money(a.online_amount)} · Cobra en el negocio: ${money(a.cash_due)}`;
+          return `Anticipo en línea: ${money(a.online_amount)} · Cobra ${place}: ${money(a.cash_due)}`;
         }
         return `Pagado en línea: ${money(a.online_amount)}`;
       };
@@ -503,6 +515,7 @@
               ${feeLine(a)}
               ${Number(a.refund_amount || 0) > 0 ? `<div class="small text-info"><i class="bi bi-arrow-counterclockwise"></i> Reembolso pendiente: ${money(a.refund_amount)}</div>` : ''}
               ${a.client_phone ? `<div class="small text-muted"><i class="bi bi-telephone"></i> ${esc(a.client_phone)}</div>` : ''}
+              ${a.service_address ? `<div class="small"><i class="bi bi-geo-alt"></i> ${esc(a.service_address)}${(a.service_lat != null && a.service_lng != null) ? ` · <a href="https://www.google.com/maps/search/?api=1&query=${a.service_lat},${a.service_lng}" target="_blank" rel="noopener">Ver mapa</a>` : ''}</div>` : ''}
               ${a.notes ? `<div class="small text-muted">${esc(a.notes)}</div>` : ''}
             </div>
             <div class="agenda-actions ms-auto d-flex gap-1 flex-wrap">${actions.join('')}</div>

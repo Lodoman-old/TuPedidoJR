@@ -10,6 +10,7 @@ class ServiceIn(BaseModel):
     description: str | None = None
     duration_min: int = Field(default=30, ge=5, le=480)
     price: Decimal = Field(default=Decimal("0"), ge=0)
+    requires_address: bool = False
     is_active: bool = True
     sort_order: int = 0
 
@@ -19,6 +20,7 @@ class ServiceUpdate(BaseModel):
     description: str | None = None
     duration_min: int | None = Field(default=None, ge=5, le=480)
     price: Decimal | None = Field(default=None, ge=0)
+    requires_address: bool | None = None
     is_active: bool | None = None
     sort_order: int | None = None
 
@@ -29,6 +31,7 @@ class ServiceOut(BaseModel):
     description: str | None
     duration_min: int
     price: Decimal
+    requires_address: bool = False
     is_active: bool
     sort_order: int
 
@@ -67,6 +70,9 @@ class AppointmentIn(BaseModel):
     start_at: str
     client_name: str = Field(min_length=1, max_length=120)
     client_phone: str | None = Field(default=None, max_length=25)
+    service_address: str | None = Field(default=None, max_length=500)
+    service_lat: float | None = Field(default=None, ge=-90, le=90)
+    service_lng: float | None = Field(default=None, ge=-180, le=180)
     notes: str | None = None
     payment_mode: str = Field(default="cash", pattern="^(cash|deposit|full)$")
     proof_url: str | None = None
@@ -94,6 +100,9 @@ class AppointmentOut(BaseModel):
     restaurant_name: str | None = None
     client_name: str
     client_phone: str | None
+    service_address: str | None = None
+    service_lat: float | None = None
+    service_lng: float | None = None
     start_at: datetime
     end_at: datetime
     status: str

@@ -107,7 +107,7 @@
         <div class="fw-semibold small mb-2">Forma de pago</div>
         <div class="form-check">
           <input class="form-check-input" type="radio" name="payMode" id="payCash" value="cash" checked onchange="updatePaymentMode()">
-          <label class="form-check-label" for="payCash">Efectivo en el negocio · <span class="pay-amount" data-mode="cash"></span></label>
+          <label class="form-check-label" for="payCash" id="payCashLabel">Efectivo en el negocio · <span class="pay-amount" data-mode="cash"></span></label>
         </div>
         <div class="form-check" id="depositOption">
           <input class="form-check-input" type="radio" name="payMode" id="payDeposit" value="deposit" onchange="updatePaymentMode()">
@@ -135,6 +135,16 @@
         <div class="col-md-6">
           <label class="form-label small mb-1" for="clientPhone">Teléfono (opcional)</label>
           <input class="form-control" id="clientPhone" maxlength="25" inputmode="tel" autocomplete="tel">
+        </div>
+        <div class="col-12 d-none" id="serviceAddressBox">
+          <label class="form-label small mb-1" for="serviceAddress">Dirección donde se dará el servicio</label>
+          <div class="input-group">
+            <input class="form-control" id="serviceAddress" maxlength="500" placeholder="Calle, número y colonia" autocomplete="street-address">
+            <button class="btn btn-outline-secondary" type="button" id="serviceLocationBtn" onclick="useServiceLocation()">
+              <i class="bi bi-geo-alt"></i> Usar mi ubicación
+            </button>
+          </div>
+          <div class="form-text" id="serviceAddressHint">El precio del servicio ya incluye el traslado. Solo dentro de Juventino Rosas.</div>
         </div>
         <div class="col-12">
           <label class="form-label small mb-1" for="clientNotes">Notas (opcional)</label>
@@ -183,6 +193,8 @@
   let viewerDebt = 0;
   let business = null;
   let selectedProducts = {};
+  let serviceLat = null;
+  let serviceLng = null;
 
   function esc(v) {
     return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -193,6 +205,73 @@
 
   function currentService() {
     return (info.services || []).find((s) => s.id === serviceId) || null;
+  }
+
+  function isAtHome() {
+    const service = currentService();
+    return Boolean(service && service.requires_address);
+  }
+
+  function updateServiceAddressBox() {
+    const box = document.getElementById('serviceAddressBox');
+    if (!box) return;
+    const atHome = isAtHome();
+    box.classList.toggle('d-none', !atHome);
+    if (!atHome) {
+      serviceLat = null;
+      serviceLng = null;
+      document.getElementById('serviceAddress').value = '';
+      document.getElementById('serviceAddressHint').textContent = 'El precio del servicio ya incluye el traslado. Solo dentro de Juventino Rosas.';
+      document.getElementById('serviceAddressHint').className = 'form-text';
+    }
+    const cashLabel = document.getElementById('payCashLabel');
+    if (cashLabel) {
+      cashLabel.innerHTML = (atHome ? 'Efectivo en tu domicilio' : 'Efectivo en el negocio')
+        + ' · <span class="pay-amount" data-mode="cash"></span>';
+    }
+    updatePaymentMode();
+  }
+
+  async function useServiceLocation() {
+    const hint = document.getElementById('serviceAddressHint');
+    const button = document.getElementById('serviceLocationBtn');
+    if (!navigator.geolocation) {
+      showToast('Tu dispositivo no permite compartir la ubicación.', 'warning');
+      return;
+    }
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    hint.className = 'form-text';
+    hint.textContent = 'Obteniendo tu ubicación...';
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      serviceLat = position.coords.latitude;
+      serviceLng = position.coords.longitude;
+      try {
+        const res = await apiRequest('GET', `/geocode/reverse?lat=${serviceLat}&lng=${serviceLng}`);
+        const parts = [res.road, res.house_number, res.suburb || res.neighbourhood, res.city].filter(Boolean);
+        if (!document.getElementById('serviceAddress').value.trim() && parts.length) {
+          document.getElementById('serviceAddress').value = parts.join(', ');
+        }
+        const coverage = await apiRequest('GET', `/geocode/coverage?lat=${serviceLat}&lng=${serviceLng}`);
+        if (coverage.inside === false) {
+          hint.className = 'form-text text-danger';
+          hint.textContent = 'Esa ubicación está fuera de Juventino Rosas. No podemos agendar el servicio ahí.';
+        } else {
+          hint.className = 'form-text text-success';
+          hint.textContent = 'Ubicación lista. Confirma o corrige la dirección escrita.';
+        }
+      } catch (err) {
+        hint.className = 'form-text text-success';
+        hint.textContent = 'Ubicación lista. Confirma o corrige la dirección escrita.';
+      }
+      button.disabled = false;
+      button.innerHTML = '<i class="bi bi-geo-alt"></i> Usar mi ubicación';
+    }, (error) => {
+      button.disabled = false;
+      button.innerHTML = '<i class="bi bi-geo-alt"></i> Usar mi ubicación';
+      hint.className = 'form-text text-danger';
+      hint.textContent = 'No pudimos obtener tu ubicación. Escribe la dirección o revisa los permisos.';
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   }
 
   function updateSlotHint() {
@@ -213,7 +292,7 @@
       <div class="col-md-6 col-xl-4">
         <div class="agenda-service ${s.id === serviceId ? 'selected' : ''}" onclick="selectService('${s.id}')">
           <div class="fw-semibold">${esc(s.name)}</div>
-          <div class="small text-muted">${s.duration_min} min</div>
+          <div class="small text-muted">${s.duration_min} min · ${s.requires_address ? 'a domicilio' : 'en el local'}</div>
           <div class="price mt-1">${money(s.price)}</div>
         </div>
       </div>`).join('');
@@ -232,8 +311,11 @@
     serviceId = id;
     selectedDate = null;
     selectedTime = null;
+    serviceLat = null;
+    serviceLng = null;
     document.getElementById('confirmCard').classList.add('d-none');
     renderServices();
+    updateServiceAddressBox();
     await loadAvailability();
     renderCalendar();
     updateSlotHint();
@@ -374,17 +456,19 @@
     document.querySelectorAll('.pay-amount').forEach((el) => {
       const p = planFor(el.dataset.mode);
       if (el.dataset.mode === 'deposit') {
-        el.textContent = `$${p.online.toFixed(2)} en línea (${feeValues().percent}% = $${p.deposit.toFixed(2)}) + $${p.cash.toFixed(2)} en el negocio`;
+        el.textContent = `$${p.online.toFixed(2)} en línea (${feeValues().percent}% = $${p.deposit.toFixed(2)}) + $${p.cash.toFixed(2)} ${isAtHome() ? 'en tu domicilio' : 'en el negocio'}`;
       } else if (el.dataset.mode === 'full') {
         el.textContent = `$${p.online.toFixed(2)} en línea`;
       } else {
-        el.textContent = `$${p.cash.toFixed(2)} al llegar`;
+        el.textContent = `$${p.cash.toFixed(2)} ${isAtHome() ? 'en tu domicilio' : 'al llegar'}`;
       }
     });
     document.getElementById('transferBox').classList.toggle('d-none', !transfer);
     document.getElementById('confirmLabel').textContent = transfer
       ? 'Confirmo mis datos y que haré la transferencia a la cuenta de TuPedidoJR.'
-      : 'Confirmo que pagaré en el negocio en efectivo.';
+      : (isAtHome()
+        ? 'Confirmo que pagaré en efectivo al profesional en mi domicilio.'
+        : 'Confirmo que pagaré en el negocio en efectivo.');
     renderSummary();
   }
 
@@ -405,16 +489,16 @@
       lines.push(['Cuota de servicio (cliente)', money(fees.client)]);
       lines.push(['Pagas en línea ahora', money(plan.online)]);
       if (viewerDebt > 0) lines.push(['Adeudo de citas anteriores', money(viewerDebt)]);
-      lines.push(['Pagas en el negocio', money(plan.cash + viewerDebt)]);
+      lines.push([isAtHome() ? 'Pagas al profesional' : 'Pagas en el negocio', money(plan.cash + viewerDebt)]);
     } else if (plan.mode === 'full') {
       lines.push(['Cuota de servicio (cliente)', money(fees.client)]);
       lines.push(['Pagas en línea ahora', money(plan.online)]);
       if (viewerDebt > 0) lines.push(['Adeudo de citas anteriores', money(viewerDebt)]);
-      lines.push(['Pagas en el negocio', money(viewerDebt)]);
+      lines.push([isAtHome() ? 'Pagas al profesional' : 'Pagas en el negocio', money(viewerDebt)]);
     } else {
       lines.push(['Cuota de servicio (cliente)', money(fees.client)]);
       if (viewerDebt > 0) lines.push(['Adeudo de citas anteriores', money(viewerDebt)]);
-      lines.push(['Total en el negocio', money(plan.cash + viewerDebt)]);
+      lines.push([isAtHome() ? 'Total al profesional' : 'Total en el negocio', money(plan.cash + viewerDebt)]);
     }
     document.getElementById('summaryBox').innerHTML = lines
       .map(([label, value], index) => `<div class="d-flex justify-content-between ${index === 1 ? 'border-top pt-1 mt-1' : ''}"><span>${label}</span><strong>${value}</strong></div>`)
@@ -498,6 +582,34 @@
       errorBox.classList.remove('d-none');
       return;
     }
+    const serviceAddress = document.getElementById('serviceAddress').value.trim();
+    if (isAtHome()) {
+      if (!serviceAddress) {
+        errorBox.textContent = 'Escribe la dirección donde se dará el servicio.';
+        errorBox.classList.remove('d-none');
+        return;
+      }
+      if (serviceLat === null || serviceLng === null) {
+        try {
+          const results = await apiRequest('POST', '/geocode', { address: serviceAddress });
+          if (!results || !results.length) throw new Error('sin resultados');
+          serviceLat = Number(results[0].lat);
+          serviceLng = Number(results[0].lng);
+        } catch (err) {
+          errorBox.textContent = 'No pudimos ubicar esa dirección. Revisa la calle y el número o usa el botón “Usar mi ubicación”.';
+          errorBox.classList.remove('d-none');
+          return;
+        }
+        try {
+          const coverage = await apiRequest('GET', `/geocode/coverage?lat=${serviceLat}&lng=${serviceLng}`);
+          if (coverage.inside === false) {
+            errorBox.textContent = 'Ese domicilio está fuera de Juventino Rosas. Por ahora los servicios a domicilio solo se agendan dentro del municipio.';
+            errorBox.classList.remove('d-none');
+            return;
+          }
+        } catch (err) { /* si no se puede verificar, se permite y el negocio decide */ }
+      }
+    }
     if (!document.getElementById('cashConfirm').checked) {
       errorBox.textContent = 'Confirma los datos de tu cita para continuar.';
       errorBox.classList.remove('d-none');
@@ -538,6 +650,9 @@
         start_at: `${selectedDate}T${selectedTime}:00`,
         client_name: name,
         client_phone: document.getElementById('clientPhone').value.trim() || null,
+        service_address: isAtHome() ? serviceAddress : null,
+        service_lat: isAtHome() ? serviceLat : null,
+        service_lng: isAtHome() ? serviceLng : null,
         notes: document.getElementById('clientNotes').value.trim() || null,
         payment_mode: mode,
         proof_url: proofUrl,
@@ -601,6 +716,14 @@
       button.innerHTML = '<i class="bi bi-calendar-check"></i> Confirmar cita';
     }
   }
+
+  document.getElementById('serviceAddress').addEventListener('input', () => {
+    serviceLat = null;
+    serviceLng = null;
+    const hint = document.getElementById('serviceAddressHint');
+    hint.className = 'form-text';
+    hint.textContent = 'El precio del servicio ya incluye el traslado. Solo dentro de Juventino Rosas.';
+  });
 
   document.getElementById('prevMonth').addEventListener('click', async () => {
     viewMonth -= 1;
@@ -671,6 +794,7 @@
       staffId = null;
       updateSlotHint();
       renderServices();
+      updateServiceAddressBox();
       renderStaff();
       await loadAvailability();
       renderCalendar();

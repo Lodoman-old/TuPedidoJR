@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.base import Base, TimestampMixin
@@ -35,6 +35,9 @@ class Appointment(TimestampMixin, Base):
     )
     client_name = Column(String(120), nullable=False)
     client_phone = Column(String(25), nullable=True)
+    service_address = Column(Text, nullable=True)
+    service_lat = Column(Float, nullable=True)
+    service_lng = Column(Float, nullable=True)
     start_at = Column(DateTime(timezone=True), nullable=False, index=True)
     end_at = Column(DateTime(timezone=True), nullable=False)
     status = Column(String(20), default="confirmed", nullable=False, index=True)

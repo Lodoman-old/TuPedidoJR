@@ -134,7 +134,7 @@
             <div class="flex-grow-1">
               <div class="fw-bold">{{ service.name }}</div>
               {% if service.description %}<div class="small text-muted">{{ service.description }}</div>{% endif %}
-              <div class="small text-muted">{{ service.duration_min }} min{% if service.is_rental %} · {{ service.stock }} disponible(s){% endif %}</div>
+              <div class="small text-muted">{{ service.duration_min }} min{% if service.is_rental %} · {{ service.stock }} disponible(s){% elif service.requires_address %} · a domicilio{% endif %}</div>
               <div class="price">${{ '%.2f'|format(service.price|float) }}</div>
             </div>
             {% if restaurant.business_type == 'rental' %}

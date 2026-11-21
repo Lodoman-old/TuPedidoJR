@@ -1004,3 +1004,139 @@ async def test_appointment_reminders_are_queued(
     assert business_appt.business_reminder_sent_at is not None
     assert ("client", str(client_appt.id)) in calls
     assert ("business", str(business_appt.id)) in calls
+
+
+@pytest.fixture
+async def at_home_service(client: AsyncClient, owner_token, business):
+    resto, _ = business
+    resp = await client.post(
+        f"/api/v1/agenda/{resto.id}/services",
+        headers=_headers(owner_token),
+        json={
+            "name": "Masaje a domicilio",
+            "duration_min": 60,
+            "price": 150,
+            "requires_address": True,
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+@pytest.mark.asyncio
+async def test_service_exposes_at_home_flag(
+    client: AsyncClient, owner_token, business, at_home_service
+):
+    resto, _ = business
+    services = await client.get(
+        f"/api/v1/agenda/{resto.id}/services", headers=_headers(owner_token)
+    )
+    assert services.status_code == 200
+    row = next(s for s in services.json() if s["id"] == at_home_service["id"])
+    assert row["requires_address"] is True
+
+
+@pytest.mark.asyncio
+async def test_at_home_appointment_requires_address(
+    client: AsyncClient, customer_token, business, at_home_service, staff
+):
+    resto, target = business
+    resp = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments",
+        headers=_headers(customer_token),
+        json={
+            "service_id": at_home_service["id"],
+            "staff_id": staff["id"],
+            "start_at": f"{target.isoformat()}T09:00:00",
+            "client_name": "Cliente Domicilio",
+            "payment_mode": "cash",
+        },
+    )
+    assert resp.status_code == 400
+    assert "dirección" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_at_home_appointment_saves_address(
+    client: AsyncClient, customer_token, business, at_home_service, staff
+):
+    resto, target = business
+    resp = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments",
+        headers=_headers(customer_token),
+        json={
+            "service_id": at_home_service["id"],
+            "staff_id": staff["id"],
+            "start_at": f"{target.isoformat()}T09:00:00",
+            "client_name": "Cliente Domicilio",
+            "client_phone": "4121234567",
+            "service_address": "Calle Progreso 120, Centro",
+            "service_lat": 20.6439,
+            "service_lng": -100.9967,
+            "payment_mode": "cash",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    data = resp.json()
+    assert data["service_address"] == "Calle Progreso 120, Centro"
+    assert data["service_lat"] == pytest.approx(20.6439)
+    assert data["service_lng"] == pytest.approx(-100.9967)
+    # La cuota se mantiene: $5 al negocio y $5 al cliente.
+    assert float(data["business_fee"]) == 5
+    assert float(data["platform_fee"]) == 10
+
+
+@pytest.mark.asyncio
+async def test_at_home_appointment_outside_coverage_is_blocked(
+    client: AsyncClient, customer_token, business, at_home_service, staff, db_session
+):
+    from sqlalchemy import text
+
+    from app.services.setting_service import set_setting
+
+    resto, target = business
+    await db_session.execute(text("DELETE FROM postal_code_areas"))
+    await db_session.execute(
+        text(
+            "INSERT INTO postal_code_areas (cp, geom) VALUES (:cp, "
+            "ST_Multi(ST_MakeEnvelope(:x1, :y1, :x2, :y2, 4326)))"
+        ),
+        {"cp": "38250", "x1": -101.01, "y1": 20.63, "x2": -100.97, "y2": 20.66},
+    )
+    await set_setting(db_session, "COVERAGE_ENFORCE", "true")
+    await db_session.commit()
+
+    # Dentro del polígono: pasa.
+    inside = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments",
+        headers=_headers(customer_token),
+        json={
+            "service_id": at_home_service["id"],
+            "staff_id": staff["id"],
+            "start_at": f"{target.isoformat()}T09:00:00",
+            "client_name": "Cliente Dentro",
+            "service_address": "Calle Progreso 120, Centro",
+            "service_lat": 20.6439,
+            "service_lng": -100.9967,
+            "payment_mode": "cash",
+        },
+    )
+    assert inside.status_code == 201, inside.text
+
+    # Fuera del polígono (León): se rechaza.
+    outside = await client.post(
+        f"/api/v1/agenda/{resto.id}/appointments",
+        headers=_headers(customer_token),
+        json={
+            "service_id": at_home_service["id"],
+            "staff_id": staff["id"],
+            "start_at": f"{target.isoformat()}T10:00:00",
+            "client_name": "Cliente Fuera",
+            "service_address": "Blvd. Adolfo López Mateos 100, León",
+            "service_lat": 21.1213,
+            "service_lng": -101.6830,
+            "payment_mode": "cash",
+        },
+    )
+    assert outside.status_code == 400
+    assert "fuera" in outside.json()["detail"].lower()

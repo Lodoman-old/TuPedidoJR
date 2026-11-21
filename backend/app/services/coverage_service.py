@@ -75,10 +75,11 @@ async def ensure_coverage(
     db: AsyncSession,
     lat: float | None,
     lng: float | None,
+    message: str | None = None,
 ) -> None:
     """Lanza 400 si el punto de entrega está fuera del municipio."""
     if not await coverage_enabled(db):
         return
     inside = await is_inside_coverage(db, lat, lng)
     if inside is False:
-        raise HTTPException(status_code=400, detail=OUT_OF_COVERAGE_MESSAGE)
+        raise HTTPException(status_code=400, detail=message or OUT_OF_COVERAGE_MESSAGE)

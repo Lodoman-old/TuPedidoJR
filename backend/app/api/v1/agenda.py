@@ -40,6 +40,8 @@ from app.services.appointment_settlement_service import (
     count_pending_debts,
     no_show_appointment,
 )
+from app.services.coverage_service import ensure_coverage
+from app.services.geocode_service import geocode_address
 from app.services.order_service import get_setting_value
 from app.services.push_service import (
     schedule_appointment_status,
@@ -69,6 +71,7 @@ def _service_out(item: BusinessService) -> ServiceOut:
     return ServiceOut(
         id=item.id, name=item.name, description=item.description,
         duration_min=item.duration_min, price=item.price,
+        requires_address=bool(item.requires_address),
         is_active=item.is_active, sort_order=item.sort_order,
     )
 
@@ -93,6 +96,9 @@ def _appointment_out(a: Appointment, service_name: str | None = None,
         restaurant_name=restaurant_name,
         client_name=a.client_name,
         client_phone=a.client_phone,
+        service_address=a.service_address,
+        service_lat=a.service_lat,
+        service_lng=a.service_lng,
         start_at=a.start_at,
         end_at=a.end_at,
         status=a.status,
@@ -443,6 +449,48 @@ async def create_appointment(
         raise HTTPException(status_code=409, detail=detail)
     chosen = free_staff[0]
 
+    service_address = (body.service_address or "").strip()
+    service_lat = body.service_lat
+    service_lng = body.service_lng
+    if service.requires_address:
+        if not service_address:
+            raise HTTPException(
+                status_code=400,
+                detail="Escribe la dirección donde se dará el servicio.",
+            )
+        if service_lat is None or service_lng is None:
+            try:
+                results = await geocode_address(
+                    service_address,
+                    city="Santa Cruz de Juventino Rosas",
+                    state="Guanajuato",
+                )
+            except Exception:
+                results = []
+            if not results:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "No pudimos ubicar esa dirección. Revisa la calle y el número "
+                        "o usa el botón “Usar mi ubicación”."
+                    ),
+                )
+            service_lat = float(results[0]["lat"])
+            service_lng = float(results[0]["lng"])
+        await ensure_coverage(
+            db,
+            service_lat,
+            service_lng,
+            message=(
+                "El domicilio está fuera de nuestra zona: por ahora los servicios "
+                "a domicilio solo se agendan dentro de Juventino Rosas."
+            ),
+        )
+    else:
+        service_address = ""
+        service_lat = None
+        service_lng = None
+
     if body.payment_mode in ("deposit", "full") and not (body.proof_url or "").strip():
         raise HTTPException(
             status_code=400,
@@ -460,6 +508,9 @@ async def create_appointment(
         client_user_id=current_user.id,
         client_name=body.client_name.strip(),
         client_phone=(body.client_phone or "").strip() or None,
+        service_address=service_address or None,
+        service_lat=service_lat,
+        service_lng=service_lng,
         start_at=_utc(start_local),
         end_at=_utc(end_local),
         status="confirmed",

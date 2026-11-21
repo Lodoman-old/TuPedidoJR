@@ -594,6 +594,8 @@ async def _notify_new_appointment(appointment_id: str) -> None:
             service_name = service.name if service else "Servicio"
             staff_name = staff.name if staff else "por asignar"
             body = f"{name}: {service_name} · {when} · con {staff_name}"
+            if appointment.service_address:
+                body += f" · Domicilio: {appointment.service_address}"
             for user_id in user_ids:
                 await send_to_user(
                     db,
@@ -664,6 +666,8 @@ async def _notify_appointment_business_now(appointment_id: str) -> None:
             service_name = service.name if service else "Servicio"
             staff_name = staff.name if staff else "por asignar"
             body = f"{name}: {service_name} con {staff_name} · {when}"
+            if appointment.service_address:
+                body += f" · Domicilio: {appointment.service_address}"
             for user_id in user_ids:
                 await send_to_user(
                     db,

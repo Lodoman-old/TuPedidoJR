@@ -79,6 +79,11 @@ async def restaurant_balance(db: AsyncSession, restaurant_id) -> dict:
         Decimal("0"),
     )
     earned = earnable + loyalty_credit
+    cash_collected = sum(
+        ((o.total or Decimal("0")) for o in orders
+         if o.delivery_mode in ("own", "pickup") and o.payment_method == "cash"),
+        Decimal("0"),
+    )
     cash_debt = sum(
         (o.restaurant_owes_platform or Decimal("0"))
         for o in orders
@@ -142,6 +147,7 @@ async def restaurant_balance(db: AsyncSession, restaurant_id) -> dict:
         "all_orders": orders,
         "shipments": shipments,
         "earned": earned,
+        "cash_collected": cash_collected,
         "requested": requested,
         "cash_debt": cash_debt,
         "net": net,

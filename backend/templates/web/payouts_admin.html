@@ -373,7 +373,7 @@
     return `<div class="card p-3 mb-3">
       <h6>Negocios</h6>
       <p class="small text-muted">La comisión individual reemplaza la comisión global. Si dejas el campo vacío, se usa la global.<br>
-        <strong>Ganancia</strong> es lo que la plataforma le pagará antes de deudas. <strong>Debe</strong> es el efectivo o cargos que el negocio cobró por la plataforma. <strong>Neto</strong> es lo que realmente se paga o se cobra.</p>
+        <strong>Por transferir</strong> es la ganancia de pedidos con reparto de la plataforma. <strong>Cobrado en efectivo</strong> son pedidos ya pagados directamente al negocio. <strong>Debe</strong> es el efectivo o cargos que el negocio cobró por la plataforma. <strong>Neto</strong> es lo que realmente se transfiere o se cobra.</p>
       <div class="d-flex flex-wrap gap-1 mb-2" id="businessSubtabs">
         <button type="button" class="btn btn-sm btn-outline-secondary ${businessTab === 'all' ? 'active' : ''}" onclick="filterBusinessRows('all', this)">Todos <span class="badge bg-secondary">${restaurants.length}</span></button>
         <button type="button" class="btn btn-sm btn-outline-success ${businessTab === 'owed' ? 'active' : ''}" onclick="filterBusinessRows('owed', this)">Se les debe <span class="badge bg-success">${owedCount}</span></button>
@@ -382,7 +382,7 @@
       </div>
       <div class="table-responsive"><table class="table table-sm align-middle" style="min-width:1220px">
         <thead><tr>
-          <th>Negocio</th><th class="text-end">Ventas 30d</th><th class="text-end">Ganancia</th><th class="text-end">Debe a plataforma</th><th class="text-end">Neto a pagar</th><th>Comisión %</th>
+          <th>Negocio</th><th class="text-end">Ventas 30d</th><th class="text-end">Por transferir</th><th class="text-end">Cobrado en efectivo</th><th class="text-end">Debe a plataforma</th><th class="text-end">Neto a pagar</th><th>Comisión %</th>
           <th>Frecuencia</th><th>Próximo pago</th><th>Estado</th><th></th>
         </tr></thead>
         <tbody>${restaurants.map(r => {
@@ -407,6 +407,7 @@
             <td>${esc(r.name)}</td>
             <td class="text-end">${money(r.monthly_sales)}</td>
             <td class="text-end fw-bold">${money(r.earned_total)}</td>
+            <td class="text-end">${money(r.cash_collected || 0)}</td>
             <td class="text-end text-danger">${money(r.restaurant_debt || 0)}</td>
             <td class="text-end">${netLabel}</td>
             <td style="min-width:110px">
@@ -572,23 +573,33 @@
     const r = restaurantsById[String(id)];
     if (!r) return;
     const earned = parseFloat(r.earned_total || 0);
+    const cashCollected = parseFloat(r.cash_collected || 0);
     const debt = parseFloat(r.restaurant_debt || 0);
     const net = parseFloat(r.net_amount || 0);
+    const totalEarned = net + cashCollected;
     const netBlock = net > 0
-      ? `<div class="alert alert-success mb-0"><strong>Neto a pagar al negocio:</strong> ${money(net)}</div>`
+      ? `<div class="alert alert-success mb-0"><strong>Neto a transferir al negocio:</strong> ${money(net)}</div>`
       : (net < 0
         ? `<div class="alert alert-danger mb-0"><strong>El negocio debe entregar a la plataforma:</strong> ${money(Math.abs(net))}</div>`
         : '<div class="alert alert-secondary mb-0"><strong>Sin saldo pendiente.</strong></div>');
     document.getElementById('businessBalanceTitle').textContent = r.name || 'Negocio';
     document.getElementById('businessBalanceBody').innerHTML = `
       <div class="row g-2 mb-3">
-        <div class="col-6"><div class="border rounded p-2 text-center">
-          <small class="text-muted d-block">Ganancia por pagar</small>
+        <div class="col-6 col-md-3"><div class="border rounded p-2 text-center">
+          <small class="text-muted d-block">Por transferir</small>
           <strong class="text-success fs-5">${money(earned)}</strong>
         </div></div>
-        <div class="col-6"><div class="border rounded p-2 text-center">
-          <small class="text-muted d-block">El negocio debe</small>
+        <div class="col-6 col-md-3"><div class="border rounded p-2 text-center">
+          <small class="text-muted d-block">Cobrado en efectivo</small>
+          <strong class="text-primary fs-5">${money(cashCollected)}</strong>
+        </div></div>
+        <div class="col-6 col-md-3"><div class="border rounded p-2 text-center">
+          <small class="text-muted d-block">Debe a plataforma</small>
           <strong class="text-danger fs-5">${money(debt)}</strong>
+        </div></div>
+        <div class="col-6 col-md-3"><div class="border rounded p-2 text-center">
+          <small class="text-muted d-block">Ganancia total</small>
+          <strong class="fs-5">${money(totalEarned)}</strong>
         </div></div>
       </div>
       ${netBlock}
@@ -633,7 +644,7 @@
             <td class="text-end text-danger">${money(o.charge)}</td>
           </tr>`).join('')}</tbody>
         </table></div>` : ''}
-      <p class="small text-muted mt-3 mb-0">La ganancia neta ya incluye comisiones, envíos, ajustes y puntos. Ganancia ${money(earned)} − deuda ${money(debt)} = neto ${money(net)}. ${net > 0 ? `Se le pagan ${money(net)}` : net < 0 ? `Se le cobran ${money(Math.abs(net))}` : 'No hay movimiento'}.</p>
+      <p class="small text-muted mt-3 mb-0">Por transferir ${money(earned)} − deuda ${money(debt)} = ${money(net)}. Ya cobró ${money(cashCollected)} en efectivo. Total del negocio: ${money(net)} + ${money(cashCollected)} = ${money(totalEarned)}. La deuda ya está descontada de la transferencia, no se resta otra vez.</p>
     `;
     new bootstrap.Modal(document.getElementById('businessBalanceModal')).show();
   }

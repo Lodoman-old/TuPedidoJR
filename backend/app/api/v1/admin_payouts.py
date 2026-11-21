@@ -304,6 +304,7 @@ async def admin_payouts(
             "payout_frequency_days": restaurant.payout_frequency_days,
             "pending_amount": _money(balance["pending"]),
             "earned_total": _money(balance["earned"]),
+            "cash_collected": _money(balance.get("cash_collected", 0)),
             "restaurant_debt": _money(balance.get("cash_debt", 0)),
             "net_amount": _money(balance["net"]),
             "monthly_sales": _money(monthly_sales),

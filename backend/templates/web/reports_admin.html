@@ -185,7 +185,7 @@
     if ((data.by_restaurant || []).length > 1) {
       html += `<div class="card p-3 mb-3">
         <h6>Restaurantes que más venden</h6>
-        <div class="table-responsive"><table class="table table-sm mb-0">
+        <div class="table-responsive"><table class="table table-sm mb-0" style="min-width:900px">
           <thead><tr><th>Restaurante</th><th class="text-end">Pedidos</th><th class="text-end">Subtotal</th><th class="text-end">Comisión negocio</th><th class="text-end">Comisión cliente</th><th class="text-end">Total</th><th></th></tr></thead>
           <tbody>${data.by_restaurant.map(r => `<tr>
             <td>${esc(r.restaurant_name)}</td>
@@ -203,7 +203,7 @@
     if ((data.top_couriers || []).length) {
       html += `<div class="card p-3 mb-3">
         <h6>Repartidores con más entregas</h6>
-        <div class="table-responsive"><table class="table table-sm mb-0">
+        <div class="table-responsive"><table class="table table-sm mb-0" style="min-width:900px">
           <thead><tr><th>Repartidor</th><th class="text-end">Entregas</th><th class="text-end">Ganancia</th><th class="text-end">Ventas</th></tr></thead>
           <tbody>${data.top_couriers.map(c => `<tr>
             <td>${esc(c.name)}</td>
@@ -217,7 +217,7 @@
 
     html += `<div class="card p-3">
       <h6>Por día</h6>
-      <div class="table-responsive"><table class="table table-sm mb-0">
+      <div class="table-responsive"><table class="table table-sm mb-0" style="min-width:900px">
         <thead><tr><th>Fecha</th><th class="text-end">Pedidos</th><th class="text-end">Entregados</th><th class="text-end">Pendientes</th><th class="text-end">Cancelados</th><th class="text-end">Subtotal</th><th class="text-end">Comisión negocio</th><th class="text-end">Comisión cliente</th><th class="text-end">Total</th></tr></thead>
         <tbody>${(data.daily || []).slice().reverse().map(d => `<tr>
           <td>${d.date}</td>

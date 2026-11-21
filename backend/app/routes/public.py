@@ -73,8 +73,15 @@ async def _manual_values(db: AsyncSession) -> dict:
 
 
 @router.get("/politica-no-entrega")
-async def public_no_delivery_policy(request: Request):
-    return templates.TemplateResponse(request, "policy_no_delivery.html")
+async def public_no_delivery_policy(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    raw = (await get_setting_value(db, "WHATSAPP_SUPPORT", "")).strip()
+    whatsapp = "".join(ch for ch in raw if ch.isdigit())
+    return templates.TemplateResponse(
+        request, "policy_no_delivery.html", {"whatsapp": whatsapp}
+    )
 
 
 @router.get("/manuales")

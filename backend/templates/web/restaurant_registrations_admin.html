@@ -13,7 +13,7 @@
       <input id="regSearch" class="form-control form-control-sm" autocomplete="off"
              style="max-width:300px" placeholder="Buscar negocio, dueño, correo o teléfono...">
     </div>
-    <div class="table-responsive"><table class="table table-sm align-middle">
+    <div class="table-responsive"><table class="table table-sm align-middle" style="min-width:980px">
       <thead><tr><th>Negocio</th><th>Responsable</th><th>Contacto</th><th>Estado</th><th>Fecha</th><th></th></tr></thead>
       <tbody id="regTableBody"></tbody>
     </table></div>
@@ -441,7 +441,7 @@
     const rows = filteredAffiliations();
     const visible = rows.slice(0, affiliationVisible);
     const planByMonths = Object.fromEntries(affiliationPlansAdmin.map(p => [String(p.months), p]));
-    body.innerHTML = `<table class="table table-sm align-middle mb-0">
+    body.innerHTML = `<table class="table table-sm align-middle mb-0" style="min-width:1080px">
       <thead><tr><th>Negocio</th><th>Estado</th><th>Plan</th><th>Monto</th><th>Pagado hasta</th><th>Días</th><th class="text-end">Acciones</th></tr></thead>
       <tbody>${visible.map(r => {
         const active = Boolean(r.affiliated);

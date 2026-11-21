@@ -218,6 +218,7 @@
             <button class="btn btn-sm btn-success" onclick="askApprove('${r.id}')">Aprobar</button>
             <button class="btn btn-sm btn-outline-danger" onclick="askReject('${r.id}')">Rechazar</button>`
           : r.status === 'active' ? `
+            <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="/web/restaurants/${r.id}/qr">QR</a>
             <button class="btn btn-sm btn-outline-secondary" onclick="askResend('${r.id}')">Reenviar correo</button>` : ''}
         </td>
       </tr>`).join('') || '<tr><td colspan="6" class="text-center text-muted">No hay solicitudes en esta pestaña.</td></tr>';

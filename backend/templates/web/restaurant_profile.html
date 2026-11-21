@@ -191,6 +191,31 @@
         </div>
       </div>
 
+      <div class="card p-3 mb-3" id="qrCard">
+        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-1">
+          <h6 class="mb-0"><i class="bi bi-qr-code"></i> QR de tu negocio</h6>
+          <span class="badge bg-light text-dark">Listo para imprimir</span>
+        </div>
+        <p class="small text-muted mb-3">
+          Imprímelo y colócalo en tu mostrador, mesas o volantes. El cliente escanea y llega directo a tu página para pedir.
+        </p>
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <div id="qrPreview" class="border rounded p-1 bg-white" style="width:132px;height:132px"></div>
+          <div class="d-flex flex-column gap-2">
+            <a class="btn btn-sm btn-primary" id="qrPrintLink" target="_blank" rel="noopener" href="#">
+              <i class="bi bi-printer"></i> Abrir para imprimir
+            </a>
+            <a class="btn btn-sm btn-outline-secondary" id="qrPngLink" href="#">
+              <i class="bi bi-download"></i> Descargar PNG
+            </a>
+            <a class="btn btn-sm btn-outline-secondary" id="qrSvgLink" href="#">
+              <i class="bi bi-download"></i> Descargar SVG
+            </a>
+          </div>
+        </div>
+        <div class="small text-muted mt-3" id="qrUrl"></div>
+      </div>
+
       <div class="card p-3 mb-3">
         <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
           <h6 class="mb-0">Horario de atención</h6>
@@ -368,6 +393,26 @@
     }
   }
 
+  function setupQrCard() {
+    const base = `/api/v1/restaurants/${RID}/qr`;
+    const slug = restaurant.slug || RID;
+    const publicUrl = `${location.origin}/r/${slug}`;
+    const preview = el('qrPreview');
+    if (preview) {
+      preview.innerHTML = `<img src="${base}?format=svg" alt="QR de ${esc(restaurant.name || 'tu negocio')}" style="width:100%;height:100%;object-fit:contain">`;
+    }
+    const printLink = el('qrPrintLink');
+    if (printLink) printLink.href = `/web/restaurants/${RID}/qr`;
+    const pngLink = el('qrPngLink');
+    if (pngLink) pngLink.href = `${base}?format=png&download=1`;
+    const svgLink = el('qrSvgLink');
+    if (svgLink) svgLink.href = `${base}?format=svg&download=1`;
+    const urlBox = el('qrUrl');
+    if (urlBox) {
+      urlBox.innerHTML = `Enlace público: <a href="${publicUrl}" target="_blank" rel="noopener">${esc(publicUrl)}</a>`;
+    }
+  }
+
   async function loadRestaurant() {
     restaurant = await apiRequest('GET', `/restaurants/${RID}`);
     canManage = ['owner', 'manager', 'admin'].includes(restaurant.viewer_role);
@@ -378,6 +423,7 @@
     }
     el('profileContent').classList.remove('d-none');
     fillBusinessForm();
+    setupQrCard();
     await loadSchedule();
     await loadLocationAndMap();
     await loadAffiliationPayment();

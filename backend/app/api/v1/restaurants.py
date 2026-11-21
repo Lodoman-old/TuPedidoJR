@@ -1,13 +1,17 @@
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+import io
 import re
 import unicodedata
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+import segno
+
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
 from sqlalchemy import and_, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.api.deps import get_current_user, get_optional_user, require_superuser
 from app.db.session import get_db
 from app.models.menu_category import MenuCategory
@@ -372,7 +376,7 @@ async def get_open_status(restaurant_id: str, db: AsyncSession = Depends(get_db)
     result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
     restaurant = result.scalar_one_or_none()
     if not restaurant:
-        raise HTTPException(status_code=404, detail="Restaurante no encontrado")
+        raise HTTPException(status_code=404, detail="Negocio no encontrado")
     state = await restaurant_open_state(db, restaurant)
     tz = await get_timezone(db)
     return RestaurantOpenStatus(
@@ -383,6 +387,46 @@ async def get_open_status(restaurant_id: str, db: AsyncSession = Depends(get_db)
         has_schedule=state["has_schedule"],
         next_open_at=state["next_open_at"],
         timezone=str(tz),
+    )
+
+
+@router.get("/{restaurant_id}/qr")
+async def get_restaurant_qr(
+    restaurant_id: str,
+    format: str = "svg",
+    download: bool = False,
+    scale: int = 10,
+    db: AsyncSession = Depends(get_db),
+):
+    """QR listo para imprimir con el enlace público del negocio."""
+    result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
+    restaurant = result.scalar_one_or_none()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Negocio no encontrado")
+
+    slug = restaurant.slug or str(restaurant.id)
+    public_url = f"{settings.APP_URL.rstrip('/')}/r/{slug}"
+    kind = "png" if format.lower() == "png" else "svg"
+    safe_scale = min(max(int(scale or 10), 4), 20)
+    qr = segno.make(public_url, error="m")
+
+    buffer = io.BytesIO()
+    qr.save(
+        buffer,
+        kind=kind,
+        scale=safe_scale,
+        border=3,
+        dark="#0d1b2a",
+        light="#ffffff",
+    )
+    headers = {"Cache-Control": "public, max-age=3600"}
+    if download:
+        filename = f"qr-{slug}.{kind}"
+        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return Response(
+        content=buffer.getvalue(),
+        media_type="image/png" if kind == "png" else "image/svg+xml",
+        headers=headers,
     )
 
 

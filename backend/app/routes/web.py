@@ -2,6 +2,8 @@ import json
 import hashlib
 from pathlib import Path
 
+import segno
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -184,6 +186,32 @@ async def web_restaurant_location(restaurant_id: str):
 @router.get("/restaurants/{restaurant_id}/profile")
 async def web_restaurant_profile(request: Request, restaurant_id: str):
     return templates.TemplateResponse(request, "restaurant_profile.html", {"restaurant_id": restaurant_id})
+
+
+@router.get("/restaurants/{restaurant_id}/qr")
+async def web_restaurant_qr(
+    request: Request,
+    restaurant_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
+    restaurant = result.scalar_one_or_none()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Negocio no encontrado")
+    slug = restaurant.slug or str(restaurant.id)
+    public_url = f"{settings.APP_URL.rstrip('/')}/r/{slug}"
+    qr_svg = segno.make(public_url, error="m").svg_inline(
+        scale=10, border=3, dark="#0d1b2a", light="#ffffff"
+    )
+    return templates.TemplateResponse(
+        request,
+        "restaurant_qr.html",
+        {
+            "restaurant": restaurant,
+            "public_url": public_url,
+            "qr_svg": qr_svg,
+        },
+    )
 
 
 @router.get("/restaurants/{restaurant_id}/reserve")

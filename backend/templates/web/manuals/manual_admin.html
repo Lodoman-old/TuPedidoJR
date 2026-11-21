@@ -58,19 +58,44 @@
   <li><strong>Comida en efectivo no pagada</strong>: el cliente queda debiendo el total.</li>
 </ul>
 
-<h3>4. Pagos y reembolsos</h3>
+<h3>4. Pagos de negocios y repartidores</h3>
 <figure class="shot">
-  <img src="/static/manuals/admin-pagos.png" alt="Panel de pagos con pendientes de restaurantes y repartidores">
-  <figcaption>Pagos: pendientes, transferencias, efectivo por conciliar, avances y liquidaciones.</figcaption>
+  <img src="/static/manuals/admin-pagos.png" alt="Panel de pagos con pendientes de negocios y repartidores">
+  <figcaption>Pagos: pestañas por negocio, repartidor, devoluciones y otros movimientos.</figcaption>
 </figure>
+<p>La pantalla está dividida en pestañas con contadores:</p>
 <ul>
-  <li><strong>Restaurantes</strong>: ventas, comisión, deuda y próximo pago. Genera la liquidación y márcala como pagada.</li>
-  <li><strong>Repartidores</strong>: ganancia pendiente, deuda de efectivo, avances y <strong>saldo del corte</strong>.</li>
-  <li><strong>Cortes</strong>: el repartidor genera el corte; tú confirmas el pago o la recepción del efectivo.</li>
-  <li><strong>Transferencias</strong>: confirma las transferencias recibidas antes de liquidar.</li>
-  <li><strong>Reembolsos</strong>: revisa los pendientes y marca el reembolso cuando se haya enviado.</li>
-  <li><strong>Conciliación</strong>: compara pedidos entregados, ventas, propinas y comisiones por rango de fechas.</li>
+  <li><strong>Negocios</strong>: todos, se les debe, deben a plataforma y liquidados.</li>
+  <li><strong>Repartidores</strong>: todos, se les debe, deben a plataforma y liquidados.</li>
+  <li><strong>Devoluciones</strong>: reembolsos pendientes al cliente.</li>
+  <li><strong>Otros</strong>: transferencias, avances, depósitos y conciliación.</li>
 </ul>
+<table>
+  <tr><th>Concepto</th><th>Cómo leerlo</th></tr>
+  <tr><td>Por transferir</td><td>Ganancia de pedidos con reparto de la plataforma, antes de deudas.</td></tr>
+  <tr><td>Cobrado en efectivo</td><td>Pedidos que el negocio ya cobró directamente.</td></tr>
+  <tr><td>Comisión al negocio</td><td>Se descuenta de la venta del negocio.</td></tr>
+  <tr><td>Comisión al cliente</td><td>Se suma al total que paga el cliente.</td></tr>
+  <tr><td>Debe a plataforma</td><td>Efectivo o cargos que el negocio o repartidor cobró por la plataforma.</td></tr>
+  <tr><td>Neto</td><td>Lo que realmente se transfiere o se cobra después de deudas.</td></tr>
+</table>
+<p>Usa <strong>Detalle</strong> en cada negocio, repartidor, liquidación o reembolso para ver cada pedido, comisión, envío, recarga, ajuste y deuda.</p>
+<ul>
+  <li><strong>Generar pago/corte</strong>: crea la liquidación con el saldo actual.</li>
+  <li><strong>Marcar pagada</strong>: confirma que ya se pagó por transferencia o efectivo.</li>
+  <li><strong>Recibí el efectivo</strong>: confirma que el repartidor entregó su corte. Pide el código de 6 dígitos.</li>
+</ul>
+<div class="note">Cuando un negocio o repartidor solicita pago o entrega de efectivo, recibes una notificación push, un número en <strong>Pagos y cobros</strong> y un aviso dentro del panel.</div>
+
+<h3>4.1 Recargas</h3>
+<p>Mientras se integra el proveedor, las recargas se procesan manualmente desde <strong>Operación → Recargas</strong>.</p>
+<ul>
+  <li><strong>Portal por transferencia</strong>: confirma el pago y después marca la recarga como completada.</li>
+  <li><strong>Efectivo con repartidor</strong>: el repartidor cobra el monto + <strong>$2 de comisión</strong>. El monto queda como deuda del repartidor y los $2 como su ganancia.</li>
+  <li><strong>Completar</strong>: registra la referencia del proveedor.</li>
+  <li><strong>Falló</strong>: si no se pudo procesar, puedes reintentar o reembolsar. Al reembolsar se revierte la deuda y la comisión.</li>
+</ul>
+<div class="note">Las recargas se pueden ofrecer al entregar un pedido o de forma suelta desde el panel del repartidor.</div>
 
 <h3>5. Validación de comprobantes</h3>
 <figure class="shot">

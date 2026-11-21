@@ -76,6 +76,21 @@
   </div>
 </div>
 
+<div class="modal fade" id="payoutHistoryModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="payoutHistoryTitle">Detalle de liquidación</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="payoutHistoryBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="courierDetailModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
     <div class="modal-content">
@@ -166,6 +181,52 @@
   let restaurantsById = {};
   let reconRowsById = {};
   let couriersById = {};
+  let payoutHistoryById = {};
+
+  function openPayoutHistoryDetail(id) {
+    const h = payoutHistoryById[String(id)];
+    if (!h) return;
+    const isCourier = h.kind === 'courier';
+    const methodLabel = h.settlement_method === 'cash'
+      ? 'Efectivo'
+      : (h.settlement_method === 'transfer' ? 'Transferencia' : (h.payout_method === 'cash' ? 'Efectivo' : 'Transferencia'));
+    const statusLabel = { pending: 'Pendiente', paid: 'Pagada', confirmed: 'Confirmada', cancelled: 'Cancelada' };
+    const body = isCourier
+      ? `
+        <div class="row g-2 mb-3">
+          ${summaryCard('Ganancia', money(h.earnings))}
+          ${summaryCard('Efectivo por entregar', money(h.debt), 'border-danger')}
+          ${summaryCard('Avances', money(h.advances))}
+          ${summaryCard('Neto', money(h.net_amount), parseFloat(h.net_amount) < 0 ? 'border-danger' : 'border-success')}
+        </div>
+        <table class="table table-sm"><tbody>
+          <tr><td>Dirección</td><td class="text-end">${h.direction === 'to_platform' ? 'El repartidor entrega a la plataforma' : 'La plataforma paga al repartidor'}</td></tr>
+          <tr><td>Servicios</td><td class="text-end">${h.orders_count || 0}</td></tr>
+          <tr><td>Código</td><td class="text-end">${esc(h.confirmation_code || '—')}</td></tr>
+        </tbody></table>`
+      : `
+        <div class="row g-2 mb-3">
+          ${summaryCard('Productos', money(h.subtotal))}
+          ${summaryCard('Comisión al negocio', money(h.commission), 'border-primary')}
+          ${summaryCard('Comisión al cliente', money(h.flat_fees))}
+          ${summaryCard('Neto pagado', money(h.net_amount), 'border-success')}
+        </div>
+        <table class="table table-sm"><tbody>
+          <tr><td>Pedidos</td><td class="text-end">${h.orders_count || 0}</td></tr>
+        </tbody></table>`;
+    document.getElementById('payoutHistoryTitle').textContent = `${isCourier ? 'Repartidor' : 'Negocio'}: ${h.name}`;
+    document.getElementById('payoutHistoryBody').innerHTML = `
+      ${body}
+      <table class="table table-sm mb-0"><tbody>
+        <tr><td>Período</td><td class="text-end">${h.period_start} a ${h.period_end}</td></tr>
+        <tr><td>Estado</td><td class="text-end">${statusLabel[h.status] || h.status}</td></tr>
+        <tr><td>Forma de pago</td><td class="text-end">${methodLabel}</td></tr>
+        <tr><td>Creada</td><td class="text-end">${h.created_at ? new Date(h.created_at).toLocaleString('es-MX') : '—'}</td></tr>
+        <tr><td>Pagada</td><td class="text-end">${h.paid_at ? new Date(h.paid_at).toLocaleString('es-MX') : '—'}</td></tr>
+        ${h.notes ? `<tr><td>Notas</td><td class="text-end small">${esc(h.notes)}</td></tr>` : ''}
+      </tbody></table>`;
+    new bootstrap.Modal(document.getElementById('payoutHistoryModal')).show();
+  }
 
   async function openCourierDetail(id) {
     try {
@@ -517,6 +578,7 @@
     if (!rows.length) {
       return '<div class="card p-3"><h6>Historial</h6><p class="small text-muted mb-0">Sin liquidaciones registradas.</p></div>';
     }
+    payoutHistoryById = Object.fromEntries(rows.map(h => [String(h.id), h]));
     const kindLabel = { restaurant: 'Restaurante', courier: 'Repartidor' };
     const statusLabel = { pending: 'Pendiente', paid: 'Pagada', confirmed: 'Confirmada', cancelled: 'Cancelada' };
     return `<div class="card p-3">
@@ -541,11 +603,11 @@
           const methodLine = methodLabel
             ? `<div class="small text-muted mt-1">Forma de pago: <strong>${methodLabel}</strong></div>`
             : '';
-          let action = '';
+          let action = `<button class="btn btn-sm btn-outline-secondary" onclick="openPayoutHistoryDetail('${h.id}')">Detalle</button>`;
           if (h.status === 'pending') {
-            action = isCourier
-              ? `<button class="btn btn-sm ${toPlatform ? 'btn-warning' : 'btn-success'}" onclick="openPayoutPaid('courier','${h.id}','${h.direction}','${esc(h.confirmation_code || '')}','${h.settlement_method || h.payout_method || 'cash'}')">${toPlatform ? 'Recibí el efectivo' : 'Marcar pagada'}</button>`
-              : `<button class="btn btn-sm btn-success" onclick="openPayoutPaid('restaurant','${h.id}','to_restaurant','','${h.settlement_method || 'transfer'}')">Marcar pagada</button>`;
+            action += isCourier
+              ? ` <button class="btn btn-sm ${toPlatform ? 'btn-warning' : 'btn-success'}" onclick="openPayoutPaid('courier','${h.id}','${h.direction}','${esc(h.confirmation_code || '')}','${h.settlement_method || h.payout_method || 'cash'}')">${toPlatform ? 'Recibí el efectivo' : 'Marcar pagada'}</button>`
+              : ` <button class="btn btn-sm btn-success" onclick="openPayoutPaid('restaurant','${h.id}','to_restaurant','','${h.settlement_method || 'transfer'}')">Marcar pagada</button>`;
           }
           return `<tr>
             <td>${kindLabel[h.kind] || h.kind}</td>

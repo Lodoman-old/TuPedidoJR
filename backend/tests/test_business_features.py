@@ -1905,3 +1905,14 @@ class TestShowAddress:
         assert page.status_code == 200
         assert "Calle 5 de Mayo 209" not in page.text
         assert '"address"' not in page.text
+
+        anonymous = await client.get(f"/api/v1/restaurants/{resto.id}")
+        assert anonymous.status_code == 200
+        assert anonymous.json()["show_address"] is False
+        assert anonymous.json()["address"] == ""
+
+        owner_view = await client.get(
+            f"/api/v1/restaurants/{resto.id}",
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert owner_view.json()["address"] == "Calle 5 de Mayo 209"

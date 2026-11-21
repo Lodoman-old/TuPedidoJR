@@ -369,7 +369,12 @@ async def get_restaurant(
         restaurant.affiliation_days_left = (
             restaurant.affiliation_expires_at - today_local
         ).days
-    return await _set_effective_commission(db, restaurant)
+    out = RestaurantOut.model_validate(
+        await _set_effective_commission(db, restaurant)
+    )
+    if not restaurant.show_address and role is None and not is_admin:
+        out.address = ""
+    return out
 
 
 @router.get("/{restaurant_id}/open-status", response_model=RestaurantOpenStatus)

@@ -13,6 +13,7 @@ from app.models.receipt_validation import ReceiptValidation
 from app.models.restaurant import Restaurant
 from app.models.user import User
 from app.services.receipt_validation_service import revalidate_receipt
+from app.services.affiliation_qr_service import send_affiliation_qr_email
 from app.services.push_service import schedule_appointment_paid
 
 router = APIRouter()
@@ -98,13 +99,14 @@ async def revalidate(
     return _row(record)
 
 
-async def _settle_entity(db: AsyncSession, record: ReceiptValidation, approved: bool) -> None:
+async def _settle_entity(db: AsyncSession, record: ReceiptValidation, approved: bool) -> bool:
     if record.entity_type == "appointment_payment":
         await _settle_appointment(db, record, approved)
     elif record.entity_type == "rental_payment":
         await _settle_rental(db, record, approved)
     elif record.entity_type == "affiliation_payment":
-        await _settle_affiliation(db, record, approved)
+        return await _settle_affiliation(db, record, approved)
+    return False
 
 
 async def _settle_appointment(db: AsyncSession, record: ReceiptValidation, approved: bool) -> None:
@@ -140,13 +142,14 @@ async def _settle_rental(db: AsyncSession, record: ReceiptValidation, approved: 
         booking.paid_at = None
 
 
-async def _settle_affiliation(db: AsyncSession, record: ReceiptValidation, approved: bool) -> None:
+async def _settle_affiliation(db: AsyncSession, record: ReceiptValidation, approved: bool) -> bool:
     restaurant = await db.get(Restaurant, record.entity_id)
     if not restaurant:
-        return
+        return False
     extracted = dict(record.extracted or {})
     months = int(record.plan_months or 12)
     days = 365 if months == 12 else months * 30
+    newly_applied = False
     if approved:
         if not extracted.get("applied"):
             base = date.today()
@@ -158,6 +161,7 @@ async def _settle_affiliation(db: AsyncSession, record: ReceiptValidation, appro
             restaurant.affiliation_reminder_on = None
             extracted["applied"] = True
             extracted["applied_months"] = months
+            newly_applied = True
     else:
         if extracted.get("applied"):
             previous = extracted.get("previous_expires_at")
@@ -165,6 +169,7 @@ async def _settle_affiliation(db: AsyncSession, record: ReceiptValidation, appro
             restaurant.affiliation_reminder_on = None
             extracted["applied"] = False
     record.extracted = extracted
+    return newly_applied
 
 
 @router.post("/receipts/{receipt_id}/approve")
@@ -177,10 +182,17 @@ async def approve_receipt(
     if not record:
         raise HTTPException(status_code=404, detail="Comprobante no encontrado")
     record.status = "approved"
-    await _settle_entity(db, record, True)
+    newly_affiliated = await _settle_entity(db, record, True)
     await db.commit()
     await db.refresh(record)
-    return _row(record)
+    row = _row(record)
+    if newly_affiliated:
+        restaurant = await db.get(Restaurant, record.entity_id)
+        if restaurant:
+            sent, detail = await send_affiliation_qr_email(db, restaurant)
+            row["qr_email_sent"] = sent
+            row["qr_email_detail"] = None if sent else detail
+    return row
 
 
 @router.post("/receipts/{receipt_id}/reject")

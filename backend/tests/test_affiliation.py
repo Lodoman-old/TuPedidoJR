@@ -183,3 +183,33 @@ async def test_reminder_is_sent_once_per_day(
     sent_again = await affiliation_service.send_affiliation_reminders(db_session)
     assert sent_again == 0
     assert len(calls) == 1
+
+
+async def test_affiliation_payment_sends_qr_email(
+    client: AsyncClient, db_session, owner_token, superuser_token, monkeypatch
+):
+    restaurant = await _make_restaurant(db_session, owner_token, None)
+    calls = []
+
+    async def fake_send(db, to, subject, html, text=None, attachments=None):
+        calls.append({"to": to, "subject": subject, "attachments": attachments})
+        return True, "Correo enviado"
+
+    monkeypatch.setattr("app.services.affiliation_qr_service.send_email", fake_send)
+
+    resp = await client.patch(
+        f"/api/v1/admin/affiliations/{restaurant.id}",
+        json={"paid": True, "months": 12},
+        headers=_headers(superuser_token),
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["qr_email_sent"] is True
+
+    assert len(calls) == 1
+    assert calls[0]["to"] == "owner-aff@test.com"
+    assert "QR" in calls[0]["subject"]
+    filename, content, mime = calls[0]["attachments"][0]
+    assert filename.endswith(".png")
+    assert mime == "image/png"
+    assert content.startswith(b"\x89PNG\r\n\x1a\n")

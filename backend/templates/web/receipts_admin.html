@@ -146,12 +146,21 @@
 
   async function settle(id, action) {
     const question = action === 'approve'
-      ? '¿Aprobar este pago? La cita quedará marcada como pagada.'
-      : '¿Rechazar este comprobante? La cita quedará pendiente de pago.';
+      ? '¿Aprobar este pago? La operación quedará marcada como pagada.'
+      : '¿Rechazar este comprobante? La operación quedará pendiente de pago.';
     if (!confirm(question)) return;
     try {
-      await apiRequest('POST', `/admin/receipts/${id}/${action}`, {});
-      showToast(action === 'approve' ? 'Pago aprobado' : 'Comprobante rechazado', 'success');
+      const res = await apiRequest('POST', `/admin/receipts/${id}/${action}`, {});
+      if (action === 'approve' && res.qr_email_sent !== undefined) {
+        showToast(
+          res.qr_email_sent
+            ? 'Pago aprobado. QR enviado por correo.'
+            : `Pago aprobado. No se pudo enviar el QR: ${res.qr_email_detail || 'revisa el correo del dueño'}`,
+          res.qr_email_sent ? 'success' : 'warning'
+        );
+      } else {
+        showToast(action === 'approve' ? 'Pago aprobado' : 'Comprobante rechazado', 'success');
+      }
       loadValidations();
     } catch (e) {
       showToast(e.message, 'danger');

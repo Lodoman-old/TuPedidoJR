@@ -16,6 +16,7 @@ from app.models.restaurant_user import RestaurantUser
 from app.models.user import User
 from app.schemas.restaurant import RestaurantApprovalRequest, RestaurantRegistrationOut
 from app.services.affiliation_payment_service import affiliation_plans
+from app.services.affiliation_qr_service import send_affiliation_qr_email
 from app.services.audit_service import log_action
 from app.services.schedule_service import local_today
 from app.services.email_service import send_email, send_restaurant_rejected, send_restaurant_welcome
@@ -180,7 +181,9 @@ async def update_affiliation(
     result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
     restaurant = result.scalar_one_or_none()
     if not restaurant:
-        raise HTTPException(status_code=404, detail="Restaurante no encontrado")
+        raise HTTPException(status_code=404, detail="Negocio no encontrado")
+
+    previous_expires = restaurant.affiliation_expires_at
 
     if body.paid is True:
         base = await local_today(db)
@@ -212,7 +215,12 @@ async def update_affiliation(
     )
     await db.commit()
     await db.refresh(restaurant)
-    return _affiliation_row(restaurant, today=await local_today(db))
+    row = _affiliation_row(restaurant, today=await local_today(db))
+    if body.paid is True and restaurant.affiliation_expires_at != previous_expires:
+        sent, detail = await send_affiliation_qr_email(db, restaurant)
+        row["qr_email_sent"] = sent
+        row["qr_email_detail"] = None if sent else detail
+    return row
 
 
 @router.post("/restaurant-registrations/{restaurant_id}/approve")

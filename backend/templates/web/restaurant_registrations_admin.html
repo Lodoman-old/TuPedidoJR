@@ -529,11 +529,18 @@
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     try {
       const payload = paid ? { paid, months, method } : { paid };
-      await apiRequest('PATCH', `/admin/affiliations/${id}`, payload);
+      const res = await apiRequest('PATCH', `/admin/affiliations/${id}`, payload);
       const plan = affiliationPlansAdmin.find(p => Number(p.months) === months);
-      showToast(paid
-        ? `Pago registrado: ${plan?.label || months + ' meses'} · ${method === 'cash' ? 'efectivo' : 'transferencia'}`
-        : 'Afiliación retirada');
+      if (paid) {
+        const detail = `${plan?.label || months + ' meses'} · ${method === 'cash' ? 'efectivo' : 'transferencia'}`;
+        if (res.qr_email_sent) {
+          showToast(`Pago registrado: ${detail}. QR enviado por correo.`);
+        } else {
+          showToast(`Pago registrado: ${detail}. No se pudo enviar el QR: ${res.qr_email_detail || 'revisa el correo del dueño'}`, 'warning');
+        }
+      } else {
+        showToast('Afiliación retirada');
+      }
       await loadAffiliations();
     } catch (e) {
       showToast(e.message, 'danger');

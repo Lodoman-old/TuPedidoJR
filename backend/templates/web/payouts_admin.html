@@ -245,15 +245,20 @@
         </div>
         <h6 class="small">Pedidos entregados</h6>
         <div class="table-responsive mb-3"><table class="table table-sm mb-0">
-          <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th class="text-end">Total pedido</th><th class="text-end">Ganancia</th></tr></thead>
+          <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th class="text-end">Productos</th><th class="text-end">Comisión cliente</th><th class="text-end">Envío</th><th class="text-end">Cobrado</th><th class="text-end">Ganancia</th><th class="text-end">Debe</th></tr></thead>
           <tbody>${orders.map(o => `<tr>
             <td>#${esc(String(o.id).slice(0, 8))}</td>
             <td class="small">${o.date ? new Date(o.date).toLocaleDateString('es-MX') : '—'}</td>
             <td>${o.payment_method === 'cash' ? 'Efectivo' : o.payment_method === 'transfer' ? 'Transferencia' : 'En línea'}</td>
-            <td class="text-end">${money(o.total)}</td>
+            <td class="text-end">${money(o.subtotal)}</td>
+            <td class="text-end">${money(o.flat_fee)}</td>
+            <td class="text-end">${money(o.delivery_fee)}</td>
+            <td class="text-end">${money(o.collected)}</td>
             <td class="text-end text-success">${money(o.earnings)}</td>
-          </tr>`).join('') || '<tr><td colspan="5" class="text-center text-muted">Sin pedidos.</td></tr>'}</tbody>
+            <td class="text-end text-danger">${money(o.debt)}</td>
+          </tr>`).join('') || '<tr><td colspan="9" class="text-center text-muted">Sin pedidos.</td></tr>'}</tbody>
         </table></div>
+        <p class="small text-muted">En pedidos en efectivo, “Cobrado” es lo que recibió el repartidor. “Debe” es lo que entrega a la plataforma e incluye productos, comisión al cliente y lo que corresponda; su ganancia de envío ya está descontada.</p>
         <h6 class="small">Envíos</h6>
         <div class="table-responsive mb-3"><table class="table table-sm mb-0">
           <thead><tr><th>Envío</th><th>Estado</th><th class="text-end">Ganancia</th><th class="text-end">Por cobrar</th></tr></thead>

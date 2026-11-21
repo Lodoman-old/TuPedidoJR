@@ -617,12 +617,20 @@ async def courier_payout_detail(
 
     orders = []
     for order in balance["orders"]:
+        is_cash = order.payment_method == "cash"
+        earnings = order.delivery_earnings or Decimal("0")
+        collected = order.total if is_cash else Decimal("0")
         orders.append({
             "id": str(order.id),
             "date": (order.delivered_at or order.placed_at).isoformat()
             if (order.delivered_at or order.placed_at) else None,
+            "subtotal": _money(order.subtotal),
+            "flat_fee": _money(order.flat_usage_fee),
+            "delivery_fee": _money(order.delivery_fee),
             "total": _money(order.total),
-            "earnings": _money(order.delivery_earnings),
+            "earnings": _money(earnings),
+            "collected": _money(collected),
+            "debt": _money(max(collected - earnings, Decimal("0"))) if is_cash else "0.00",
             "payment_method": order.payment_method,
         })
 

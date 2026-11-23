@@ -165,6 +165,7 @@ class SecurityGuard:
             "block_minutes": "60",
             "whitelist": "",
             "trust_cf": "false",
+            "email_mode": "daily",
         }
         try:
             async with self._session() as db:
@@ -179,6 +180,9 @@ class SecurityGuard:
                 values["whitelist"] = await get_setting_value(db, "SECURITY_WHITELIST", "")
                 values["trust_cf"] = await get_setting_value(
                     db, "SECURITY_TRUST_CF", "false"
+                )
+                values["email_mode"] = await get_setting_value(
+                    db, "SECURITY_EMAIL_MODE", "daily"
                 )
         except Exception:
             pass
@@ -357,7 +361,10 @@ class SecurityGuard:
     ) -> None:
         try:
             async with self._session() as db:
-                if not truthy(await get_setting_value(db, "SECURITY_ALERTS_ENABLED", "true")):
+                mode = (
+                    await get_setting_value(db, "SECURITY_EMAIL_MODE", "daily")
+                ).strip().lower()
+                if mode != "immediate":
                     return
                 to = (await get_setting_value(db, "SECURITY_ALERT_EMAIL", "")).strip()
                 if not to:

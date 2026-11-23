@@ -74,6 +74,7 @@ async def clean_db():
         await conn.execute(text("DELETE FROM restaurant_schedules"))
         await conn.execute(text("DELETE FROM restaurants"))
         await conn.execute(text("DELETE FROM settings"))
+        await conn.execute(text("DELETE FROM daily_visits"))
         await conn.execute(text("DELETE FROM users"))
         await conn.execute(text("DELETE FROM postal_code_areas"))
         await conn.execute(text("DELETE FROM security_events"))

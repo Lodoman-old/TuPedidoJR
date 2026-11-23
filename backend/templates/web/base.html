@@ -1330,6 +1330,14 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         window.location.href = `/web/login?next=${encodeURIComponent(next)}`;
         return;
       }
+      if (token && sessionStorage.getItem('is_superuser') !== 'true') {
+        fetch(`${API_BASE}/analytics/visit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ path: window.location.pathname }),
+          keepalive: true,
+        }).catch(() => {});
+      }
       if (sessionStorage.getItem('is_superuser') === 'true') {
         applyAdminNav(true);
       }

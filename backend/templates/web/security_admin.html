@@ -38,6 +38,43 @@
     </div>
   </div>
 
+  <div class="card p-3 mb-3">
+    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+      <h6 class="mb-0"><i class="bi bi-bar-chart-line"></i> Audiencia y publicidad</h6>
+      <span class="badge bg-light text-dark">Últimos 7 días</span>
+    </div>
+    <div class="row g-2 mb-3">
+      <div class="col-6 col-md-2">
+        <div class="card p-3 h-100"><small class="text-muted">Dispositivos con push</small><strong class="fs-4" id="audPushDevices">0</strong></div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="card p-3 h-100"><small class="text-muted">Usuarios con push</small><strong class="fs-4" id="audPushUsers">0</strong></div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="card p-3 h-100"><small class="text-muted">Clientes hoy</small><strong class="fs-4 text-primary" id="audVisitsToday">0</strong></div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="card p-3 h-100"><small class="text-muted">Páginas vistas hoy</small><strong class="fs-4" id="audViewsToday">0</strong></div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="card p-3 h-100"><small class="text-muted">Usuarios activos</small><strong class="fs-4" id="audNormalUsers">0</strong></div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="card p-3 h-100"><small class="text-muted">Negocios activos</small><strong class="fs-4" id="audBusinesses">0</strong></div>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0" style="min-width:480px">
+        <thead><tr><th>Día</th><th class="text-end">Clientes</th><th class="text-end">Páginas</th></tr></thead>
+        <tbody id="audWeekBody">
+          <tr><td colspan="3" class="text-muted small">Sin visitas registradas.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="small text-muted mt-2" id="audPlatforms"></div>
+    <div class="small text-muted mt-1">Datos para cotizar publicidad. Los administradores no se cuentan como clientes.</div>
+  </div>
+
   <div class="row g-3">
     <div class="col-12 col-lg-5">
       <div class="card p-3 mb-3">
@@ -55,6 +92,13 @@
           <label class="form-check-label small" for="secTrustCf">Confiar en Cloudflare (CF-Connecting-IP)</label>
           <div class="form-text">Actívalo solo si el dominio pasa por Cloudflare.</div>
         </div>
+        <label class="form-label small mb-1">Correos de seguridad</label>
+        <select class="form-select form-select-sm mb-1" id="secEmailMode">
+          <option value="immediate">Inmediato (cada bloqueo)</option>
+          <option value="daily">Resumen diario</option>
+          <option value="off">Desactivado</option>
+        </select>
+        <div class="form-text mb-3">Resumen diario: un solo correo al día con los bloqueos. Desactivado: sin correos.</div>
         <div class="row g-2">
           <div class="col-6">
             <label class="form-label small mb-1">Solicitudes por minuto</label>
@@ -202,6 +246,28 @@
       secEl('secBlockedHits').textContent = c.blocked_hits_24h ?? 0;
       secEl('secActive').textContent = c.active_blocks ?? 0;
 
+      const aud = data.audience || {};
+      secEl('audPushDevices').textContent = aud.push_devices ?? 0;
+      secEl('audPushUsers').textContent = aud.push_users ?? 0;
+      secEl('audVisitsToday').textContent = aud.visits_today ?? 0;
+      secEl('audViewsToday').textContent = aud.views_today ?? 0;
+      secEl('audNormalUsers').textContent = aud.normal_users ?? 0;
+      secEl('audBusinesses').textContent = aud.active_businesses ?? 0;
+      const week = aud.visits_7d || [];
+      secEl('audWeekBody').innerHTML = week.length
+        ? week.map(d => {
+            const label = new Date(`${d.date}T12:00:00`).toLocaleDateString('es-MX', {
+              weekday: 'short', day: 'numeric', month: 'short',
+            });
+            return `<tr><td class="small">${label}</td><td class="text-end">${d.users}</td><td class="text-end">${d.views}</td></tr>`;
+          }).join('')
+        : '<tr><td colspan="3" class="text-muted small">Sin visitas registradas.</td></tr>';
+      const platforms = aud.push_by_platform || {};
+      const platformText = Object.entries(platforms).map(([k, v]) => `${k}: ${v}`).join(' · ');
+      secEl('audPlatforms').textContent = platformText
+        ? `Push por plataforma: ${platformText}`
+        : 'Todavía no hay dispositivos con push.';
+
       const s = data.settings || {};
       secEl('secEnabled').checked = Boolean(s.enabled);
       secEl('secAuto').checked = Boolean(s.auto_block);
@@ -209,6 +275,7 @@
       secEl('secRateLimit').value = s.rate_limit ?? 400;
       secEl('secBlockMinutes').value = s.block_minutes ?? 60;
       secEl('secWhitelist').value = s.whitelist ?? '';
+      secEl('secEmailMode').value = s.email_mode || 'daily';
       secEl('secMyIp').textContent = data.client_ip || '—';
 
       const blocks = data.blocks || [];
@@ -258,6 +325,7 @@
           SECURITY_BLOCK_MINUTES: String(secEl('secBlockMinutes').value || 60),
           SECURITY_WHITELIST: secEl('secWhitelist').value.trim(),
           SECURITY_TRUST_CF: secEl('secTrustCf').checked,
+          SECURITY_EMAIL_MODE: secEl('secEmailMode').value,
         },
       });
       await apiRequest('POST', '/admin/security/refresh', {});

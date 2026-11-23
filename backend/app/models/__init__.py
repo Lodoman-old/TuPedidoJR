@@ -37,6 +37,7 @@ from app.models.appointment_debt import AppointmentDebt
 from app.models.business_ledger import BusinessLedger
 from app.models.rental_booking import RentalBooking, RentalBookingItem
 from app.models.recarga_order import RecargaOrder
+from app.models.daily_visit import DailyVisit
 
 __all__ = [
     "User",

@@ -10,6 +10,7 @@ from app.api.deps import require_superuser
 from app.db.session import get_db
 from app.models.user import User
 from app.services.audit_service import log_action
+from app.services.audience_service import audience_overview
 from app.services.security_service import (
     client_ip,
     is_valid_ip,
@@ -41,6 +42,7 @@ async def security_overview(
     settings = await security_guard.refresh_settings(force=True)
     return {
         **data,
+        "audience": await audience_overview(db),
         "client_ip": client_ip(request, trust_cf=truthy(settings.get("trust_cf"))),
         "settings": {
             "enabled": truthy(settings.get("enabled")),
@@ -49,6 +51,7 @@ async def security_overview(
             "block_minutes": settings.get("block_minutes") or "60",
             "whitelist": settings.get("whitelist") or "",
             "trust_cf": truthy(settings.get("trust_cf")),
+            "email_mode": settings.get("email_mode") or "daily",
         },
         "server_time": datetime.now(timezone.utc).isoformat(),
     }

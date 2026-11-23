@@ -1916,3 +1916,19 @@ class TestShowAddress:
             headers={"Authorization": f"Bearer {owner_token}"},
         )
         assert owner_view.json()["address"] == "Calle 5 de Mayo 209"
+
+    async def test_security_email_mode(self, client, superuser_token):
+        resp = await client.patch(
+            "/api/v1/settings",
+            json={"values": {"SECURITY_EMAIL_MODE": "off"}},
+            headers=_headers(superuser_token),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["updated"]["SECURITY_EMAIL_MODE"] == "off"
+
+        invalid = await client.patch(
+            "/api/v1/settings",
+            json={"values": {"SECURITY_EMAIL_MODE": "otro"}},
+            headers=_headers(superuser_token),
+        )
+        assert invalid.status_code == 400

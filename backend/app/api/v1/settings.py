@@ -131,10 +131,15 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Actívalo solo cuando el sitio esté detrás de Cloudflare. Así se usa la IP real del visitante y no la del proxy.",
         "type": "bool", "default": "false",
     },
-    "SECURITY_ALERTS_ENABLED": {
-        "group": "Seguridad", "label": "Avisos por correo al bloquear IPs",
-        "description": "Envía un correo cuando se bloquea una IP automáticamente. Máximo uno cada 10 minutos.",
-        "type": "bool", "default": "true",
+    "SECURITY_EMAIL_MODE": {
+        "group": "Seguridad", "label": "Correos de seguridad",
+        "description": "Inmediato: un correo por cada bloqueo. Resumen diario: un solo correo al día. Desactivado: sin correos.",
+        "type": "select", "default": "daily",
+        "options": [
+            {"value": "immediate", "label": "Inmediato (cada bloqueo)"},
+            {"value": "daily", "label": "Resumen diario"},
+            {"value": "off", "label": "Desactivado"},
+        ],
     },
     "SECURITY_ALERT_EMAIL": {
         "group": "Seguridad", "label": "Correo para avisos de seguridad",

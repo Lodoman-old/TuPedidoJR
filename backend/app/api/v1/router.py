@@ -37,6 +37,7 @@ from app.api.v1.rentals import router as rentals_router
 from app.api.v1.recargas import router as recargas_router, admin_router as admin_recargas_router
 from app.api.v1.restaurant_registration import router as restaurant_registration_router
 from app.api.v1.team import router as team_router
+from app.api.v1.analytics import router as analytics_router
 from app.api.v1.debug import router as debug_router
 
 router = APIRouter(prefix="/api/v1")
@@ -79,5 +80,6 @@ router.include_router(agenda_router, prefix="/agenda", tags=["Agenda"])
 router.include_router(rentals_router, prefix="/rentals", tags=["Rentas"])
 router.include_router(restaurant_registration_router, prefix="/restaurant-registration", tags=["Restaurantes"])
 router.include_router(team_router, prefix="/restaurants/{restaurant_id}/team", tags=["Restaurantes"])
+router.include_router(analytics_router, prefix="/analytics", tags=["Analítica"])
 router.include_router(debug_router, prefix="/debug", tags=["Diagnóstico"])
 

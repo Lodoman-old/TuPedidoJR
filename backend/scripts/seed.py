@@ -2,7 +2,8 @@
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,17 +19,37 @@ from app.models.setting import Setting
 
 
 async def _clean_db(db: AsyncSession):
-    await db.execute(text("DELETE FROM cash_advances"))
-    await db.execute(text("DELETE FROM mandados"))
-    await db.execute(text("DELETE FROM delivery_payouts"))
-    await db.execute(text("DELETE FROM restaurant_payouts"))
-    await db.execute(text("DELETE FROM reviews"))
-    await db.execute(text("DELETE FROM delivery_locations"))
-    await db.execute(text("DELETE FROM order_items"))
+    # Delete dependent rows first so foreign keys never block the reset.
+    for table in (
+        "delivery_locations",
+        "restaurant_adjustments",
+        "delivery_incidents",
+        "cash_advances",
+        "store_requests",
+        "reviews",
+        "order_items",
+        "delivery_payouts",
+        "restaurant_payouts",
+        "mandados",
+        "shipments",
+        "receipt_validations",
+        "reservations",
+        "courier_sos",
+        "daily_visits",
+        "security_events",
+        "blocked_ips",
+        "postal_code_areas",
+        "colonia_areas",
+        "ageb_areas",
+    ):
+        await db.execute(text(f"DELETE FROM {table}"))
+    await db.execute(text("UPDATE delivery_persons SET current_order_id = NULL"))
     await db.execute(text("DELETE FROM orders"))
     await db.execute(text("DELETE FROM delivery_persons"))
     await db.execute(text("DELETE FROM menu_items"))
     await db.execute(text("DELETE FROM menu_categories"))
+    await db.execute(text("DELETE FROM restaurant_schedules"))
+    await db.execute(text("DELETE FROM coupons"))
     await db.execute(text("DELETE FROM restaurants"))
     await db.execute(text("DELETE FROM users"))
     await db.execute(text("DELETE FROM settings"))
@@ -78,7 +99,9 @@ async def seed():
                 location="SRID=4326;POINT(-100.9930 20.6440)",
                 address="Av. Hidalgo 45, Centro", phone="555-8101",
                 logo_url=None, is_open=True, rating=4.5, delivery_radius_m=4000, delivery_fee=15.00,
-                preparation_base_time_min=10, commission_percentage=12.0,
+                preparation_base_time_min=10, slug="tacos-el-norteno",
+                commission_mode="fixed", fixed_fee=Decimal("5.00"),
+                affiliation_expires_at=date.today() + timedelta(days=365),
             ),
             Restaurant(
                 id=uuid.uuid4(), owner_id=pizza_owner.id,
@@ -86,7 +109,9 @@ async def seed():
                 location="SRID=4326;POINT(-100.9910 20.6460)",
                 address="Calle Juárez 102, Centro", phone="555-8102",
                 logo_url=None, is_open=True, rating=4.2, delivery_radius_m=5000, delivery_fee=20.00,
-                preparation_base_time_min=15, commission_percentage=15.0,
+                preparation_base_time_min=15, slug="pizza-mia",
+                commission_mode="fixed", fixed_fee=Decimal("5.00"),
+                affiliation_expires_at=date.today() + timedelta(days=365),
             ),
             Restaurant(
                 id=uuid.uuid4(), owner_id=sushi_owner.id,
@@ -94,7 +119,9 @@ async def seed():
                 location="SRID=4326;POINT(-100.9950 20.6420)",
                 address="Blvd. Independencia 78, Zona Norte", phone="555-8103",
                 logo_url=None, is_open=True, rating=4.7, delivery_radius_m=3500, delivery_fee=18.00,
-                preparation_base_time_min=12, commission_percentage=15.0,
+                preparation_base_time_min=12, slug="sushi-house",
+                commission_mode="fixed", fixed_fee=Decimal("5.00"),
+                affiliation_expires_at=date.today() + timedelta(days=365),
             ),
         ]
         db.add_all(restaurants_data)
@@ -188,13 +215,15 @@ async def seed():
 
         # ── SETTINGS ────────────────────────────────────────
         settings_data = [
-            Setting(key="APP_COMMISSION_PERCENTAGE", value="15.0",
+            Setting(key="APP_COMMISSION_PERCENTAGE", value="0.0",
                     description="Porcentaje de comisión global para pedidos de tienda"),
+            Setting(key="APP_FIXED_RESTAURANT_FEE", value="5.0",
+                    description="Comisión fija al negocio por pedido (pesos)"),
             Setting(key="APP_FLAT_USAGE_FEE", value="5.0",
                     description="Cargo fijo por uso de plataforma (pesos)"),
-            Setting(key="DELIVERY_BASE_FEE", value="20.0",
+            Setting(key="DELIVERY_BASE_FEE", value="25.0",
                     description="Tarifa base de envío (pesos)"),
-            Setting(key="DELIVERY_FREE_RADIUS_KM", value="2.0",
+            Setting(key="DELIVERY_FREE_RADIUS_KM", value="6.0",
                     description="Kilómetros incluidos sin costo extra"),
             Setting(key="DELIVERY_EXTRA_FEE_PER_KM", value="5.0",
                     description="Cargo adicional por km extra (pesos)"),
@@ -229,7 +258,7 @@ async def seed():
         print(f"   Usuarios: carlos@email.com / maria@email.com / pedro@repartidor.com")
         print(f"   Todos con password: 123456")
         print(f"   Negocios: Taquería El Norteño, Pizza Mía, Sushi House")
-        print(f"   Configuraciones: commission 15%, flat fee $5, delivery base $20")
+        print(f"   Configuraciones: comisión fija $5, cargo de uso $5, envío base $25")
 
 
 if __name__ == "__main__":

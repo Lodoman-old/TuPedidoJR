@@ -10,6 +10,11 @@ service-account*.json
 *firebase-adminsdk*.json
 google-services.json
 
+# Android: llaves de firma (nunca subir)
+capacitor/android/keystore.properties
+*.jks
+*.keystore
+
 # Python
 __pycache__/
 *.py[cod]
@@ -21,6 +26,7 @@ __pycache__/
 .venv/
 venv/
 env/
+backend/build/
 
 # Contenido generado o pesado
 backend/static/tiles/*

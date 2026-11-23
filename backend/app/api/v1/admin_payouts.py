@@ -316,6 +316,7 @@ async def admin_payouts(
                     "date": (o.delivered_at or o.placed_at).isoformat()
                     if (o.delivered_at or o.placed_at) else None,
                     "subtotal": _money(o.subtotal),
+                    "discount": _money(o.discount_amount),
                     "commission": _money(o.platform_commission),
                     "flat_fee": _money(o.flat_usage_fee),
                     "delivery_fee": _money(o.delivery_fee),

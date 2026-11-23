@@ -52,7 +52,11 @@ async def restaurant_balance(db: AsyncSession, restaurant_id) -> dict:
     ]
 
     def _net(order: Order) -> Decimal:
-        base = (order.subtotal or Decimal("0")) - (order.platform_commission or Decimal("0"))
+        base = (
+            (order.subtotal or Decimal("0"))
+            - (order.discount_amount or Decimal("0"))
+            - (order.platform_commission or Decimal("0"))
+        )
         if order.delivery_mode == "own":
             base += order.delivery_fee or Decimal("0")
             base += order.tip_amount or Decimal("0")

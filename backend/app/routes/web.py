@@ -186,6 +186,11 @@ async def web_restaurant_profile(request: Request, restaurant_id: str):
     return templates.TemplateResponse(request, "restaurant_profile.html", {"restaurant_id": restaurant_id})
 
 
+@router.get("/restaurants/{restaurant_id}/coupons")
+async def web_restaurant_coupons(request: Request, restaurant_id: str):
+    return templates.TemplateResponse(request, "coupons_manage.html", {"restaurant_id": restaurant_id})
+
+
 @router.get("/restaurants/{restaurant_id}/qr")
 async def web_restaurant_qr(
     request: Request,

@@ -38,6 +38,7 @@ from app.models.business_ledger import BusinessLedger
 from app.models.rental_booking import RentalBooking, RentalBookingItem
 from app.models.recarga_order import RecargaOrder
 from app.models.daily_visit import DailyVisit
+from app.models.courier_sos import CourierSOS
 
 __all__ = [
     "User",

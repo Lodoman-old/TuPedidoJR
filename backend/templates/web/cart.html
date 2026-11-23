@@ -1125,7 +1125,7 @@ async function refreshEstimate() {
       const code = document.getElementById('couponInput').value.trim().toUpperCase();
       if (!code) return;
       try {
-        const res = await validateCoupon(code, getCartTotal());
+        const res = await validateCoupon(code, getCartTotal(), restaurantInfo?.id);
         document.getElementById('couponMsg').innerHTML = res.valid
           ? `<span class="text-success">${res.message}</span>`
           : `<span class="text-danger">${res.message}</span>`;

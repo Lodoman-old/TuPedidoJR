@@ -20,4 +20,4 @@ class Coupon(TimestampMixin, Base):
     is_active = Column(Boolean, default=True, nullable=False)
     valid_from = Column(DateTime(timezone=True), nullable=True)
     valid_until = Column(DateTime(timezone=True), nullable=True)
-    restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id"), nullable=True)
+    restaurant_id = Column(UUID(as_uuid=True), ForeignKey("restaurants.id", ondelete="CASCADE"), nullable=True)

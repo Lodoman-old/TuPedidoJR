@@ -1,14 +1,17 @@
 import math
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, require_superuser
 from app.db.session import get_db
+from app.models.courier_sos import CourierSOS
 from app.models.delivery_person import DeliveryPerson
 from app.models.delivery_payout import DeliveryPayout
 from app.models.cash_advance import CashAdvance
@@ -36,7 +39,8 @@ from app.services.geo_service import find_nearby_delivery_persons
 from app.services.loyalty_service import award_on_delivery
 from app.services.order_service import get_setting_value
 from app.services.order_serialization import order_out
-from app.services.push_service import schedule_courier_assigned, schedule_order_status, schedule_arrival, schedule_admin_payout_request
+from app.services.push_service import schedule_courier_assigned, schedule_order_status, schedule_arrival, schedule_admin_payout_request, send_to_user
+from app.services.email_service import send_email
 from app.services.route_service import route_info
 from app.services.schedule_service import get_timezone
 from app.services.settlement_service import is_order_settleable
@@ -700,3 +704,156 @@ async def request_payout(
         payout.direction,
     )
     return payout
+
+class SOSIn(BaseModel):
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+    message: str | None = Field(default=None, max_length=500)
+    order_id: UUID | None = None
+
+
+@router.get("/hot-zones")
+async def hot_zones(
+    days: int = 7,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Zonas con más pedidos entregados y horas pico para el repartidor."""
+    await _get_dp(current_user, db)
+    span = max(1, min(int(days or 7), 30))
+    since = datetime.now(timezone.utc) - timedelta(days=span)
+
+    zones = (
+        await db.execute(
+            text(
+                """
+                SELECT c.nombre AS zone,
+                       count(*) AS orders,
+                       coalesce(round(avg(o.delivery_fee)::numeric, 2), 0) AS avg_fee,
+                       round(ST_Y(ST_Centroid(c.geom))::numeric, 6) AS lat,
+                       round(ST_X(ST_Centroid(c.geom))::numeric, 6) AS lng
+                FROM orders o
+                JOIN colonia_areas c ON ST_Contains(c.geom, o.delivery_location::geometry)
+                WHERE o.status = 'delivered'
+                  AND o.delivery_location IS NOT NULL
+                  AND COALESCE(o.delivered_at, o.placed_at) >= :since
+                GROUP BY c.nombre, c.geom
+                ORDER BY orders DESC
+                LIMIT 8
+                """
+            ),
+            {"since": since},
+        )
+    ).mappings().all()
+
+    peaks = (
+        await db.execute(
+            text(
+                """
+                SELECT EXTRACT(HOUR FROM COALESCE(delivered_at, placed_at)
+                               AT TIME ZONE 'America/Mexico_City') AS hour,
+                       count(*) AS orders
+                FROM orders
+                WHERE status = 'delivered'
+                  AND COALESCE(delivered_at, placed_at) >= :since
+                GROUP BY hour
+                ORDER BY orders DESC
+                LIMIT 4
+                """
+            ),
+            {"since": since},
+        )
+    ).mappings().all()
+
+    return {
+        "days": span,
+        "zones": [
+            {
+                "name": row["zone"],
+                "orders": int(row["orders"]),
+                "avg_fee": float(row["avg_fee"] or 0),
+                "lat": float(row["lat"]) if row["lat"] is not None else None,
+                "lng": float(row["lng"]) if row["lng"] is not None else None,
+            }
+            for row in zones
+        ],
+        "peak_hours": [
+            {"hour": int(row["hour"]), "orders": int(row["orders"])}
+            for row in peaks
+            if row["hour"] is not None
+        ],
+    }
+
+
+@router.post("/sos")
+async def send_sos(
+    body: SOSIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Aviso de auxilio del repartidor a los administradores."""
+    from html import escape
+
+    dp = await _get_dp(current_user, db)
+    sos = CourierSOS(
+        courier_id=dp.id,
+        user_id=current_user.id,
+        order_id=body.order_id,
+        lat=body.lat,
+        lng=body.lng,
+        message=(body.message or "").strip() or None,
+    )
+    db.add(sos)
+    await db.flush()
+
+    admins = (
+        await db.execute(
+            select(User).where(User.is_superuser.is_(True), User.is_active.is_(True))
+        )
+    ).scalars().all()
+    maps = (
+        f"https://www.google.com/maps/search/?api=1&query={body.lat},{body.lng}"
+        if body.lat is not None and body.lng is not None
+        else None
+    )
+    detail = f"{current_user.name or current_user.email} pidió auxilio."
+    if body.message:
+        detail += f" Mensaje: {body.message}"
+
+    for admin in admins:
+        await send_to_user(
+            db,
+            admin.id,
+            "🚨 Auxilio de repartidor",
+            detail,
+            {"type": "courier_sos", "sos_id": str(sos.id)},
+            "red",
+        )
+        if admin.email:
+            html = f"""
+            <div style="font-family:Arial,sans-serif;background:#fff5f5;padding:24px">
+              <div style="max-width:620px;margin:auto;background:#fff;border-radius:14px;overflow:hidden;border:2px solid #b02a37">
+                <div style="background:#b02a37;color:#fff;padding:20px 26px">
+                  <h1 style="margin:0;font-size:21px">🚨 Auxilio de repartidor</h1>
+                </div>
+                <div style="padding:26px;color:#243447;line-height:1.55">
+                  <p><strong>{escape(current_user.name or current_user.email)}</strong> pidió auxilio desde la app.</p>
+                  <p><strong>Teléfono:</strong> {escape(current_user.phone or 'No registrado')}<br>
+                  <strong>Mensaje:</strong> {escape(body.message or 'Sin mensaje')}<br>
+                  <strong>Pedido:</strong> {escape(str(body.order_id) if body.order_id else 'Sin pedido activo')}</p>
+                  {f'<p><a href="{maps}" style="color:#b02a37">Ver ubicación en Google Maps</a></p>' if maps else ''}
+                  <p style="margin-top:20px">Atiende el aviso desde el panel de seguridad.</p>
+                </div>
+              </div>
+            </div>
+            """
+            await send_email(
+                db,
+                admin.email,
+                "🚨 Auxilio de repartidor",
+                html,
+                detail,
+            )
+
+    await db.commit()
+    return {"ok": True, "sos_id": str(sos.id)}

@@ -61,6 +61,7 @@
     </button>
     <button class="dp-tab-btn text-center" data-tab="payouts" onclick="switchTab('payouts')">Ganancias</button>
     <button class="dp-tab-btn text-center" data-tab="recargas" onclick="switchTab('recargas')">Recargas</button>
+    <button class="dp-tab-btn text-center" data-tab="zones" onclick="switchTab('zones')">Zonas 🔥</button>
     <button class="dp-tab-btn text-center" data-tab="settings" onclick="switchTab('settings')">Ajustes</button>
   </div>
 
@@ -69,9 +70,46 @@
     <div class="tab-pane" id="tab-myorders"></div>
     <div class="tab-pane" id="tab-payouts"></div>
     <div class="tab-pane" id="tab-recargas"></div>
+    <div class="tab-pane" id="tab-zones"></div>
     <div class="tab-pane" id="tab-settings"></div>
     <div class="tab-pane" id="tab-mandados"></div>
     <div class="tab-pane" id="tab-shipments"></div>
+  </div>
+
+  <button class="btn btn-danger rounded-circle shadow" id="sosBtn" onclick="openSosModal()"
+          title="Pedir auxilio" aria-label="Pedir auxilio"
+          style="position:fixed;right:18px;bottom:18px;width:66px;height:66px;z-index:1050;font-weight:800">
+    SOS
+  </button>
+
+  <div class="modal fade" id="sosModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h6 class="modal-title"><i class="bi bi-exclamation-octagon"></i> Pedir auxilio</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small mb-2">
+            Se enviará tu ubicación y un aviso a los administradores de TuPedidoJR.
+            <strong>Si estás en peligro, llama primero al 911.</strong>
+          </p>
+          <label class="form-label small mb-1" for="sosMessage">¿Qué está pasando? (opcional)</label>
+          <textarea class="form-control" id="sosMessage" rows="2" maxlength="500"
+                    placeholder="Ej. Me siento en riesgo, el cliente no me deja salir..."></textarea>
+          <div class="text-danger small mt-2 d-none" id="sosError"></div>
+          <a class="btn btn-outline-danger w-100 mt-3" href="tel:911">
+            <i class="bi bi-telephone"></i> Llamar al 911
+          </a>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-sm btn-danger" id="sosConfirmBtn" onclick="sendSos()">
+            Enviar auxilio
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 {% endblock %}
 {% block scripts %}
@@ -169,6 +207,7 @@ function switchTab(name) {
   else if (name === 'myorders') loadMyOrders();
   else if (name === 'payouts') loadPayouts();
   else if (name === 'recargas') loadCourierRecargas();
+  else if (name === 'zones') loadHotZones();
   else if (name === 'settings') loadSettings();
   else if (name === 'mandados') loadMandadosWeb();
   else if (name === 'shipments') loadShipmentsWeb();
@@ -1375,6 +1414,77 @@ function showFailDialog(kind, id, method) {
       status.innerHTML = `<div class="alert alert-danger py-2 mb-0">${e.message}</div>`;
     }
   });
+}
+
+async function loadHotZones() {
+  const box = document.getElementById('tab-zones');
+  box.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+  try {
+    const data = await apiRequest('GET', '/delivery/hot-zones?days=7');
+    const zones = data.zones || [];
+    const peaks = data.peak_hours || [];
+    box.innerHTML = `
+      <div class="card p-3 mb-3">
+        <h6 class="mb-1"><i class="bi bi-fire text-danger"></i> Zonas calientes</h6>
+        <p class="small text-muted mb-2">Pedidos entregados en los últimos ${data.days || 7} días. Úsalas para ubicarte cerca de la demanda.</p>
+        ${zones.length ? zones.map((z, i) => `
+          <div class="d-flex justify-content-between align-items-center gap-2 border-bottom py-2">
+            <div><strong>${i + 1}. ${escShip(z.name)}</strong><br><small class="text-muted">${z.orders} pedido(s) · envío promedio ${money0(z.avg_fee)}</small></div>
+            ${z.lat != null && z.lng != null ? `<a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${z.lat},${z.lng}">Ver mapa</a>` : ''}
+          </div>`).join('') : '<div class="text-muted small">Todavía no hay suficientes pedidos para calcular zonas.</div>'}
+      </div>
+      <div class="card p-3">
+        <h6 class="mb-1"><i class="bi bi-clock-history"></i> Horas pico</h6>
+        <p class="small text-muted mb-2">Horas con más entregas en el periodo.</p>
+        ${peaks.length ? peaks.map(p => `<div class="d-flex justify-content-between border-bottom py-1"><span>${String(p.hour).padStart(2, '0')}:00 - ${String((p.hour + 1) % 24).padStart(2, '0')}:00</span><strong>${p.orders} pedido(s)</strong></div>`).join('') : '<div class="text-muted small">Sin datos todavía.</div>'}
+      </div>`;
+  } catch (e) {
+    box.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+  }
+}
+
+let sosModal = null;
+
+function openSosModal() {
+  document.getElementById('sosMessage').value = '';
+  document.getElementById('sosError').classList.add('d-none');
+  if (!sosModal) sosModal = new bootstrap.Modal(document.getElementById('sosModal'));
+  sosModal.show();
+}
+
+async function sendSos() {
+  const btn = document.getElementById('sosConfirmBtn');
+  const error = document.getElementById('sosError');
+  error.classList.add('d-none');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+  let coords = gpsCoords;
+  if (!coords && navigator.geolocation) {
+    coords = await new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    });
+  }
+  const order = myDeliveryOrdersCache.find(o => ['accepted', 'picked_up', 'in_delivery'].includes(o.status));
+  try {
+    await apiRequest('POST', '/delivery/sos', {
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
+      message: document.getElementById('sosMessage').value.trim() || null,
+      order_id: order?.id || null,
+    });
+    sosModal.hide();
+    showToast('Auxilio enviado. Si estás en peligro, llama al 911.', 'danger');
+  } catch (e) {
+    error.textContent = e.message;
+    error.classList.remove('d-none');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Enviar auxilio';
+  }
 }
 </script>
 {% endblock %}

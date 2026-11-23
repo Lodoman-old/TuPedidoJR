@@ -226,12 +226,14 @@ async def estimate_price(
     )
     if not pickup:
         await ensure_coverage(db, lat, lng)
-    subtotal, delivery_fee, discount, total, coupon, platform_commission, flat_usage_fee, delivery_earnings, distance_km = await calculate_order_totals(
+    subtotal, delivery_fee, discount, total, coupon, platform_commission, flat_usage_fee, delivery_earnings, distance_km, coupon_error = await calculate_order_totals(
         db, restaurant, items_data, body.coupon_code,
         delivery_lat=lat, delivery_lng=lng,
         tip_amount=Decimal("0") if pickup else round_half_down(body.tip_amount),
         pickup=pickup,
     )
+    if coupon_error:
+        raise HTTPException(status_code=400, detail=coupon_error)
     await _check_max_distance(db, distance_km, pickup)
     pre_subtotal = sum(
         (entry["unit_price"] * entry["item"].quantity for entry in items_data),
@@ -431,12 +433,14 @@ async def create_order(
             "unit_price": unit_price, "options": selected,
         })
 
-    subtotal, delivery_fee, discount, total, coupon, platform_commission, flat_usage_fee, delivery_earnings, distance_km = await calculate_order_totals(
+    subtotal, delivery_fee, discount, total, coupon, platform_commission, flat_usage_fee, delivery_earnings, distance_km, coupon_error = await calculate_order_totals(
         db, restaurant, items_data, body.coupon_code,
         delivery_lat=total_lat, delivery_lng=total_lng,
         tip_amount=tip_amount,
         pickup=pickup,
     )
+    if coupon_error:
+        raise HTTPException(status_code=400, detail=coupon_error)
 
     await _check_max_distance(db, distance_km, pickup)
     requires_approval, _approval_km = await _requires_courier_approval(

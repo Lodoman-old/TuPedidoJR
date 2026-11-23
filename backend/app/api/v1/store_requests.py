@@ -275,6 +275,7 @@ async def confirm_store_request(
         flat_usage_fee,
         delivery_earnings,
         distance_km,
+        _coupon_error,
     ) = await calculate_order_totals(
         db,
         store,

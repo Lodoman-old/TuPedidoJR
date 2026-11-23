@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-3">
+  <div>
+    <h4 class="m-0"><i class="bi bi-ticket-perforated"></i> Cupones y promociones</h4>
+    <p class="small text-muted mb-0 mt-1">
+      Crea descuentos sobre tus productos. El descuento sale de tu precio; la plataforma no te cobra extra por usarlo.
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary btn-sm" href="/web/restaurants/{{ restaurant_id }}/profile">
+      <i class="bi bi-arrow-left"></i> Volver al perfil
+    </a>
+    <button class="btn btn-primary btn-sm" onclick="openCouponModal()">
+      <i class="bi bi-plus-lg"></i> Nuevo cupón
+    </button>
+  </div>
+</div>
+
+<div id="couponsLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="couponsContent" class="d-none">
+  <div class="card p-3 mb-3">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0" style="min-width:820px">
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Descuento</th>
+            <th>Mínimo</th>
+            <th>Usos</th>
+            <th>Vence</th>
+            <th>Estado</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="couponsBody">
+          <tr><td colspan="7" class="text-muted small">Sin cupones.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="small text-muted">
+    Ejemplo: cupón <strong>10%</strong> en tu producto. El cliente paga menos, tú recibes el precio con el descuento y la plataforma mantiene su cuota fija.
+  </div>
+</div>
+
+<div class="modal fade" id="couponModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="couponModalTitle">Nuevo cupón</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="couponId">
+        <div class="row g-2">
+          <div class="col-8">
+            <label class="form-label small mb-1" for="couponCode">Código</label>
+            <input class="form-control" id="couponCode" maxlength="50" placeholder="EJ. BIENVENIDO10">
+          </div>
+          <div class="col-4 d-flex align-items-end">
+            <button class="btn btn-outline-secondary w-100" type="button" onclick="generateCouponCode()">Generar</button>
+          </div>
+          <div class="col-12">
+            <label class="form-label small mb-1" for="couponDescription">Descripción (opcional)</label>
+            <input class="form-control" id="couponDescription" maxlength="255" placeholder="Ej. 10% en tu próximo pedido">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1" for="couponType">Tipo</label>
+            <select class="form-select" id="couponType" onchange="updateCouponType()">
+              <option value="percentage">Porcentaje</option>
+              <option value="fixed">Monto fijo</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1" for="couponValue">Valor</label>
+            <input type="number" class="form-control" id="couponValue" min="0.01" step="0.01" value="10">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1" for="couponMin">Pedido mínimo</label>
+            <input type="number" class="form-control" id="couponMin" min="0" step="1" value="0">
+          </div>
+          <div class="col-6" id="couponMaxDiscountBox">
+            <label class="form-label small mb-1" for="couponMaxDiscount">Tope de descuento</label>
+            <input type="number" class="form-control" id="couponMaxDiscount" min="0" step="1" placeholder="Sin tope">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1" for="couponMaxUses">Usos máximos</label>
+            <input type="number" class="form-control" id="couponMaxUses" min="0" step="1" value="0">
+            <div class="form-text">0 = sin límite.</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1" for="couponValidUntil">Válido hasta</label>
+            <input type="date" class="form-control" id="couponValidUntil">
+          </div>
+          <div class="col-12">
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" id="couponActive" checked>
+              <label class="form-check-label" for="couponActive">Cupón activo</label>
+            </div>
+          </div>
+        </div>
+        <div class="text-danger small mt-2 d-none" id="couponError"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-sm btn-primary" id="saveCouponBtn" onclick="saveCoupon()">Guardar cupón</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ restaurant_id }}';
+  let coupons = [];
+  let couponModal = null;
+
+  const money = (v) => '$' + Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function formatDate(value) {
+    if (!value) return '—';
+    return new Date(value).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  function couponValue(c) {
+    return c.discount_type === 'percentage'
+      ? `${Number(c.discount_value)}%`
+      : money(c.discount_value);
+  }
+
+  async function loadCoupons() {
+    try {
+      coupons = await apiRequest('GET', `/restaurants/${RID}/coupons`);
+      renderCoupons();
+      document.getElementById('couponsLoading').classList.add('d-none');
+      document.getElementById('couponsContent').classList.remove('d-none');
+    } catch (e) {
+      document.getElementById('couponsLoading').classList.add('d-none');
+      showToast(e.message, 'danger');
+    }
+  }
+
+  function renderCoupons() {
+    const body = document.getElementById('couponsBody');
+    if (!coupons.length) {
+      body.innerHTML = '<tr><td colspan="7" class="text-muted small">Todavía no tienes cupones. Crea el primero.</td></tr>';
+      return;
+    }
+    body.innerHTML = coupons.map(c => `
+      <tr>
+        <td><code>${esc(c.code)}</code>${c.description ? `<br><small class="text-muted">${esc(c.description)}</small>` : ''}</td>
+        <td><strong>${couponValue(c)}</strong>${c.max_discount ? `<br><small class="text-muted">Tope ${money(c.max_discount)}</small>` : ''}</td>
+        <td>${money(c.min_order_amount)}</td>
+        <td>${c.current_uses || 0}${c.max_uses > 0 ? ' / ' + c.max_uses : ''}</td>
+        <td>${formatDate(c.valid_until)}</td>
+        <td>${c.is_active ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Pausado</span>'}</td>
+        <td class="text-end text-nowrap">
+          <button class="btn btn-sm btn-outline-secondary" onclick="openCouponModal('${c.id}')">Editar</button>
+          <button class="btn btn-sm btn-outline-${c.is_active ? 'danger' : 'success'}" onclick="toggleCoupon('${c.id}', ${!c.is_active})">
+            ${c.is_active ? 'Pausar' : 'Activar'}
+          </button>
+        </td>
+      </tr>`).join('');
+  }
+
+  function updateCouponType() {
+    const type = document.getElementById('couponType').value;
+    const box = document.getElementById('couponMaxDiscountBox');
+    if (box) box.classList.toggle('d-none', type !== 'percentage');
+  }
+
+  function generateCouponCode() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let suffix = '';
+    for (let i = 0; i < 5; i += 1) suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+    document.getElementById('couponCode').value = `PROMO-${suffix}`;
+  }
+
+  function openCouponModal(id = null) {
+    const c = coupons.find(row => row.id === id);
+    document.getElementById('couponModalTitle').textContent = c ? 'Editar cupón' : 'Nuevo cupón';
+    document.getElementById('couponId').value = c ? c.id : '';
+    document.getElementById('couponCode').value = c ? c.code : '';
+    document.getElementById('couponDescription').value = c ? (c.description || '') : '';
+    document.getElementById('couponType').value = c ? c.discount_type : 'percentage';
+    document.getElementById('couponValue').value = c ? Number(c.discount_value) : 10;
+    document.getElementById('couponMin').value = c ? Number(c.min_order_amount) : 0;
+    document.getElementById('couponMaxDiscount').value = c && c.max_discount != null ? Number(c.max_discount) : '';
+    document.getElementById('couponMaxUses').value = c ? Number(c.max_uses || 0) : 0;
+    document.getElementById('couponValidUntil').value = c && c.valid_until ? String(c.valid_until).slice(0, 10) : '';
+    document.getElementById('couponActive').checked = c ? Boolean(c.is_active) : true;
+    document.getElementById('couponError').classList.add('d-none');
+    updateCouponType();
+    if (!couponModal) couponModal = new bootstrap.Modal(document.getElementById('couponModal'));
+    couponModal.show();
+  }
+
+  async function saveCoupon() {
+    const id = document.getElementById('couponId').value;
+    const error = document.getElementById('couponError');
+    error.classList.add('d-none');
+    const code = document.getElementById('couponCode').value.trim().toUpperCase();
+    if (!code) {
+      error.textContent = 'Escribe un código.';
+      error.classList.remove('d-none');
+      return;
+    }
+    const type = document.getElementById('couponType').value;
+    const value = Number(document.getElementById('couponValue').value || 0);
+    if (value <= 0) {
+      error.textContent = 'El descuento debe ser mayor a cero.';
+      error.classList.remove('d-none');
+      return;
+    }
+    if (type === 'percentage' && value > 100) {
+      error.textContent = 'El porcentaje no puede ser mayor a 100.';
+      error.classList.remove('d-none');
+      return;
+    }
+    const until = document.getElementById('couponValidUntil').value;
+    const maxDiscount = document.getElementById('couponMaxDiscount').value;
+    const payload = {
+      code,
+      description: document.getElementById('couponDescription').value.trim() || null,
+      discount_type: type,
+      discount_value: value,
+      min_order_amount: Number(document.getElementById('couponMin').value || 0),
+      max_discount: maxDiscount === '' ? null : Number(maxDiscount),
+      max_uses: Number(document.getElementById('couponMaxUses').value || 0),
+      is_active: document.getElementById('couponActive').checked,
+      valid_until: until ? new Date(`${until}T23:59:59`).toISOString() : null,
+    };
+    const button = document.getElementById('saveCouponBtn');
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Guardando...';
+    try {
+      if (id) await apiRequest('PATCH', `/restaurants/${RID}/coupons/${id}`, payload);
+      else await apiRequest('POST', `/restaurants/${RID}/coupons`, payload);
+      couponModal.hide();
+      showToast(id ? 'Cupón actualizado' : 'Cupón creado');
+      await loadCoupons();
+    } catch (e) {
+      error.textContent = e.message;
+      error.classList.remove('d-none');
+    } finally {
+      button.disabled = false;
+      button.innerHTML = 'Guardar cupón';
+    }
+  }
+
+  async function toggleCoupon(id, active) {
+    try {
+      await apiRequest('PATCH', `/restaurants/${RID}/coupons/${id}`, { is_active: active });
+      showToast(active ? 'Cupón activado' : 'Cupón pausado');
+      await loadCoupons();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
+  loadCoupons();
+</script>
+{% endblock %}

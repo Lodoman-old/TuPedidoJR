@@ -608,6 +608,7 @@
           <tr><td>Ventas últimos 30 días</td><td class="text-end">${money(r.monthly_sales)}</td></tr>
           <tr><td>Ganancia neta acumulada</td><td class="text-end fw-bold">${money(r.earned_total)}</td></tr>
           <tr><td>Comisión al negocio (ya descontada)</td><td class="text-end">${money(r.commission_total)}</td></tr>
+          <tr><td>Descuentos de cupones</td><td class="text-end">${money((r.pending_items || []).reduce((sum, o) => sum + parseFloat(o.discount || 0), 0))}</td></tr>
           <tr><td>Comisión al cliente (ya incluida en el total)</td><td class="text-end">${money(r.flat_fee_total)}</td></tr>
           <tr><td>Envíos de negocio a favor</td><td class="text-end">${money(r.shipment_credit)}</td></tr>
           <tr><td>Envíos de negocio por cobrar</td><td class="text-end">${money(r.shipment_charge)}</td></tr>
@@ -619,18 +620,19 @@
       </table>
       <h6 class="small mt-3">Pedidos que forman el saldo</h6>
       <div class="table-responsive"><table class="table table-sm mb-0">
-        <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th>Entrega</th><th class="text-end">Productos</th><th class="text-end">Comisión negocio</th><th class="text-end">Comisión cliente</th><th class="text-end">Total</th><th class="text-end">Debe</th></tr></thead>
+        <thead><tr><th>Pedido</th><th>Fecha</th><th>Pago</th><th>Entrega</th><th class="text-end">Productos</th><th class="text-end">Descuento</th><th class="text-end">Comisión negocio</th><th class="text-end">Comisión cliente</th><th class="text-end">Total</th><th class="text-end">Debe</th></tr></thead>
         <tbody>${(r.pending_items || []).map(o => `<tr>
           <td>#${esc(String(o.id).slice(0, 8))}</td>
           <td class="small">${o.date ? new Date(o.date).toLocaleDateString('es-MX') : '—'}</td>
           <td>${o.payment_method === 'cash' ? 'Efectivo' : o.payment_method === 'transfer' ? 'Transferencia' : 'En línea'}</td>
           <td class="small">${esc(deliveryLabel(o))}</td>
           <td class="text-end">${money(o.subtotal)}</td>
+          <td class="text-end text-danger">${money(o.discount || 0)}</td>
           <td class="text-end">${money(o.commission)}</td>
           <td class="text-end">${money(o.flat_fee)}</td>
           <td class="text-end fw-bold">${money(o.total)}</td>
           <td class="text-end text-danger">${money(o.owes)}</td>
-        </tr>`).join('') || '<tr><td colspan="9" class="text-center text-muted">Sin pedidos.</td></tr>'}</tbody>
+        </tr>`).join('') || '<tr><td colspan="10" class="text-center text-muted">Sin pedidos.</td></tr>'}</tbody>
       </table></div>
       ${(r.other_items || []).length ? `
         <h6 class="small mt-3">Envíos y ajustes</h6>

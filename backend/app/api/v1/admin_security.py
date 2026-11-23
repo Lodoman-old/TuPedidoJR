@@ -4,10 +4,12 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_superuser
 from app.db.session import get_db
+from app.models.courier_sos import CourierSOS
 from app.models.user import User
 from app.services.audit_service import log_action
 from app.services.audience_service import audience_overview
@@ -40,9 +42,32 @@ async def security_overview(
 ):
     data = await list_security_overview(db)
     settings = await security_guard.refresh_settings(force=True)
+    sos_rows = (
+        await db.execute(
+            select(CourierSOS, User)
+            .join(User, User.id == CourierSOS.user_id)
+            .where(CourierSOS.status == "open")
+            .order_by(CourierSOS.created_at.desc())
+            .limit(20)
+        )
+    ).all()
+    courier_sos = [
+        {
+            "id": str(sos.id),
+            "courier": user.name or user.email,
+            "phone": user.phone,
+            "lat": sos.lat,
+            "lng": sos.lng,
+            "message": sos.message,
+            "order_id": str(sos.order_id) if sos.order_id else None,
+            "created_at": sos.created_at.isoformat() if sos.created_at else None,
+        }
+        for sos, user in sos_rows
+    ]
     return {
         **data,
         "audience": await audience_overview(db),
+        "courier_sos": courier_sos,
         "client_ip": client_ip(request, trust_cf=truthy(settings.get("trust_cf"))),
         "settings": {
             "enabled": truthy(settings.get("enabled")),
@@ -99,4 +124,22 @@ async def security_refresh(
 ):
     security_guard.reset_settings_cache()
     await security_guard._refresh_settings(force=True)
+    return {"ok": True}
+
+@router.post("/security/sos/{sos_id}/resolve")
+async def resolve_courier_sos(
+    sos_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    sos = await db.get(CourierSOS, sos_id)
+    if not sos:
+        raise HTTPException(status_code=404, detail="Alerta no encontrada")
+    sos.status = "resolved"
+    sos.resolved_at = datetime.now(timezone.utc)
+    sos.resolved_by = current_user.id
+    await log_action(
+        db, current_user.id, "security.sos_resolve", "courier_sos", str(sos.id), None
+    )
+    await db.commit()
     return {"ok": True}

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.coupon import Coupon
 from app.models.restaurant import Restaurant
+from app.services.coupon_service import evaluate_coupon
 from app.services.rounding import round_half_down
 
 logger = logging.getLogger(__name__)
@@ -200,17 +201,14 @@ async def calculate_order_totals(
 
     discount = Decimal("0.00")
     coupon = None
+    coupon_error = None
     if coupon_code:
-        result = await db.execute(select(Coupon).where(Coupon.code == coupon_code.upper()))
-        coupon = result.scalar_one_or_none()
-        if coupon and coupon.is_active:
-            if coupon.discount_type == "percentage":
-                raw = subtotal * (coupon.discount_value / Decimal("100"))
-                if coupon.max_discount is not None and raw > coupon.max_discount:
-                    raw = coupon.max_discount
-                discount = round_half_down(raw)
-            else:
-                discount = round_half_down(min(coupon.discount_value, subtotal))
+        coupon, discount, coupon_error = await evaluate_coupon(
+            db, coupon_code, restaurant.id, subtotal
+        )
+        if coupon_error:
+            coupon = None
+            discount = Decimal("0.00")
 
     tip = round_half_down(Decimal(tip_amount or 0))
     loyalty = round_half_down(Decimal(loyalty_discount or 0))
@@ -224,4 +222,4 @@ async def calculate_order_totals(
     if total < 0:
         total = Decimal("0.00")
 
-    return subtotal, delivery_fee, discount, total, coupon, platform_commission, flat_usage_fee, delivery_earnings, distance_km
+    return subtotal, delivery_fee, discount, total, coupon, platform_commission, flat_usage_fee, delivery_earnings, distance_km, coupon_error

@@ -38,6 +38,19 @@
     </div>
   </div>
 
+  <div class="card p-3 mb-3 border-danger d-none" id="sosCard">
+    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+      <h6 class="mb-0 text-danger"><i class="bi bi-exclamation-octagon"></i> Alertas de repartidores</h6>
+      <span class="badge bg-danger">Requieren atención</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0" style="min-width:760px">
+        <thead><tr><th>Hora</th><th>Repartidor</th><th>Mensaje</th><th>Ubicación</th><th class="text-end">Acción</th></tr></thead>
+        <tbody id="sosBody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="card p-3 mb-3">
     <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
       <h6 class="mb-0"><i class="bi bi-bar-chart-line"></i> Audiencia y publicidad</h6>
@@ -207,6 +220,24 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="sosResolveModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Atender alerta</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        ¿Marcar esta alerta de auxilio como atendida?
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-sm btn-danger" id="sosResolveBtn" onclick="confirmResolveSos()">Atender</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -221,6 +252,9 @@
   };
 
   const secEl = (id) => document.getElementById(id);
+  const secEsc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
   const secDate = (iso) => {
     if (!iso) return '—';
     const d = new Date(iso);
@@ -267,6 +301,27 @@
       secEl('audPlatforms').textContent = platformText
         ? `Push por plataforma: ${platformText}`
         : 'Todavía no hay dispositivos con push.';
+
+      const sos = data.courier_sos || [];
+      const sosCard = secEl('sosCard');
+      if (sos.length) {
+        sosCard.classList.remove('d-none');
+        secEl('sosBody').innerHTML = sos.map(s => {
+          const map = s.lat != null && s.lng != null
+            ? `<a href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}" target="_blank" rel="noopener">Ver mapa</a>`
+            : '—';
+          return `<tr>
+            <td class="small text-nowrap">${secDate(s.created_at)}</td>
+            <td><strong>${secEsc(s.courier)}</strong><br><small class="text-muted">${secEsc(s.phone || '')}</small></td>
+            <td class="small">${secEsc(s.message || 'Sin mensaje')}</td>
+            <td class="small">${map}</td>
+            <td class="text-end"><button class="btn btn-sm btn-outline-danger" onclick="resolveSos('${s.id}')">Atender</button></td>
+          </tr>`;
+        }).join('');
+      } else {
+        sosCard.classList.add('d-none');
+        secEl('sosBody').innerHTML = '';
+      }
 
       const s = data.settings || {};
       secEl('secEnabled').checked = Boolean(s.enabled);
@@ -315,8 +370,32 @@
     }
   }
 
-  async function saveSecurity() {
+  let pendingSosId = null;
+
+  function resolveSos(id) {
+    pendingSosId = id;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('sosResolveModal')).show();
+  }
+
+  async function confirmResolveSos() {
+    if (!pendingSosId) return;
+    const btn = secEl('sosResolveBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     try {
+      await apiRequest('POST', `/admin/security/sos/${pendingSosId}/resolve`, {});
+      bootstrap.Modal.getInstance(document.getElementById('sosResolveModal')).hide();
+      showToast('Alerta atendida');
+      loadSecurity();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Atender';
+    }
+  }
+
+  async function saveSecurity() {    try {
       await apiRequest('PATCH', '/settings', {
         values: {
           SECURITY_ENABLED: secEl('secEnabled').checked,

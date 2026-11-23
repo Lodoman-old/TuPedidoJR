@@ -28,6 +28,7 @@ from app.services.appointment_reminder_service import appointment_reminder_loop
 from app.services.security_summary_service import security_summary_loop
 from app.services.reengagement_service import customer_winback_loop
 from app.services.business_summary_service import business_summary_loop
+from app.services.onboarding_reminder_service import onboarding_reminder_loop
 from app.services.courier_timeout_service import courier_timeout_loop
 from app.services.push_service import bootstrap_push_settings
 from app.services.security_service import security_guard
@@ -56,6 +57,7 @@ async def lifespan(app: FastAPI):
     security_task = asyncio.create_task(security_summary_loop())
     winback_task = asyncio.create_task(customer_winback_loop())
     business_summary_task = asyncio.create_task(business_summary_loop())
+    onboarding_task = asyncio.create_task(onboarding_reminder_loop())
     yield
     task.cancel()
     affiliation_task.cancel()
@@ -64,6 +66,7 @@ async def lifespan(app: FastAPI):
     security_task.cancel()
     winback_task.cancel()
     business_summary_task.cancel()
+    onboarding_task.cancel()
     await ws_manager.stop()
     logger.info("Servidor detenido")
 

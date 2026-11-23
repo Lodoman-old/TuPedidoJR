@@ -49,6 +49,8 @@ class Restaurant(TimestampMixin, Base):
     affiliation_payment_method = Column(String(20), default="transfer", nullable=False)
     affiliation_plan_months = Column(Integer, default=12, nullable=False)
     affiliation_payment_requested_at = Column(DateTime(timezone=True), nullable=True)
+    onboarding_reminder_2_at = Column(DateTime(timezone=True), nullable=True)
+    onboarding_reminder_7_at = Column(DateTime(timezone=True), nullable=True)
     payout_frequency_days = Column(Integer, default=7, nullable=False)
     bank_name = Column(String(100), nullable=True)
     bank_account_holder = Column(String(150), nullable=True)

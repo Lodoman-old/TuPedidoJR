@@ -267,6 +267,57 @@ async def send_email_verification(
     return await send_email(db, to, "Confirma tu correo — TuPedidoJR", html)
 
 
+async def send_onboarding_reminder(
+    db: AsyncSession,
+    to: str,
+    name: str,
+    restaurant_name: str,
+    restaurant_id: str,
+    missing: list[dict],
+    final: bool = False,
+) -> tuple[bool, str]:
+    from html import escape
+
+    config = await email_config(db)
+    url = f"{config['public_url']}/web/restaurants/{restaurant_id}"
+    items = "".join(
+        "<li style='margin-bottom:8px'><strong>{}</strong><br>"
+        "<span style='color:#64748b'>{}</span></li>".format(
+            escape(str(item.get("label") or "")),
+            escape(str(item.get("description") or "")),
+        )
+        for item in missing
+    )
+    subject = (
+        "Último recordatorio para completar tu negocio — TuPedidoJR"
+        if final else
+        "Completa tu negocio para empezar a vender — TuPedidoJR"
+    )
+    intro = (
+        f"Hola {escape(name)}, es el último recordatorio: tu negocio "
+        f"<strong>{escape(restaurant_name)}</strong> todavía tiene pasos pendientes."
+        if final else
+        f"Hola {escape(name)}, tu negocio <strong>{escape(restaurant_name)}</strong> "
+        "todavía tiene pasos pendientes."
+    )
+    body = f"""
+    <p>Esto es lo que falta:</p>
+    <ul style="padding-left:20px">{items}</ul>
+    <p style="margin:22px 0">
+      <a href="{url}" style="background:#0d6efd;color:#fff;padding:12px 20px;
+         border-radius:8px;text-decoration:none;font-weight:bold">Completar mi negocio</a>
+    </p>
+    <p>Si ya terminaste, ignora este correo. Si necesitas ayuda, responde a este mensaje.</p>
+    """
+    html = _email_shell(
+        "Completa tu negocio",
+        intro,
+        body,
+        logo_url=f"{config['public_url']}/static/logo.png",
+    )
+    return await send_email(db, to, subject, html)
+
+
 async def send_team_welcome(
     db: AsyncSession,
     to: str,

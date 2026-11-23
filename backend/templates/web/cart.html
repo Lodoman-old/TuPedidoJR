@@ -280,7 +280,7 @@ let scheduleState = { enabled: false, value: '' };
       <div class="form-text mb-2 d-none" id="scheduleHint">Elige la fecha y hora. Debe ser al menos 10 minutos después.</div>
       <div class="mb-2"><strong>Cupón de descuento</strong></div>
       <div class="input-group mb-2">
-        <input type="text" class="form-control" id="couponInput" placeholder="EJ: BIENVENIDO10">
+        <input type="text" class="form-control" id="couponInput" value="${esc(sessionStorage.getItem('coupon_code') || '')}" placeholder="EJ: BIENVENIDO10">
         <button class="btn btn-outline-primary" id="applyCoupon">Aplicar</button>
       </div>
       <div id="couponMsg" class="small mb-2"></div>
@@ -1130,6 +1130,7 @@ async function refreshEstimate() {
           ? `<span class="text-success">${res.message}</span>`
           : `<span class="text-danger">${res.message}</span>`;
         appliedCoupon = res.valid ? code : null;
+        if (res.valid) sessionStorage.removeItem('coupon_code');
         refreshEstimate();
       } catch (ex) {
         document.getElementById('couponMsg').innerHTML = `<span class="text-danger">${ex.message}</span>`;

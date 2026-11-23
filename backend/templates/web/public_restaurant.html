@@ -237,6 +237,12 @@
       catch (e) { prompt('Copia el enlace:', location.href); }
     }
   </script>
+  <script>
+    (function () {
+      const code = new URLSearchParams(location.search).get('coupon');
+      if (code) sessionStorage.setItem('coupon_code', code.trim().toUpperCase());
+    })();
+  </script>
 {% endif %}
 </body>
 </html>

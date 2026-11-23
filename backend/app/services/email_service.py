@@ -318,6 +318,59 @@ async def send_onboarding_reminder(
     return await send_email(db, to, subject, html)
 
 
+async def send_coupon_campaign(
+    db: AsyncSession,
+    to: str,
+    business_name: str,
+    code: str,
+    description: str | None,
+    discount_label: str,
+    min_order_label: str,
+    valid_until_label: str,
+    link: str,
+) -> tuple[bool, str]:
+    from html import escape
+
+    config = await email_config(db)
+    business = escape(business_name)
+    safe_code = escape(code)
+    details = " ".join(
+        part for part in (min_order_label, valid_until_label) if part
+    )
+    html = _email_shell(
+        "Cupón exclusivo",
+        f"{business} tiene un cupón para ti.",
+        f"""
+        <div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;
+             padding:18px;text-align:center;margin:18px 0">
+          <div style="font-size:12px;color:#64748b;text-transform:uppercase;
+               letter-spacing:1px">Código</div>
+          <div style="font-size:28px;font-weight:800;letter-spacing:3px;color:#0f172a">
+            {safe_code}
+          </div>
+        </div>
+        <p style="font-size:18px;margin:8px 0"><strong>{escape(discount_label)}</strong></p>
+        {f'<p style="margin:8px 0">{escape(description)}</p>' if description else ''}
+        {f'<p style="margin:8px 0;color:#64748b">{escape(details)}</p>' if details else ''}
+        <p style="margin:22px 0">
+          <a href="{link}" style="background:#F58220;color:#fff;padding:12px 20px;
+             border-radius:8px;text-decoration:none;font-weight:bold">Usar mi cupón</a>
+        </p>
+        <p style="font-size:12px;color:#94a3b8">
+          Recibes este correo porque pediste en {business}. Si no quieres recibir
+          promociones, responde a este correo y te damos de baja.
+        </p>
+        """,
+        logo_url=f"{config['public_url']}/static/logo.png",
+    )
+    return await send_email(
+        db,
+        to,
+        f"{business_name}: {description or 'Cupón exclusivo'}",
+        html,
+    )
+
+
 async def send_team_welcome(
     db: AsyncSession,
     to: str,

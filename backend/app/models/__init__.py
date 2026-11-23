@@ -13,6 +13,7 @@ from app.models.review import Review
 from app.models.setting import Setting
 from app.models.saved_address import SavedAddress
 from app.models.coupon import Coupon
+from app.models.coupon_campaign import CouponCampaign
 from app.models.delivery_payout import DeliveryPayout
 from app.models.restaurant_payout import RestaurantPayout
 from app.models.mandado import Mandado
@@ -57,6 +58,7 @@ __all__ = [
     "Setting",
     "SavedAddress",
     "Coupon",
+    "CouponCampaign",
     "DeliveryPayout",
     "RestaurantPayout",
     "Mandado",

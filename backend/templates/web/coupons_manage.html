@@ -5,7 +5,7 @@
     <h4 class="m-0"><i class="bi bi-ticket-perforated"></i> Cupones y promociones</h4>
     <p class="small text-muted mb-0 mt-1">
       Crea descuentos sobre tus productos. El descuento sale de tu precio; la plataforma no te cobra extra por usarlo.
-      Comparte con el botón de WhatsApp: el enlace lleva el cupón precargado en el carrito.
+      Comparte con el botón de WhatsApp o envía una campaña por push y correo a tus clientes.
     </p>
   </div>
   <div class="d-flex gap-2">
@@ -110,6 +110,43 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="campaignModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-megaphone"></i> Enviar campaña</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2">Solo se envía a clientes que ya pidieron y recibieron en tu negocio.</p>
+        <div class="mb-3">Cupón: <code id="campaignCouponCode">—</code></div>
+        <div id="campaignLoading" class="text-center py-3"><div class="spinner-border text-primary"></div></div>
+        <div id="campaignContent" class="d-none">
+          <div class="row g-2 mb-3">
+            <div class="col-4"><div class="border rounded p-2 text-center"><div class="fw-bold" id="campaignCustomers">0</div><small class="text-muted">Clientes</small></div></div>
+            <div class="col-4"><div class="border rounded p-2 text-center"><div class="fw-bold" id="campaignPushCount">0</div><small class="text-muted">Push</small></div></div>
+            <div class="col-4"><div class="border rounded p-2 text-center"><div class="fw-bold" id="campaignEmailCount">0</div><small class="text-muted">Correos</small></div></div>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="campaignPush">
+            <label class="form-check-label" for="campaignPush">Notificación push</label>
+          </div>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="campaignEmail">
+            <label class="form-check-label" for="campaignEmail">Correo electrónico</label>
+          </div>
+          <div class="alert alert-warning small d-none" id="campaignCooldown"></div>
+          <div class="text-danger small" id="campaignError"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-sm btn-primary" id="campaignSendBtn" onclick="sendCampaign()">Enviar campaña</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -170,6 +207,79 @@
     }
   }
 
+  let campaignCouponId = null;
+  let campaignAudience = null;
+
+  async function openCampaign(id) {
+    const c = coupons.find((row) => row.id === id);
+    if (!c) return;
+    campaignCouponId = id;
+    campaignAudience = null;
+    document.getElementById('campaignCouponCode').textContent = c.code;
+    document.getElementById('campaignError').textContent = '';
+    const cooldown = document.getElementById('campaignCooldown');
+    cooldown.classList.add('d-none');
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('campaignModal'));
+    modal.show();
+    document.getElementById('campaignLoading').classList.remove('d-none');
+    document.getElementById('campaignContent').classList.add('d-none');
+    document.getElementById('campaignSendBtn').disabled = true;
+    try {
+      const data = await apiRequest('GET', `/restaurants/${RID}/coupons/${id}/audience`);
+      campaignAudience = data;
+      document.getElementById('campaignCustomers').textContent = data.customers;
+      document.getElementById('campaignPushCount').textContent = data.push_devices;
+      document.getElementById('campaignEmailCount').textContent = data.emails;
+      const push = document.getElementById('campaignPush');
+      const email = document.getElementById('campaignEmail');
+      push.checked = data.push_devices > 0;
+      email.checked = data.emails > 0;
+      push.disabled = data.push_devices === 0;
+      email.disabled = data.emails === 0;
+      if (!data.can_send) {
+        cooldown.classList.remove('d-none');
+        cooldown.textContent = 'Ya enviaste una campaña con este cupón en las últimas 24 horas.';
+      }
+      const hasChannel = data.push_devices > 0 || data.emails > 0;
+      document.getElementById('campaignSendBtn').disabled = !data.can_send || !hasChannel;
+      document.getElementById('campaignLoading').classList.add('d-none');
+      document.getElementById('campaignContent').classList.remove('d-none');
+    } catch (e) {
+      document.getElementById('campaignLoading').classList.add('d-none');
+      document.getElementById('campaignError').textContent = e.message;
+    }
+  }
+
+  async function sendCampaign() {
+    if (!campaignCouponId) return;
+    const channels = [];
+    if (document.getElementById('campaignPush').checked) channels.push('push');
+    if (document.getElementById('campaignEmail').checked) channels.push('email');
+    const error = document.getElementById('campaignError');
+    error.textContent = '';
+    if (!channels.length) {
+      error.textContent = 'Elige al menos un canal.';
+      return;
+    }
+    const btn = document.getElementById('campaignSendBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+    try {
+      const res = await apiRequest(
+        'POST',
+        `/restaurants/${RID}/coupons/${campaignCouponId}/campaign`,
+        { channels }
+      );
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('campaignModal')).hide();
+      showToast(`Campaña enviada: ${res.push_sent} push y ${res.email_sent} correos.`);
+    } catch (e) {
+      error.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Enviar campaña';
+    }
+  }
+
   async function loadCoupons() {
     try {
       if (!business) await loadBusiness();
@@ -199,6 +309,7 @@
         <td>${c.is_active ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Pausado</span>'}</td>
         <td class="text-end text-nowrap">
           <button class="btn btn-sm btn-outline-success" title="Compartir por WhatsApp" onclick="shareCoupon('${c.id}')"><i class="bi bi-whatsapp"></i></button>
+          <button class="btn btn-sm btn-outline-primary" title="Enviar campaña a mis clientes" onclick="openCampaign('${c.id}')"><i class="bi bi-megaphone"></i></button>
           <button class="btn btn-sm btn-outline-secondary" title="Copiar código" onclick="copyCoupon('${c.code}')"><i class="bi bi-clipboard"></i></button>
           <button class="btn btn-sm btn-outline-secondary" onclick="openCouponModal('${c.id}')">Editar</button>
           <button class="btn btn-sm btn-outline-${c.is_active ? 'danger' : 'success'}" onclick="toggleCoupon('${c.id}', ${!c.is_active})">

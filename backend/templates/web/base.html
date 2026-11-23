@@ -1221,6 +1221,8 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
             target = '/web/store-requests/' + data.request_id;
           } else if (data.type === 'mandado_fee_adjustment' && data.mandado_id) {
             target = '/web/mandados/' + data.mandado_id;
+          } else if (data.type === 'coupon' && data.url) {
+            target = data.url;
           } else if (data.order_id) {
             target = '/web/orders/' + data.order_id;
             if (data.type === 'order_status' && data.status === 'delivered') {

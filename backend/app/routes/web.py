@@ -536,6 +536,7 @@ self.addEventListener('notificationclick', (event) => {{
   else if (data.order_id) target = '/web/orders/' + data.order_id;
   else if (data.type === 'payout_request') target = '/web/admin/payouts';
   else if (data.type === 'affiliation' && data.restaurant_id) target = '/web/restaurants/' + data.restaurant_id + '/profile';
+  else if (data.type === 'coupon' && data.url) target = data.url;
   event.waitUntil((async () => {{
     const all = await self.clients.matchAll({{ type: 'window', includeUncontrolled: true }});
     for (const client of all) {{

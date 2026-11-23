@@ -270,6 +270,9 @@ let scheduleState = { enabled: false, value: '' };
         <div id="geocodeMsg" class="small mt-2 text-muted">Si eliges una dirección guardada no necesitas C.P. ni colonia. Para otra ubicación escribe la calle o usa tu GPS/mapa.</div>
         <div id="geocodeResults" class="small mt-2"></div>
       </div>
+      <div id="coverageStatus" class="alert alert-secondary py-2 mt-2 mb-2 small">
+        <i class="bi bi-geo-alt"></i> Escribe tu dirección y usa <strong>Buscar dirección</strong> para verificar la cobertura.
+      </div>
       <div class="mb-2 mt-2"><strong>Notas (opcional)</strong></div>
       <textarea class="form-control mb-2" id="orderNotes" rows="1" placeholder="Ej: Sin cebolla"></textarea>
       <div class="form-check mb-2">
@@ -436,21 +439,34 @@ let scheduleState = { enabled: false, value: '' };
     } catch (e) {
       coverageInside = null;
     }
-    const msg = document.getElementById('geocodeMsg');
-    if (coverageInside === false && msg) {
-      msg.className = 'small mt-2 text-danger';
-      msg.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Esa ubicación está fuera de nuestra zona de entrega. Por ahora solo entregamos dentro de Juventino Rosas; puedes recoger tu pedido en el negocio.';
-    }
     updateCoverageUi();
     return coverageInside;
   }
 
   function updateCoverageUi() {
     const btn = document.getElementById('placeOrderBtn');
-    if (!btn) return;
-    const blocked = fulfillment !== 'pickup' && coverageInside === false;
-    btn.disabled = blocked;
-    btn.textContent = blocked ? 'Fuera de la zona de entrega' : 'Confirmar pedido';
+    const box = document.getElementById('coverageStatus');
+    const isPickup = fulfillment === 'pickup';
+    const blocked = !isPickup && coverageInside === false;
+    if (btn) {
+      btn.disabled = blocked;
+      btn.textContent = blocked ? 'Fuera de la zona de entrega' : 'Confirmar pedido';
+    }
+    if (box) {
+      if (isPickup) {
+        box.className = 'alert alert-info py-2 mt-2 mb-2 small';
+        box.innerHTML = '<i class="bi bi-shop"></i> Recoger en el negocio no requiere cobertura de entrega.';
+      } else if (coverageInside === true) {
+        box.className = 'alert alert-success py-2 mt-2 mb-2 small';
+        box.innerHTML = '<i class="bi bi-check-circle-fill"></i> Dirección dentro de la zona de entrega de Juventino Rosas.';
+      } else if (coverageInside === false) {
+        box.className = 'alert alert-danger py-2 mt-2 mb-2 small';
+        box.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Esa dirección está fuera de la zona de entrega. Solo entregamos en Juventino Rosas; puedes recoger en el negocio.';
+      } else {
+        box.className = 'alert alert-secondary py-2 mt-2 mb-2 small';
+        box.innerHTML = '<i class="bi bi-geo-alt"></i> Escribe tu dirección y usa <strong>Buscar dirección</strong> para verificar la cobertura.';
+      }
+    }
   }
 
   function selectSavedAddress(address) {

@@ -57,6 +57,7 @@ from app.services.schedule_service import (
 from app.services.settlement_service import is_order_settleable
 from app.services.order_service import get_approval_timeout_min, get_commission_rate, get_setting_value
 from app.services.order_serialization import order_out
+from app.services.onboarding_service import business_onboarding
 from app.services.restaurant_access import (
     FINANCE_ROLES, MANAGE_ROLES, ORDER_ROLES, OWNER_ROLES,
     have_role, my_restaurants, restaurant_role,
@@ -375,6 +376,23 @@ async def get_restaurant(
     if not restaurant.show_address and role is None and not is_admin:
         out.address = ""
     return out
+
+
+@router.get("/{restaurant_id}/onboarding")
+async def get_restaurant_onboarding(
+    restaurant_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
+    restaurant = result.scalar_one_or_none()
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Negocio no encontrado")
+    if not current_user.is_superuser and not await have_role(
+        db, restaurant.id, current_user, MANAGE_ROLES
+    ):
+        raise HTTPException(status_code=403, detail="No tienes acceso a este negocio")
+    return await business_onboarding(db, restaurant)
 
 
 @router.get("/{restaurant_id}/open-status", response_model=RestaurantOpenStatus)

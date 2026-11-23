@@ -491,10 +491,28 @@ messaging.onBackgroundMessage((payload) => {{
   const n = payload.notification || {{}};
   self.registration.showNotification(n.title || 'TuPedidoJR', {{
     body: n.body || '',
-    icon: '/static/logo.png',
-    badge: '/static/logo.png',
+    icon: '/static/logo_notification_circle.png',
+    badge: '/static/logo_notification_circle.png',
     data: payload.data || {{}},
   }});
+}});
+self.addEventListener('notificationclick', (event) => {{
+  event.notification.close();
+  const data = event.notification.data || {{}};
+  let target = '/web/orders';
+  if (data.type === 'courier_sos') target = '/web/admin/security';
+  else if (data.type === 'available_order' || data.type === 'assigned_order') target = '/web/delivery';
+  else if (data.type === 'new_order') target = '/web/orders';
+  else if (data.order_id) target = '/web/orders/' + data.order_id;
+  else if (data.type === 'payout_request') target = '/web/admin/payouts';
+  else if (data.type === 'affiliation' && data.restaurant_id) target = '/web/restaurants/' + data.restaurant_id + '/profile';
+  event.waitUntil((async () => {{
+    const all = await self.clients.matchAll({{ type: 'window', includeUncontrolled: true }});
+    for (const client of all) {{
+      if (client.url.includes(target)) {{ await client.focus(); return; }}
+    }}
+    await self.clients.openWindow(target);
+  }})());
 }});
 """
     else:

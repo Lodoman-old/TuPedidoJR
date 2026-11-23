@@ -10,6 +10,7 @@
   .bank-fields.visible { display: block; }
   .mandado-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
   #deliveryTabs { flex-wrap: wrap; }
+  #tabContent { padding-bottom: 96px; }
   .dp-tab-btn { display:inline-flex; align-items:center; justify-content:center; gap:5px; font-size: 15px; font-weight: 700; padding: 10px 10px; border: none; border-radius: 10px 10px 0 0; cursor: pointer; flex: 1 1 130px; white-space: nowrap; }
   .dp-tab-btn .badge { font-size: 11px; }
   @media (max-width: 575.98px) {
@@ -1427,11 +1428,14 @@ async function loadHotZones() {
       <div class="card p-3 mb-3">
         <h6 class="mb-1"><i class="bi bi-fire text-danger"></i> Zonas calientes</h6>
         <p class="small text-muted mb-2">Pedidos entregados en los últimos ${data.days || 7} días. Úsalas para ubicarte cerca de la demanda.</p>
-        ${zones.length ? zones.map((z, i) => `
+        ${zones.length ? zones.map((z, i) => {
+          const zoneLabel = /^col\./i.test(z.name) ? z.name : `Col. ${z.name}`;
+          return `
           <div class="d-flex justify-content-between align-items-center gap-2 border-bottom py-2">
-            <div><strong>${i + 1}. ${escShip(z.name)}</strong><br><small class="text-muted">${z.orders} pedido(s) · envío promedio ${money0(z.avg_fee)}</small></div>
+            <div><strong>${i + 1}. ${escShip(zoneLabel)}</strong><br><small class="text-muted">${z.orders} pedido(s) · envío promedio ${money0(z.avg_fee)}</small></div>
             ${z.lat != null && z.lng != null ? `<a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${z.lat},${z.lng}">Ver mapa</a>` : ''}
-          </div>`).join('') : '<div class="text-muted small">Todavía no hay suficientes pedidos para calcular zonas.</div>'}
+          </div>`;
+        }).join('') : '<div class="text-muted small">Todavía no hay suficientes pedidos para calcular zonas.</div>'}
       </div>
       <div class="card p-3">
         <h6 class="mb-1"><i class="bi bi-clock-history"></i> Horas pico</h6>

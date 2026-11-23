@@ -16,6 +16,18 @@ logger = logging.getLogger(__name__)
 SUMMARY_WEEKDAY = 0  # lunes
 SUMMARY_HOUR = 8
 
+BUSINESS_STATS_SQL = """
+SELECT count(*) AS orders,
+       coalesce(sum(subtotal), 0) AS sales,
+       coalesce(sum(discount_amount), 0) AS discounts,
+       coalesce(sum(platform_commission), 0) AS commission,
+       coalesce(sum(flat_usage_fee), 0) AS client_fees
+FROM orders
+WHERE restaurant_id = :rid
+  AND status = 'delivered'
+  AND COALESCE(delivered_at, placed_at) >= :since
+"""
+
 
 async def maybe_send_weekly_business_summary() -> None:
     async with async_session() as db:
@@ -47,19 +59,7 @@ async def maybe_send_weekly_business_summary() -> None:
         for business in businesses:
             stats = (
                 await db.execute(
-                    text(
-                        """
-                        SELECT count(*) AS orders,
-                               coalesce(sum(subtotal), 0) AS sales,
-                               coalesce(sum(discount), 0) AS discounts,
-                               coalesce(sum(platform_commission), 0) AS commission,
-                               coalesce(sum(flat_usage_fee), 0) AS client_fees
-                        FROM orders
-                        WHERE restaurant_id = :rid
-                          AND status = 'delivered'
-                          AND COALESCE(delivered_at, placed_at) >= :since
-                        """
-                    ),
+                    text(BUSINESS_STATS_SQL),
                     {"rid": business["id"], "since": since},
                 )
             ).mappings().one()

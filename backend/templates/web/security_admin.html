@@ -38,15 +38,17 @@
     </div>
   </div>
 
-  <div class="card p-3 mb-3 border-danger d-none" id="sosCard">
+  <div class="card p-3 mb-3" id="sosCard">
     <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
       <h6 class="mb-0 text-danger"><i class="bi bi-exclamation-octagon"></i> Alertas de repartidores</h6>
-      <span class="badge bg-danger">Requieren atención</span>
+      <span class="badge bg-success" id="sosBadge">Sin alertas</span>
     </div>
     <div class="table-responsive">
       <table class="table table-sm mb-0" style="min-width:760px">
         <thead><tr><th>Hora</th><th>Repartidor</th><th>Mensaje</th><th>Ubicación</th><th class="text-end">Acción</th></tr></thead>
-        <tbody id="sosBody"></tbody>
+        <tbody id="sosBody">
+          <tr><td colspan="5" class="text-muted small">Sin alertas activas.</td></tr>
+        </tbody>
       </table>
     </div>
   </div>
@@ -304,8 +306,11 @@
 
       const sos = data.courier_sos || [];
       const sosCard = secEl('sosCard');
+      const sosBadge = secEl('sosBadge');
       if (sos.length) {
-        sosCard.classList.remove('d-none');
+        sosCard.classList.add('border-danger');
+        sosBadge.className = 'badge bg-danger';
+        sosBadge.textContent = 'Requieren atención';
         secEl('sosBody').innerHTML = sos.map(s => {
           const map = s.lat != null && s.lng != null
             ? `<a href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}" target="_blank" rel="noopener">Ver mapa</a>`
@@ -319,8 +324,10 @@
           </tr>`;
         }).join('');
       } else {
-        sosCard.classList.add('d-none');
-        secEl('sosBody').innerHTML = '';
+        sosCard.classList.remove('border-danger');
+        sosBadge.className = 'badge bg-success';
+        sosBadge.textContent = 'Sin alertas';
+        secEl('sosBody').innerHTML = '<tr><td colspan="5" class="text-muted small">Sin alertas activas.</td></tr>';
       }
 
       const s = data.settings || {};

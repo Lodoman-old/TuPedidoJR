@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from sqlalchemy import text
 
+from app.core.config import settings
 from app.db.session import async_session
 from app.services.email_service import send_email
 from app.services.order_service import get_setting_value
@@ -27,7 +28,7 @@ async def maybe_send_weekly_business_summary() -> None:
             return
 
         since = now - timedelta(days=7)
-        base = (await get_setting_value(db, "APP_PUBLIC_URL", "")).rstrip("/")
+        base = (await get_setting_value(db, "APP_PUBLIC_URL", settings.APP_URL)).rstrip("/")
         businesses = (
             await db.execute(
                 text(

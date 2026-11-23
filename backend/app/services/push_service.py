@@ -255,9 +255,6 @@ async def send_to_tokens(
         style or "", ("/static/logo_notification_circle.png", "#1B2F6B")
     )
     event_type = str((data or {}).get("type") or "")
-    # En compras y repartos, mostrar el logotipo con el nombre de TuPedidoJR.
-    if event_type in ("new_order", "order_status", "assigned_order", "available_order"):
-        image_path = "/static/logo_notification_wordmark.png"
     logo_url = f"{base_url}{image_path}" if base_url else image_path
     priority_alert = event_type in ("new_order", "available_order")
     android_notification: dict = {

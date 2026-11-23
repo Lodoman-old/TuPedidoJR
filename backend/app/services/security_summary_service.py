@@ -6,6 +6,7 @@ from html import escape
 
 from sqlalchemy import text
 
+from app.core.config import settings
 from app.db.session import async_session
 from app.services.email_service import send_email
 from app.services.order_service import get_setting_value
@@ -73,7 +74,7 @@ async def maybe_send_daily_summary() -> None:
         if not to:
             return
 
-        base = (await get_setting_value(db, "APP_PUBLIC_URL", "")).rstrip("/")
+        base = (await get_setting_value(db, "APP_PUBLIC_URL", settings.APP_URL)).rstrip("/")
         panel = f"{base}/web/admin/security" if base else "/web/admin/security"
         logo_url = f"{base}/static/logo.png" if base else "/static/logo.png"
         rows = "".join(

@@ -62,6 +62,7 @@ async def _send_affiliation_qr_email(
     public_url = restaurant_public_url(restaurant)
     print_url = f"{base}/web/restaurants/{restaurant.id}/qr?print=1"
     panel_url = f"{base}/web/restaurants/{restaurant.id}/profile"
+    logo_url = f"{base}/static/logo.png"
     name = escape(restaurant.name)
     owner_name = escape(owner.name or "equipo")
     expires = _date_label(restaurant.affiliation_expires_at)
@@ -82,7 +83,7 @@ async def _send_affiliation_qr_email(
       <div style="font-family:Arial,sans-serif;background:#f4f7fb;padding:24px">
         <div style="max-width:620px;margin:auto;background:#fff;border-radius:14px;overflow:hidden">
           <div style="background:#0d1b2a;color:#fff;padding:22px 26px">
-            <h1 style="margin:0;font-size:22px">TuPedidoJR</h1>
+            <img src="{logo_url}" alt="TuPedidoJR" style="height:38px;display:block;background:#fff;border-radius:8px;padding:5px 9px">
             <p style="margin:10px 0 0;opacity:.85;font-size:14px">Tu QR está listo</p>
           </div>
           <div style="padding:26px;color:#243447;line-height:1.55">

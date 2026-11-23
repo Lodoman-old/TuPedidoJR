@@ -75,6 +75,7 @@ async def maybe_send_daily_summary() -> None:
 
         base = (await get_setting_value(db, "APP_PUBLIC_URL", "")).rstrip("/")
         panel = f"{base}/web/admin/security" if base else "/web/admin/security"
+        logo_url = f"{base}/static/logo.png" if base else "/static/logo.png"
         rows = "".join(
             f"<tr><td style='padding:5px 0'><code>{escape(str(item['ip']))}</code></td>"
             f"<td style='padding:5px 0;text-align:right'>{int(item['total'])}</td></tr>"
@@ -84,7 +85,7 @@ async def maybe_send_daily_summary() -> None:
         <div style="font-family:Arial,sans-serif;background:#f4f7fb;padding:24px">
           <div style="max-width:620px;margin:auto;background:#fff;border-radius:14px;overflow:hidden">
             <div style="background:#0d1b2a;color:#fff;padding:20px 26px">
-              <h1 style="margin:0;font-size:21px">TuPedidoJR</h1>
+              <img src="{logo_url}" alt="TuPedidoJR" style="height:38px;display:block;background:#fff;border-radius:8px;padding:5px 9px">
               <p style="margin:10px 0 0;opacity:.85;font-size:14px">Resumen diario de seguridad</p>
             </div>
             <div style="padding:26px;color:#243447;line-height:1.55">

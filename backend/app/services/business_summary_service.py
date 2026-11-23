@@ -121,11 +121,12 @@ async def maybe_send_weekly_business_summary() -> None:
             subject = f"Tu resumen semanal · {business['name']}"
             earnings_path = f"/web/restaurants/{business['id']}/earnings"
             earnings_url = f"{base}{earnings_path}" if base else earnings_path
+            logo_url = f"{base}/static/logo.png" if base else "/static/logo.png"
             html = f"""
             <div style="font-family:Arial,sans-serif;background:#f4f7fb;padding:24px">
               <div style="max-width:620px;margin:auto;background:#fff;border-radius:14px;overflow:hidden">
                 <div style="background:#0d1b2a;color:#fff;padding:20px 26px">
-                  <h1 style="margin:0;font-size:21px">TuPedidoJR</h1>
+                  <img src="{logo_url}" alt="TuPedidoJR" style="height:38px;display:block;background:#fff;border-radius:8px;padding:5px 9px">
                   <p style="margin:10px 0 0;opacity:.85;font-size:14px">Resumen semanal de {business['name']}</p>
                 </div>
                 <div style="padding:26px;color:#243447;line-height:1.55">

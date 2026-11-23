@@ -53,6 +53,15 @@ def _get_ws_manager():
     return ws_manager
 
 
+async def _customer_phones(db: AsyncSession, orders: list[Order]) -> dict:
+    """Teléfonos de los clientes para el repartidor asignado."""
+    ids = {order.user_id for order in orders if order.user_id}
+    if not ids:
+        return {}
+    rows = await db.execute(select(User.id, User.phone).where(User.id.in_(ids)))
+    return {row.id: row.phone for row in rows}
+
+
 def _time_between(moment, start, end) -> bool:
     if start == end:
         return True
@@ -252,7 +261,10 @@ async def accept_order(
         schedule_courier_assigned(str(order.id))
     else:
         schedule_courier_assigned(str(order.id))
-    return order_out(order, can_see_refund=False)
+    customer = await db.get(User, order.user_id)
+    return order_out(
+        order, can_see_refund=False, customer_phone=customer.phone if customer else None
+    )
 
 
 @router.post("/pickup/{order_id}", response_model=OrderOut)
@@ -289,7 +301,10 @@ async def pickup_order(
     await db.refresh(order)
     await _get_ws_manager().notify_order_status(str(order.id), "picked_up")
     schedule_order_status(str(order.id), "picked_up")
-    return order
+    customer = await db.get(User, order.user_id)
+    return order_out(
+        order, can_see_refund=False, customer_phone=customer.phone if customer else None
+    )
 
 
 @router.post("/deliver/{order_id}", response_model=OrderOut)
@@ -344,7 +359,10 @@ async def deliver_order(
     await db.refresh(order)
     await _get_ws_manager().notify_order_status(str(order.id), "delivered")
     schedule_order_status(str(order.id), "delivered")
-    return order
+    customer = await db.get(User, order.user_id)
+    return order_out(
+        order, can_see_refund=False, customer_phone=customer.phone if customer else None
+    )
 
 
 @router.post("/orders/{order_id}/fail", response_model=OrderOut)
@@ -379,7 +397,10 @@ async def fail_order(
     await db.commit()
     await db.refresh(order)
     schedule_order_status(str(order.id), "delivery_failed")
-    return order_out(order, can_see_refund=False)
+    customer = await db.get(User, order.user_id)
+    return order_out(
+        order, can_see_refund=False, customer_phone=customer.phone if customer else None
+    )
 
 
 @router.patch("/location", status_code=status.HTTP_204_NO_CONTENT)
@@ -559,7 +580,12 @@ async def delivery_orders(
         .options(selectinload(Order.items))
         .order_by(Order.created_at.desc())
     )
-    return [order_out(order, can_see_refund=False) for order in result.scalars().all()]
+    orders = list(result.scalars().all())
+    phones = await _customer_phones(db, orders)
+    return [
+        order_out(order, can_see_refund=False, customer_phone=phones.get(order.user_id))
+        for order in orders
+    ]
 
 
 @router.get("/payouts", response_model=list[DeliveryPayoutOut])

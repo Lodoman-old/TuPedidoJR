@@ -56,6 +56,7 @@ def _row(restaurant: Restaurant, owner: User | None) -> RestaurantRegistrationOu
         owner_email=owner.email if owner else "—",
         created_at=restaurant.created_at,
         rejection_reason=restaurant.rejection_reason,
+        affiliation_expires_at=restaurant.affiliation_expires_at,
     )
 
 
@@ -299,12 +300,26 @@ async def approve_restaurant(
         sent, detail = await send_restaurant_welcome(
             db, owner.email, owner.name, restaurant.name, pending=False,
         )
+    published = bool(
+        restaurant.affiliation_expires_at
+        and restaurant.affiliation_expires_at >= date.today()
+    )
     return {
         "status": "active",
         "restaurant_name": restaurant.name,
         "owner_email": owner.email if owner else None,
         "email_sent": sent,
         "email_detail": None if sent else detail,
+        "affiliation_expires_at": (
+            restaurant.affiliation_expires_at.isoformat()
+            if restaurant.affiliation_expires_at else None
+        ),
+        "published": published,
+        "message": (
+            "Negocio aprobado y publicado."
+            if published else
+            "Negocio aprobado. Registra el pago de afiliación para que aparezca en los listados."
+        ),
     }
 
 

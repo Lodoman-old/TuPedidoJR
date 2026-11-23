@@ -29,11 +29,15 @@
       <div id="regRestError" class="alert alert-danger d-none"></div>
       <div id="regRestSuccess" class="alert alert-success d-none"></div>
       <form id="regRestForm">
+        <div class="d-none" aria-hidden="true">
+          <label class="form-label">No llenar</label>
+          <input type="text" class="form-control" id="website" tabindex="-1" autocomplete="off">
+        </div>
         <h6 class="mt-2">Datos del responsable</h6>
         <div class="row g-3">
           <div class="col-md-6"><label class="form-label">Nombre completo</label><input id="ownerName" class="form-control" required></div>
           <div class="col-md-6"><label class="form-label">Correo</label><input id="ownerEmail" type="email" class="form-control" required></div>
-          <div class="col-md-6"><label class="form-label">Teléfono</label><input id="ownerPhone" class="form-control"></div>
+          <div class="col-md-6"><label class="form-label">Teléfono (WhatsApp)</label><input id="ownerPhone" type="tel" class="form-control" required inputmode="tel" autocomplete="tel" placeholder="10 dígitos" maxlength="15"></div>
           <div class="col-md-6"><label class="form-label">Contraseña</label><input id="ownerPassword" type="password" minlength="6" class="form-control" required></div>
         </div>
 
@@ -488,11 +492,17 @@
       error.textContent = 'Busca la dirección, usa el GPS o ajusta el pin en el mapa.';
       error.classList.remove('d-none'); return;
     }
+    const phoneDigits = $('ownerPhone').value.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      error.textContent = 'Escribe un teléfono de 10 dígitos.';
+      error.classList.remove('d-none'); return;
+    }
     try {
       const result = await apiRequest('POST', '/restaurant-registration', {
         owner_name: $('ownerName').value.trim(),
         email: $('ownerEmail').value.trim(),
-        phone: $('ownerPhone').value.trim() || null,
+        phone: phoneDigits,
+        website: $('website').value,
         password: $('ownerPassword').value,
         restaurant_name: $('restName').value.trim(),
         cuisine: $('restCuisine').value.trim() || null,

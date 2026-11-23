@@ -49,6 +49,7 @@ async def create_admin_user(
         password_hash=hash_password(body.password),
         is_active=True,
         is_superuser=True,
+        email_verified=True,
     )
     db.add(user)
     await db.commit()

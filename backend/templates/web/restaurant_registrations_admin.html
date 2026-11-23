@@ -284,14 +284,20 @@
     try {
       const res = await apiRequest('POST', `/admin/restaurant-registrations/${pendingApproveId}/approve`, {});
       modal('approveModal').hide();
+      const published = res.published === true;
+      const affiliationMsg = published
+        ? '<p class="mb-1">El negocio ya aparece en los listados.</p>'
+        : '<p class="mb-1 text-warning"><strong>Falta el pago de afiliación.</strong> Regístralo en Afiliaciones para que aparezca en los listados.</p>';
       resendRestaurantId = res.email_sent ? null : pendingApproveId;
       setTimeout(() => showResult(
         res.email_sent ? 'success' : 'warning',
         res.email_sent ? 'Negocio aprobado' : 'Aprobado, pero sin correo',
         res.email_sent
           ? `<p class="mb-1"><strong>${esc(res.restaurant_name)}</strong> ya está activo.</p>
+             ${affiliationMsg}
              <p class="mb-0">Se envió el correo de bienvenida a <strong>${esc(res.owner_email || '')}</strong>.</p>`
           : `<p class="mb-1"><strong>${esc(res.restaurant_name)}</strong> ya está activo.</p>
+             ${affiliationMsg}
              <p class="mb-1">No se pudo enviar el correo de bienvenida:</p>
              <p class="small text-danger mb-0">${esc(res.email_detail || 'error desconocido')}</p>`
       ), 300);

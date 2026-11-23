@@ -312,6 +312,19 @@ async def create_order(
     if restaurant.status != "active" and not current_user.is_superuser:
         raise HTTPException(status_code=409, detail="El restaurante todavía no está activo")
 
+    if not current_user.is_superuser:
+        require_verified = (
+            await get_setting_value(db, "REQUIRE_EMAIL_VERIFICATION", "false")
+        ).lower() == "true"
+        if require_verified and not current_user.email_verified:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Confirma tu correo antes de hacer tu pedido. "
+                    "Revisa tu bandeja o pide un enlace nuevo."
+                ),
+            )
+
     appointment_link = None
     if body.appointment_id:
         try:
@@ -668,9 +681,11 @@ async def get_order(
             allowed = bool(dp and order.delivery_person_id == dp.id)
         if not allowed:
             raise HTTPException(status_code=403, detail="No tienes acceso a este pedido")
+    customer = await db.get(User, order.user_id)
     return order_out(
         order,
         can_see_refund=bool(current_user.is_superuser or order.user_id == current_user.id),
+        customer_phone=customer.phone if customer else None,
     )
 
 

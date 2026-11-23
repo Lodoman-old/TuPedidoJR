@@ -64,7 +64,7 @@
           </div>
           <div class="col-12 col-md-6">
             <label class="form-label small mb-1" for="courierPhone">Teléfono</label>
-            <input class="form-control" id="courierPhone" maxlength="20" placeholder="Ej. 412 123 4567">
+            <input class="form-control" id="courierPhone" required inputmode="tel" autocomplete="tel" maxlength="15" placeholder="Ej. 412 123 4567">
           </div>
           <div class="col-12 col-md-6">
             <label class="form-label small mb-1" for="courierEmail">Correo de acceso</label>
@@ -361,6 +361,8 @@
     const clabe = document.getElementById('courierClabe').value.replace(/\D/g, '');
     if (name.length < 2) { error.textContent = 'Escribe el nombre completo'; error.classList.remove('d-none'); return; }
     if (!email || !email.includes('@')) { error.textContent = 'Escribe un correo válido'; error.classList.remove('d-none'); return; }
+    const phoneDigits = document.getElementById('courierPhone').value.replace(/\D/g, '');
+    if (phoneDigits.length < 10) { error.textContent = 'Escribe un teléfono de 10 dígitos'; error.classList.remove('d-none'); return; }
     if (!editing && password.length < 6) { error.textContent = 'La contraseña debe tener al menos 6 caracteres'; error.classList.remove('d-none'); return; }
     if (editing && password && password.length < 6) { error.textContent = 'La nueva contraseña debe tener al menos 6 caracteres'; error.classList.remove('d-none'); return; }
     if (payout === 'transfer' && (!document.getElementById('courierBank').value.trim()
@@ -373,7 +375,7 @@
     const payload = {
       name,
       email,
-      phone: document.getElementById('courierPhone').value.trim() || null,
+      phone: phoneDigits,
       vehicle_type: document.getElementById('courierVehicle').value,
       payout_method: payout,
       bank_name: document.getElementById('courierBank').value.trim() || null,

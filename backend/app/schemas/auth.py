@@ -11,6 +11,8 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=6, max_length=128)
     address: str | None = None
     referral_code: str | None = Field(default=None, max_length=20)
+    # Honeypot: los humanos lo dejan vacío.
+    website: str | None = Field(default=None, max_length=200)
 
 
 class LoginRequest(BaseModel):
@@ -20,6 +22,10 @@ class LoginRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(..., min_length=10)
 
 
 class ResetPasswordRequest(BaseModel):
@@ -68,6 +74,7 @@ class UserOut(BaseModel):
     address: str | None
     is_active: bool
     is_superuser: bool = False
+    email_verified: bool = False
     loyalty_points: int = 0
     pending_balance: Decimal = Decimal("0")
     pending_installments: int = 0

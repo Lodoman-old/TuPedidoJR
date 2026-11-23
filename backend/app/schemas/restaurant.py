@@ -277,6 +277,8 @@ class RestaurantRegistrationCreate(BaseModel):
     address: str = Field(..., min_length=5)
     lat: float
     lng: float
+    # Honeypot: los humanos lo dejan vacío.
+    website: str | None = Field(default=None, max_length=200)
 
 
 class RestaurantRegistrationOut(BaseModel):
@@ -291,6 +293,7 @@ class RestaurantRegistrationOut(BaseModel):
     owner_email: str
     created_at: datetime
     rejection_reason: str | None = None
+    affiliation_expires_at: date | None = None
 
     class Config:
         from_attributes = True

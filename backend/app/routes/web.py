@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.restaurant import Restaurant
-from app.services import push_service
+from app.services import email_verification_service, push_service
 from app.services.order_service import get_setting_value
 from app.services.schedule_service import restaurant_open_state
 
@@ -99,6 +99,21 @@ async def web_landing(request: Request, db: AsyncSession = Depends(get_db)):
 @router.get("/login")
 async def web_login(request: Request):
     return templates.TemplateResponse(request, "login.html")
+
+
+@router.get("/verify-email")
+async def web_verify_email(
+    request: Request,
+    token: str = "",
+    db: AsyncSession = Depends(get_db),
+):
+    user = await email_verification_service.verify(db, token) if token else None
+    return templates.TemplateResponse(
+        request,
+        "verify_email.html",
+        {"ok": bool(user), "email": user.email if user else None},
+        status_code=200 if user else 400,
+    )
 
 
 @router.get("/unlock")

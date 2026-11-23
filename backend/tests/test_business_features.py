@@ -1409,6 +1409,8 @@ class TestRestaurantRegistrationAndTeam:
         )
         assert approved.status_code == 200
         assert approved.json()["status"] == "active"
+        assert approved.json()["published"] is False
+        assert approved.json()["affiliation_expires_at"] is None
 
         login = await client.post("/api/v1/auth/login", json={
             "email": email, "password": "pass123",

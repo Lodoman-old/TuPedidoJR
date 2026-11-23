@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block navbar %}{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+  <div class="col-md-6 col-lg-5">
+    <div class="card p-4 text-center">
+      <img src="/static/logo.png" height="60" alt="TuPedidoJR" class="mx-auto">
+      {% if ok %}
+        <h4 class="mt-3">Correo confirmado</h4>
+        <p class="text-muted">Tu correo {% if email %}<strong>{{ email }}</strong>{% endif %} quedó verificado.</p>
+        <a class="btn btn-primary mt-2" href="/web/login">Iniciar sesión</a>
+      {% else %}
+        <h4 class="mt-3">No pudimos confirmar tu correo</h4>
+        <p class="text-muted">El enlace no es válido o ya venció. Inicia sesión y pide un enlace nuevo.</p>
+        <a class="btn btn-outline-primary mt-2" href="/web/login">Ir a iniciar sesión</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

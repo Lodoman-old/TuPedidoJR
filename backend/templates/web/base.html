@@ -302,6 +302,7 @@
 
   <main class="container py-3">
     <div id="affiliationBanner" class="alert alert-warning d-none" role="alert"></div>
+    <div id="emailVerifyBanner" class="alert alert-info d-none" role="alert"></div>
     <div id="adminPayoutAlert" class="alert alert-warning d-none" role="alert"></div>
     <div id="adminRegistrationAlert" class="alert alert-info d-none" role="alert"></div>
     <div id="restaurantOrderAlert" class="alert alert-danger d-none" role="alert"></div>
@@ -847,6 +848,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         const displayName = me.name || me.email || 'Mi cuenta';
         sessionStorage.setItem('user_name', displayName);
         applyAdminNav(me.is_superuser);
+        renderEmailVerifyBanner(me);
         const top = document.getElementById('userNameTopText');
         const nav = document.getElementById('userNameText');
         if (top) top.textContent = displayName;
@@ -947,6 +949,29 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         return true;
       }
       return false;
+    }
+
+    function renderEmailVerifyBanner(me) {
+      const box = document.getElementById('emailVerifyBanner');
+      if (!box) return;
+      if (!me || me.email_verified || me.is_superuser) {
+        box.classList.add('d-none');
+        return;
+      }
+      box.classList.remove('d-none');
+      box.innerHTML = `<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+        <span><i class="bi bi-envelope-exclamation"></i> Confirma tu correo para proteger tu cuenta.</span>
+        <button class="btn btn-sm btn-primary" type="button" onclick="resendEmailVerification()">Reenviar correo</button>
+      </div>`;
+    }
+
+    async function resendEmailVerification() {
+      try {
+        const res = await apiRequest('POST', '/auth/resend-verification');
+        showToast(res.detail || 'Correo enviado.');
+      } catch (e) {
+        showToast(e.message, 'danger');
+      }
     }
 
     function renderAffiliationBanner(detail) {

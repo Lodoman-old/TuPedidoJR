@@ -356,6 +356,11 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Monto mínimo por abono al dividir una deuda.",
         "type": "money", "default": "50.0",
     },
+    "REQUIRE_EMAIL_VERIFICATION": {
+        "group": "Clientes", "label": "Exigir correo confirmado para pedir",
+        "description": "Si se activa, el cliente debe confirmar su correo antes de hacer un pedido. El aviso aparece en la parte superior de la app.",
+        "type": "bool", "default": "false",
+    },
     "LOYALTY_ENABLED": {
         "group": "Lealtad", "label": "Programa de puntos",
         "description": "Activa los puntos por compra y los referidos.",

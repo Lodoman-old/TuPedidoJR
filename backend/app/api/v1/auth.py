@@ -25,8 +25,9 @@ from app.schemas.auth import (
     TwoFactorSetupOut,
     TwoFactorVerifyRequest,
     UserOut,
+    VerifyEmailRequest,
 )
-from app.services import totp_service
+from app.services import email_verification_service, registration_guard, totp_service
 from app.services.email_service import send_password_reset, email_typo_suggestion
 from app.services.order_service import get_setting_value
 from app.services.security_service import security_guard
@@ -75,7 +76,13 @@ def _check_second_factor(user: User, code: str) -> tuple[bool, bool]:
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(
+    body: RegisterRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    registration_guard.check_registration(request)
+    registration_guard.reject_honeypot(body.website)
     result = await db.execute(select(User).where(User.email == body.email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email ya registrado")
@@ -112,9 +119,40 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(user)
 
+    try:
+        await email_verification_service.send_verification(db, user)
+    except Exception:
+        # El registro no debe fallar si el correo no está configurado.
+        pass
+
     token = create_access_token(subject=str(user.id))
     expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     return TokenResponse(access_token=token, expires_in=expires_in, is_superuser=user.is_superuser)
+
+
+@router.post("/verify-email")
+async def verify_email(
+    body: VerifyEmailRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await email_verification_service.verify(db, body.token)
+    if not user:
+        raise HTTPException(
+            status_code=400,
+            detail="El enlace no es válido o ya venció. Pide uno nuevo.",
+        )
+    return {"verified": True, "email": user.email}
+
+
+@router.post("/resend-verification")
+async def resend_verification(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.email_verified:
+        return {"sent": False, "detail": "Tu correo ya está verificado"}
+    sent, detail = await email_verification_service.send_verification(db, current_user)
+    return {"sent": sent, "detail": detail}
 
 
 @router.post("/login")

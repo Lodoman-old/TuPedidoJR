@@ -327,12 +327,19 @@ async def create_courier(
         if len(clabe) != 18:
             raise HTTPException(status_code=400, detail="La CLABE debe tener 18 dígitos")
 
+    if not (body.phone or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="El teléfono del repartidor es obligatorio",
+        )
+
     user = User(
         name=body.name.strip(),
         email=body.email.strip().lower(),
         phone=(body.phone or "").strip() or None,
         password_hash=hash_password(body.password),
         referral_code=uuid.uuid4().hex[:8].upper(),
+        email_verified=True,
     )
     db.add(user)
     await db.flush()

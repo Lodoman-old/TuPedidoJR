@@ -781,6 +781,15 @@ async def update_menu_item_options(
     return result.scalars().all()
 
 
+async def _customer_phones(db: AsyncSession, orders: list[Order]) -> dict:
+    """Teléfonos de los clientes para el negocio que atiende el pedido."""
+    ids = {order.user_id for order in orders if order.user_id}
+    if not ids:
+        return {}
+    rows = await db.execute(select(User.id, User.phone).where(User.id.in_(ids)))
+    return {row.id: row.phone for row in rows}
+
+
 @router.get("/{restaurant_id}/orders", response_model=list[OrderOut])
 async def list_restaurant_orders(
     restaurant_id: str,
@@ -806,9 +815,15 @@ async def list_restaurant_orders(
         .order_by(Order.created_at.desc())
     )
     result = await db.execute(stmt)
+    orders = list(result.scalars().all())
+    phones = await _customer_phones(db, orders)
     return [
-        order_out(order, can_see_refund=bool(current_user.is_superuser))
-        for order in result.scalars().all()
+        order_out(
+            order,
+            can_see_refund=bool(current_user.is_superuser),
+            customer_phone=phones.get(order.user_id),
+        )
+        for order in orders
     ]
 
 
@@ -915,7 +930,12 @@ async def update_restaurant_order_status(
             schedule_available_order(str(order.id), True)
     elif final_status == "in_delivery" and order.requires_courier_approval:
         schedule_courier_ready(str(order.id))
-    return order_out(order, can_see_refund=bool(current_user.is_superuser))
+    customer = await db.get(User, order.user_id)
+    return order_out(
+        order,
+        can_see_refund=bool(current_user.is_superuser),
+        customer_phone=customer.phone if customer else None,
+    )
 
 
 @router.post("/{restaurant_id}/orders/{order_id}/cancel", response_model=OrderOut)
@@ -972,7 +992,12 @@ async def cancel_restaurant_order(
     ws = _get_ws_manager()
     await ws.notify_order_status(str(order.id), "cancelled")
     schedule_order_status(str(order.id), "cancelled")
-    return order_out(order, can_see_refund=bool(current_user.is_superuser))
+    customer = await db.get(User, order.user_id)
+    return order_out(
+        order,
+        can_see_refund=bool(current_user.is_superuser),
+        customer_phone=customer.phone if customer else None,
+    )
 
 
 @router.patch("/{restaurant_id}/profile", response_model=RestaurantOut)

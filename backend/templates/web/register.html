@@ -19,8 +19,13 @@
           <input type="email" class="form-control" id="email" required>
         </div>
         <div class="mb-3">
-          <label class="form-label">Teléfono</label>
-          <input type="text" class="form-control" id="phone">
+          <label class="form-label">Teléfono (WhatsApp)</label>
+          <input type="tel" class="form-control" id="phone" required inputmode="tel" autocomplete="tel" placeholder="10 dígitos" maxlength="15">
+          <div class="form-text">Lo usamos para contactarte durante tu pedido.</div>
+        </div>
+        <div class="d-none" aria-hidden="true">
+          <label class="form-label">No llenar</label>
+          <input type="text" class="form-control" id="website" tabindex="-1" autocomplete="off">
         </div>
         <div class="mb-3">
           <label class="form-label">Contraseña</label>
@@ -63,12 +68,20 @@
     const phone = document.getElementById('phone').value;
     const password = document.getElementById('password').value;
     const referralCode = document.getElementById('referralCode').value.trim();
+    const website = document.getElementById('website').value;
     const errEl = document.getElementById('regError');
     errEl.classList.add('d-none');
+    if (website.trim()) return;
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      errEl.textContent = 'Escribe un teléfono de 10 dígitos.';
+      errEl.classList.remove('d-none');
+      return;
+    }
     try {
-      await register(name, email, password, phone || null, referralCode || null);
-      showToast('Cuenta creada. Inicia sesión.');
-      setTimeout(() => window.location.href = loginTarget, 1500);
+      await register(name, email, password, phoneDigits, referralCode || null);
+      showToast('Cuenta creada. Revisa tu correo para confirmarlo.');
+      setTimeout(() => window.location.href = loginTarget, 1800);
     } catch (ex) {
       errEl.textContent = ex.message;
       errEl.classList.remove('d-none');

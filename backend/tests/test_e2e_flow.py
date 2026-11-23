@@ -33,16 +33,21 @@ def _headers(token: str) -> dict:
 @pytest.fixture
 async def tokens(client: AsyncClient) -> dict[str, str]:
     roles = {
-        "client": ("Cliente E2E", "cliente-e2e@test.com"),
-        "owner": ("Negocio E2E", "negocio-e2e@test.com"),
-        "courier": ("Repartidor E2E", "repartidor-e2e@test.com"),
-        "admin": ("Admin E2E", "admin-e2e@test.com"),
+        "client": ("Cliente E2E", "cliente-e2e@test.com", "4121234567"),
+        "owner": ("Negocio E2E", "negocio-e2e@test.com", "4120000001"),
+        "courier": ("Repartidor E2E", "repartidor-e2e@test.com", "4120000002"),
+        "admin": ("Admin E2E", "admin-e2e@test.com", "4120000003"),
     }
     result = {}
-    for role, (name, email) in roles.items():
+    for role, (name, email, phone) in roles.items():
         resp = await client.post(
             "/api/v1/auth/register",
-            json={"name": name, "email": email, "password": "pass123"},
+            json={
+                "name": name,
+                "email": email,
+                "phone": phone,
+                "password": "pass123",
+            },
         )
         assert resp.status_code in (200, 201), resp.text
         result[role] = resp.json()["access_token"]
@@ -182,12 +187,38 @@ async def test_full_delivery_flow_with_coupon_and_sos(
     assert ready.status_code == 200, ready.text
     assert ready.json()["status"] == "ready"
 
+    # The business sees the customer phone to coordinate the order.
+    business_orders = await client.get(
+        f"/api/v1/restaurants/{resto.id}/orders", headers=owner
+    )
+    assert business_orders.status_code == 200, business_orders.text
+    business_row = next(
+        row for row in business_orders.json() if row["id"] == order_id
+    )
+    assert business_row["customer_phone"] == "4121234567"
+
+    # Unassigned orders must not expose the phone.
+    available = await client.get(
+        "/api/v1/delivery/available-orders", headers=courier_h
+    )
+    assert available.status_code == 200, available.text
+    available_row = next(
+        row for row in available.json() if row["id"] == order_id
+    )
+    assert available_row["customer_phone"] is None
+
     # 5. The courier accepts, reports location, picks up and delivers.
     accepted = await client.post(
         f"/api/v1/delivery/accept/{order_id}", headers=courier_h
     )
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["delivery_person_id"] == str(courier_id)
+
+    # The assigned courier sees the phone.
+    mine = await client.get("/api/v1/delivery/orders", headers=courier_h)
+    assert mine.status_code == 200, mine.text
+    mine_row = next(row for row in mine.json() if row["id"] == order_id)
+    assert mine_row["customer_phone"] == "4121234567"
 
     located = await client.patch(
         "/api/v1/delivery/location",

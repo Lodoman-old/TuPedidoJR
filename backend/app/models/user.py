@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DECIMAL, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, DECIMAL, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from geoalchemy2 import Geography
 
@@ -16,6 +16,8 @@ class User(TimestampMixin, Base):
     location = Column(Geography(geometry_type="POINT", srid=4326), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
+    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
     trusted_customer = Column(Boolean, default=False, nullable=False)
     loyalty_points = Column(Integer, default=0, nullable=False)
     pending_balance = Column(DECIMAL(10, 2), default=0, nullable=False)

@@ -375,6 +375,11 @@ const statusLabels = { pending: 'Pendiente', confirmed: 'Confirmado', awaiting_c
 const payoutStatusLabels = { pending: 'Pendiente', paid: 'Pagada', confirmed: 'Confirmada', cancelled: 'Cancelada' };
 const mandadoStatusLabels = { pending: 'Pendiente', accepted: 'Aceptado', buying: 'Comprando', purchased: 'Comprado', completed: 'Completado', cancelled: 'Cancelado', delivery_failed: 'No entregado' };
 const statusColors = { confirmed: 'primary', awaiting_courier: 'warning', preparing: 'warning', ready: 'success', in_delivery: 'info', picked_up: 'teal', delivered: 'secondary', cancelled: 'danger', delivery_failed: 'danger' };
+function waPhone(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.length === 10 ? '52' + digits : digits;
+}
 const statusBadgeColors = { ready: 'success', preparing: 'warning', awaiting_courier: 'warning' };
 
 async function loadAvailable(silent = false) {
@@ -470,6 +475,10 @@ async function loadMyOrders() {
           <small>${money0(o.total || 0)}</small>
         </div>
         <small>${o.delivery_address || ''}</small>
+        ${o.customer_phone ? `<div class="mt-1 d-flex gap-2 flex-wrap">
+          <a class="btn btn-sm btn-outline-secondary" href="tel:${waPhone(o.customer_phone)}"><i class="bi bi-telephone"></i> Llamar</a>
+          <a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="https://wa.me/${waPhone(o.customer_phone)}"><i class="bi bi-whatsapp"></i> WhatsApp</a>
+        </div>` : ''}
         <div class="mt-1">
           <small class="text-muted">${o.restaurant_name || ''}</small>
         </div>

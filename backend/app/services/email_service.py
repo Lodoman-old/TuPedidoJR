@@ -245,6 +245,28 @@ async def send_password_reset(
     return await send_email(db, to, "Restablece tu contraseña — TuPedidoJR", html)
 
 
+async def send_email_verification(
+    db: AsyncSession,
+    to: str,
+    name: str,
+    verify_url: str,
+) -> tuple[bool, str]:
+    config = await email_config(db)
+    html = _email_shell(
+        "Confirma tu correo",
+        f"Hola {name}, confirma tu correo para activar todas las funciones de TuPedidoJR.",
+        f"""
+        <p style="margin:22px 0">
+          <a href="{verify_url}" style="background:#0d6efd;color:#fff;padding:12px 20px;
+             border-radius:8px;text-decoration:none;font-weight:bold">Confirmar mi correo</a>
+        </p>
+        <p>El enlace vence en 3 días. Si no creaste esta cuenta, ignora este correo.</p>
+        """,
+        logo_url=f"{config['public_url']}/static/logo.png",
+    )
+    return await send_email(db, to, "Confirma tu correo — TuPedidoJR", html)
+
+
 async def send_team_welcome(
     db: AsyncSession,
     to: str,

@@ -15,6 +15,11 @@
   const STATUS_ORDER = ["pending", "confirmed", "preparing", "ready"];
   const STATUS_ORDER_FAR = ["pending", "confirmed", "awaiting_courier", "preparing", "ready"];
   const STATUS_LABELS = { pending: "Pendiente", confirmed: "Confirmado", awaiting_courier: "Esperando repartidor", preparing: "Preparando", ready: "Listo", in_delivery: "En reparto", picked_up: "Recogido", delivered: "Entregado", cancelled: "Cancelado", delivery_failed: "No entregado" };
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function waPhone(value) {
+    const digits = String(value || '').replace(/\D/g, '');
+    return digits.length === 10 ? '52' + digits : digits;
+  }
   function portionLabel(value) {
     const p = parseFloat(value || 0);
     if (!p || p >= 0.99) return '';
@@ -128,6 +133,12 @@
           <small class="text-muted d-block">Pago: ${o.payment_method === 'transfer'
             ? (o.payment_status === 'approved' ? 'Transferencia confirmada a la plataforma' : 'Transferencia pendiente de confirmar')
             : 'Efectivo'}</small>
+          ${o.customer_phone ? `<small class="text-muted d-block"><i class="bi bi-telephone"></i> ${esc(o.customer_phone)}</small>
+          <div class="mt-1 d-flex gap-2 flex-wrap">
+            <a class="btn btn-sm btn-outline-secondary" href="tel:${waPhone(o.customer_phone)}"><i class="bi bi-telephone"></i> Llamar</a>
+            <a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="https://wa.me/${waPhone(o.customer_phone)}"><i class="bi bi-whatsapp"></i> WhatsApp</a>
+          </div>` : ''}
+          ${o.delivery_mode === 'own' && o.delivery_address ? `<small class="text-muted d-block"><i class="bi bi-geo-alt"></i> ${esc(o.delivery_address)}</small>` : ''}
           ${o.delivery_mode === 'own' ? '<small class="text-info d-block">Entrega propia del negocio</small>' : ''}
           ${o.fulfillment_type === 'pickup' ? '<small class="text-primary d-block">Recoger en el negocio</small>' : ''}
           ${o.requires_courier_approval && status === 'pending' ? `<div class="alert alert-info py-2 mt-2 mb-0 small"><i class="bi bi-hourglass-split"></i> ${o.delivery_person_id ? '<strong>Ya hay un repartidor reservado.</strong> Confirma el pedido para que pase a preparación.' : '<strong>Pedido lejano.</strong> Ya se está ofreciendo a repartidores. Al confirmarlo, no lo prepares hasta que alguien lo acepte.'}${o.courier_approval_deadline ? ` Si no hay repartidor antes de las ${new Date(o.courier_approval_deadline).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}, se cancelará automáticamente.` : ''}</div>` : ''}

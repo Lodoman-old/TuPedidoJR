@@ -80,6 +80,7 @@ async def add_team_member(
         password_hash=hash_password(body.password),
         referral_code=uuid.uuid4().hex[:8].upper(),
         is_active=True,
+        email_verified=True,
     )
     db.add(user)
     await db.flush()

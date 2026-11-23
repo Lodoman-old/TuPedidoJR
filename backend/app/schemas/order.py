@@ -69,6 +69,7 @@ class OrderOut(BaseModel):
     delivery_fee: Decimal
     total: Decimal
     delivery_address: str
+    customer_phone: str | None = None
     notes: str | None
     estimated_delivery_min: int | None
     payment_method: str

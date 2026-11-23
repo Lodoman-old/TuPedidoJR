@@ -370,3 +370,36 @@ async def test_mixed_restaurant_cart_is_rejected(
     )
     assert resp.status_code == 400
     assert "mismo restaurante" in resp.json()["detail"]
+
+
+class TestEmailVerificationGate:
+    async def test_order_requires_verified_email_when_enabled(
+        self, client: AsyncClient, user_token, seeded_restaurant, db_session
+    ):
+        from app.core.security import decode_access_token
+        from app.models.setting import Setting
+        from app.models.user import User
+
+        db_session.add(Setting(key="REQUIRE_EMAIL_VERIFICATION", value="true"))
+        await db_session.commit()
+
+        resto, item = seeded_restaurant
+        payload = {
+            "restaurant_id": str(resto.id),
+            "items": [{"menu_item_id": str(item.id), "quantity": 1}],
+            "delivery_address": "Calle Principal 123",
+            "delivery_location": {"lat": 19.43, "lng": -99.13},
+        }
+        headers = {"Authorization": f"Bearer {user_token}"}
+        blocked = await client.post("/api/v1/orders", json=payload, headers=headers)
+        assert blocked.status_code == 403
+        assert "Confirma tu correo" in blocked.json()["detail"]
+
+        user = await db_session.get(
+            User, uuid.UUID(decode_access_token(user_token)["sub"])
+        )
+        user.email_verified = True
+        await db_session.commit()
+
+        allowed = await client.post("/api/v1/orders", json=payload, headers=headers)
+        assert allowed.status_code == 201, allowed.text

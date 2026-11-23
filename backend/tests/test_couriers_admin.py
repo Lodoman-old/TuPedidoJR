@@ -104,6 +104,23 @@ async def test_transfer_courier_requires_clabe(
     assert resp.status_code == 400
     assert "CLABE" in resp.json()["detail"]
 
+
+async def test_courier_requires_phone(client: AsyncClient, superuser_token):
+    resp = await client.post(
+        "/api/v1/admin/couriers",
+        json={
+            "name": "Sin Teléfono",
+            "email": "sin.telefono@test.com",
+            "password": "reparto123",
+            "vehicle_type": "bike",
+            "payout_method": "cash",
+        },
+        headers=_headers(superuser_token),
+    )
+    assert resp.status_code == 400
+    assert "teléfono" in resp.json()["detail"].lower()
+
+
 async def _new_courier(client, token, email="edit.courier@test.com"):
     resp = await client.post(
         "/api/v1/admin/couriers",

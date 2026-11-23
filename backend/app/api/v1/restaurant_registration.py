@@ -5,7 +5,7 @@ import re
 import unicodedata
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,7 @@ from app.models.restaurant import Restaurant
 from app.models.restaurant_user import RestaurantUser
 from app.models.user import User
 from app.schemas.restaurant import RestaurantRegistrationCreate
+from app.services import email_verification_service, registration_guard
 from app.services.email_service import send_restaurant_welcome, email_typo_suggestion
 from app.services.push_service import schedule_new_restaurant_registration
 
@@ -42,8 +43,11 @@ async def _unique_slug(db: AsyncSession, base: str) -> str:
 @router.post("", status_code=201)
 async def register_restaurant(
     body: RestaurantRegistrationCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    registration_guard.check_registration(request)
+    registration_guard.reject_honeypot(body.website)
     existing = await db.execute(select(User).where(User.email == body.email.lower()))
     if existing.scalar_one_or_none():
         raise HTTPException(
@@ -100,6 +104,11 @@ async def register_restaurant(
     await db.commit()
 
     schedule_new_restaurant_registration(restaurant.id)
+
+    try:
+        await email_verification_service.send_verification(db, user)
+    except Exception:
+        pass
 
     sent, detail = await send_restaurant_welcome(
         db, user.email, user.name, restaurant.name, pending=True,

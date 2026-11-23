@@ -464,7 +464,7 @@
         </div>
         <div class="col-12 col-md-6">
           <div class="small text-muted">Teléfono</div>
-          <div>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : 'Sin teléfono'}</div>
+          <div>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : 'Sin teléfono'} ${c.phone_verified ? '<span class="badge bg-success ms-1">WhatsApp verificado</span>' : '<span class="badge bg-warning text-dark ms-1">WhatsApp pendiente</span>'}</div>
         </div>
         <div class="col-6 col-md-3">
           <div class="small text-muted">Vehículo</div>
@@ -505,8 +505,25 @@
           <div class="small text-muted">Última señal de ubicación</div>
           <div>${esc(seen)}</div>
         </div>
+        ${c.phone ? `<div class="col-12"><button class="btn btn-success btn-sm" onclick="sendPhoneVerification('${c.id}')"><i class="bi bi-whatsapp"></i> Enviar verificación por WhatsApp</button></div>` : ''}
       </div>`;
     bootstrap.Modal.getOrCreateInstance(document.getElementById('courierDetailModal')).show();
+  }
+
+  async function sendPhoneVerification(id) {
+    const c = couriersCache[id];
+    if (!c || !c.phone) { showToast('El repartidor no tiene teléfono', 'warning'); return; }
+    try {
+      const res = await apiRequest('GET', `/admin/couriers/${id}/phone-verification`);
+      if (res.verified) { showToast('Ese WhatsApp ya está verificado'); return; }
+      const msg = `Hola ${res.name || c.name}, soy de TuPedidoJR. Confirma tu teléfono con este enlace: ${res.url}`;
+      const digits = String(res.phone || '').replace(/\D/g, '');
+      const wa = digits.length === 10 ? '52' + digits : digits;
+      window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, '_blank');
+      showToast('Se abrió WhatsApp con el enlace. Presiona Enviar.');
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
   }
 
   function copyCourierClabe(clabe) {

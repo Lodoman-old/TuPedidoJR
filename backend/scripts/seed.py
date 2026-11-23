@@ -77,7 +77,7 @@ async def seed():
             User(id=uuid.uuid4(), name="Sushi House (Dueño)", email="info@sushi.com",
                  phone="555-2003", password_hash=hashed, is_active=True),
             User(id=uuid.uuid4(), name="Pedro Pérez", email="pedro@repartidor.com",
-                 phone="555-3001", password_hash=hashed, is_active=True),
+                 phone="4121234567", password_hash=hashed, is_active=True),
         ]
         db.add_all(users_data)
         await db.flush()

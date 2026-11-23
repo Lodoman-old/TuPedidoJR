@@ -55,6 +55,7 @@ class DeliveryProfileOut(BaseModel):
     is_mandadero: bool
     pending_platform_debt: Decimal
     pending_platform_credit: Decimal = Decimal("0")
+    phone_verified: bool = False
     delivery_bonus_per_order: Decimal = Decimal("0")
     current_order_id: UUID | None
 

@@ -18,6 +18,8 @@ class User(TimestampMixin, Base):
     is_superuser = Column(Boolean, default=False, nullable=False)
     email_verified = Column(Boolean, default=False, nullable=False)
     email_verified_at = Column(DateTime(timezone=True), nullable=True)
+    phone_verified = Column(Boolean, default=False, nullable=False)
+    phone_verified_at = Column(DateTime(timezone=True), nullable=True)
     trusted_customer = Column(Boolean, default=False, nullable=False)
     loyalty_points = Column(Integer, default=0, nullable=False)
     pending_balance = Column(DECIMAL(10, 2), default=0, nullable=False)

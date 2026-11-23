@@ -254,6 +254,22 @@
     renderTable();
   }
 
+  async function sendPhoneVerification(id) {
+    const c = couriersCache[id];
+    if (!c || !c.phone) { showToast('El repartidor no tiene teléfono', 'warning'); return; }
+    try {
+      const res = await apiRequest('GET', `/admin/couriers/${id}/phone-verification`);
+      if (res.verified) { showToast('Ese WhatsApp ya está verificado'); return; }
+      const msg = `Hola ${res.name || c.name}, soy de TuPedidoJR. Confirma tu teléfono con este enlace: ${res.url}`;
+      const digits = String(res.phone || '').replace(/\D/g, '');
+      const wa = digits.length === 10 ? '52' + digits : digits;
+      window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, '_blank');
+      showToast('Se abrió WhatsApp con el enlace. Presiona Enviar.');
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
   function renderTable() {
     const body = document.getElementById('couriersTableBody');
     const start = (page - 1) * pageSize;
@@ -271,6 +287,7 @@
           </td>
           <td>
             <div>${esc(c.phone || 'Sin teléfono')}</div>
+            <div class="small">${c.phone_verified ? '<span class="badge bg-success">WhatsApp verificado</span>' : '<span class="badge bg-warning text-dark">WhatsApp pendiente</span>'}</div>
             <div class="small text-muted">${esc(statusLabel(c.vehicle_type))} · ${c.payout_method === 'transfer' ? 'Transferencia' : 'Efectivo'}</div>
           </td>
           <td>${stateBadge(c)}</td>
@@ -279,6 +296,7 @@
           <td class="text-end text-nowrap">
             <div class="btn-group btn-group-sm">
               <button class="btn btn-outline-primary" title="Ver todos los datos" onclick="showCourierDetails('${c.id}')"><i class="bi bi-eye"></i></button>
+              <button class="btn btn-outline-success" title="Enviar verificación por WhatsApp" onclick="sendPhoneVerification('${c.id}')"><i class="bi bi-whatsapp"></i></button>
               <button class="btn btn-outline-dark" title="Editar" onclick="openCourierModal('${c.id}')"><i class="bi bi-pencil"></i></button>
               <button class="btn ${active ? 'btn-outline-warning' : 'btn-outline-success'}"
                       title="${active ? 'Dar de baja' : 'Reactivar'}"
@@ -455,7 +473,7 @@
         <div class="col-12 col-md-6"><div class="small text-muted">Nombre</div><div class="fw-bold">${esc(c.name)}</div></div>
         <div class="col-12 col-md-6"><div class="small text-muted">Estado</div><div>${stateBadge(c)} ${active ? '' : '· cuenta dada de baja'}</div></div>
         <div class="col-12 col-md-6"><div class="small text-muted">Correo</div><div class="text-break">${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : 'Sin correo'}</div></div>
-        <div class="col-12 col-md-6"><div class="small text-muted">Teléfono</div><div>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : 'Sin teléfono'}</div></div>
+        <div class="col-12 col-md-6"><div class="small text-muted">Teléfono</div><div>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : 'Sin teléfono'} ${c.phone_verified ? '<span class="badge bg-success ms-1">WhatsApp verificado</span>' : '<span class="badge bg-warning text-dark ms-1">WhatsApp pendiente</span>'}</div></div>
         <div class="col-6 col-md-3"><div class="small text-muted">Vehículo</div><div>${esc(statusLabel(c.vehicle_type))}</div></div>
         <div class="col-6 col-md-3"><div class="small text-muted">Calificación</div><div>${esc(c.rating || '0.0')}</div></div>
         <div class="col-6 col-md-3"><div class="small text-muted">Entregas</div><div>${esc(c.total_deliveries || 0)}</div></div>
@@ -471,6 +489,7 @@
         <div class="col-12 col-md-8"><div class="small text-muted">Cuenta para depósitos</div>${bank}</div>
         <div class="col-12"><div class="small text-muted">Última señal de ubicación</div><div>${c.updated_at ? new Date(c.updated_at).toLocaleString('es-MX') : 'Sin dato'}</div></div>
         ${c.current_order_id ? `<div class="col-12"><div class="small text-muted">Pedido actual</div><div>#${esc(c.current_order_id.slice(0, 8))}</div></div>` : ''}
+        ${c.phone ? `<div class="col-12"><button class="btn btn-success btn-sm" onclick="sendPhoneVerification('${c.id}')"><i class="bi bi-whatsapp"></i> Enviar verificación por WhatsApp</button></div>` : ''}
       </div>`;
     bootstrap.Modal.getOrCreateInstance(document.getElementById('courierDetailModal')).show();
   }

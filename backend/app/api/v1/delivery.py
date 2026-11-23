@@ -62,6 +62,12 @@ async def _customer_phones(db: AsyncSession, orders: list[Order]) -> dict:
     return {row.id: row.phone for row in rows}
 
 
+def _profile_out(dp: DeliveryPerson, user: User) -> DeliveryProfileOut:
+    data = DeliveryProfileOut.model_validate(dp)
+    data.phone_verified = bool(user.phone_verified)
+    return data
+
+
 def _time_between(moment, start, end) -> bool:
     if start == end:
         return True
@@ -475,7 +481,8 @@ async def update_delivery_person_admin(
         dp.payout_method = body.payout_method
     await db.commit()
     await db.refresh(dp)
-    return dp
+    user = await db.get(User, dp.user_id)
+    return _profile_out(dp, user) if user else dp
 
 
 @router.post("/advances", response_model=CashAdvanceOut, status_code=status.HTTP_201_CREATED)
@@ -530,7 +537,8 @@ async def delivery_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await _get_dp(current_user, db)
+    dp = await _get_dp(current_user, db)
+    return _profile_out(dp, current_user)
 
 
 @router.patch("/availability", response_model=DeliveryProfileOut)
@@ -543,7 +551,7 @@ async def set_availability(
     dp.is_available = body.is_available
     await db.commit()
     await db.refresh(dp)
-    return dp
+    return _profile_out(dp, current_user)
 
 
 @router.patch("/profile", response_model=DeliveryProfileOut)
@@ -565,7 +573,7 @@ async def update_delivery_profile(
         dp.bank_clabe = body.bank_clabe
     await db.commit()
     await db.refresh(dp)
-    return dp
+    return _profile_out(dp, current_user)
 
 
 @router.get("/orders", response_model=list[OrderOut])

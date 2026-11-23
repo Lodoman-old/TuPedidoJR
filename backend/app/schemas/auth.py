@@ -75,6 +75,7 @@ class UserOut(BaseModel):
     is_active: bool
     is_superuser: bool = False
     email_verified: bool = False
+    phone_verified: bool = False
     loyalty_points: int = 0
     pending_balance: Decimal = Decimal("0")
     pending_installments: int = 0

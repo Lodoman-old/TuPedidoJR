@@ -303,6 +303,7 @@
   <main class="container py-3">
     <div id="affiliationBanner" class="alert alert-warning d-none" role="alert"></div>
     <div id="emailVerifyBanner" class="alert alert-info d-none" role="alert"></div>
+    <div id="phoneVerifyBanner" class="alert alert-warning d-none" role="alert"></div>
     <div id="adminPayoutAlert" class="alert alert-warning d-none" role="alert"></div>
     <div id="adminRegistrationAlert" class="alert alert-info d-none" role="alert"></div>
     <div id="restaurantOrderAlert" class="alert alert-danger d-none" role="alert"></div>
@@ -862,6 +863,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         } catch (e) { /* customer or restaurant account */ }
         sessionStorage.setItem('is_delivery', isDelivery ? 'true' : 'false');
         applyDeliveryNav(isDelivery);
+        renderPhoneVerifyBanner(isDelivery, deliveryProfile);
         applyManualNav();
         window.setCourierTracking?.(isDelivery && Boolean(deliveryProfile && deliveryProfile.is_available));
         if (isDelivery) hideDeliveryIrrelevantNav();
@@ -949,6 +951,17 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         return true;
       }
       return false;
+    }
+
+    function renderPhoneVerifyBanner(isDelivery, deliveryProfile) {
+      const box = document.getElementById('phoneVerifyBanner');
+      if (!box) return;
+      if (!isDelivery || !deliveryProfile || deliveryProfile.phone_verified) {
+        box.classList.add('d-none');
+        return;
+      }
+      box.classList.remove('d-none');
+      box.innerHTML = `<i class="bi bi-whatsapp"></i> Tu WhatsApp está pendiente de verificar. Pide a TuPedidoJR que te envíe el enlace de verificación.`;
     }
 
     function renderEmailVerifyBanner(me) {

@@ -16,6 +16,7 @@ from app.models.delivery_person import DeliveryPerson
 from app.models.order import Order
 from app.models.restaurant import Restaurant
 from app.models.user import User
+from app.services import phone_verification_service
 from app.services.audit_service import log_action
 from app.services.email_service import send_courier_welcome
 from app.services.schedule_service import get_timezone, open_state_map
@@ -95,7 +96,7 @@ async def courier_locations(
     result = await db.execute(
         text("""
             SELECT
-                dp.id, u.name, u.email, u.phone, u.is_active, u.created_at AS registered_at,
+                dp.id, u.name, u.email, u.phone, u.phone_verified, u.is_active, u.created_at AS registered_at,
                 dp.is_available, dp.current_order_id,
                 dp.vehicle_type, dp.payout_method,
                 dp.bank_name, dp.bank_account_holder, dp.bank_clabe,
@@ -124,6 +125,7 @@ async def courier_locations(
             "name": row["name"] or row["email"],
             "email": row["email"],
             "phone": row["phone"],
+            "phone_verified": bool(row["phone_verified"]),
             "is_active": bool(row["is_active"]),
             "registered_at": row["registered_at"].isoformat() if row["registered_at"] else None,
             "is_available": bool(row["is_available"]),
@@ -145,6 +147,31 @@ async def courier_locations(
             "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
         })
     return rows
+
+
+@router.get("/couriers/{dp_id}/phone-verification")
+async def courier_phone_verification(
+    dp_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    dp = await db.get(DeliveryPerson, _uuid(dp_id))
+    if not dp:
+        raise HTTPException(status_code=404, detail="Repartidor no encontrado")
+    user = await db.get(User, dp.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Cuenta del repartidor no encontrada")
+    if not (user.phone or "").strip():
+        raise HTTPException(
+            status_code=400, detail="El repartidor no tiene teléfono registrado"
+        )
+    url = await phone_verification_service.make_link(db, user)
+    return {
+        "name": user.name,
+        "phone": user.phone,
+        "verified": bool(user.phone_verified),
+        "url": url,
+    }
 
 
 @router.get("/dashboard")
@@ -417,7 +444,11 @@ async def update_courier(
     if body.name is not None:
         user.name = body.name.strip()
     if body.phone is not None:
-        user.phone = body.phone.strip() or None
+        new_phone = body.phone.strip() or None
+        if new_phone != (user.phone or None):
+            user.phone = new_phone
+            user.phone_verified = False
+            user.phone_verified_at = None
     if body.password:
         user.password_hash = hash_password(body.password)
     if body.vehicle_type is not None:

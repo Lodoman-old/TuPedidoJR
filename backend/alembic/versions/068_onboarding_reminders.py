@@ -22,6 +22,11 @@ def upgrade() -> None:
         "restaurants",
         sa.Column("onboarding_reminder_7_at", sa.DateTime(timezone=True), nullable=True),
     )
+    # Los negocios que ya existen no reciben recordatorios retroactivos.
+    op.execute(
+        "UPDATE restaurants SET onboarding_reminder_2_at = now(), "
+        "onboarding_reminder_7_at = now()"
+    )
 
 
 def downgrade() -> None:

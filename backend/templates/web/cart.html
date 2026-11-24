@@ -1171,8 +1171,8 @@ async function refreshEstimate() {
             bankInfo.innerHTML = '<span class="text-danger">La plataforma aún no configuró la cuenta bancaria. Elige efectivo o pide al negocio que contacte a TuPedidoJR.</span>';
           } else if (!paymentConfig.transfer_auto_validation_available) {
             bankInfo.innerHTML = `<div class="alert alert-warning small mb-0">
-              <strong>Transferencia con validación pendiente</strong><br>
-              ${esc(paymentConfig.transfer_validation_message || 'La validación automática de transferencias no está disponible en este momento.')}<br>
+              <strong>Pago por transferencia no disponible</strong><br>
+              ${esc(paymentConfig.transfer_validation_message || 'El pago por transferencia no está disponible en este momento. Elige otro método de pago, como efectivo, o intenta más tarde.')}<br>
               <button type="button" class="btn btn-sm btn-outline-dark mt-2" onclick="switchCartToCash()">Cambiar a efectivo</button>
             </div>`;
           } else {

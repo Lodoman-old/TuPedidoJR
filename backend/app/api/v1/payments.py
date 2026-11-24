@@ -61,18 +61,14 @@ async def _payment_flags(db: AsyncSession) -> dict:
     )
     gemini_ready = bool(fallback_enabled and gemini_key)
     auto_available = bool((banxico_is_open and apicep_ready) or gemini_ready)
-    if auto_available:
-        validation_message = ""
-    elif banxico_is_open:
-        validation_message = (
-            "La validación automática de transferencias no está disponible. "
-            "Te recomendamos pagar en efectivo."
+    validation_message = (
+        ""
+        if auto_available
+        else (
+            "El pago por transferencia no está disponible en este momento. "
+            "Elige otro método de pago, como efectivo, o intenta más tarde."
         )
-    else:
-        validation_message = (
-            "Banxico está cerrado (09:30 a 23:00) y el respaldo con Gemini no está "
-            "disponible. Te recomendamos pagar en efectivo o intentar de 09:30 a 23:00."
-        )
+    )
     loyalty = await loyalty_config(db)
     return {
         "cash_enabled": True,

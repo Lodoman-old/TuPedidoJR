@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import mimetypes
 
 from contextlib import asynccontextmanager
 
@@ -245,6 +246,9 @@ async def sitemap_xml():
     )
     return Response(content=xml, media_type="application/xml")
 
+
+mimetypes.add_type("image/webp", ".webp")
+mimetypes.add_type("application/pdf", ".pdf")
 
 app.mount("/static", StaticFiles(directory=Path(__file__).parent.parent / "static"), name="static")
 _tiles_dir = Path(os.getenv("TILES_DIR", str(Path(__file__).parent.parent / "static" / "tiles")))

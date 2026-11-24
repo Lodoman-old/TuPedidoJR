@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import async_session
 from app.models.receipt_validation import ReceiptValidation
+from app.services.api_cep_service import ApiCepError, validate_receipt as validate_apicep_receipt
 from app.services.file_service import UPLOAD_DIR
 from app.services.order_service import get_setting_value
 
@@ -277,11 +278,111 @@ def _recipient_ok(expected: str | None, extracted: dict) -> bool | None:
     return False
 
 
+async def _validate_with_apicep(
+    db: AsyncSession, record: ReceiptValidation
+) -> ReceiptValidation:
+    record.provider = "apicep"
+    record.model = "apicep"
+    try:
+        data = await validate_apicep_receipt(
+            db,
+            file_url=record.file_url,
+            expected_amount=record.expected_amount,
+        )
+    except ApiCepError as exc:
+        record.confidence = 0
+        record.status = "low"
+        record.error = exc.message[:500]
+        await db.commit()
+        await db.refresh(record)
+        return record
+
+    status = str(data.get("status") or "").lower()
+    extracted = data.get("extracted") or {}
+    validation = data.get("validation") or {}
+    try:
+        confidence = int(round(float(data.get("confidence") or 0) * 100))
+    except (TypeError, ValueError):
+        confidence = 0
+    if confidence <= 0:
+        confidence = 100 if status == "valid" else 0
+
+    amount_ok = None
+    amount = extracted.get("amount")
+    if record.expected_amount is not None and amount is not None:
+        try:
+            tolerance = Decimal(
+                await get_setting_value(db, "RECEIPT_AMOUNT_TOLERANCE", "10.0")
+            )
+        except (InvalidOperation, ValueError):
+            tolerance = Decimal("10.0")
+        amount_ok = (
+            abs(Decimal(str(amount)) - Decimal(record.expected_amount)) <= tolerance
+        )
+
+    confirmed = bool(validation.get("banxicoConfirmed"))
+    cep_status = str(validation.get("cepStatus") or "").upper()
+    reused = validation.get("cepPreviouslyValidated") is True
+    issues: list[str] = []
+    if status != "valid" or not confirmed or cep_status != "LIQUIDADO":
+        issues.append(
+            data.get("error") or "apiCEP no confirmó la transferencia con Banxico."
+        )
+    if amount_ok is False:
+        issues.append("El monto no coincide con el esperado.")
+    if reused:
+        issues.append("Ese comprobante ya fue validado antes.")
+
+    valid = (
+        status == "valid"
+        and confirmed
+        and cep_status == "LIQUIDADO"
+        and amount_ok is not False
+        and not reused
+    )
+    record.document_type = TRANSFER
+    record.confidence = 100 if valid else min(confidence, 40)
+    record.status = "high" if valid else ("review" if status == "valid" else "low")
+    record.extracted = {
+        **extracted,
+        "validation": validation,
+        "downloads": data.get("downloads") or {},
+        "validation_id": data.get("validationId"),
+    }
+    record.issues = issues
+    record.summary = (
+        "Transferencia validada por Banxico."
+        if valid
+        else (data.get("error") or "No se pudo confirmar la transferencia.")
+    )[:1000]
+    record.error = None if valid else (data.get("error") or None)
+    await db.commit()
+    await db.refresh(record)
+    return record
+
+
 async def _validate_record(db: AsyncSession, record: ReceiptValidation) -> ReceiptValidation:
     enabled = (await get_setting_value(db, "RECEIPT_VALIDATION_ENABLED", "false")).lower() == "true"
+    if not enabled:
+        return record
+
+    provider = (
+        await get_setting_value(db, "RECEIPT_VALIDATION_PROVIDER", "gemini")
+    ).strip().lower()
+    apicep_key = (await get_setting_value(db, "APICEP_API_KEY", "")).strip()
+    if provider == "apicep" and record.expected_kind == TRANSFER:
+        if apicep_key:
+            return await _validate_with_apicep(db, record)
+        record.provider = "apicep"
+        record.status = "low"
+        record.error = "Falta configurar la API key de apiCEP."
+        await db.commit()
+        await db.refresh(record)
+        return record
+
     api_key = (await get_setting_value(db, "GEMINI_API_KEY", "")).strip()
     model = (await get_setting_value(db, "GEMINI_MODEL", "gemini-3.5-flash-lite")).strip()
-    if not enabled or not api_key:
+    if not api_key:
         return record
 
     record.provider = "gemini"
@@ -390,8 +491,20 @@ async def _run_validation(
 ) -> None:
     async with async_session() as db:
         enabled = (await get_setting_value(db, "RECEIPT_VALIDATION_ENABLED", "false")).lower() == "true"
-        api_key = (await get_setting_value(db, "GEMINI_API_KEY", "")).strip()
-        if not enabled or not api_key:
+        if not enabled:
+            return
+        provider = (
+            await get_setting_value(db, "RECEIPT_VALIDATION_PROVIDER", "gemini")
+        ).strip().lower()
+        if provider == "apicep" and expected_kind == TRANSFER:
+            configured = bool(
+                (await get_setting_value(db, "APICEP_API_KEY", "")).strip()
+            )
+        else:
+            configured = bool(
+                (await get_setting_value(db, "GEMINI_API_KEY", "")).strip()
+            )
+        if not configured:
             return
         record = ReceiptValidation(
             entity_type=entity_type,
@@ -441,8 +554,7 @@ async def create_and_validate(
     await db.refresh(record)
 
     enabled = (await get_setting_value(db, "RECEIPT_VALIDATION_ENABLED", "false")).lower() == "true"
-    api_key = (await get_setting_value(db, "GEMINI_API_KEY", "")).strip()
-    if not enabled or not api_key:
+    if not enabled:
         return record
     return await _validate_record(db, record)
 

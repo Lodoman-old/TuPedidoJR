@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_superuser
 from app.db.session import get_db
 from app.models.appointment import Appointment
+from app.models.order import Order
 from app.models.rental_booking import RentalBooking
 from app.models.receipt_validation import ReceiptValidation
 from app.models.restaurant import Restaurant
@@ -25,6 +26,7 @@ ENTITY_LABELS = {
     "appointment_payment": "Pago de cita",
     "rental_payment": "Pago de renta",
     "affiliation_payment": "Afiliación anual",
+    "order_transfer": "Transferencia de pedido",
 }
 KIND_LABELS = {
     "purchase_receipt": "Ticket de compra",
@@ -106,7 +108,52 @@ async def _settle_entity(db: AsyncSession, record: ReceiptValidation, approved: 
         await _settle_rental(db, record, approved)
     elif record.entity_type == "affiliation_payment":
         return await _settle_affiliation(db, record, approved)
+    elif record.entity_type == "order_transfer":
+        await _settle_order(db, record, approved)
     return False
+
+
+async def _settle_order(
+    db: AsyncSession, record: ReceiptValidation, approved: bool
+) -> None:
+    order = await db.get(Order, record.entity_id)
+    if not order:
+        return
+    if not approved:
+        if order.payment_status != "approved":
+            order.cep_status = "rejected"
+        return
+    if order.payment_status == "approved":
+        return
+
+    extracted = record.extracted or {}
+    details = (extracted.get("validation") or {}).get("cepDetails") or {}
+    key = str(
+        extracted.get("trackingKey") or details.get("trackingKey") or ""
+    ).strip()
+    if key:
+        existing = await db.scalar(
+            select(Order.id).where(
+                Order.transfer_tracking_key == key,
+                Order.id != order.id,
+            )
+        )
+        if not existing:
+            order.transfer_tracking_key = key
+
+    order.cep_status = "valid"
+    order.cep_validated_at = datetime.now(timezone.utc)
+    order.cep_sender_bank = (
+        extracted.get("senderBank")
+        or details.get("senderBank")
+        or order.cep_sender_bank
+    )
+    order.cep_receiver_bank = order.cep_receiver_bank or details.get("receiverBank")
+    order.payment_status = "approved"
+
+    from app.services.payout_service import credit_courier_for_order
+
+    await credit_courier_for_order(db, order)
 
 
 async def _settle_appointment(db: AsyncSession, record: ReceiptValidation, approved: bool) -> None:

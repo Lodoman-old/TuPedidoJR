@@ -35,11 +35,17 @@ async def _payment_flags(db: AsyncSession) -> dict:
     from app.services.loyalty_service import loyalty_config
     mp_enabled = (await get_setting(db, "MP_ENABLED", "false")).lower() == "true"
     transfer_enabled = (await get_setting(db, "TRANSFER_ENABLED", "false")).lower() == "true"
+    cep_enabled = (await get_setting(db, "CEP_ENABLED", "false")).lower() == "true"
+    receipt_provider = (
+        await get_setting(db, "RECEIPT_VALIDATION_PROVIDER", "gemini")
+    ).strip().lower()
     loyalty = await loyalty_config(db)
     return {
         "cash_enabled": True,
         "mp_enabled": mp_enabled,
         "transfer_enabled": transfer_enabled,
+        "cep_enabled": cep_enabled,
+        "receipt_validation_provider": receipt_provider,
         "loyalty_enabled": loyalty["enabled"],
         "loyalty_visible": loyalty["visible"],
         "loyalty_value_per_point": f"{loyalty['value_per_point']:.2f}",
@@ -50,6 +56,19 @@ async def _payment_flags(db: AsyncSession) -> dict:
 async def payment_config(db: AsyncSession = Depends(get_db)):
     """Public flags so cart UIs can hide disabled payment methods."""
     return await _payment_flags(db)
+
+
+@router.get("/transfer-banks")
+async def transfer_banks():
+    """Bancos SPEI para validar una transferencia con el CEP de Banxico."""
+    from clabe import BANK_NAMES
+
+    return [
+        {"code": code, "name": name}
+        for code, name in sorted(
+            BANK_NAMES.items(), key=lambda item: item[1].lower()
+        )
+    ]
 
 
 @router.get("/bank-details", response_model=BankDetailsOut)

@@ -101,15 +101,20 @@
 <h3>5. Validación de comprobantes</h3>
 <figure class="shot">
   <img src="/static/manuals/admin-comprobantes.png" alt="Pantalla de validación de comprobantes con grado de certeza">
-  <figcaption>Comprobantes: la IA solo muestra el grado de certeza; tú decides.</figcaption>
+  <figcaption>Comprobantes: revisa el resultado y decide.</figcaption>
 </figure>
-<p>La validación con IA no aprueba ni rechaza. Muestra:</p>
+<p>Hay dos formas de validar un comprobante de transferencia:</p>
+<ul>
+  <li><strong>apiCEP (recomendado):</strong> el cliente sube su comprobante y el OCR lee la clave de rastreo, el monto, la fecha y el banco. Después se consulta el CEP de Banxico. Si Banxico confirma el pago y el monto coincide, el pedido se marca pagado automáticamente.</li>
+  <li><strong>Clave de rastreo manual:</strong> el cliente escribe la clave, el banco emisor y la fecha. La plataforma consulta Banxico sin costo por consulta.</li>
+</ul>
+<p>El panel de comprobantes muestra:</p>
 <ul>
   <li>Porcentaje de certeza.</li>
   <li>Datos extraídos: monto, fecha, comercio, referencia.</li>
   <li>Observaciones y errores detectados.</li>
 </ul>
-<div class="note">85% o más = se puede aprobar; 50–84% = revisa; menos de 50% = revisa a fondo. Un PDF editado puede engañar al modelo: la confirmación final es tuya.</div>
+<div class="note">Si apiCEP no puede leer el comprobante o Banxico no encuentra la transferencia, el pago queda para revisión manual. Nunca compartas tu API key ni las credenciales bancarias.</div>
 
 <h3>6. Configuración</h3>
 <figure class="shot">
@@ -123,7 +128,7 @@
   <tr><td>Incidencias</td><td>Minutos de reentrega de comida, horas de resguardo, costo de reentrega, tope de autorización y oficina.</td></tr>
   <tr><td>Clientes</td><td>Abonos máximos y abono mínimo.</td></tr>
   <tr><td>Pagos</td><td>Transferencia, banco, CLABE y Mercado Pago.</td></tr>
-  <tr><td>Comprobantes</td><td>Gemini API key, modelo, tolerancias y ventana de fecha.</td></tr>
+  <tr><td>Comprobantes</td><td>Proveedor (apiCEP o Gemini), API keys, banco beneficiario, tolerancias y ventana de fecha.</td></tr>
 </table>
 
 <h3>7. Seguridad y auditoría</h3>

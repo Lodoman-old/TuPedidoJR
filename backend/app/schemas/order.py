@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -76,6 +76,8 @@ class OrderOut(BaseModel):
     payment_status: str
     payment_id: str | None
     preference_id: str | None
+    cep_status: str | None = None
+    cep_validated_at: datetime | None = None
     coupon_code: str | None
     discount_amount: Decimal
     platform_commission: Decimal
@@ -111,6 +113,12 @@ class OrderOut(BaseModel):
 
 class CancelOrderRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=300)
+
+
+class TransferValidationRequest(BaseModel):
+    clave_rastreo: str = Field(..., min_length=4, max_length=30)
+    sender_bank: str = Field(..., min_length=5, max_length=5)
+    transfer_date: date | None = None
 
 
 class OrderFail(BaseModel):

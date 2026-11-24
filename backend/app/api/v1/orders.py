@@ -1,10 +1,12 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import clabe
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -28,9 +30,17 @@ from app.schemas.order import (
     OrderStatusUpdate,
     RefundAccountUpdate,
     TrackingOut,
+    TransferValidationRequest,
 )
+from app.services.audit_service import log_action
 from app.services.cancellation_service import apply_cancellation, can_cancel, get_policy
+from app.services.cep_validation_service import CepValidationError, validate_transfer
 from app.services.coverage_service import ensure_coverage
+from app.services.file_service import save_document
+from app.services.receipt_validation_service import (
+    TRANSFER as TRANSFER_RECEIPT,
+    create_and_validate,
+)
 from app.services.restaurant_access import ORDER_ROLES, have_role
 from app.services.estimation_service import calculate_estimated_time
 from app.services.order_service import calculate_order_totals, get_approval_timeout_min, get_setting_value, resolve_item_options
@@ -687,6 +697,290 @@ async def get_order(
         can_see_refund=bool(current_user.is_superuser or order.user_id == current_user.id),
         customer_phone=customer.phone if customer else None,
     )
+
+
+async def _apply_cep_payment(
+    db: AsyncSession,
+    order: Order,
+    current_user: User,
+    *,
+    tracking_key: str,
+    sender_bank: str | None,
+    receiver_bank: str,
+    cep_payload: dict,
+) -> None:
+    """Marca el pedido como pagado tras una validación CEP exitosa."""
+    key = (tracking_key or "").strip()
+    existing = await db.scalar(
+        select(Order.id).where(
+            Order.transfer_tracking_key == key,
+            Order.id != order.id,
+        )
+    )
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail="Esa transferencia ya fue usada en otro pedido.",
+        )
+
+    order.transfer_tracking_key = key
+    order.cep_status = "valid"
+    order.cep_validated_at = datetime.now(timezone.utc)
+    order.cep_sender_bank = sender_bank
+    order.cep_receiver_bank = receiver_bank
+    order.cep_payload = cep_payload
+    order.payment_status = "approved"
+
+    from app.services.payout_service import credit_courier_for_order
+
+    await credit_courier_for_order(db, order)
+    await log_action(
+        db,
+        current_user.id,
+        "transfer.cep_validated",
+        "order",
+        order.id,
+        {"clave_rastreo": key, "total": str(order.total)},
+    )
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Esa transferencia ya fue usada en otro pedido.",
+        )
+
+
+async def _load_order_for_transfer(
+    db: AsyncSession, order_id: str, current_user: User
+) -> Order:
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+    if not order or (not current_user.is_superuser and order.user_id != current_user.id):
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if order.payment_method != "transfer":
+        raise HTTPException(
+            status_code=400, detail="Este pedido no es por transferencia"
+        )
+    if order.status == "cancelled":
+        raise HTTPException(status_code=400, detail="El pedido está cancelado")
+    return order
+
+
+async def _transfer_receiver_account(db: AsyncSession) -> tuple[str, str]:
+    receiver_account = "".join(
+        ch
+        for ch in (await get_setting_value(db, "BANK_CLABE", "")).strip()
+        if ch.isdigit()
+    )
+    if len(receiver_account) != 18:
+        raise HTTPException(
+            status_code=400,
+            detail="La cuenta bancaria de la plataforma no está configurada.",
+        )
+    receiver_bank = clabe.BANKS.get(receiver_account[:3])
+    if not receiver_bank:
+        raise HTTPException(
+            status_code=400,
+            detail="No se pudo identificar el banco de la cuenta de la plataforma.",
+        )
+    return receiver_account, receiver_bank
+
+
+@router.post("/{order_id}/validate-transfer")
+async def validate_transfer_payment(
+    order_id: str,
+    body: TransferValidationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    order = await _load_order_for_transfer(db, order_id, current_user)
+    if order.payment_status == "approved":
+        return {
+            "payment_status": "approved",
+            "cep_status": order.cep_status or "valid",
+            "message": "Este pedido ya está pagado.",
+        }
+
+    enabled = (
+        await get_setting_value(db, "CEP_ENABLED", "false")
+    ).lower() == "true"
+    if not enabled:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "La validación automática con Banxico no está activada. "
+                "Envía tu comprobante a soporte o espera la revisión."
+            ),
+        )
+
+    receiver_account, receiver_bank = await _transfer_receiver_account(db)
+
+    key = body.clave_rastreo.strip()
+    existing = await db.scalar(
+        select(Order.id).where(
+            Order.transfer_tracking_key == key,
+            Order.id != order.id,
+        )
+    )
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail="Esa transferencia ya fue usada en otro pedido.",
+        )
+
+    amount_cents = int((Decimal(order.total or 0) * 100).to_integral_value())
+    transfer_date = body.transfer_date or date.today()
+    try:
+        cep = await validate_transfer(
+            clave_rastreo=key,
+            sender_bank=body.sender_bank,
+            receiver_bank=receiver_bank,
+            receiver_account=receiver_account,
+            amount_cents=amount_cents,
+            transfer_date=transfer_date,
+        )
+    except CepValidationError as exc:
+        status_by_error = {
+            "not_found": 404,
+            "pending": 409,
+            "rate_limited": 429,
+            "invalid_bank": 400,
+            "invalid_account": 400,
+            "missing_key": 400,
+            "invalid_amount": 400,
+            "invalid_date": 400,
+            "closed": 409,
+            "amount_mismatch": 409,
+            "account_mismatch": 409,
+            "receiver_mismatch": 409,
+            "sender_mismatch": 409,
+            "key_mismatch": 409,
+            "error": 502,
+        }
+        raise HTTPException(
+            status_code=status_by_error.get(exc.status, 502),
+            detail=exc.message,
+        ) from exc
+
+    await _apply_cep_payment(
+        db,
+        order,
+        current_user,
+        tracking_key=key,
+        sender_bank=body.sender_bank,
+        receiver_bank=receiver_bank,
+        cep_payload=cep,
+    )
+    return {
+        "payment_status": "approved",
+        "cep_status": "valid",
+        "message": "Pago validado por Banxico. El negocio ya puede preparar tu pedido.",
+    }
+
+
+@router.post("/{order_id}/validate-transfer-receipt")
+async def validate_transfer_receipt(
+    order_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lee el comprobante con apiCEP y lo valida contra Banxico."""
+    order = await _load_order_for_transfer(db, order_id, current_user)
+    if order.payment_status == "approved":
+        return {
+            "payment_status": "approved",
+            "cep_status": order.cep_status or "valid",
+            "message": "Este pedido ya está pagado.",
+        }
+
+    enabled = (
+        await get_setting_value(db, "CEP_ENABLED", "false")
+    ).lower() == "true"
+    if not enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="La validación automática con Banxico no está activada.",
+        )
+    provider = (
+        await get_setting_value(db, "RECEIPT_VALIDATION_PROVIDER", "gemini")
+    ).strip().lower()
+    if provider != "apicep":
+        raise HTTPException(
+            status_code=400,
+            detail="La lectura automática de comprobantes no está activada.",
+        )
+    validation_enabled = (
+        await get_setting_value(db, "RECEIPT_VALIDATION_ENABLED", "false")
+    ).lower() == "true"
+    if not validation_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="La lectura automática de comprobantes no está activada.",
+        )
+    if not (await get_setting_value(db, "APICEP_API_KEY", "")).strip():
+        raise HTTPException(
+            status_code=400,
+            detail="La cuenta de apiCEP no está configurada.",
+        )
+
+    _, receiver_bank = await _transfer_receiver_account(db)
+
+    try:
+        file_url = await save_document(file)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    record = await create_and_validate(
+        db,
+        "order_transfer",
+        order.id,
+        file_url,
+        TRANSFER_RECEIPT,
+        expected_amount=order.total,
+    )
+    if record.status != "high":
+        issues = record.issues or []
+        detail = record.error or (str(issues[0]) if issues else "")
+        raise HTTPException(
+            status_code=422,
+            detail=detail
+            or "No se pudo confirmar la transferencia con Banxico. "
+            "Revisa que el comprobante sea legible o captura la clave de rastreo.",
+        )
+
+    extracted = record.extracted or {}
+    validation = extracted.get("validation") or {}
+    details = validation.get("cepDetails") or {}
+    key = (
+        str(extracted.get("trackingKey") or details.get("trackingKey") or "").strip()
+    )
+    if not key:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "No se pudo leer la clave de rastreo del comprobante. "
+                "Captúrala manualmente para validar tu pago."
+            ),
+        )
+    sender_bank = extracted.get("senderBank") or details.get("senderBank")
+
+    await _apply_cep_payment(
+        db,
+        order,
+        current_user,
+        tracking_key=key,
+        sender_bank=sender_bank,
+        receiver_bank=receiver_bank,
+        cep_payload=extracted,
+    )
+    return {
+        "payment_status": "approved",
+        "cep_status": "valid",
+        "message": "Pago validado por Banxico. El negocio ya puede preparar tu pedido.",
+    }
 
 
 @router.get("/{order_id}/tracking", response_model=TrackingOut)

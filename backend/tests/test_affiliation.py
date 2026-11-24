@@ -1,13 +1,19 @@
 """Afiliación anual: visibilidad, panel del admin y recordatorios."""
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import AsyncClient
 
 from app.models.restaurant import Restaurant
 from app.models.user import User
+
+
+def _today() -> date:
+    """Misma fecha local que usa la app (America/Mexico_City)."""
+    return datetime.now(ZoneInfo("America/Mexico_City")).date()
 
 
 def _headers(token: str) -> dict:
@@ -70,7 +76,7 @@ async def test_unpaid_restaurant_is_hidden(client: AsyncClient, db_session, owne
 
 async def test_expired_restaurant_is_hidden(client: AsyncClient, db_session, owner_token):
     restaurant = await _make_restaurant(
-        db_session, owner_token, date.today() - timedelta(days=1)
+        db_session, owner_token, _today() - timedelta(days=1)
     )
 
     listing = await client.get("/api/v1/restaurants")
@@ -84,7 +90,7 @@ async def test_expired_restaurant_is_hidden(client: AsyncClient, db_session, own
 async def test_paid_restaurant_is_visible_with_days_left(
     client: AsyncClient, db_session, owner_token
 ):
-    await _make_restaurant(db_session, owner_token, date.today() + timedelta(days=300))
+    await _make_restaurant(db_session, owner_token, _today() + timedelta(days=300))
 
     listing = await client.get("/api/v1/restaurants")
     assert listing.status_code == 200
@@ -110,7 +116,7 @@ async def test_admin_marks_affiliation_paid(
     assert resp.status_code == 200
     data = resp.json()
     assert data["affiliated"] is True
-    assert data["affiliation_expires_at"] == (date.today() + timedelta(days=365)).isoformat()
+    assert data["affiliation_expires_at"] == (_today() + timedelta(days=365)).isoformat()
 
     rows = await client.get(
         "/api/v1/admin/affiliations", headers=_headers(superuser_token)
@@ -149,14 +155,14 @@ async def test_admin_registers_short_plan_in_cash(
     assert data["affiliated"] is True
     assert data["plan_months"] == 3
     assert data["payment_method"] == "cash"
-    assert data["affiliation_expires_at"] == (date.today() + timedelta(days=90)).isoformat()
+    assert data["affiliation_expires_at"] == (_today() + timedelta(days=90)).isoformat()
 
 
 async def test_reminder_is_sent_once_per_day(
     db_session, owner_token, monkeypatch
 ):
     restaurant = await _make_restaurant(
-        db_session, owner_token, date.today() + timedelta(days=5)
+        db_session, owner_token, _today() + timedelta(days=5)
     )
 
     import app.services.affiliation_service as affiliation_service
@@ -177,7 +183,7 @@ async def test_reminder_is_sent_once_per_day(
     assert calls[0]["data"]["type"] == "affiliation"
 
     await db_session.refresh(restaurant)
-    assert restaurant.affiliation_reminder_on == date.today()
+    assert restaurant.affiliation_reminder_on == _today()
 
     # El mismo día no se repite.
     sent_again = await affiliation_service.send_affiliation_reminders(db_session)

@@ -47,24 +47,35 @@
   let ws = null;
   let currentOrder = null;
   let currentTracking = null;
-  let paymentConfig = { mp_enabled: false, transfer_enabled: false };
+  let paymentConfig = { mp_enabled: false, transfer_enabled: false, cep_enabled: false, receipt_validation_provider: 'gemini' };
   let bankDetails = null;
   let supportPhone = '';
+  let transferBanks = [];
+
+  const escHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+  function todayLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
 
   async function loadOrder(connect = true) {
     const loading = document.getElementById('orderLoading');
     const content = document.getElementById('orderContent');
     try {
-      const [o, t, pc, bd, sc] = await Promise.all([
+      const [o, t, pc, bd, sc, banks] = await Promise.all([
         getOrder(OID),
         apiRequest('GET', `/orders/${OID}/tracking`),
         apiRequest('GET', '/payments/config'),
         getBankDetails().catch(() => null),
         apiRequest('GET', '/settings/public').catch(() => ({})),
+        apiRequest('GET', '/payments/transfer-banks').catch(() => []),
       ]);
       paymentConfig = pc;
       bankDetails = bd;
       supportPhone = (sc && sc.whatsapp_support) || '';
+      transferBanks = Array.isArray(banks) ? banks : [];
       currentOrder = o;
       currentTracking = t;
       loading.classList.add('d-none');
@@ -156,11 +167,48 @@
     }
     if (o.payment_method === 'transfer' && o.status !== 'delivered' && o.status !== 'cancelled' && paymentConfig.transfer_enabled) {
       const hasBank = bankDetails && (bankDetails.bank_name || bankDetails.clabe || bankDetails.account_holder);
-      html += hasBank
-        ? `<div class="alert alert-info mb-2"><i class="bi bi-bank"></i> Pago por transferencia a TuPedidoJR (plataforma)<br>
-             <small>Banco: ${bankDetails.bank_name || '—'} · Titular: ${bankDetails.account_holder || '—'} · CLABE: ${bankDetails.clabe || '—'}${bankDetails.card ? ` · Tarjeta: ${bankDetails.card}` : ''}<br>
-             El dinero entra a la plataforma. TuPedidoJR liquida al negocio y paga al repartidor; no pagas en efectivo al recibir.</small></div>`
-        : `<div class="alert alert-warning mb-2"><i class="bi bi-bank"></i> Pago por transferencia. La plataforma aún no configuró la cuenta bancaria.</div>`;
+      const reference = String(o.id || '').slice(0, 8).toUpperCase();
+      const paid = o.payment_status === 'approved';
+      if (hasBank) {
+        html += `<div class="alert alert-info mb-2"><i class="bi bi-bank"></i> Pago por transferencia a TuPedidoJR (plataforma)<br>
+          <small>Banco: ${bankDetails.bank_name || '—'} · Titular: ${bankDetails.account_holder || '—'} · CLABE: ${bankDetails.clabe || '—'}${bankDetails.card ? ` · Tarjeta: ${bankDetails.card}` : ''}<br>
+          <strong>Referencia:</strong> #${reference}<br>
+          Escribe esta referencia en el concepto y transfiere el total exacto. El dinero entra a la plataforma; TuPedidoJR liquida al negocio y paga al repartidor.</small>
+          ${paid ? `<div class="mt-1"><span class="badge bg-success"><i class="bi bi-check2-circle"></i> Pago validado${o.cep_status === 'valid' ? ' por Banxico' : ''}</span></div>` : ''}
+        </div>`;
+        if (!paid && paymentConfig.cep_enabled) {
+          const bankOptions = transferBanks.map((b) => `<option value="${b.code}">${escHtml(b.name)}</option>`).join('');
+          const apicep = paymentConfig.receipt_validation_provider === 'apicep';
+          const manualForm = `<div class="row g-2 mt-1">
+              <div class="col-12"><input id="cepTrackingKey" class="form-control form-control-sm" maxlength="30" placeholder="Clave de rastreo (en tu comprobante)"></div>
+              <div class="col-7"><select id="cepSenderBank" class="form-select form-select-sm"><option value="">Banco emisor...</option>${bankOptions}</select></div>
+              <div class="col-5"><input type="date" id="cepDate" class="form-control form-control-sm" value="${todayLocal()}"></div>
+            </div>
+            <button class="btn btn-sm btn-outline-primary mt-2" id="cepValidateBtn" onclick="validateTransferPayment()">Validar clave</button>
+            <div class="small text-muted mt-1" id="cepManualMsg"></div>`;
+          if (apicep) {
+            html += `<div class="card p-2 mb-2">
+              <div class="small fw-bold mb-1"><i class="bi bi-camera"></i> ¿Ya transferiste? Sube tu comprobante</div>
+              <input type="file" id="cepReceiptFile" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp,application/pdf">
+              <button class="btn btn-sm btn-primary mt-2" id="cepUploadBtn" onclick="validateTransferReceipt()">Validar mi comprobante</button>
+              <div class="small text-muted mt-1" id="cepMsg"></div>
+              <div class="form-text">Leemos tu comprobante y lo validamos con Banxico. También puedes capturar la clave de rastreo.</div>
+              <a class="small" data-bs-toggle="collapse" href="#cepManual">Capturar clave de rastreo</a>
+              <div class="collapse" id="cepManual">${manualForm}</div>
+            </div>`;
+          } else {
+            html += `<div class="card p-2 mb-2">
+              <div class="small fw-bold mb-1"><i class="bi bi-shield-check"></i> ¿Ya transferiste? Valida tu pago</div>
+              ${manualForm}
+              <div class="form-text">La validación consulta Banxico. Si no encuentra tu transferencia, revisa la clave de rastreo, el banco y la fecha.</div>
+            </div>`;
+          }
+        } else if (!paid) {
+          html += `<div class="alert alert-warning small mb-2"><i class="bi bi-info-circle"></i> La validación automática no está activada. Envía tu comprobante a soporte o espera la revisión.</div>`;
+        }
+      } else {
+        html += `<div class="alert alert-warning mb-2"><i class="bi bi-bank"></i> Pago por transferencia. La plataforma aún no configuró la cuenta bancaria.</div>`;
+      }
     }
     if (
       o.payment_method === 'transfer'
@@ -356,6 +404,100 @@
     document.getElementById('orderContent').prepend(div);
     if (window.location.hash === '#reviewSection') {
       setTimeout(() => div.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+    }
+  }
+
+  async function validateTransferPayment() {
+    const key = (document.getElementById('cepTrackingKey')?.value || '').trim();
+    const bank = document.getElementById('cepSenderBank')?.value || '';
+    const dateValue = document.getElementById('cepDate')?.value || '';
+    const msg = document.getElementById('cepManualMsg');
+    if (!msg) return;
+    if (key.length < 4) {
+      msg.className = 'text-danger small';
+      msg.textContent = 'Escribe la clave de rastreo de tu comprobante.';
+      return;
+    }
+    if (!bank) {
+      msg.className = 'text-danger small';
+      msg.textContent = 'Selecciona el banco desde el que transferiste.';
+      return;
+    }
+    const btn = document.getElementById('cepValidateBtn');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Validando...';
+    }
+    msg.className = 'text-muted small';
+    msg.textContent = 'Consultando Banxico...';
+    try {
+      const res = await apiRequest('POST', `/orders/${OID}/validate-transfer`, {
+        clave_rastreo: key,
+        sender_bank: bank,
+        transfer_date: dateValue || null,
+      });
+      msg.className = 'text-success small';
+      msg.textContent = res.message || 'Pago validado.';
+      showToast('Pago validado por Banxico');
+      setTimeout(() => loadOrder(false), 1200);
+    } catch (e) {
+      msg.className = 'text-danger small';
+      msg.textContent = e.message;
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Validar mi transferencia';
+      }
+    }
+  }
+
+  async function validateTransferReceipt() {
+    const input = document.getElementById('cepReceiptFile');
+    const file = input && input.files && input.files[0];
+    const msg = document.getElementById('cepMsg');
+    const btn = document.getElementById('cepUploadBtn');
+    if (!msg) return;
+    if (!file) {
+      msg.className = 'text-danger small';
+      msg.textContent = 'Selecciona la foto o PDF de tu comprobante.';
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      msg.className = 'text-danger small';
+      msg.textContent = 'El archivo es muy grande. Usa una foto o PDF de menos de 8 MB.';
+      return;
+    }
+    const token = sessionStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('file', file);
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Validando...';
+    }
+    msg.className = 'text-muted small';
+    msg.textContent = 'Leyendo tu comprobante y consultando Banxico...';
+    try {
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const r = await fetch(`${API_BASE}/orders/${OID}/validate-transfer-receipt`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.detail || `Error ${r.status}`);
+      msg.className = 'text-success small';
+      msg.textContent = data.message || 'Pago validado.';
+      showToast('Pago validado por Banxico');
+      setTimeout(() => loadOrder(false), 1200);
+    } catch (e) {
+      msg.className = 'text-danger small';
+      msg.textContent = e.message;
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Validar mi comprobante';
+      }
     }
   }
 

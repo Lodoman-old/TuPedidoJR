@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, Column, DateTime, DECIMAL, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from geoalchemy2 import Geography
 
@@ -28,6 +28,12 @@ class Order(TimestampMixin, Base):
     payment_status = Column(String(20), default="pending", nullable=False)
     payment_id = Column(String, nullable=True)
     preference_id = Column(String, nullable=True)
+    transfer_tracking_key = Column(String(30), nullable=True, unique=True, index=True)
+    cep_status = Column(String(20), nullable=True)
+    cep_validated_at = Column(DateTime(timezone=True), nullable=True)
+    cep_sender_bank = Column(String(80), nullable=True)
+    cep_receiver_bank = Column(String(80), nullable=True)
+    cep_payload = Column(JSONB, nullable=True)
 
     coupon_id = Column(UUID(as_uuid=True), ForeignKey("coupons.id"), nullable=True)
     coupon_code = Column(String(50), nullable=True)

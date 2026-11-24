@@ -197,9 +197,28 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "type": "int", "default": "50",
     },
     "RECEIPT_VALIDATION_ENABLED": {
-        "group": "Validación de comprobantes", "label": "Validar comprobantes con Gemini",
-        "description": "Analiza tickets y comprobantes de transferencia y muestra un grado de certeza. No aprueba pagos automáticamente.",
+        "group": "Validación de comprobantes", "label": "Analizar comprobantes automáticamente",
+        "description": "Analiza tickets y comprobantes de transferencia y calcula un grado de certeza. Con apiCEP, los pedidos por transferencia se marcan pagados si Banxico confirma el pago.",
         "type": "bool", "default": "false",
+    },
+    "RECEIPT_VALIDATION_PROVIDER": {
+        "group": "Validación de comprobantes", "label": "Proveedor de validación",
+        "description": "Gemini analiza la imagen y solo sugiere. apiCEP hace OCR y valida contra Banxico; aplica a comprobantes de transferencia.",
+        "type": "select", "default": "gemini",
+        "options": [
+            {"value": "gemini", "label": "Gemini (imagen)"},
+            {"value": "apicep", "label": "apiCEP (OCR + Banxico)"},
+        ],
+    },
+    "APICEP_API_KEY": {
+        "group": "Validación de comprobantes", "label": "apiCEP API key",
+        "description": "Clave secreta de apiCEP. Se usa solo en el servidor.",
+        "type": "password", "default": "",
+    },
+    "APICEP_BENEFICIARY_BANK": {
+        "group": "Validación de comprobantes", "label": "Banco beneficiario apiCEP",
+        "description": "Opcional: se deduce de la CLABE de la plataforma. Si la CLABE no se reconoce, escribe el nombre exacto: BANAMEX, AZTECA, BBVA MEXICO, SANTANDER, BANORTE, HSBC.",
+        "type": "text", "default": "",
     },
     "GEMINI_API_KEY": {
         "group": "Validación de comprobantes", "label": "Gemini API key",
@@ -250,6 +269,11 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "group": "Pagos", "label": "Transferencia bancaria",
         "description": "Habilitar pagos por transferencia.",
         "type": "bool", "default": "true",
+    },
+    "CEP_ENABLED": {
+        "group": "Pagos", "label": "Validar transferencias con Banxico (CEP)",
+        "description": "El cliente valida su transferencia con la clave de rastreo o subiendo su comprobante. Requiere la CLABE de la plataforma configurada abajo.",
+        "type": "bool", "default": "false",
     },
     "BANK_NAME": {
         "group": "Pagos", "label": "Banco de la plataforma",

@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import AsyncClient
@@ -20,6 +21,11 @@ from app.services.appointment_reminder_service import _send_due
 
 def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
+
+
+def _today() -> date:
+    """Misma fecha local que usa la app (America/Mexico_City)."""
+    return datetime.now(ZoneInfo("America/Mexico_City")).date()
 
 
 @pytest.fixture
@@ -41,7 +47,7 @@ async def customer_token(client: AsyncClient):
 @pytest.fixture
 async def business(db_session, owner_token):
     owner_id = decode_access_token(owner_token)["sub"]
-    target = date.today() + timedelta(days=3)
+    target = _today() + timedelta(days=3)
     resto = Restaurant(
         id=uuid.uuid4(),
         name="Barbería Agenda",
@@ -52,7 +58,7 @@ async def business(db_session, owner_token):
         rating=4.8,
         delivery_radius_m=3000,
         delivery_fee=0,
-        affiliation_expires_at=date.today() + timedelta(days=365),
+        affiliation_expires_at=_today() + timedelta(days=365),
         appointments_enabled=True,
     )
     db_session.add(resto)
@@ -198,7 +204,7 @@ async def test_booking_requires_active_affiliation(
     client, customer_token, business, service, staff, db_session
 ):
     resto, target = business
-    resto.affiliation_expires_at = date.today() - timedelta(days=1)
+    resto.affiliation_expires_at = _today() - timedelta(days=1)
     db_session.add(resto)
     await db_session.commit()
     resp = await client.post(
@@ -749,7 +755,7 @@ async def test_products_can_be_reserved_with_appointment(
     resto.pickup_enabled = True
     resto.is_open = True
     db_session.add(resto)
-    today = date.today()
+    today = _today()
     open_today = await db_session.execute(
         RestaurantSchedule.__table__.select().where(
             RestaurantSchedule.restaurant_id == resto.id,

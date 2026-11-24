@@ -127,7 +127,7 @@
               <button class="btn btn-sm btn-outline-success" onclick="whatsappCustomer('${v.id}')">
                 <i class="bi bi-whatsapp"></i> Avisar por WhatsApp
               </button>` : ''}
-            ${['appointment_payment', 'rental_payment', 'affiliation_payment', 'order_transfer'].includes(v.entity_type) && v.status !== 'approved' && v.status !== 'rejected' ? `
+            ${['appointment_payment', 'rental_payment', 'affiliation_payment', 'order_transfer', 'balance_payment'].includes(v.entity_type) && v.status !== 'approved' && v.status !== 'rejected' ? `
               <button class="btn btn-sm btn-success" onclick="settle('${v.id}', 'approve')">
                 <i class="bi bi-check2-circle"></i> Aprobar pago
               </button>

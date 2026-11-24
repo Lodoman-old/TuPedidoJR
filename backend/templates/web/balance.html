@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="mb-3">Pagar saldo pendiente</h4>
+<div id="balanceLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="balanceContent" class="d-none">
+  <div class="card p-3 mb-3">
+    <div class="d-flex justify-content-between align-items-center">
+      <span>Saldo pendiente</span>
+      <strong id="balanceAmount" class="fs-4">$0.00</strong>
+    </div>
+    <div class="small text-muted mt-1">Paga el monto exacto para liquidar tu saldo.</div>
+  </div>
+
+  <div id="balancePaid" class="alert alert-success d-none"></div>
+  <div id="balanceUnavailable" class="alert alert-warning d-none"></div>
+  <div id="balanceReview" class="alert alert-warning d-none"></div>
+
+  <div id="balancePayment" class="d-none">
+    <div class="alert alert-info">
+      <div class="small text-muted">Referencia para tu transferencia</div>
+      <div class="fs-4 fw-bold" id="balanceReference">#--------</div>
+      <div class="small mt-1">Escribe esta referencia en el concepto y transfiere el total exacto.</div>
+    </div>
+
+    <div id="balanceAccounts"></div>
+
+    <div class="card p-2 mb-2">
+      <div class="small fw-bold mb-1"><i class="bi bi-camera"></i> ¿Ya transferiste? Sube tu comprobante</div>
+      <input type="file" id="balanceReceiptFile" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp,application/pdf">
+      <button class="btn btn-sm btn-primary mt-2" id="balanceUploadBtn" onclick="validateBalanceReceipt()">Validar mi comprobante</button>
+      <div class="small text-muted mt-1" id="balanceUploadMsg"></div>
+      <div class="form-text">Si el comprobante no se puede leer, usa la clave de rastreo de abajo.</div>
+    </div>
+
+    <div class="card p-2 mb-2">
+      <div class="small fw-bold mb-1"><i class="bi bi-key"></i> Capturar clave de rastreo</div>
+      <div class="row g-2">
+        <div class="col-12"><input id="balanceTrackingKey" class="form-control form-control-sm" maxlength="30" placeholder="Clave de rastreo"></div>
+        <div class="col-7"><select id="balanceSenderBank" class="form-select form-select-sm"><option value="">Banco emisor...</option></select></div>
+        <div class="col-5"><input type="date" id="balanceDate" class="form-control form-control-sm"></div>
+      </div>
+      <button class="btn btn-sm btn-outline-primary mt-2" id="balanceValidateBtn" onclick="validateBalanceTransfer()">Validar clave</button>
+      <div class="small text-muted mt-1" id="balanceManualMsg"></div>
+    </div>
+  </div>
+
+  <a href="/web/orders" class="btn btn-outline-secondary w-100 mt-2">Volver a mis pedidos</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let balancePayment = null;
+  let balanceConfig = {};
+  let balanceAccounts = [];
+  let balanceBanks = [];
+
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function todayLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function renderBalanceAccounts() {
+    const box = document.getElementById('balanceAccounts');
+    if (!box) return;
+    if (!balanceAccounts.length) {
+      box.innerHTML = '<div class="alert alert-warning">La plataforma no tiene configurada la cuenta bancaria.</div>';
+      return;
+    }
+    box.innerHTML = balanceAccounts.map((account) => `
+      <div class="card p-2 mb-2">
+        <div class="small fw-bold">${esc(account.bank_name || 'Cuenta de la plataforma')}</div>
+        <div class="small">Titular: ${esc(account.account_holder || '—')}<br>
+        CLABE: <strong>${esc(account.clabe || '—')}</strong></div>
+      </div>
+    `).join('') + `<div class="small text-muted mb-2">
+      Si tu cuenta es Banamex, usa la de Banco Azteca; si es Banco Azteca, usa la de Banamex. Si es otro banco, cualquiera funciona.
+    </div>`;
+  }
+
+  function fillBalanceBanks() {
+    const select = document.getElementById('balanceSenderBank');
+    if (!select) return;
+    select.innerHTML = '<option value="">Banco emisor...</option>' + balanceBanks.map(
+      (bank) => `<option value="${esc(bank.code)}">${esc(bank.name)}</option>`
+    ).join('');
+  }
+
+  async function loadBalance() {
+    const loading = document.getElementById('balanceLoading');
+    const content = document.getElementById('balanceContent');
+    try {
+      const [profile, pc, bd, banks, summary] = await Promise.all([
+        getProfile(),
+        apiRequest('GET', '/payments/config'),
+        getBankDetails().catch(() => null),
+        apiRequest('GET', '/payments/transfer-banks').catch(() => []),
+        apiRequest('GET', '/balance').catch(() => ({ pending_balance: 0, payment: null })),
+      ]);
+      balanceConfig = pc;
+      balanceAccounts = (bd && bd.accounts) || [];
+      balanceBanks = Array.isArray(banks) ? banks : [];
+      balancePayment = summary.payment || null;
+      loading.classList.add('d-none');
+      content.classList.remove('d-none');
+
+      const balance = Number(profile.pending_balance || 0);
+      document.getElementById('balanceAmount').textContent = money0(balance);
+      if (balance <= 0) {
+        const paid = document.getElementById('balancePaid');
+        paid.classList.remove('d-none');
+        paid.textContent = 'No tienes saldo pendiente.';
+        return;
+      }
+
+      if (balancePayment && ['review', 'pending_cep', 'preapproved'].includes(balancePayment.status)) {
+        const review = document.getElementById('balanceReview');
+        review.classList.remove('d-none');
+        review.textContent = balancePayment.status === 'pending_cep'
+          ? 'Tu pago quedó pendiente de validar con Banxico. Lo revisaremos automáticamente.'
+          : 'Tu pago está en revisión. El administrador lo confirmará.';
+        return;
+      }
+
+      if (!pc.cep_enabled || !pc.banxico_open || !pc.apicep_ready) {
+        const warning = document.getElementById('balanceUnavailable');
+        warning.classList.remove('d-none');
+        warning.textContent = 'La validación de saldo está disponible de 09:30 a 23:00. Si no, puedes pagarlo con tu próximo pedido.';
+        return;
+      }
+
+      if (!balancePayment) {
+        const created = await apiRequest('POST', '/balance/payments');
+        balancePayment = created.payment;
+      }
+      if (!balancePayment) {
+        throw new Error('No se pudo generar la referencia de pago.');
+      }
+
+      document.getElementById('balanceReference').textContent = '#' + balancePayment.reference;
+      document.getElementById('balanceDate').value = todayLocal();
+      fillBalanceBanks();
+      renderBalanceAccounts();
+      document.getElementById('balancePayment').classList.remove('d-none');
+    } catch (e) {
+      loading.classList.add('d-none');
+      content.classList.remove('d-none');
+      if (String(e.message).includes('401') || String(e.message).toLowerCase().includes('autentic')) {
+        location.href = '/web/login?next=/web/balance';
+        return;
+      }
+      content.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`;
+    }
+  }
+
+  async function validateBalanceReceipt() {
+    const input = document.getElementById('balanceReceiptFile');
+    const file = input && input.files && input.files[0];
+    const msg = document.getElementById('balanceUploadMsg');
+    const btn = document.getElementById('balanceUploadBtn');
+    if (!msg) return;
+    if (!file) {
+      msg.className = 'text-danger small';
+      msg.textContent = 'Selecciona la foto o PDF de tu comprobante.';
+      return;
+    }
+    if (!balancePayment) return;
+    const token = sessionStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('file', file);
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Validando...';
+    }
+    msg.className = 'text-muted small';
+    msg.textContent = 'Leyendo tu comprobante y consultando Banxico...';
+    try {
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const r = await fetch(`${API_BASE}/balance/payments/${balancePayment.id}/validate-receipt`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.detail || `Error ${r.status}`);
+      if (data.payment_status === 'approved') {
+        msg.className = 'text-success small';
+        msg.textContent = data.message || 'Saldo pagado.';
+        showToast('Saldo pagado');
+      } else {
+        msg.className = 'text-warning small';
+        msg.textContent = data.message || 'Tu comprobante quedó en revisión.';
+      }
+      setTimeout(loadBalance, 1200);
+    } catch (e) {
+      msg.className = 'text-danger small';
+      msg.textContent = e.message;
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Validar mi comprobante';
+      }
+    }
+  }
+
+  async function validateBalanceTransfer() {
+    const key = (document.getElementById('balanceTrackingKey')?.value || '').trim();
+    const bank = document.getElementById('balanceSenderBank')?.value || '';
+    const dateValue = document.getElementById('balanceDate')?.value || '';
+    const msg = document.getElementById('balanceManualMsg');
+    const btn = document.getElementById('balanceValidateBtn');
+    if (!msg) return;
+    if (key.length < 4) {
+      msg.className = 'text-danger small';
+      msg.textContent = 'Escribe la clave de rastreo de tu comprobante.';
+      return;
+    }
+    if (!bank) {
+      msg.className = 'text-danger small';
+      msg.textContent = 'Selecciona el banco desde el que transferiste.';
+      return;
+    }
+    if (!balancePayment) return;
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Validando...';
+    }
+    msg.className = 'text-muted small';
+    msg.textContent = 'Consultando Banxico...';
+    try {
+      const res = await apiRequest('POST', `/balance/payments/${balancePayment.id}/validate-transfer`, {
+        clave_rastreo: key,
+        sender_bank: bank,
+        transfer_date: dateValue || null,
+      });
+      msg.className = 'text-success small';
+      msg.textContent = res.message || 'Saldo pagado.';
+      showToast('Saldo pagado');
+      setTimeout(loadBalance, 1200);
+    } catch (e) {
+      msg.className = 'text-danger small';
+      msg.textContent = e.message;
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Validar clave';
+      }
+    }
+  }
+
+  loadBalance();
+</script>
+{% endblock %}

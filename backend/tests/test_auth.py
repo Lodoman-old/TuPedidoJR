@@ -32,6 +32,33 @@ class TestRegister:
         resp = await client.post("/api/v1/auth/register", json=self._payload(email="not-an-email"))
         assert resp.status_code == 422
 
+    async def test_duplicate_phone_is_detected_but_not_blocked(
+        self, client: AsyncClient, monkeypatch
+    ):
+        from app.api.v1 import auth as auth_module
+
+        calls = []
+        monkeypatch.setattr(
+            auth_module,
+            "schedule_admin_duplicate_phone",
+            lambda user_id: calls.append(user_id),
+        )
+
+        first = await client.post(
+            "/api/v1/auth/register",
+            json=self._payload(email="dup-phone-1@test.com", phone="4121234567"),
+        )
+        assert first.status_code == 201, first.text
+
+        second = await client.post(
+            "/api/v1/auth/register",
+            json=self._payload(
+                email="dup-phone-2@test.com", phone="5214121234567"
+            ),
+        )
+        assert second.status_code == 201, second.text
+        assert calls
+
 
 class TestLogin:
     async def _register_user(self, client: AsyncClient, email="login@test.com"):

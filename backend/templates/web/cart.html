@@ -143,58 +143,6 @@ let scheduleState = { enabled: false, value: '' };
     }[c]));
   }
 
-  const TRANSFER_BANKS = [
-    { code: '40002', name: 'Banamex' },
-    { code: '40127', name: 'Banco Azteca' },
-    { code: '40012', name: 'BBVA' },
-    { code: '40014', name: 'Santander' },
-    { code: '40072', name: 'Banorte' },
-    { code: '40021', name: 'HSBC' },
-    { code: '40044', name: 'Scotiabank' },
-    { code: '40036', name: 'Inbursa' },
-    { code: '0', name: 'Otro banco' },
-  ];
-
-  function transferBankOptions(selected) {
-    return TRANSFER_BANKS.map((bank) => (
-      `<option value="${bank.code}" ${bank.code === selected ? 'selected' : ''}>${esc(bank.name)}</option>`
-    )).join('');
-  }
-
-  function recommendedTransferAccount(senderCode) {
-    const accounts = (bankDetails && bankDetails.accounts) || [];
-    if (!accounts.length) return null;
-    if (!senderCode || senderCode === '0') return accounts[0];
-    return accounts.find((account) => account.bank_code !== senderCode) || accounts[0];
-  }
-
-  function renderCartTransferAccount() {
-    const select = document.getElementById('cartTransferSenderBank');
-    const box = document.getElementById('cartTransferAccountInfo');
-    if (!select || !box) return;
-    const accounts = (bankDetails && bankDetails.accounts) || [];
-    if (!accounts.length) return;
-    const sender = select.value;
-    if (!sender) {
-      const names = accounts.map((account) => account.bank_name).filter(Boolean).join(' y ');
-      box.innerHTML = `<div class="small text-muted">Selecciona tu banco para mostrarte la cuenta correcta. Si tienes ${esc(names)}, te mostraremos la cuenta del otro banco.</div>`;
-      return;
-    }
-    const account = recommendedTransferAccount(sender);
-    if (!account) return;
-    const card = account.card ? `<br>Tarjeta: ${esc(account.card)}` : '';
-    box.innerHTML = `<div class="border rounded p-2 bg-white">
-      <div class="small fw-bold">Transfiere a ${esc(account.bank_name || 'la plataforma')}</div>
-      <div class="small">Titular: ${esc(account.account_holder || '—')}<br>
-      CLABE: <strong>${esc(account.clabe || '—')}</strong>${card}</div>
-      <div class="small text-muted mt-1">Es un banco distinto al tuyo, así Banxico puede validar la transferencia.</div>
-    </div>`;
-  }
-
-  function onCartTransferBankChange(value) {
-    renderCartTransferAccount();
-  }
-
   const money = n => money0(n);
 
   function formatOptionNames(names) {
@@ -1211,22 +1159,11 @@ async function refreshEstimate() {
         if (radio.value === 'transfer' && bankInfo) {
           const accounts = (bankDetails && bankDetails.accounts) || [];
           const hasData = bankDetails && (bankDetails.bank_name || bankDetails.clabe || bankDetails.account_holder || accounts.length);
-          if (!hasData) {
-            bankInfo.innerHTML = '<span class="text-danger">La plataforma aún no configuró la cuenta bancaria. Elige efectivo o pide al negocio que contacte a TuPedidoJR.</span>';
-          } else if (accounts.length >= 2) {
-            const saved = '';
-            bankInfo.innerHTML = `<label class="form-label small fw-bold mb-1">¿Desde qué banco vas a transferir?</label>
-              <select id="cartTransferSenderBank" class="form-select form-select-sm mb-2" onchange="onCartTransferBankChange(this.value)">
-                <option value="">Selecciona tu banco...</option>
-                ${transferBankOptions(saved)}
-              </select>
-              <div id="cartTransferAccountInfo"></div>
-              <div class="mt-2">El dinero entra a la plataforma. El repartidor no te cobrará en efectivo por este pedido; su pago lo cubre TuPedidoJR. Al confirmar te daremos una referencia única para tu transferencia.</div>`;
-            renderCartTransferAccount();
-          } else {
-            const card = bankDetails.card ? `<br>Tarjeta: ${esc(bankDetails.card)}` : '';
-            bankInfo.innerHTML = `<strong>Transferencia a TuPedidoJR (plataforma)</strong><br>Banco: ${esc(bankDetails.bank_name || '—')}<br>Titular: ${esc(bankDetails.account_holder || '—')}<br>CLABE: ${esc(bankDetails.clabe || '—')}${card}<br><span class="text-muted">El dinero entra a la plataforma. El repartidor no te cobrará en efectivo por este pedido; su pago lo cubre TuPedidoJR. Al confirmar te daremos una referencia única para tu transferencia.</span>`;
-          }
+          bankInfo.innerHTML = hasData
+            ? `<strong>Pago por transferencia</strong><br>
+               Al confirmar el pedido te mostraremos la CLABE, la referencia única y el formulario para validar tu pago.<br>
+               <span class="text-muted">En transferencia, el negocio prepara el pedido hasta que el pago esté confirmado.</span>`
+            : '<span class="text-danger">La plataforma aún no configuró la cuenta bancaria. Elige efectivo o pide al negocio que contacte a TuPedidoJR.</span>';
           bankInfo.classList.remove('d-none');
         } else if (bankInfo) {
           bankInfo.classList.add('d-none');

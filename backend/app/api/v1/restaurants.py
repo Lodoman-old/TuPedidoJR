@@ -832,6 +832,13 @@ async def list_restaurant_orders(
         .options(selectinload(Order.items))
         .order_by(Order.created_at.desc())
     )
+    if not current_user.is_superuser:
+        stmt = stmt.where(
+            or_(
+                Order.payment_method != "transfer",
+                Order.payment_status == "approved",
+            )
+        )
     result = await db.execute(stmt)
     orders = list(result.scalars().all())
     phones = await _customer_phones(db, orders)
@@ -868,6 +875,19 @@ async def update_restaurant_order_status(
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if (
+        order.payment_method == "transfer"
+        and order.payment_status != "approved"
+        and body.status in ("confirmed", "preparing", "ready")
+        and not current_user.is_superuser
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "El pago por transferencia aún no está confirmado. "
+                "El pedido se prepara hasta que se valide el pago."
+            ),
+        )
     if (
         not current_user.is_superuser
         and order.requires_courier_approval

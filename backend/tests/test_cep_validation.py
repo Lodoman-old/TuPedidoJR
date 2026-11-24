@@ -787,3 +787,53 @@ async def test_apicep_uses_potential_beneficiaries(db_session, monkeypatch):
         "BBVA MEXICO",
         "AZTECA",
     }
+
+
+async def test_business_list_hides_unpaid_transfer(client, db_session):
+    token = await _register(client, "cep18@test.com")
+    order = await _order(db_session, token)
+
+    hidden = await client.get(
+        f"/api/v1/restaurants/{order.restaurant_id}/orders",
+        headers=_headers(token),
+    )
+    assert hidden.status_code == 200, hidden.text
+    assert all(row["id"] != str(order.id) for row in hidden.json())
+
+    order.payment_status = "approved"
+    await db_session.commit()
+
+    visible = await client.get(
+        f"/api/v1/restaurants/{order.restaurant_id}/orders",
+        headers=_headers(token),
+    )
+    assert visible.status_code == 200, visible.text
+    assert any(row["id"] == str(order.id) for row in visible.json())
+
+
+async def test_business_list_shows_cash_order(client, db_session):
+    token = await _register(client, "cep19@test.com")
+    order = await _order(db_session, token)
+    order.payment_method = "cash"
+    order.payment_status = "pending"
+    await db_session.commit()
+
+    resp = await client.get(
+        f"/api/v1/restaurants/{order.restaurant_id}/orders",
+        headers=_headers(token),
+    )
+    assert resp.status_code == 200, resp.text
+    assert any(row["id"] == str(order.id) for row in resp.json())
+
+
+async def test_business_cannot_confirm_unpaid_transfer(client, db_session):
+    token = await _register(client, "cep20@test.com")
+    order = await _order(db_session, token)
+
+    resp = await client.patch(
+        f"/api/v1/restaurants/{order.restaurant_id}/orders/{order.id}/status",
+        headers=_headers(token),
+        json={"status": "confirmed"},
+    )
+    assert resp.status_code == 409
+    assert "no está confirmado" in resp.json()["detail"].lower()

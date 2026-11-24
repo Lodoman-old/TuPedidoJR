@@ -47,7 +47,7 @@ from app.services.order_service import calculate_order_totals, get_approval_time
 from app.services.order_serialization import order_out
 from app.services.order_transfer_service import apply_preapproved_transfer
 from app.services.loyalty_service import apply_redemption, preview_redemption, award_on_delivery
-from app.services.push_service import schedule_available_order, schedule_courier_preparing, schedule_courier_ready, schedule_new_order, schedule_order_status, schedule_admin_transfer_review
+from app.services.push_service import schedule_available_order, schedule_courier_preparing, schedule_courier_ready, schedule_new_order, schedule_order_release, schedule_order_status, schedule_admin_transfer_review
 from app.services.schedule_service import restaurant_open_state
 from app.services.tracking_service import build_tracking
 from app.ws.manager import ConnectionManager
@@ -600,10 +600,11 @@ async def create_order(
     result = await db.execute(
         select(Order).where(Order.id == order.id).options(selectinload(Order.items))
     )
-    schedule_new_order(str(order.id))
-    if requires_approval:
-        # El repartidor se busca desde que se paga, no cuando el restaurante confirma.
-        schedule_available_order(str(order.id), False)
+    if payment_method != "transfer" or order.payment_status == "approved":
+        schedule_new_order(str(order.id))
+        if requires_approval:
+            # El repartidor se busca desde que se paga, no cuando el restaurante confirma.
+            schedule_available_order(str(order.id), False)
     return result.scalar_one()
 
 
@@ -692,6 +693,16 @@ async def get_order(
             allowed = bool(dp and order.delivery_person_id == dp.id)
         if not allowed:
             raise HTTPException(status_code=403, detail="No tienes acceso a este pedido")
+    if (
+        not current_user.is_superuser
+        and order.user_id != current_user.id
+        and order.payment_method == "transfer"
+        and order.payment_status != "approved"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="El pago aún no está confirmado para este pedido",
+        )
     customer = await db.get(User, order.user_id)
     return order_out(
         order,
@@ -751,6 +762,7 @@ async def _apply_cep_payment(
             status_code=409,
             detail="Esa transferencia ya fue usada en otro pedido.",
         )
+    schedule_order_release(str(order.id))
 
 
 async def _load_order_for_transfer(

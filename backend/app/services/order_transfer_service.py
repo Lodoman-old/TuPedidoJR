@@ -16,7 +16,11 @@ from app.models.user import User
 from app.services.audit_service import log_action
 from app.services.email_service import send_email
 from app.services.order_service import get_setting_value
-from app.services.push_service import notify_admin_transfer_failed, send_to_user
+from app.services.push_service import (
+    notify_admin_transfer_failed,
+    schedule_order_release,
+    send_to_user,
+)
 from app.services.rounding import round_half_down
 
 logger = logging.getLogger(__name__)
@@ -57,6 +61,8 @@ async def apply_preapproved_transfer(
             "same_bank": bool(extracted.get("_same_bank")),
         },
     )
+    await db.commit()
+    schedule_order_release(str(order.id))
 
 
 async def settle_order_transfer(
@@ -135,6 +141,10 @@ async def settle_order_transfer(
             order.id,
             {"total": str(order.total)},
         )
+
+    if not already_paid:
+        await db.commit()
+        schedule_order_release(str(order.id))
 
 
 async def charge_failed_transfer(

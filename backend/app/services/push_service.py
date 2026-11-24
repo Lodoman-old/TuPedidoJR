@@ -393,6 +393,10 @@ async def notify_new_order(order_id: str) -> None:
             order = result.scalar_one_or_none()
             if not order:
                 return
+            # El negocio no ve pedidos por transferencia hasta que el pago
+            # esté confirmado. Los pedidos en efectivo sí se muestran al crear.
+            if order.payment_method == "transfer" and order.payment_status != "approved":
+                return
             # Los pedidos lejanos no se muestran al restaurante hasta que un
             # repartidor los acepte.
             if order.requires_courier_approval and not order.delivery_person_id:
@@ -1572,6 +1576,32 @@ def schedule_new_order(order_id: str) -> None:
         asyncio.create_task(notify_new_order(order_id))
     except RuntimeError:
         logger.debug("No event loop for push notification")
+
+
+async def notify_order_release(order_id: str) -> None:
+    """Avisa al negocio y a los repartidores que el pedido ya está pagado."""
+    try:
+        async with async_session() as db:
+            order = await db.get(Order, order_id)
+            if not order:
+                return
+            if order.payment_method == "transfer" and order.payment_status != "approved":
+                return
+            needs_courier = bool(
+                order.requires_courier_approval and not order.delivery_person_id
+            )
+        await notify_new_order(order_id)
+        if needs_courier:
+            await notify_available_order(order_id, False)
+    except Exception:
+        logger.exception("Order release notification failed for %s", order_id)
+
+
+def schedule_order_release(order_id: str) -> None:
+    try:
+        asyncio.create_task(notify_order_release(order_id))
+    except RuntimeError:
+        logger.debug("No event loop for order release notification")
 
 
 def schedule_new_restaurant_registration(restaurant_id: str) -> None:

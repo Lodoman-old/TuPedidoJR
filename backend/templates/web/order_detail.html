@@ -268,6 +268,9 @@
           <div class="small mt-2">
             Escribe esta referencia en el concepto y transfiere el total exacto. El dinero entra a la plataforma; TuPedidoJR liquida al negocio y paga al repartidor.
           </div>
+          <div class="small mt-2 text-muted">
+            El negocio prepara el pedido hasta que el pago esté confirmado.
+          </div>
           ${statusBadges}
         </div>`;
         if (!paid && o.cep_status === 'pending_cep') {
@@ -292,7 +295,7 @@
               <input type="file" id="cepReceiptFile" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp,application/pdf">
               <button class="btn btn-sm btn-primary mt-2" id="cepUploadBtn" onclick="validateTransferReceipt()">Validar mi comprobante</button>
               <div class="small text-muted mt-1" id="cepMsg"></div>
-              <div class="form-text">Leemos tu comprobante y lo validamos con Banxico (09:30 a 23:00). Fuera de horario se preaprueba con Gemini o queda en revisión.</div>
+              <div class="form-text">Sube una foto o PDF legible de tu comprobante. Si no se puede leer correctamente, usa “Capturar clave de rastreo” para validar tu pago manualmente.</div>
               <a class="small" data-bs-toggle="collapse" href="#cepManual">Capturar clave de rastreo</a>
               <div class="collapse" id="cepManual">${manualForm}</div>
             </div>`;

@@ -192,7 +192,6 @@ let scheduleState = { enabled: false, value: '' };
   }
 
   function onCartTransferBankChange(value) {
-    sessionStorage.setItem('transfer_sender_bank', value || '');
     renderCartTransferAccount();
   }
 
@@ -1215,7 +1214,7 @@ async function refreshEstimate() {
           if (!hasData) {
             bankInfo.innerHTML = '<span class="text-danger">La plataforma aún no configuró la cuenta bancaria. Elige efectivo o pide al negocio que contacte a TuPedidoJR.</span>';
           } else if (accounts.length >= 2) {
-            const saved = sessionStorage.getItem('transfer_sender_bank') || '';
+            const saved = '';
             bankInfo.innerHTML = `<label class="form-label small fw-bold mb-1">¿Desde qué banco vas a transferir?</label>
               <select id="cartTransferSenderBank" class="form-select form-select-sm mb-2" onchange="onCartTransferBankChange(this.value)">
                 <option value="">Selecciona tu banco...</option>

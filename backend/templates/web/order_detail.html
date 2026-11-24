@@ -238,14 +238,27 @@
       const savedSender = '';
       const reference = String(o.id || '').slice(0, 8).toUpperCase();
       const paid = o.payment_status === 'approved';
-      if (accounts.length || hasBank) {
-        const statusBadges = `
-          ${paid && o.cep_status !== 'failed' ? `<div class="mt-2">${o.cep_status === 'valid'
-            ? '<span class="badge bg-success"><i class="bi bi-check2-circle"></i> Pago validado por Banxico</span>'
-            : o.cep_status === 'preapproved'
-              ? '<span class="badge bg-warning text-dark"><i class="bi bi-clock-history"></i> Pago preaprobado; pendiente de confirmación final</span>'
-              : '<span class="badge bg-success"><i class="bi bi-check2-circle"></i> Pago validado</span>'}</div>` : ''}
-          ${o.cep_status === 'failed' ? '<div class="mt-2"><span class="badge bg-danger">Transferencia no confirmada; el monto se cargó a tu saldo pendiente</span></div>' : ''}`;
+      if (paid) {
+        if (o.cep_status === 'failed') {
+          html += `<div class="alert alert-danger mb-2">
+            <div class="fw-bold"><i class="bi bi-x-circle"></i> Transferencia no confirmada</div>
+            <div class="small">No se pudo confirmar el pago con Banxico. El monto se cargó a tu saldo pendiente.</div>
+          </div>`;
+        } else if (o.cep_status === 'preapproved') {
+          html += `<div class="alert alert-warning mb-2">
+            <div class="fw-bold"><i class="bi bi-clock-history"></i> Pago preaprobado</div>
+            <div class="small">El negocio ya puede preparar tu pedido. La confirmación final con Banxico está pendiente.</div>
+          </div>`;
+        } else {
+          const validated = o.cep_status === 'valid'
+            ? 'Pago validado por Banxico'
+            : 'Pago validado';
+          html += `<div class="alert alert-success mb-2">
+            <div class="fw-bold"><i class="bi bi-check2-circle"></i> ${validated}</div>
+            <div class="small">Total pagado: ${money0(o.total)}. El negocio ya puede preparar tu pedido.</div>
+          </div>`;
+        }
+      } else if (accounts.length || hasBank) {
         const bankSection = accounts.length >= 2
           ? `<label class="form-label small mb-1">¿Desde qué banco vas a transferir?</label>
              <select id="transferSenderBank" class="form-select form-select-sm mb-2" onchange="onTransferBankChange(this.value)">
@@ -271,15 +284,14 @@
           <div class="small mt-2 text-muted">
             El negocio prepara el pedido hasta que el pago esté confirmado.
           </div>
-          ${statusBadges}
         </div>`;
-        if (!paid && o.cep_status === 'pending_cep') {
+        if (o.cep_status === 'pending_cep') {
           html += `<div class="alert alert-info small mb-2"><i class="bi bi-clock"></i> Tu comprobante quedó pendiente. Banxico valida de 09:30 a 23:00; lo validaremos automáticamente al abrir.</div>`;
         }
-        if (!paid && o.cep_status === 'review') {
+        if (o.cep_status === 'review') {
           html += `<div class="alert alert-warning small mb-2"><i class="bi bi-hourglass-split"></i> Tu pago está en revisión. El administrador debe confirmar tu transferencia; si no se confirma, el pedido se cancelará y no se te cobrará.</div>`;
         }
-        if (!paid && paymentConfig.cep_enabled) {
+        if (paymentConfig.cep_enabled) {
           const bankOptions = transferBanks.map((b) => `<option value="${b.code}">${escHtml(b.name)}</option>`).join('');
           const apicep = paymentConfig.receipt_validation_provider === 'apicep';
           const manualForm = `<div class="row g-2 mt-1">
@@ -306,7 +318,7 @@
               <div class="form-text">La validación consulta Banxico. Si no encuentra tu transferencia, revisa la clave de rastreo, el banco y la fecha.</div>
             </div>`;
           }
-        } else if (!paid) {
+        } else {
           html += `<div class="alert alert-warning small mb-2"><i class="bi bi-info-circle"></i> La validación automática no está activada. Envía tu comprobante a soporte o espera la revisión.</div>`;
         }
       } else {

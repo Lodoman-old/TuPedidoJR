@@ -28,6 +28,7 @@ from app.models.reservation import Reservation
 from app.models.store_request import StoreRequest
 from app.models.shipment import Shipment
 from app.models.receipt_validation import ReceiptValidation
+from app.models.balance_payment import BalancePayment
 from app.models.delivery_incident import DeliveryIncident
 from app.models.restaurant_adjustment import RestaurantAdjustment
 from app.models.security import BlockedIP, SecurityEvent
@@ -74,6 +75,7 @@ __all__ = [
     "StoreRequest",
     "Shipment",
     "ReceiptValidation",
+    "BalancePayment",
     "DeliveryIncident",
     "RestaurantAdjustment",
     "SecurityEvent",

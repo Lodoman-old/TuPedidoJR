@@ -893,6 +893,20 @@ async def validate_transfer_payment(
             detail="Esa transferencia ya fue usada en otro pedido.",
         )
 
+    force_closed = (
+        await get_setting_value(db, "CEP_FORCE_CLOSED", "false")
+    ).lower() == "true"
+    if force_closed:
+        order.cep_status = "review"
+        await db.commit()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Banxico está cerrado (simulación). Sube tu comprobante "
+                "para validarlo con el respaldo de Gemini."
+            ),
+        )
+
     amount_cents = int((Decimal(order.total or 0) * 100).to_integral_value())
     transfer_date = body.transfer_date or date.today()
     try:
@@ -923,6 +937,22 @@ async def validate_transfer_payment(
             "same_bank": 409,
             "error": 502,
         }
+        review_statuses = {
+            "not_found",
+            "pending",
+            "rate_limited",
+            "closed",
+            "amount_mismatch",
+            "account_mismatch",
+            "receiver_mismatch",
+            "sender_mismatch",
+            "key_mismatch",
+            "same_bank",
+            "error",
+        }
+        if exc.status in review_statuses:
+            order.cep_status = "review"
+            await db.commit()
         raise HTTPException(
             status_code=status_by_error.get(exc.status, 502),
             detail=exc.message,
@@ -1037,6 +1067,8 @@ async def validate_transfer_receipt(
         }
 
     if record.status == "pending_cep":
+        order.cep_status = "pending_cep"
+        await db.commit()
         return {
             "payment_status": "pending",
             "cep_status": "pending_cep",
@@ -1047,6 +1079,8 @@ async def validate_transfer_receipt(
         }
 
     if record.status == "review":
+        order.cep_status = "review"
+        await db.commit()
         reason = record.summary or "Pago en revisión."
         issues = record.issues or []
         if issues:
@@ -1072,6 +1106,8 @@ async def validate_transfer_receipt(
         }
 
     if record.status != "high":
+        order.cep_status = "review"
+        await db.commit()
         issues = record.issues or []
         detail = record.error or (str(issues[0]) if issues else "")
         raise HTTPException(

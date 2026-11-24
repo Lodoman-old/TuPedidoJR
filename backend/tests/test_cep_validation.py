@@ -650,6 +650,7 @@ async def test_receipt_upload_pending_cep_stays_unpaid(
 
     await db_session.refresh(order)
     assert order.payment_status == "pending"
+    assert order.cep_status == "pending_cep"
 
 
 async def test_receipt_upload_review_notifies_admin(
@@ -686,6 +687,7 @@ async def test_receipt_upload_review_notifies_admin(
 
     await db_session.refresh(order)
     assert order.payment_status == "pending"
+    assert order.cep_status == "review"
 
 
 def _make_clabe(prefix: str, body: str) -> str:

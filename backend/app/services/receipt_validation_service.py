@@ -757,13 +757,15 @@ async def _validate_record(
     if provider != "apicep" or record.expected_kind != TRANSFER:
         return await _validate_with_gemini(db, record)
 
-    if not banxico_open():
+    force_closed = (
+        await get_setting_value(db, "CEP_FORCE_CLOSED", "false")
+    ).lower() == "true"
+    if force_closed or not banxico_open():
         return await _fallback_with_gemini(
             db,
             record,
             "Banxico está fuera de horario (09:30 a 23:00).",
         )
-
     apicep_key = (await get_setting_value(db, "APICEP_API_KEY", "")).strip()
     if not apicep_key:
         return await _fallback_with_gemini(

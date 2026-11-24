@@ -1,5 +1,6 @@
 import logging
 
+import clabe
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +11,7 @@ from app.core.constants import PaymentStatus
 from app.db.session import get_db
 from app.models.order import Order
 from app.models.user import User
-from app.schemas.payment import BankDetailsOut, CreatePreferenceRequest, CreatePreferenceResponse, PaymentStatusOut
+from app.schemas.payment import BankAccountOut, BankDetailsOut, CreatePreferenceRequest, CreatePreferenceResponse, PaymentStatusOut
 
 logger = logging.getLogger(__name__)
 
@@ -71,18 +72,44 @@ async def transfer_banks():
     ]
 
 
+def _bank_code(value: str) -> str:
+    digits = "".join(ch for ch in (value or "") if ch.isdigit())
+    if len(digits) == 18:
+        return clabe.BANKS.get(digits[:3], "") or ""
+    return ""
+
+
 @router.get("/bank-details", response_model=BankDetailsOut)
 async def get_bank_details(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     from app.services.setting_service import get_setting
+
+    primary = BankAccountOut(
+        bank_name=await get_setting(db, "BANK_NAME", "") or "",
+        account_holder=await get_setting(db, "BANK_ACCOUNT_HOLDER", "") or "",
+        clabe=await get_setting(db, "BANK_CLABE", "") or "",
+        card=await get_setting(db, "BANK_CARD", "") or "",
+    )
+    primary.bank_code = _bank_code(primary.clabe)
+
+    secondary = BankAccountOut(
+        bank_name=await get_setting(db, "BANK_NAME_2", "") or "",
+        account_holder=await get_setting(db, "BANK_ACCOUNT_HOLDER_2", "") or "",
+        clabe=await get_setting(db, "BANK_CLABE_2", "") or "",
+        card=await get_setting(db, "BANK_CARD_2", "") or "",
+    )
+    secondary.bank_code = _bank_code(secondary.clabe)
+
+    accounts = [account for account in (primary, secondary) if account.clabe]
     return BankDetailsOut(
-        bank_name=await get_setting(db, "BANK_NAME", ""),
-        account_holder=await get_setting(db, "BANK_ACCOUNT_HOLDER", ""),
-        clabe=await get_setting(db, "BANK_CLABE", ""),
-        card=await get_setting(db, "BANK_CARD", ""),
+        bank_name=primary.bank_name,
+        account_holder=primary.account_holder,
+        clabe=primary.clabe,
+        card=primary.card,
         recipient="TuPedidoJR",
+        accounts=accounts,
     )
 
 

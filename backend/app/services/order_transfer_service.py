@@ -116,7 +116,9 @@ async def settle_order_transfer(
         or details.get("senderBank")
         or order.cep_sender_bank
     )
-    order.cep_receiver_bank = order.cep_receiver_bank or details.get("receiverBank")
+    order.cep_receiver_bank = (
+        details.get("receiverBank") or order.cep_receiver_bank
+    )
     order.payment_status = "approved"
 
     if not already_paid:

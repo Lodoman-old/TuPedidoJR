@@ -769,24 +769,63 @@ async def _load_order_for_transfer(
     return order
 
 
-async def _transfer_receiver_account(db: AsyncSession) -> tuple[str, str]:
-    receiver_account = "".join(
-        ch
-        for ch in (await get_setting_value(db, "BANK_CLABE", "")).strip()
-        if ch.isdigit()
+def _normalize_bank_name(value) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _cep_code_for_bank_name(value) -> str | None:
+    target = _normalize_bank_name(value)
+    if not target:
+        return None
+    for code, name in clabe.BANK_NAMES.items():
+        if _normalize_bank_name(name) == target:
+            return code
+    return None
+
+
+def _match_receiver_account(extracted: dict, accounts: list[dict]) -> dict | None:
+    text = " ".join(
+        str(extracted.get(key) or "")
+        for key in ("recipient", "account", "beneficiaryName", "reference")
     )
-    if len(receiver_account) != 18:
+    digits = "".join(ch for ch in text if ch.isdigit())
+    for account in accounts:
+        if account["clabe"] and account["clabe"] in digits:
+            return account
+    return None
+
+
+async def _transfer_receiver_accounts(db: AsyncSession) -> list[dict]:
+    accounts: list[dict] = []
+    for suffix in ("", "_2"):
+        clabe_value = "".join(
+            ch
+            for ch in (
+                await get_setting_value(db, f"BANK_CLABE{suffix}", "")
+            ).strip()
+            if ch.isdigit()
+        )
+        if len(clabe_value) != 18:
+            continue
+        bank_code = clabe.BANKS.get(clabe_value[:3])
+        if not bank_code:
+            continue
+        accounts.append({
+            "clabe": clabe_value,
+            "bank_code": bank_code,
+            "bank_name": (
+                await get_setting_value(db, f"BANK_NAME{suffix}", "")
+            ).strip(),
+            "holder": (
+                await get_setting_value(db, f"BANK_ACCOUNT_HOLDER{suffix}", "")
+            ).strip(),
+        })
+    if not accounts:
         raise HTTPException(
             status_code=400,
             detail="La cuenta bancaria de la plataforma no está configurada.",
         )
-    receiver_bank = clabe.BANKS.get(receiver_account[:3])
-    if not receiver_bank:
-        raise HTTPException(
-            status_code=400,
-            detail="No se pudo identificar el banco de la cuenta de la plataforma.",
-        )
-    return receiver_account, receiver_bank
+    return accounts
 
 
 @router.post("/{order_id}/validate-transfer")
@@ -816,7 +855,18 @@ async def validate_transfer_payment(
             ),
         )
 
-    receiver_account, receiver_bank = await _transfer_receiver_account(db)
+    accounts = await _transfer_receiver_accounts(db)
+    sender_bank = str(body.sender_bank or "").strip()
+    receiver = next(
+        (
+            account
+            for account in accounts
+            if account["bank_code"] != sender_bank
+        ),
+        accounts[0],
+    )
+    receiver_account = receiver["clabe"]
+    receiver_bank = receiver["bank_code"]
 
     key = body.clave_rastreo.strip()
     existing = await db.scalar(
@@ -932,7 +982,9 @@ async def validate_transfer_receipt(
                 detail="La validación automática no está configurada.",
             )
 
-    receiver_account, receiver_bank = await _transfer_receiver_account(db)
+    accounts = await _transfer_receiver_accounts(db)
+    expected_recipient = " o ".join(account["clabe"] for account in accounts)
+    receiver_bank = accounts[0]["bank_code"]
 
     try:
         file_url = await save_document(file)
@@ -947,10 +999,13 @@ async def validate_transfer_receipt(
         TRANSFER_RECEIPT,
         expected_amount=order.total,
         expected_date=order.placed_at or datetime.now(timezone.utc),
-        expected_recipient=receiver_account,
+        expected_recipient=expected_recipient,
     )
 
     if record.status == "preapproved":
+        matched = _match_receiver_account(record.extracted or {}, accounts)
+        if matched:
+            order.cep_receiver_bank = matched["bank_code"]
         await apply_preapproved_transfer(db, record, actor_id=current_user.id)
         await db.commit()
         if (record.extracted or {}).get("_same_bank"):
@@ -1029,6 +1084,8 @@ async def validate_transfer_receipt(
             ),
         )
     sender_bank = extracted.get("senderBank") or details.get("senderBank")
+    actual_receiver = details.get("receiverBank") or extracted.get("receiverBank")
+    receiver_bank = _cep_code_for_bank_name(actual_receiver) or receiver_bank
 
     await _apply_cep_payment(
         db,

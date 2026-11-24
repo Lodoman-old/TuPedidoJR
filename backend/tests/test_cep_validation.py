@@ -17,6 +17,7 @@ from app.models.setting import Setting
 from app.models.user import User
 from app.services import order_transfer_service as ots
 from app.services import receipt_validation_service as rvs
+from app.services import api_cep_service
 from app.services.api_cep_service import ApiCepError
 from app.services.cep_validation_service import CepValidationError, validate_transfer
 
@@ -685,3 +686,104 @@ async def test_receipt_upload_review_notifies_admin(
 
     await db_session.refresh(order)
     assert order.payment_status == "pending"
+
+
+def _make_clabe(prefix: str, body: str) -> str:
+    first17 = (prefix + body)[:17]
+    weights = [3, 7, 1] * 6
+    total = sum(int(d) * weights[i] for i, d in enumerate(first17))
+    return first17 + str((10 - (total % 10)) % 10)
+
+
+async def _second_account(db_session, clabe_value: str) -> None:
+    db_session.add_all([
+        Setting(key="BANK_NAME_2", value="Banco Azteca"),
+        Setting(key="BANK_ACCOUNT_HOLDER_2", value="TuPedidoJR"),
+        Setting(key="BANK_CLABE_2", value=clabe_value),
+    ])
+    await db_session.commit()
+
+
+async def test_bank_details_includes_second_account(client, db_session):
+    token = await _register(client, "cep16@test.com")
+    await _settings(db_session)
+    azteca = _make_clabe("127", "01000000000000")
+    await _second_account(db_session, azteca)
+
+    resp = await client.get(
+        "/api/v1/payments/bank-details", headers=_headers(token)
+    )
+    assert resp.status_code == 200, resp.text
+    accounts = resp.json()["accounts"]
+    assert {account["bank_code"] for account in accounts} == {"40012", "40127"}
+    assert any(account["clabe"] == azteca for account in accounts)
+
+
+async def test_manual_cep_uses_other_bank_account(
+    client, db_session, monkeypatch
+):
+    token = await _register(client, "cep17@test.com")
+    await _settings(db_session)
+    azteca = _make_clabe("127", "01000000000000")
+    await _second_account(db_session, azteca)
+    order = await _order(db_session, token)
+    calls = []
+    monkeypatch.setattr(orders_module, "validate_transfer", _fake_validate(calls))
+
+    resp = await client.post(
+        f"/api/v1/orders/{order.id}/validate-transfer",
+        headers=_headers(token),
+        json={
+            "clave_rastreo": "ABC12345",
+            "sender_bank": "40012",
+            "transfer_date": str(date.today()),
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert calls[0]["receiver_bank"] == "40127"
+    assert calls[0]["receiver_account"] == azteca
+
+    await db_session.refresh(order)
+    assert order.cep_receiver_bank == "40127"
+
+
+async def test_apicep_uses_potential_beneficiaries(db_session, monkeypatch):
+    await _apicep_settings(db_session)
+    azteca = _make_clabe("127", "01000000000000")
+    await _second_account(db_session, azteca)
+    captured = {}
+
+    class FakeResponse:
+        status_code = 400
+        text = "{}"
+
+        def json(self):
+            return {}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, headers=None, json=None):
+            captured["payload"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(api_cep_service.httpx, "AsyncClient", FakeClient)
+
+    with pytest.raises(api_cep_service.ApiCepError):
+        await api_cep_service.validate_receipt(
+            db_session, file_url="/static/uploads/comprobante.webp"
+        )
+
+    accounts = captured["payload"]["potentialBeneficiaries"]
+    assert len(accounts) == 2
+    assert {account["bank"] for account in accounts} == {
+        "BBVA MEXICO",
+        "AZTECA",
+    }

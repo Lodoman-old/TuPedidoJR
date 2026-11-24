@@ -6,6 +6,7 @@ have to remember internal key names.
 """
 from decimal import Decimal, InvalidOperation
 
+import clabe
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -18,6 +19,15 @@ from app.models.user import User
 from app.services.audit_service import log_action
 
 router = APIRouter()
+
+
+def _clabe_checksum_ok(value: str) -> bool:
+    if len(value) != 18 or not value.isdigit():
+        return False
+    weights = [3, 7, 1] * 6
+    total = sum(int(d) * weights[i] for i, d in enumerate(value[:17]))
+    expected = (10 - (total % 10)) % 10
+    return expected == int(value[17])
 
 # key -> (group, label, description, type, default, options)
 KNOWN_SETTINGS: dict[str, dict] = {
@@ -330,6 +340,26 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Dato adicional para transferencias o depósitos.",
         "type": "text", "default": "",
     },
+    "BANK_NAME_2": {
+        "group": "Pagos", "label": "Banco de la segunda cuenta",
+        "description": "Segundo banco para recibir transferencias. Ejemplo: Banco Azteca.",
+        "type": "text", "default": "",
+    },
+    "BANK_ACCOUNT_HOLDER_2": {
+        "group": "Pagos", "label": "Titular de la segunda cuenta",
+        "description": "Nombre que verá el cliente al transferir a la segunda cuenta.",
+        "type": "text", "default": "",
+    },
+    "BANK_CLABE_2": {
+        "group": "Pagos", "label": "CLABE de la segunda cuenta",
+        "description": "CLABE de 18 dígitos del segundo banco. Se usa para clientes del banco principal.",
+        "type": "text", "default": "",
+    },
+    "BANK_CARD_2": {
+        "group": "Pagos", "label": "Tarjeta de la segunda cuenta (opcional)",
+        "description": "Dato adicional para transferencias o depósitos.",
+        "type": "text", "default": "",
+    },
     "WHATSAPP_SUPPORT": {
         "group": "Soporte", "label": "WhatsApp de soporte",
         "description": "Número con lada país, sin espacios. Ej. 524121234567.",
@@ -549,12 +579,25 @@ def _normalize_value(key: str, raw) -> str:
         return value
 
     value = str(raw).strip()
-    if key == "BANK_CLABE" and value:
-        if not value.isdigit() or len(value) != 18:
+    if key in ("BANK_CLABE", "BANK_CLABE_2") and value:
+        digits = "".join(ch for ch in value if ch.isdigit())
+        if not _clabe_checksum_ok(digits):
             raise HTTPException(
                 status_code=400,
-                detail="CLABE interbancaria: deben ser 18 dígitos",
+                detail=(
+                    f"{meta['label']}: CLABE inválida. Deben ser 18 dígitos "
+                    "con dígito verificador correcto."
+                ),
             )
+        if not clabe.BANKS.get(digits[:3]):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{meta['label']}: el banco de la CLABE no está reconocido "
+                    "para validar transferencias."
+                ),
+            )
+        value = digits
     return value
 
 

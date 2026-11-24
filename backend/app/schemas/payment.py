@@ -3,12 +3,21 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class BankAccountOut(BaseModel):
+    bank_name: str = ""
+    bank_code: str = ""
+    account_holder: str = ""
+    clabe: str = ""
+    card: str = ""
+
+
 class BankDetailsOut(BaseModel):
     bank_name: str = ""
     account_holder: str = ""
     clabe: str = ""
     card: str = ""
     recipient: str = "TuPedidoJR"
+    accounts: list[BankAccountOut] = []
 
 
 class CreatePreferenceRequest(BaseModel):

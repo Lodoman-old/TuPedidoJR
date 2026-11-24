@@ -60,6 +60,75 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
+  const TRANSFER_BANKS = [
+    { code: '40002', name: 'Banamex' },
+    { code: '40127', name: 'Banco Azteca' },
+    { code: '40012', name: 'BBVA' },
+    { code: '40014', name: 'Santander' },
+    { code: '40072', name: 'Banorte' },
+    { code: '40021', name: 'HSBC' },
+    { code: '40044', name: 'Scotiabank' },
+    { code: '40036', name: 'Inbursa' },
+    { code: '0', name: 'Otro banco' },
+  ];
+
+  function transferBankOptions(selected) {
+    return TRANSFER_BANKS.map((bank) => (
+      `<option value="${bank.code}" ${bank.code === selected ? 'selected' : ''}>${escHtml(bank.name)}</option>`
+    )).join('');
+  }
+
+  function recommendedTransferAccount(senderCode) {
+    const accounts = (bankDetails && bankDetails.accounts) || [];
+    if (!accounts.length) return null;
+    if (!senderCode || senderCode === '0') return accounts[0];
+    return accounts.find((account) => account.bank_code !== senderCode) || accounts[0];
+  }
+
+  function renderTransferAccount() {
+    const select = document.getElementById('transferSenderBank');
+    const box = document.getElementById('transferAccountInfo');
+    if (!select || !box) return;
+    const accounts = (bankDetails && bankDetails.accounts) || [];
+    if (!accounts.length) {
+      box.innerHTML = '<span class="text-danger">La plataforma aún no configuró la cuenta bancaria.</span>';
+      return;
+    }
+    const sender = select.value;
+    if (!sender) {
+      const names = accounts.map((account) => account.bank_name).filter(Boolean).join(' y ');
+      box.innerHTML = `<div class="small text-muted">Selecciona tu banco para mostrarte la cuenta correcta. Si tienes ${escHtml(names)}, te mostraremos la cuenta del otro banco.</div>`;
+      return;
+    }
+    const account = recommendedTransferAccount(sender);
+    if (!account) return;
+    const card = account.card ? `<br>Tarjeta: ${escHtml(account.card)}` : '';
+    box.innerHTML = `<div class="border rounded p-2 bg-light">
+      <div class="small fw-bold">Transfiere a ${escHtml(account.bank_name || 'la plataforma')}</div>
+      <div class="small">Titular: ${escHtml(account.account_holder || '—')}<br>
+      CLABE: <strong>${escHtml(account.clabe || '—')}</strong>${card}</div>
+      <div class="small text-muted mt-1">Es un banco distinto al tuyo, así Banxico puede validar la transferencia.</div>
+    </div>`;
+    const cepSelect = document.getElementById('cepSenderBank');
+    if (cepSelect && sender && sender !== '0') {
+      cepSelect.value = sender;
+    }
+  }
+
+  function onTransferBankChange(value) {
+    sessionStorage.setItem('transfer_sender_bank', value || '');
+    renderTransferAccount();
+  }
+
+  function syncTransferBankFromCep(value) {
+    const top = document.getElementById('transferSenderBank');
+    if (top && value) {
+      top.value = value;
+      sessionStorage.setItem('transfer_sender_bank', value);
+      renderTransferAccount();
+    }
+  }
+
   async function loadOrder(connect = true) {
     const loading = document.getElementById('orderLoading');
     const content = document.getElementById('orderContent');
@@ -167,19 +236,36 @@
     }
     if (o.payment_method === 'transfer' && o.status !== 'delivered' && o.status !== 'cancelled' && paymentConfig.transfer_enabled) {
       const hasBank = bankDetails && (bankDetails.bank_name || bankDetails.clabe || bankDetails.account_holder);
+      const accounts = (bankDetails && bankDetails.accounts) || [];
+      const savedSender = sessionStorage.getItem('transfer_sender_bank') || '';
       const reference = String(o.id || '').slice(0, 8).toUpperCase();
       const paid = o.payment_status === 'approved';
-      if (hasBank) {
-        html += `<div class="alert alert-info mb-2"><i class="bi bi-bank"></i> Pago por transferencia a TuPedidoJR (plataforma)<br>
-          <small>Banco: ${bankDetails.bank_name || '—'} · Titular: ${bankDetails.account_holder || '—'} · CLABE: ${bankDetails.clabe || '—'}${bankDetails.card ? ` · Tarjeta: ${bankDetails.card}` : ''}<br>
-          <strong>Referencia:</strong> #${reference}<br>
-          Escribe esta referencia en el concepto y transfiere el total exacto. El dinero entra a la plataforma; TuPedidoJR liquida al negocio y paga al repartidor.</small>
-          ${paid && o.cep_status !== 'failed' ? `<div class="mt-1">${o.cep_status === 'valid'
+      if (accounts.length || hasBank) {
+        const statusBadges = `
+          ${paid && o.cep_status !== 'failed' ? `<div class="mt-2">${o.cep_status === 'valid'
             ? '<span class="badge bg-success"><i class="bi bi-check2-circle"></i> Pago validado por Banxico</span>'
             : o.cep_status === 'preapproved'
               ? '<span class="badge bg-warning text-dark"><i class="bi bi-clock-history"></i> Pago preaprobado; pendiente de confirmación final</span>'
               : '<span class="badge bg-success"><i class="bi bi-check2-circle"></i> Pago validado</span>'}</div>` : ''}
-          ${o.cep_status === 'failed' ? '<div class="mt-1"><span class="badge bg-danger">Transferencia no confirmada; el monto se cargó a tu saldo pendiente</span></div>' : ''}
+          ${o.cep_status === 'failed' ? '<div class="mt-2"><span class="badge bg-danger">Transferencia no confirmada; el monto se cargó a tu saldo pendiente</span></div>' : ''}`;
+        const bankSection = accounts.length >= 2
+          ? `<label class="form-label small mb-1">¿Desde qué banco vas a transferir?</label>
+             <select id="transferSenderBank" class="form-select form-select-sm mb-2" onchange="onTransferBankChange(this.value)">
+               <option value="">Selecciona tu banco...</option>
+               ${transferBankOptions(savedSender)}
+             </select>
+             <div id="transferAccountInfo"></div>`
+          : `<div class="small">Banco: ${bankDetails.bank_name || (accounts[0] && accounts[0].bank_name) || '—'} · Titular: ${bankDetails.account_holder || (accounts[0] && accounts[0].account_holder) || '—'} · CLABE: ${bankDetails.clabe || (accounts[0] && accounts[0].clabe) || '—'}${(bankDetails.card || (accounts[0] && accounts[0].card)) ? ` · Tarjeta: ${bankDetails.card || accounts[0].card}` : ''}</div>`;
+        const helperNote = accounts.length >= 2
+          ? 'Te mostramos la cuenta de un banco distinto al tuyo para que Banxico pueda validar tu transferencia.'
+          : 'Si tu cuenta es del mismo banco, sube tu comprobante para revisión manual.';
+        html += `<div class="alert alert-info mb-2">
+          <div class="fw-bold"><i class="bi bi-bank"></i> Pago por transferencia a TuPedidoJR (plataforma)</div>
+          <div class="small mb-2">${helperNote}</div>
+          ${bankSection}
+          <div class="small mt-2"><strong>Referencia:</strong> #${reference}<br>
+          Escribe esta referencia en el concepto y transfiere el total exacto. El dinero entra a la plataforma; TuPedidoJR liquida al negocio y paga al repartidor.</div>
+          ${statusBadges}
         </div>`;
         if (!paid && o.cep_status === 'pending_cep') {
           html += `<div class="alert alert-info small mb-2"><i class="bi bi-clock"></i> Tu comprobante quedó pendiente. Banxico valida de 09:30 a 23:00; lo validaremos automáticamente al abrir.</div>`;
@@ -192,7 +278,7 @@
           const apicep = paymentConfig.receipt_validation_provider === 'apicep';
           const manualForm = `<div class="row g-2 mt-1">
               <div class="col-12"><input id="cepTrackingKey" class="form-control form-control-sm" maxlength="30" placeholder="Clave de rastreo (en tu comprobante)"></div>
-              <div class="col-7"><select id="cepSenderBank" class="form-select form-select-sm"><option value="">Banco emisor...</option>${bankOptions}</select></div>
+              <div class="col-7"><select id="cepSenderBank" class="form-select form-select-sm" onchange="syncTransferBankFromCep(this.value)"><option value="">Banco emisor...</option>${bankOptions}</select></div>
               <div class="col-5"><input type="date" id="cepDate" class="form-control form-control-sm" value="${todayLocal()}"></div>
             </div>
             <button class="btn btn-sm btn-outline-primary mt-2" id="cepValidateBtn" onclick="validateTransferPayment()">Validar clave</button>
@@ -272,6 +358,7 @@
 
     document.getElementById('orderContent').innerHTML = html;
     initMap(t);
+    renderTransferAccount();
 
     if (o.status === 'delivered') {
       renderReviewUI(o);

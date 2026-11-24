@@ -35,6 +35,33 @@ def _normalize_bank(value: str) -> str:
     return aliases.get(bank, bank)
 
 
+async def _platform_accounts(db: AsyncSession) -> list[dict]:
+    """Cuentas de la plataforma configuradas para recibir transferencias."""
+    accounts: list[dict] = []
+    for suffix in ("", "_2"):
+        clabe_value = "".join(
+            ch
+            for ch in (
+                await get_setting_value(db, f"BANK_CLABE{suffix}", "")
+            ).strip()
+            if ch.isdigit()
+        )
+        if len(clabe_value) != 18:
+            continue
+        bank = ""
+        if not suffix:
+            bank = _normalize_bank(
+                await get_setting_value(db, "APICEP_BENEFICIARY_BANK", "")
+            )
+        if not bank:
+            cep_code = clabe.BANKS.get(clabe_value[:3])
+            bank = _normalize_bank(clabe.BANK_NAMES.get(cep_code, ""))
+        if not bank:
+            continue
+        accounts.append({"clabe": clabe_value, "bank": bank})
+    return accounts
+
+
 async def validate_receipt(
     db: AsyncSession,
     *,
@@ -47,26 +74,11 @@ async def validate_receipt(
         raise ApiCepError(
             "not_configured", "Falta configurar la API key de apiCEP."
         )
-    beneficiary_clabe = "".join(
-        ch
-        for ch in (await get_setting_value(db, "BANK_CLABE", "")).strip()
-        if ch.isdigit()
-    )
-    beneficiary_bank = _normalize_bank(
-        await get_setting_value(db, "APICEP_BENEFICIARY_BANK", "")
-    )
-    if not beneficiary_bank:
-        cep_code = clabe.BANKS.get(beneficiary_clabe[:3])
-        beneficiary_bank = _normalize_bank(clabe.BANK_NAMES.get(cep_code, ""))
-    if len(beneficiary_clabe) != 18:
+    accounts = await _platform_accounts(db)
+    if not accounts:
         raise ApiCepError(
             "not_configured",
             "La CLABE de la plataforma no está configurada para apiCEP.",
-        )
-    if not beneficiary_bank:
-        raise ApiCepError(
-            "not_configured",
-            "Falta configurar el banco beneficiario de apiCEP.",
         )
 
     public_url = (
@@ -95,11 +107,11 @@ async def validate_receipt(
     payload = {
         "imageUrl": image_url,
         "system": "SPEI",
-        "beneficiary": {
-            "clabe": beneficiary_clabe,
-            "bank": beneficiary_bank,
-        },
     }
+    if len(accounts) == 1:
+        payload["beneficiary"] = accounts[0]
+    else:
+        payload["potentialBeneficiaries"] = accounts
     try:
         async with httpx.AsyncClient(timeout=45) as client:
             response = await client.post(

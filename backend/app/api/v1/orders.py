@@ -413,6 +413,25 @@ async def create_order(
                 status_code=400,
                 detail="La transferencia está deshabilitada por el momento. Paga en efectivo al recibir.",
             )
+        open_transfer = await db.scalar(
+            select(Order.id)
+            .where(
+                Order.user_id == current_user.id,
+                Order.payment_method == "transfer",
+                Order.payment_status != "approved",
+                Order.status != "cancelled",
+            )
+            .limit(1)
+        )
+        if open_transfer:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Ya tienes un pedido por transferencia pendiente. "
+                    "Termina ese pago, cámbialo a efectivo o cancélalo antes "
+                    "de crear otro."
+                ),
+            )
     elif payment_method != "cash":
         raise HTTPException(status_code=400, detail="Método de pago no válido")
 

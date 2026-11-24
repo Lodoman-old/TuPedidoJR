@@ -10,6 +10,7 @@ from httpx import AsyncClient
 
 from app.models.menu_item import MenuItem
 from app.models.restaurant import Restaurant
+from app.models.setting import Setting
 from app.models.user import User
 
 TZ = ZoneInfo("America/Mexico_City")
@@ -1934,3 +1935,63 @@ class TestShowAddress:
             headers=_headers(superuser_token),
         )
         assert invalid.status_code == 400
+
+
+class TestTransferAntiFraud:
+    async def test_blocks_second_unpaid_transfer(
+        self, client, restaurant, customer_token, db_session
+    ):
+        resto, item = restaurant
+        db_session.add(Setting(key="TRANSFER_ENABLED", value="true"))
+        await db_session.commit()
+
+        first = await _create_order(
+            client, customer_token, resto, item, payment_method="transfer"
+        )
+        assert first.status_code == 201, first.text
+
+        second = await _create_order(
+            client, customer_token, resto, item, payment_method="transfer"
+        )
+        assert second.status_code == 409
+        assert "pedido por transferencia pendiente" in second.json()["detail"].lower()
+
+    async def test_transfer_allows_pending_balance(
+        self, client, restaurant, customer_token, db_session
+    ):
+        from app.core.security import decode_access_token
+
+        resto, item = restaurant
+        db_session.add(Setting(key="TRANSFER_ENABLED", value="true"))
+        await db_session.commit()
+        user = await db_session.get(
+            User, uuid.UUID(decode_access_token(customer_token)["sub"])
+        )
+        user.pending_balance = Decimal("50.00")
+        await db_session.commit()
+
+        resp = await _create_order(
+            client, customer_token, resto, item, payment_method="transfer"
+        )
+        assert resp.status_code == 201, resp.text
+        await db_session.refresh(user)
+        assert Decimal(user.pending_balance or 0) == Decimal("0.00")
+
+    async def test_cash_allowed_with_pending_balance(
+        self, client, restaurant, customer_token, db_session
+    ):
+        from app.core.security import decode_access_token
+
+        resto, item = restaurant
+        user = await db_session.get(
+            User, uuid.UUID(decode_access_token(customer_token)["sub"])
+        )
+        user.pending_balance = Decimal("50.00")
+        await db_session.commit()
+
+        resp = await _create_order(
+            client, customer_token, resto, item, payment_method="cash"
+        )
+        assert resp.status_code == 201, resp.text
+        await db_session.refresh(user)
+        assert Decimal(user.pending_balance or 0) == Decimal("0.00")

@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.models.order import Order
 from app.models.user import User
 from app.schemas.payment import BankAccountOut, BankDetailsOut, CreatePreferenceRequest, CreatePreferenceResponse, PaymentStatusOut
+from app.services.cep_validation_service import banxico_open
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,35 @@ async def _payment_flags(db: AsyncSession) -> dict:
     receipt_provider = (
         await get_setting(db, "RECEIPT_VALIDATION_PROVIDER", "gemini")
     ).strip().lower()
+    validation_enabled = (
+        await get_setting(db, "RECEIPT_VALIDATION_ENABLED", "false")
+    ).lower() == "true"
+    apicep_key = (await get_setting(db, "APICEP_API_KEY", "") or "").strip()
+    gemini_key = (await get_setting(db, "GEMINI_API_KEY", "") or "").strip()
+    fallback_enabled = (
+        await get_setting(db, "RECEIPT_GEMINI_FALLBACK_ENABLED", "true")
+    ).lower() == "true"
+    banxico_is_open = banxico_open()
+    apicep_ready = bool(
+        cep_enabled
+        and validation_enabled
+        and receipt_provider == "apicep"
+        and apicep_key
+    )
+    gemini_ready = bool(fallback_enabled and gemini_key)
+    auto_available = bool((banxico_is_open and apicep_ready) or gemini_ready)
+    if auto_available:
+        validation_message = ""
+    elif banxico_is_open:
+        validation_message = (
+            "La validación automática de transferencias no está disponible. "
+            "Te recomendamos pagar en efectivo."
+        )
+    else:
+        validation_message = (
+            "Banxico está cerrado (09:30 a 23:00) y el respaldo con Gemini no está "
+            "disponible. Te recomendamos pagar en efectivo o intentar de 09:30 a 23:00."
+        )
     loyalty = await loyalty_config(db)
     return {
         "cash_enabled": True,
@@ -47,6 +77,11 @@ async def _payment_flags(db: AsyncSession) -> dict:
         "transfer_enabled": transfer_enabled,
         "cep_enabled": cep_enabled,
         "receipt_validation_provider": receipt_provider,
+        "banxico_open": banxico_is_open,
+        "apicep_ready": apicep_ready,
+        "gemini_ready": gemini_ready,
+        "transfer_auto_validation_available": auto_available,
+        "transfer_validation_message": validation_message,
         "loyalty_enabled": loyalty["enabled"],
         "loyalty_visible": loyalty["visible"],
         "loyalty_value_per_point": f"{loyalty['value_per_point']:.2f}",

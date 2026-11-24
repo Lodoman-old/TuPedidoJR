@@ -19,6 +19,7 @@ from app.models.menu_item import MenuItem
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.order_item_option import OrderItemOption
+from app.models.receipt_validation import ReceiptValidation
 from app.models.restaurant import Restaurant
 from app.models.user import User
 from app.services.rounding import round_half_down
@@ -838,6 +839,58 @@ async def _transfer_receiver_accounts(db: AsyncSession) -> list[dict]:
             detail="La cuenta bancaria de la plataforma no está configurada.",
         )
     return accounts
+
+
+@router.post("/{order_id}/switch-to-cash")
+async def switch_order_to_cash(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Permite pasar un pedido por transferencia a efectivo antes de pagar."""
+    order = await _load_order_for_transfer(db, order_id, current_user)
+    if order.payment_status == "approved":
+        raise HTTPException(
+            status_code=400,
+            detail="El pago ya está confirmado; no se puede cambiar a efectivo.",
+        )
+    if order.status != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail="El pedido ya no se puede modificar.",
+        )
+
+    order.payment_method = "cash"
+    order.payment_status = "pending"
+    order.cep_status = None
+    order.transfer_tracking_key = None
+    order.cep_validated_at = None
+    order.cep_sender_bank = None
+    order.cep_receiver_bank = None
+    order.cep_payload = None
+
+    record = await db.scalar(
+        select(ReceiptValidation)
+        .where(
+            ReceiptValidation.entity_type == "order_transfer",
+            ReceiptValidation.entity_id == order.id,
+        )
+        .order_by(ReceiptValidation.created_at.desc())
+        .limit(1)
+    )
+    if record and record.status not in ("approved", "high"):
+        record.status = "rejected"
+        record.summary = "El cliente cambió el pago a efectivo."
+
+    await db.commit()
+    schedule_order_release(str(order.id))
+    return {
+        "payment_method": "cash",
+        "message": (
+            "Cambiamos tu pago a efectivo. "
+            "El negocio ya puede ver tu pedido."
+        ),
+    }
 
 
 @router.post("/{order_id}/validate-transfer")

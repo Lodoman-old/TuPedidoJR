@@ -9,6 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.api.v1 import orders as orders_module
+from app.api.v1 import payments as payments_module
 from app.core.security import decode_access_token
 from app.models.order import Order
 from app.models.receipt_validation import ReceiptValidation
@@ -839,3 +840,83 @@ async def test_business_cannot_confirm_unpaid_transfer(client, db_session):
     )
     assert resp.status_code == 409
     assert "no está confirmado" in resp.json()["detail"].lower()
+
+
+async def test_payment_config_warns_when_no_validation(
+    client, db_session, monkeypatch
+):
+    await _apicep_settings(db_session)
+    db_session.add(
+        Setting(key="RECEIPT_GEMINI_FALLBACK_ENABLED", value="true")
+    )
+    await db_session.commit()
+    monkeypatch.setattr(payments_module, "banxico_open", lambda: False)
+
+    resp = await client.get("/api/v1/payments/config")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["banxico_open"] is False
+    assert data["apicep_ready"] is True
+    assert data["gemini_ready"] is False
+    assert data["transfer_auto_validation_available"] is False
+    assert data["transfer_validation_message"]
+
+
+async def test_payment_config_with_gemini_fallback(
+    client, db_session, monkeypatch
+):
+    await _apicep_settings(db_session)
+    db_session.add_all([
+        Setting(key="RECEIPT_GEMINI_FALLBACK_ENABLED", value="true"),
+        Setting(key="GEMINI_API_KEY", value="gemini_test_key"),
+    ])
+    await db_session.commit()
+    monkeypatch.setattr(payments_module, "banxico_open", lambda: False)
+
+    resp = await client.get("/api/v1/payments/config")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["gemini_ready"] is True
+    assert data["transfer_auto_validation_available"] is True
+
+
+async def test_switch_unpaid_transfer_to_cash(
+    client, db_session, monkeypatch
+):
+    token = await _register(client, "cep21@test.com")
+    order = await _order(db_session, token)
+    monkeypatch.setattr(
+        orders_module, "schedule_order_release", lambda *args, **kwargs: None
+    )
+
+    resp = await client.post(
+        f"/api/v1/orders/{order.id}/switch-to-cash",
+        headers=_headers(token),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["payment_method"] == "cash"
+
+    await db_session.refresh(order)
+    assert order.payment_method == "cash"
+    assert order.cep_status is None
+
+    business = await client.get(
+        f"/api/v1/restaurants/{order.restaurant_id}/orders",
+        headers=_headers(token),
+    )
+    assert business.status_code == 200, business.text
+    assert any(row["id"] == str(order.id) for row in business.json())
+
+
+async def test_cannot_switch_paid_transfer_to_cash(client, db_session):
+    token = await _register(client, "cep22@test.com")
+    order = await _order(db_session, token)
+    order.payment_status = "approved"
+    order.cep_status = "valid"
+    await db_session.commit()
+
+    resp = await client.post(
+        f"/api/v1/orders/{order.id}/switch-to-cash",
+        headers=_headers(token),
+    )
+    assert resp.status_code == 400

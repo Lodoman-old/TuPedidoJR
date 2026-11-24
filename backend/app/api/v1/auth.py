@@ -29,6 +29,8 @@ from app.schemas.auth import (
 )
 from app.services import email_verification_service, registration_guard, totp_service
 from app.services.email_service import send_password_reset, email_typo_suggestion
+from app.services.phone_service import phone_in_use
+from app.services.push_service import schedule_admin_duplicate_phone
 from app.services.order_service import get_setting_value
 from app.services.security_service import security_guard
 
@@ -86,6 +88,7 @@ async def register(
     result = await db.execute(select(User).where(User.email == body.email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email ya registrado")
+    duplicate_phone = (await phone_in_use(db, body.phone)) is not None
     suggestion = email_typo_suggestion(body.email)
     if suggestion:
         raise HTTPException(
@@ -118,6 +121,9 @@ async def register(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+
+    if duplicate_phone:
+        schedule_admin_duplicate_phone(str(user.id))
 
     try:
         await email_verification_service.send_verification(db, user)

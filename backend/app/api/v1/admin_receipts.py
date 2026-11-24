@@ -17,6 +17,7 @@ from app.services.order_transfer_service import (
     apply_preapproved_transfer,
     settle_order_transfer,
 )
+from app.services.balance_payment_service import settle_balance_payment_record
 from app.services.receipt_validation_service import revalidate_receipt
 from app.services.affiliation_qr_service import send_affiliation_qr_email
 from app.services.push_service import schedule_appointment_paid
@@ -31,6 +32,7 @@ ENTITY_LABELS = {
     "rental_payment": "Pago de renta",
     "affiliation_payment": "Afiliación anual",
     "order_transfer": "Transferencia de pedido",
+    "balance_payment": "Pago de saldo pendiente",
 }
 KIND_LABELS = {
     "purchase_receipt": "Ticket de compra",
@@ -151,6 +153,9 @@ async def revalidate(
                 db, record, actor_id=current_user.id
             )
         await db.commit()
+    elif record.entity_type == "balance_payment" and record.status == "high":
+        await settle_balance_payment_record(db, record, True)
+        await db.commit()
     return _row(record)
 
 
@@ -163,6 +168,8 @@ async def _settle_entity(db: AsyncSession, record: ReceiptValidation, approved: 
         return await _settle_affiliation(db, record, approved)
     elif record.entity_type == "order_transfer":
         await settle_order_transfer(db, record, approved)
+    elif record.entity_type == "balance_payment":
+        await settle_balance_payment_record(db, record, approved)
     return False
 
 

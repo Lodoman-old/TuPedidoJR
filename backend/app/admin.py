@@ -25,6 +25,7 @@ from app.models.setting import Setting
 from app.models.coupon import Coupon
 from app.models.shipment import Shipment
 from app.models.receipt_validation import ReceiptValidation
+from app.models.balance_payment import BalancePayment
 from app.models.user import User
 from app.schemas.review import ReviewOut
 
@@ -777,6 +778,37 @@ class ReceiptValidationAdmin(ModelView, model=ReceiptValidation):
         ReceiptValidation.expected_kind: lambda m, a: _es(RECEIPT_KIND_ES, m.expected_kind),
     }
     column_formatters_detail = column_formatters
+
+
+class BalancePaymentAdmin(ModelView, model=BalancePayment):
+    name = "Pago de saldo"
+    name_plural = "Pagos de saldo"
+    icon = "fa-solid fa-wallet"
+    can_create = False
+    can_edit = False
+    can_delete = False
+    column_list = [
+        BalancePayment.created_at,
+        BalancePayment.user_id,
+        BalancePayment.amount,
+        BalancePayment.status,
+        BalancePayment.cep_status,
+        BalancePayment.paid_at,
+    ]
+    column_labels = {
+        BalancePayment.user_id: "Cliente",
+        BalancePayment.amount: "Monto",
+        BalancePayment.status: "Estado",
+        BalancePayment.transfer_tracking_key: "Clave de rastreo",
+        BalancePayment.cep_status: "Estado CEP",
+        BalancePayment.cep_validated_at: "Validado",
+        BalancePayment.cep_sender_bank: "Banco emisor",
+        BalancePayment.cep_receiver_bank: "Banco receptor",
+        BalancePayment.paid_at: "Pagado",
+        BalancePayment.created_at: "Creado",
+    }
+    column_sortable_list = [BalancePayment.created_at, BalancePayment.amount]
+    column_searchable_list = [BalancePayment.status]
 
 
 class CashAdvanceAdmin(ModelView, model=CashAdvance):

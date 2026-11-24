@@ -1,3 +1,5 @@
+from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -18,6 +20,22 @@ class BankDetailsOut(BaseModel):
     card: str = ""
     recipient: str = "TuPedidoJR"
     accounts: list[BankAccountOut] = []
+
+
+class BalancePaymentOut(BaseModel):
+    id: str
+    amount: Decimal
+    status: str
+    reference: str
+    transfer_tracking_key: str | None = None
+    cep_status: str | None = None
+    created_at: datetime | None = None
+    paid_at: datetime | None = None
+
+
+class BalanceSummaryOut(BaseModel):
+    pending_balance: Decimal
+    payment: BalancePaymentOut | None = None
 
 
 class CreatePreferenceRequest(BaseModel):

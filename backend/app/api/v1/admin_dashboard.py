@@ -446,6 +446,14 @@ async def update_courier(
     if body.phone is not None:
         new_phone = body.phone.strip() or None
         if new_phone != (user.phone or None):
+            from app.services.phone_service import phone_in_use
+
+            other = await phone_in_use(db, new_phone, exclude_user_id=user.id)
+            if other:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Ese teléfono ya está registrado en otra cuenta",
+                )
             user.phone = new_phone
             user.phone_verified = False
             user.phone_verified_at = None

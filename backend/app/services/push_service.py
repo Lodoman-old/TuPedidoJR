@@ -1292,6 +1292,70 @@ async def notify_admin_transfer_failed(
         logger.exception("Push admin transfer failed notification failed")
 
 
+async def notify_admin_duplicate_phone(new_user_id: str) -> None:
+    """Avisa a los administradores que un teléfono se usó en otra cuenta."""
+    try:
+        from app.services.phone_service import normalize_phone
+
+        async with async_session() as db:
+            new_user = await db.get(User, new_user_id)
+            if not new_user or not new_user.phone:
+                return
+            normalized = normalize_phone(new_user.phone)
+            if len(normalized) < 10:
+                return
+            result = await db.execute(
+                select(User).where(
+                    User.is_active.is_(True),
+                    User.id != new_user.id,
+                    User.phone.is_not(None),
+                )
+            )
+            others = [
+                user
+                for user in result.scalars().all()
+                if normalize_phone(user.phone) == normalized
+            ]
+            if not others:
+                return
+            admins = list(
+                (
+                    await db.execute(
+                        select(User).where(
+                            User.is_superuser.is_(True),
+                            User.is_active.is_(True),
+                        )
+                    )
+                ).scalars().all()
+            )
+            if not admins:
+                return
+            existing = others[0]
+            body = (
+                f"{new_user.name} ({new_user.email}) registró el teléfono "
+                f"{new_user.phone}, también usado por {existing.name} "
+                f"({existing.email})."
+            )
+            for admin in admins:
+                await send_to_user(
+                    db,
+                    admin.id,
+                    "Teléfono repetido",
+                    body,
+                    {"type": "duplicate_phone", "user_id": str(new_user.id)},
+                    "amber",
+                )
+    except Exception:
+        logger.exception("Push duplicate phone notification failed")
+
+
+def schedule_admin_duplicate_phone(new_user_id: str) -> None:
+    try:
+        asyncio.create_task(notify_admin_duplicate_phone(new_user_id))
+    except RuntimeError:
+        logger.debug("No event loop for duplicate phone notification")
+
+
 async def notify_new_restaurant_registration(restaurant_id: str) -> None:
     """Avisa por push, panel y correo que hay un negocio esperando aprobación."""
     try:

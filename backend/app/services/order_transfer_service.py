@@ -303,18 +303,33 @@ async def _notify_customer_failed(
     except Exception:
         public_url = ""
     link = f"{public_url}/web/orders/{order.id}" if public_url else ""
+    whatsapp_support = (
+        await get_setting_value(db, "WHATSAPP_SUPPORT", "")
+    ).strip()
+    wa_digits = "".join(ch for ch in whatsapp_support if ch.isdigit())
+    if len(wa_digits) == 10:
+        wa_digits = "52" + wa_digits
+    elif len(wa_digits) == 13 and wa_digits.startswith("521"):
+        wa_digits = "52" + wa_digits[3:]
+    wa_url = f"https://wa.me/{wa_digits}" if wa_digits else ""
+    support_line = (
+        f"Si tienes dudas, escríbenos por WhatsApp: {wa_url}"
+        if wa_url
+        else "Si tienes dudas, contacta a soporte desde la plataforma."
+    )
 
     html = f"""
       <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;background:#fff;border-radius:12px;padding:24px;border:1px solid #e5e7eb">
         <h2 style="margin:0 0 8px;color:#1B2F6B">{escape(title)}</h2>
         <p style="margin:0 0 16px;color:#475569">{escape(message)}</p>
         <p style="margin:0 0 16px;color:#475569">
-          Si crees que es un error, contacta a soporte desde la plataforma.
+          {f'Si tienes dudas, escríbenos por <a href="{escape(wa_url)}">WhatsApp</a>.' if wa_url else 'Si tienes dudas, contacta a soporte desde la plataforma.'}
         </p>
         {f'<p style="margin:22px 0 0"><a href="{escape(link)}" style="background:#1B2F6B;color:#fff;padding:11px 18px;border-radius:8px;text-decoration:none">Ver pedido</a></p>' if link else ''}
       </div>
     """
+    text_message = f"{message}\n\n{support_line}"
     try:
-        await send_email(db, customer.email, subject, html, message)
+        await send_email(db, customer.email, subject, html, text_message)
     except Exception:
         logger.exception("No se pudo enviar correo de transferencia fallida")

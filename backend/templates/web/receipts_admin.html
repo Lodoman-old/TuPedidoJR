@@ -123,6 +123,10 @@
             <button class="btn btn-sm btn-outline-secondary" onclick="revalidate('${v.id}')">
               <i class="bi bi-arrow-repeat"></i> Validar de nuevo
             </button>
+            ${v.entity_type === 'order_transfer' && v.status !== 'approved' && v.status !== 'high' ? `
+              <button class="btn btn-sm btn-outline-success" onclick="whatsappCustomer('${v.id}')">
+                <i class="bi bi-whatsapp"></i> Avisar por WhatsApp
+              </button>` : ''}
             ${['appointment_payment', 'rental_payment', 'affiliation_payment', 'order_transfer'].includes(v.entity_type) && v.status !== 'approved' && v.status !== 'rejected' ? `
               <button class="btn btn-sm btn-success" onclick="settle('${v.id}', 'approve')">
                 <i class="bi bi-check2-circle"></i> Aprobar pago
@@ -135,6 +139,33 @@
         </div>
       </div>`;
     }).join('');
+  }
+
+  function buildWhatsAppMessage(contact) {
+    const name = contact.name || 'cliente';
+    const short = contact.order_short || '';
+    const amount = money0(contact.amount || 0);
+    if (contact.status === 'failed') {
+      return `Hola ${name}, no pudimos confirmar tu transferencia del pedido #${short} por ${amount}. El monto se cargó a tu saldo pendiente. Si crees que es un error, respóndenos por aquí.`;
+    }
+    if (contact.status === 'preapproved') {
+      return `Hola ${name}, tu pedido #${short} está preaprobado. Estamos confirmando el pago con Banxico. Cualquier duda, respóndenos por aquí.`;
+    }
+    return `Hola ${name}, tu pedido #${short} está en revisión de pago. Si ya transferiste, respóndenos por aquí para revisarlo.`;
+  }
+
+  async function whatsappCustomer(id) {
+    try {
+      const contact = await apiRequest('GET', `/admin/receipts/${id}/contact`);
+      if (!contact.phone) {
+        showToast('El cliente no tiene teléfono registrado.', 'danger');
+        return;
+      }
+      const text = buildWhatsAppMessage(contact);
+      window.open(`https://wa.me/${contact.phone}?text=${encodeURIComponent(text)}`, '_blank');
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
   }
 
   async function loadValidations() {

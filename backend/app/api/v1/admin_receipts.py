@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_superuser
 from app.db.session import get_db
 from app.models.appointment import Appointment
+from app.models.order import Order
 from app.models.rental_booking import RentalBooking
 from app.models.receipt_validation import ReceiptValidation
 from app.models.restaurant import Restaurant
@@ -54,6 +55,15 @@ def _uuid(value: str) -> UUID:
         raise HTTPException(status_code=400, detail="Identificador inválido") from exc
 
 
+def _whatsapp_number(phone: str | None) -> str:
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+    if len(digits) == 10:
+        return "52" + digits
+    if len(digits) == 13 and digits.startswith("521"):
+        return "52" + digits[3:]
+    return digits
+
+
 def _row(record: ReceiptValidation) -> dict:
     return {
         "id": str(record.id),
@@ -92,6 +102,33 @@ async def list_receipts(
         .limit(300)
     )
     return [_row(row) for row in result.scalars().all()]
+
+
+@router.get("/receipts/{receipt_id}/contact")
+async def receipt_contact(
+    receipt_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    record = await db.get(ReceiptValidation, _uuid(receipt_id))
+    if not record:
+        raise HTTPException(status_code=404, detail="Comprobante no encontrado")
+    if record.entity_type != "order_transfer":
+        raise HTTPException(
+            status_code=400, detail="Este comprobante no es de un pedido"
+        )
+    order = await db.get(Order, record.entity_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    customer = await db.get(User, order.user_id) if order.user_id else None
+    return {
+        "name": customer.name if customer else "cliente",
+        "phone": _whatsapp_number(customer.phone if customer else None),
+        "order_id": str(order.id),
+        "order_short": str(order.id)[:8].upper(),
+        "amount": str(order.total or 0),
+        "status": record.status,
+    }
 
 
 @router.post("/receipts/{receipt_id}/revalidate")

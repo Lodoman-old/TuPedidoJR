@@ -568,16 +568,26 @@ async def test_fallback_preserves_gemini_error(db_session, monkeypatch):
 async def test_charge_failed_transfer_adds_pending_balance(
     client, db_session, monkeypatch
 ):
+    captured = {}
+
     async def noop(*args, **kwargs):
         return None
 
+    async def fake_email(db, to, subject, html, text=None, attachments=None):
+        captured["to"] = to
+        captured["html"] = html
+        captured["text"] = text
+
     monkeypatch.setattr(ots, "notify_admin_transfer_failed", noop)
     monkeypatch.setattr(ots, "send_to_user", noop)
-    monkeypatch.setattr(ots, "send_email", noop)
+    monkeypatch.setattr(ots, "send_email", fake_email)
 
     token = await _register(client, "cep11@test.com")
     order = await _order(db_session, token, total="150.00")
     order.status = "preparing"
+    db_session.add(
+        Setting(key="WHATSAPP_SUPPORT", value="524121234567")
+    )
     await db_session.commit()
 
     record = ReceiptValidation(
@@ -603,6 +613,8 @@ async def test_charge_failed_transfer_adds_pending_balance(
     assert customer.pending_balance == before + Decimal("150.00")
     assert order.cep_status == "failed"
     assert record.extracted["charged_to_balance"] is True
+    assert "wa.me/524121234567" in captured.get("html", "")
+    assert "wa.me/524121234567" in (captured.get("text") or "")
 
 
 async def test_business_cannot_prepare_unpaid_transfer(client, db_session):
@@ -949,3 +961,43 @@ async def test_cannot_switch_paid_transfer_to_cash(client, db_session):
         headers=_headers(token),
     )
     assert resp.status_code == 400
+
+
+async def test_receipt_contact_returns_customer_phone(client, db_session):
+    admin = await _register(client, "cepadmin2@test.com")
+    admin_user = await db_session.scalar(
+        select(User).where(User.email == "cepadmin2@test.com")
+    )
+    admin_user.is_superuser = True
+    await db_session.commit()
+
+    token = await _register(client, "cep23@test.com")
+    order = await _order(db_session, token)
+    record = ReceiptValidation(
+        entity_type="order_transfer",
+        entity_id=order.id,
+        file_url="/static/uploads/comprobante.webp",
+        expected_kind="transfer_receipt",
+        expected_amount=order.total,
+        status="review",
+    )
+    db_session.add(record)
+    await db_session.commit()
+    await db_session.refresh(record)
+
+    resp = await client.get(
+        f"/api/v1/admin/receipts/{record.id}/contact",
+        headers=_headers(admin),
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["phone"] == "524121234567"
+    assert data["order_short"] == str(order.id)[:8].upper()
+    assert data["status"] == "review"
+    assert data["amount"] == "100.00"
+
+    denied = await client.get(
+        f"/api/v1/admin/receipts/{record.id}/contact",
+        headers=_headers(token),
+    )
+    assert denied.status_code == 403

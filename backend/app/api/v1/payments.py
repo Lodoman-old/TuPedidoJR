@@ -53,6 +53,13 @@ async def _payment_flags(db: AsyncSession) -> dict:
         await get_setting(db, "CEP_FORCE_CLOSED", "false")
     ).lower() == "true"
     banxico_is_open = False if force_closed else banxico_open()
+    try:
+        review_timeout = int(
+            await get_setting(db, "RECEIPT_REVIEW_TIMEOUT_MIN", "30")
+        )
+    except (TypeError, ValueError):
+        review_timeout = 30
+    review_timeout = max(review_timeout, 1)
     apicep_ready = bool(
         cep_enabled
         and validation_enabled
@@ -66,7 +73,9 @@ async def _payment_flags(db: AsyncSession) -> dict:
         if auto_available
         else (
             "El pago por transferencia no está disponible en este momento. "
-            "Elige otro método de pago, como efectivo, o intenta más tarde."
+            "Elige otro método de pago, como efectivo, o intenta más tarde. "
+            "Si no cambias a efectivo, el pedido no se confirmará y se "
+            f"cancelará en {review_timeout} minutos."
         )
     )
     loyalty = await loyalty_config(db)
@@ -81,6 +90,7 @@ async def _payment_flags(db: AsyncSession) -> dict:
         "gemini_ready": gemini_ready,
         "transfer_auto_validation_available": auto_available,
         "transfer_validation_message": validation_message,
+        "transfer_review_timeout_min": review_timeout,
         "loyalty_enabled": loyalty["enabled"],
         "loyalty_visible": loyalty["visible"],
         "loyalty_value_per_point": f"{loyalty['value_per_point']:.2f}",

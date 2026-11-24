@@ -1172,7 +1172,7 @@ async function refreshEstimate() {
           } else if (!paymentConfig.transfer_auto_validation_available) {
             bankInfo.innerHTML = `<div class="alert alert-warning small mb-0">
               <strong>Pago por transferencia no disponible</strong><br>
-              ${esc(paymentConfig.transfer_validation_message || 'El pago por transferencia no está disponible en este momento. Elige otro método de pago, como efectivo, o intenta más tarde.')}<br>
+              ${esc(paymentConfig.transfer_validation_message || 'El pago por transferencia no está disponible en este momento. Elige otro método de pago, como efectivo, o intenta más tarde. Si no cambias a efectivo, el pedido no se confirmará y se cancelará en 30 minutos.')}<br>
               <button type="button" class="btn btn-sm btn-outline-dark mt-2" onclick="switchCartToCash()">Cambiar a efectivo</button>
             </div>`;
           } else {

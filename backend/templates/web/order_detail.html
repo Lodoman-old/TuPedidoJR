@@ -286,7 +286,7 @@
         if (!paymentConfig.transfer_auto_validation_available) {
           html += `<div class="alert alert-warning mb-2">
             <div class="fw-bold"><i class="bi bi-exclamation-triangle"></i> Pago por transferencia no disponible</div>
-            <div class="small">${escHtml(paymentConfig.transfer_validation_message || 'El pago por transferencia no está disponible en este momento. Elige otro método de pago, como efectivo, o intenta más tarde.')}</div>
+            <div class="small">${escHtml(paymentConfig.transfer_validation_message || 'El pago por transferencia no está disponible en este momento. Elige otro método de pago, como efectivo, o intenta más tarde. Si no cambias a efectivo, el pedido no se confirmará y se cancelará en 30 minutos.')}</div>
             <button class="btn btn-sm btn-outline-dark mt-2" onclick="switchOrderToCash()">Cambiar a efectivo</button>
             <div class="small mt-1" id="switchCashMsg"></div>
           </div>`;

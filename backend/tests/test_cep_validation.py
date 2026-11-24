@@ -887,6 +887,8 @@ async def test_payment_config_warns_when_no_validation(
     assert data["transfer_auto_validation_available"] is False
     assert data["transfer_validation_message"]
     assert "Banxico" not in data["transfer_validation_message"]
+    assert data["transfer_review_timeout_min"] == 30
+    assert "30 minutos" in data["transfer_validation_message"]
 
 
 async def test_payment_config_with_gemini_fallback(

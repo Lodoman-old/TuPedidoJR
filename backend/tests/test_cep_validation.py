@@ -539,6 +539,32 @@ async def test_same_bank_preapproves_with_gemini(db_session, monkeypatch):
     assert result.extracted["_same_bank"] is True
 
 
+async def test_fallback_preserves_gemini_error(db_session, monkeypatch):
+    await _fallback_settings(db_session)
+    record = await _receipt_record(db_session)
+    record.expected_date = datetime.now(timezone.utc)
+    record.expected_recipient = "012180004643051249"
+    await db_session.commit()
+
+    async def fake_gemini(db, rec):
+        rec.provider = "gemini"
+        rec.document_type = None
+        rec.confidence = 0
+        rec.status = "low"
+        rec.issues = ["Gemini respondió 503"]
+        rec.error = "Gemini respondió 503"
+        rec.extracted = {}
+        return rec
+
+    monkeypatch.setattr(rvs, "banxico_open", lambda: False)
+    monkeypatch.setattr(rvs, "_validate_with_gemini", fake_gemini)
+    result = await rvs.revalidate_receipt(db_session, record)
+
+    assert result.status == "review"
+    assert result.error == "Gemini respondió 503"
+    assert any("503" in issue for issue in result.issues)
+
+
 async def test_charge_failed_transfer_adds_pending_balance(
     client, db_session, monkeypatch
 ):

@@ -226,6 +226,11 @@ async def _call_gemini(api_key: str, model: str, mime: str, content: bytes, prom
     }
     async with httpx.AsyncClient(timeout=60) as client:
         response = await client.post(url, params={"key": api_key}, json=payload)
+        for attempt in range(2):
+            if response.status_code not in (429, 503) or attempt == 1:
+                break
+            await asyncio.sleep(1.5)
+            response = await client.post(url, params={"key": api_key}, json=payload)
     if response.status_code >= 400:
         raise RuntimeError(f"Gemini respondió {response.status_code}: {response.text[:300]}")
     data = response.json()
@@ -509,6 +514,7 @@ async def _validate_with_gemini(db: AsyncSession, record: ReceiptValidation) -> 
         record.confidence = 0
         record.status = "low"
         record.error = str(exc)[:500]
+        record.issues = [record.error]
         await db.commit()
         await db.refresh(record)
         return record
@@ -632,6 +638,7 @@ async def _fallback_with_gemini(
         )
 
     gemini = await _validate_with_gemini(db, record)
+    gemini_error = gemini.error
     checks = (gemini.extracted or {}).get("_checks") or {}
 
     if record.entity_type != "order_transfer":
@@ -646,7 +653,9 @@ async def _fallback_with_gemini(
             if same_bank
             else "Banxico está fuera de horario. Revisión manual del comprobante."
         )
-        gemini.error = None
+        if gemini_error and gemini_error not in (gemini.issues or []):
+            gemini.issues = [*(gemini.issues or []), gemini_error]
+        gemini.error = gemini_error
         await db.commit()
         await db.refresh(gemini)
         return gemini
@@ -730,13 +739,15 @@ async def _fallback_with_gemini(
         issues.append(
             "Mismo banco: Banxico no emite CEP; requiere revisión manual."
         )
+    if gemini_error and gemini_error not in issues:
+        issues.append(gemini_error)
     gemini.extracted = extracted
     gemini.status = "review"
     gemini.issues = issues
     gemini.summary = (
         "Pago en revisión. El administrador debe confirmar la transferencia."
     )
-    gemini.error = None
+    gemini.error = gemini_error
     await db.commit()
     await db.refresh(gemini)
     return gemini

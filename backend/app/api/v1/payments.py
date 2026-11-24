@@ -49,7 +49,10 @@ async def _payment_flags(db: AsyncSession) -> dict:
     fallback_enabled = (
         await get_setting(db, "RECEIPT_GEMINI_FALLBACK_ENABLED", "true")
     ).lower() == "true"
-    banxico_is_open = banxico_open()
+    force_closed = (
+        await get_setting(db, "CEP_FORCE_CLOSED", "false")
+    ).lower() == "true"
+    banxico_is_open = False if force_closed else banxico_open()
     apicep_ready = bool(
         cep_enabled
         and validation_enabled

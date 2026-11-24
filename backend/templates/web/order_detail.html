@@ -174,8 +174,19 @@
           <small>Banco: ${bankDetails.bank_name || '—'} · Titular: ${bankDetails.account_holder || '—'} · CLABE: ${bankDetails.clabe || '—'}${bankDetails.card ? ` · Tarjeta: ${bankDetails.card}` : ''}<br>
           <strong>Referencia:</strong> #${reference}<br>
           Escribe esta referencia en el concepto y transfiere el total exacto. El dinero entra a la plataforma; TuPedidoJR liquida al negocio y paga al repartidor.</small>
-          ${paid ? `<div class="mt-1"><span class="badge bg-success"><i class="bi bi-check2-circle"></i> Pago validado${o.cep_status === 'valid' ? ' por Banxico' : ''}</span></div>` : ''}
+          ${paid && o.cep_status !== 'failed' ? `<div class="mt-1">${o.cep_status === 'valid'
+            ? '<span class="badge bg-success"><i class="bi bi-check2-circle"></i> Pago validado por Banxico</span>'
+            : o.cep_status === 'preapproved'
+              ? '<span class="badge bg-warning text-dark"><i class="bi bi-clock-history"></i> Pago preaprobado; pendiente de confirmación final</span>'
+              : '<span class="badge bg-success"><i class="bi bi-check2-circle"></i> Pago validado</span>'}</div>` : ''}
+          ${o.cep_status === 'failed' ? '<div class="mt-1"><span class="badge bg-danger">Transferencia no confirmada; el monto se cargó a tu saldo pendiente</span></div>' : ''}
         </div>`;
+        if (!paid && o.cep_status === 'pending_cep') {
+          html += `<div class="alert alert-info small mb-2"><i class="bi bi-clock"></i> Tu comprobante quedó pendiente. Banxico valida de 09:30 a 23:00; lo validaremos automáticamente al abrir.</div>`;
+        }
+        if (!paid && o.cep_status === 'review') {
+          html += `<div class="alert alert-warning small mb-2"><i class="bi bi-hourglass-split"></i> Tu pago está en revisión. El administrador debe confirmar tu transferencia; si no se confirma, el pedido se cancelará y no se te cobrará.</div>`;
+        }
         if (!paid && paymentConfig.cep_enabled) {
           const bankOptions = transferBanks.map((b) => `<option value="${b.code}">${escHtml(b.name)}</option>`).join('');
           const apicep = paymentConfig.receipt_validation_provider === 'apicep';
@@ -192,7 +203,7 @@
               <input type="file" id="cepReceiptFile" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp,application/pdf">
               <button class="btn btn-sm btn-primary mt-2" id="cepUploadBtn" onclick="validateTransferReceipt()">Validar mi comprobante</button>
               <div class="small text-muted mt-1" id="cepMsg"></div>
-              <div class="form-text">Leemos tu comprobante y lo validamos con Banxico. También puedes capturar la clave de rastreo.</div>
+              <div class="form-text">Leemos tu comprobante y lo validamos con Banxico (09:30 a 23:00). Fuera de horario se preaprueba con Gemini o queda en revisión.</div>
               <a class="small" data-bs-toggle="collapse" href="#cepManual">Capturar clave de rastreo</a>
               <div class="collapse" id="cepManual">${manualForm}</div>
             </div>`;
@@ -486,10 +497,16 @@
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.detail || `Error ${r.status}`);
-      msg.className = 'text-success small';
-      msg.textContent = data.message || 'Pago validado.';
-      showToast('Pago validado por Banxico');
-      setTimeout(() => loadOrder(false), 1200);
+      if (data.payment_status === 'approved') {
+        msg.className = 'text-success small';
+        msg.textContent = data.message || 'Pago validado.';
+        showToast(data.cep_status === 'preapproved' ? 'Pago preaprobado' : 'Pago validado por Banxico');
+      } else {
+        msg.className = 'text-warning small';
+        msg.textContent = data.message || 'Tu comprobante quedó en revisión.';
+        showToast('Comprobante en revisión', 'warning');
+      }
+      setTimeout(() => loadOrder(false), 1500);
     } catch (e) {
       msg.className = 'text-danger small';
       msg.textContent = e.message;

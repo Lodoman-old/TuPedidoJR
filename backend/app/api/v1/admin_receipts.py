@@ -8,11 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_superuser
 from app.db.session import get_db
 from app.models.appointment import Appointment
-from app.models.order import Order
 from app.models.rental_booking import RentalBooking
 from app.models.receipt_validation import ReceiptValidation
 from app.models.restaurant import Restaurant
 from app.models.user import User
+from app.services.order_transfer_service import (
+    apply_preapproved_transfer,
+    settle_order_transfer,
+)
 from app.services.receipt_validation_service import revalidate_receipt
 from app.services.affiliation_qr_service import send_affiliation_qr_email
 from app.services.push_service import schedule_appointment_paid
@@ -34,10 +37,13 @@ KIND_LABELS = {
 }
 STATUS_LABELS = {
     "high": "Se puede aprobar",
+    "preapproved": "Preaprobado por Gemini",
+    "pending_cep": "Pendiente de Banxico",
     "review": "Revisar",
     "low": "Revisar a fondo",
     "approved": "Aprobado",
     "rejected": "Rechazado",
+    "failed": "Falló la confirmación",
 }
 
 
@@ -98,6 +104,16 @@ async def revalidate(
     if not record:
         raise HTTPException(status_code=404, detail="Comprobante no encontrado")
     record = await revalidate_receipt(db, record)
+    if record.entity_type == "order_transfer":
+        if record.status == "high":
+            await settle_order_transfer(
+                db, record, True, actor_id=current_user.id
+            )
+        elif record.status == "preapproved":
+            await apply_preapproved_transfer(
+                db, record, actor_id=current_user.id
+            )
+        await db.commit()
     return _row(record)
 
 
@@ -109,51 +125,8 @@ async def _settle_entity(db: AsyncSession, record: ReceiptValidation, approved: 
     elif record.entity_type == "affiliation_payment":
         return await _settle_affiliation(db, record, approved)
     elif record.entity_type == "order_transfer":
-        await _settle_order(db, record, approved)
+        await settle_order_transfer(db, record, approved)
     return False
-
-
-async def _settle_order(
-    db: AsyncSession, record: ReceiptValidation, approved: bool
-) -> None:
-    order = await db.get(Order, record.entity_id)
-    if not order:
-        return
-    if not approved:
-        if order.payment_status != "approved":
-            order.cep_status = "rejected"
-        return
-    if order.payment_status == "approved":
-        return
-
-    extracted = record.extracted or {}
-    details = (extracted.get("validation") or {}).get("cepDetails") or {}
-    key = str(
-        extracted.get("trackingKey") or details.get("trackingKey") or ""
-    ).strip()
-    if key:
-        existing = await db.scalar(
-            select(Order.id).where(
-                Order.transfer_tracking_key == key,
-                Order.id != order.id,
-            )
-        )
-        if not existing:
-            order.transfer_tracking_key = key
-
-    order.cep_status = "valid"
-    order.cep_validated_at = datetime.now(timezone.utc)
-    order.cep_sender_bank = (
-        extracted.get("senderBank")
-        or details.get("senderBank")
-        or order.cep_sender_bank
-    )
-    order.cep_receiver_bank = order.cep_receiver_bank or details.get("receiverBank")
-    order.payment_status = "approved"
-
-    from app.services.payout_service import credit_courier_for_order
-
-    await credit_courier_for_order(db, order)
 
 
 async def _settle_appointment(db: AsyncSession, record: ReceiptValidation, approved: bool) -> None:

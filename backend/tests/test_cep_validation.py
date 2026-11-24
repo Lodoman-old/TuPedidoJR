@@ -15,7 +15,9 @@ from app.models.receipt_validation import ReceiptValidation
 from app.models.restaurant import Restaurant
 from app.models.setting import Setting
 from app.models.user import User
+from app.services import order_transfer_service as ots
 from app.services import receipt_validation_service as rvs
+from app.services.api_cep_service import ApiCepError
 from app.services.cep_validation_service import CepValidationError, validate_transfer
 
 
@@ -233,7 +235,13 @@ async def _fake_save_document(file):
     return "/static/uploads/comprobante.webp"
 
 
-def _fake_record(status="high", extracted=None, issues=None):
+def _fake_record(
+    status="high",
+    extracted=None,
+    issues=None,
+    entity_id=None,
+    summary=None,
+):
     from types import SimpleNamespace
 
     return SimpleNamespace(
@@ -241,6 +249,8 @@ def _fake_record(status="high", extracted=None, issues=None):
         extracted=extracted or {},
         issues=issues or [],
         error=None,
+        entity_id=entity_id,
+        summary=summary,
     )
 
 
@@ -364,6 +374,7 @@ async def test_receipt_service_approves_with_apicep(db_session, monkeypatch):
     async def fake_validate(db, *, file_url, expected_amount=None):
         return _apicep_payload()
 
+    monkeypatch.setattr(rvs, "banxico_open", lambda: True)
     monkeypatch.setattr(rvs, "validate_apicep_receipt", fake_validate)
     result = await rvs.revalidate_receipt(db_session, record)
 
@@ -382,6 +393,7 @@ async def test_receipt_service_rejects_reused_cep(db_session, monkeypatch):
         payload["validation"]["cepPreviouslyValidated"] = True
         return payload
 
+    monkeypatch.setattr(rvs, "banxico_open", lambda: True)
     monkeypatch.setattr(rvs, "validate_apicep_receipt", fake_validate)
     result = await rvs.revalidate_receipt(db_session, record)
 
@@ -423,3 +435,253 @@ async def test_admin_approval_settles_order_transfer(client, db_session):
     assert order.payment_status == "approved"
     assert order.cep_status == "valid"
     assert order.transfer_tracking_key == "MBAN0100241123456789"
+
+
+async def _fallback_settings(db_session, fallback="true", cap="200.0"):
+    await _apicep_settings(db_session)
+    db_session.add_all([
+        Setting(key="RECEIPT_GEMINI_FALLBACK_ENABLED", value=fallback),
+        Setting(key="RECEIPT_AUTO_APPROVE_MAX_AMOUNT", value=cap),
+        Setting(key="RECEIPT_SAME_BANK_MAX_AMOUNT", value=cap),
+        Setting(key="RECEIPT_GEMINI_MIN_CONFIDENCE", value="95"),
+        Setting(key="GEMINI_API_KEY", value="gemini_test_key"),
+    ])
+    await db_session.commit()
+
+
+def _fake_gemini(total, confidence=97):
+    async def fake(db, record):
+        record.provider = "gemini"
+        record.document_type = rvs.TRANSFER
+        record.confidence = confidence
+        record.status = "high" if confidence >= 95 else "review"
+        record.issues = []
+        record.extracted = {
+            "total": total,
+            "recipient": "012180004643051249",
+            "_checks": {
+                "amount_ok": True,
+                "date_ok": True,
+                "recipient_ok": True,
+                "fields_ok": True,
+            },
+        }
+        return record
+
+    return fake
+
+
+async def test_fallback_preapproves_under_cap(db_session, monkeypatch):
+    await _fallback_settings(db_session)
+    record = await _receipt_record(db_session)
+    record.expected_date = datetime.now(timezone.utc)
+    record.expected_recipient = "012180004643051249"
+    await db_session.commit()
+
+    monkeypatch.setattr(rvs, "banxico_open", lambda: False)
+    monkeypatch.setattr(rvs, "_validate_with_gemini", _fake_gemini(100.0))
+    result = await rvs.revalidate_receipt(db_session, record)
+
+    assert result.status == "preapproved"
+    assert result.extracted["_preapproved"] is True
+
+
+async def test_fallback_reviews_over_cap(db_session, monkeypatch):
+    await _fallback_settings(db_session, cap="200.0")
+    record = await _receipt_record(db_session)
+    record.expected_amount = Decimal("250.00")
+    record.expected_date = datetime.now(timezone.utc)
+    record.expected_recipient = "012180004643051249"
+    await db_session.commit()
+
+    monkeypatch.setattr(rvs, "banxico_open", lambda: False)
+    monkeypatch.setattr(rvs, "_validate_with_gemini", _fake_gemini(250.0))
+    result = await rvs.revalidate_receipt(db_session, record)
+
+    assert result.status == "review"
+    assert any("límite" in issue for issue in result.issues)
+
+
+async def test_fallback_disabled_outside_hours_pending(db_session, monkeypatch):
+    await _fallback_settings(db_session, fallback="false")
+    record = await _receipt_record(db_session)
+
+    monkeypatch.setattr(rvs, "banxico_open", lambda: False)
+    result = await rvs.revalidate_receipt(db_session, record)
+
+    assert result.status == "pending_cep"
+    assert result.provider == "apicep"
+
+
+async def test_same_bank_preapproves_with_gemini(db_session, monkeypatch):
+    await _fallback_settings(db_session)
+    record = await _receipt_record(db_session)
+    record.expected_date = datetime.now(timezone.utc)
+    record.expected_recipient = "012180004643051249"
+    await db_session.commit()
+
+    async def same_bank_error(db, *, file_url, expected_amount=None):
+        raise ApiCepError(
+            "error",
+            "El banco emisor y el banco receptor no pueden ser la misma "
+            "institución. Las transferencias SPEI deben ser entre instituciones "
+            "distintas.",
+        )
+
+    monkeypatch.setattr(rvs, "banxico_open", lambda: True)
+    monkeypatch.setattr(rvs, "validate_apicep_receipt", same_bank_error)
+    monkeypatch.setattr(rvs, "_validate_with_gemini", _fake_gemini(100.0))
+    result = await rvs.revalidate_receipt(db_session, record)
+
+    assert result.status == "preapproved"
+    assert result.extracted["_same_bank"] is True
+
+
+async def test_charge_failed_transfer_adds_pending_balance(
+    client, db_session, monkeypatch
+):
+    async def noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(ots, "notify_admin_transfer_failed", noop)
+    monkeypatch.setattr(ots, "send_to_user", noop)
+    monkeypatch.setattr(ots, "send_email", noop)
+
+    token = await _register(client, "cep11@test.com")
+    order = await _order(db_session, token, total="150.00")
+    order.status = "preparing"
+    await db_session.commit()
+
+    record = ReceiptValidation(
+        entity_type="order_transfer",
+        entity_id=order.id,
+        file_url="/static/uploads/comprobante.webp",
+        expected_kind="transfer_receipt",
+        expected_amount=order.total,
+        status="preapproved",
+    )
+    db_session.add(record)
+    await db_session.commit()
+    await db_session.refresh(record)
+
+    customer = await db_session.scalar(
+        select(User).where(User.id == order.user_id)
+    )
+    before = Decimal(customer.pending_balance or 0)
+    await ots.charge_failed_transfer(db_session, record, "No confirmado")
+    await db_session.refresh(customer)
+    await db_session.refresh(order)
+
+    assert customer.pending_balance == before + Decimal("150.00")
+    assert order.cep_status == "failed"
+    assert record.extracted["charged_to_balance"] is True
+
+
+async def test_business_cannot_prepare_unpaid_transfer(client, db_session):
+    token = await _register(client, "cep12@test.com")
+    order = await _order(db_session, token)
+    resp = await client.patch(
+        f"/api/v1/orders/{order.id}/status",
+        headers=_headers(token),
+        json={"status": "confirmed"},
+    )
+    assert resp.status_code == 409
+    assert "no está confirmado" in resp.json()["detail"].lower()
+
+
+async def test_receipt_upload_preapproved_marks_paid(
+    client, db_session, monkeypatch
+):
+    token = await _register(client, "cep13@test.com")
+    await _apicep_settings(db_session)
+    order = await _order(db_session, token)
+    monkeypatch.setattr(orders_module, "save_document", _fake_save_document)
+
+    async def fake_create(*args, **kwargs):
+        return _fake_record(
+            status="preapproved",
+            entity_id=order.id,
+            extracted={"_preapproved": True, "_same_bank": False},
+        )
+
+    monkeypatch.setattr(orders_module, "create_and_validate", fake_create)
+    monkeypatch.setattr(
+        orders_module, "schedule_admin_transfer_review", lambda *a, **k: None
+    )
+
+    resp = await client.post(
+        f"/api/v1/orders/{order.id}/validate-transfer-receipt",
+        headers=_headers(token),
+        files={"file": ("comprobante.png", b"fake-image", "image/png")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["cep_status"] == "preapproved"
+
+    await db_session.refresh(order)
+    assert order.payment_status == "approved"
+    assert order.cep_status == "preapproved"
+
+
+async def test_receipt_upload_pending_cep_stays_unpaid(
+    client, db_session, monkeypatch
+):
+    token = await _register(client, "cep14@test.com")
+    await _apicep_settings(db_session)
+    order = await _order(db_session, token)
+    monkeypatch.setattr(orders_module, "save_document", _fake_save_document)
+
+    async def fake_create(*args, **kwargs):
+        return _fake_record(
+            status="pending_cep",
+            entity_id=order.id,
+            summary="Pendiente de Banxico.",
+        )
+
+    monkeypatch.setattr(orders_module, "create_and_validate", fake_create)
+
+    resp = await client.post(
+        f"/api/v1/orders/{order.id}/validate-transfer-receipt",
+        headers=_headers(token),
+        files={"file": ("comprobante.png", b"fake-image", "image/png")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["payment_status"] == "pending"
+
+    await db_session.refresh(order)
+    assert order.payment_status == "pending"
+
+
+async def test_receipt_upload_review_notifies_admin(
+    client, db_session, monkeypatch
+):
+    token = await _register(client, "cep15@test.com")
+    await _apicep_settings(db_session)
+    order = await _order(db_session, token)
+    monkeypatch.setattr(orders_module, "save_document", _fake_save_document)
+    calls = []
+
+    async def fake_create(*args, **kwargs):
+        return _fake_record(
+            status="review",
+            entity_id=order.id,
+            summary="Pago en revisión.",
+        )
+
+    monkeypatch.setattr(orders_module, "create_and_validate", fake_create)
+    monkeypatch.setattr(
+        orders_module,
+        "schedule_admin_transfer_review",
+        lambda *args, **kwargs: calls.append(args),
+    )
+
+    resp = await client.post(
+        f"/api/v1/orders/{order.id}/validate-transfer-receipt",
+        headers=_headers(token),
+        files={"file": ("comprobante.png", b"fake-image", "image/png")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["cep_status"] == "review"
+    assert calls
+
+    await db_session.refresh(order)
+    assert order.payment_status == "pending"

@@ -1206,6 +1206,88 @@ def schedule_admin_payout_request(
         logger.debug("No event loop for push notification")
 
 
+async def notify_admin_transfer_review(
+    order_id: str, amount, customer_name: str, reason: str = ""
+) -> None:
+    """Avisa a los administradores que un pago por transferencia requiere revisión."""
+    try:
+        async with async_session() as db:
+            admins = list((await db.execute(
+                select(User).where(
+                    User.is_superuser.is_(True),
+                    User.is_active.is_(True),
+                )
+            )).scalars().all())
+            if not admins:
+                return
+            short = str(order_id)[:8].upper()
+            body = (
+                f"Pedido #{short} por ${float(amount or 0):.2f} "
+                f"de {customer_name or 'cliente'}."
+            )
+            if reason:
+                body += f" {reason}"
+            for admin in admins:
+                await send_to_user(
+                    db, admin.id, "Pago por confirmar", body,
+                    {"type": "transfer_review", "order_id": str(order_id)},
+                    "amber",
+                )
+    except Exception:
+        logger.exception("Push admin transfer review notification failed")
+
+
+def schedule_admin_transfer_review(
+    order_id: str, amount, customer_name: str, reason: str = ""
+) -> None:
+    try:
+        asyncio.create_task(
+            notify_admin_transfer_review(order_id, amount, customer_name, reason)
+        )
+    except RuntimeError:
+        logger.debug("No event loop for admin transfer review push")
+
+
+async def notify_admin_transfer_failed(
+    order_id: str,
+    amount,
+    customer_name: str,
+    reason: str = "",
+    charged: bool = True,
+) -> None:
+    """Avisa a los administradores que Banxico no confirmó una transferencia."""
+    try:
+        async with async_session() as db:
+            admins = list((await db.execute(
+                select(User).where(
+                    User.is_superuser.is_(True),
+                    User.is_active.is_(True),
+                )
+            )).scalars().all())
+            if not admins:
+                return
+            short = str(order_id)[:8].upper()
+            action = (
+                "Se cargó al saldo del cliente."
+                if charged
+                else "El pedido se canceló sin cargo."
+            )
+            body = (
+                f"Pedido #{short} por ${float(amount or 0):.2f} "
+                f"de {customer_name or 'cliente'}. {action}"
+            )
+            if reason:
+                body += f" Motivo: {reason}"
+            for admin in admins:
+                await send_to_user(
+                    db, admin.id, "Transferencia no confirmada", body,
+                    {"type": "transfer_failed", "order_id": str(order_id)},
+                    "red",
+                )
+    except Exception:
+        logger.exception("Push admin transfer failed notification failed")
+
+
 async def notify_new_restaurant_registration(restaurant_id: str) -> None:
     """Avisa por push, panel y correo que hay un negocio esperando aprobación."""
     try:

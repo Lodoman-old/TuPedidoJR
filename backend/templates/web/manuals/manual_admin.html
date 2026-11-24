@@ -108,6 +108,9 @@
   <li><strong>apiCEP (recomendado):</strong> el cliente sube su comprobante y el OCR lee la clave de rastreo, el monto, la fecha y el banco. Después se consulta el CEP de Banxico. Si Banxico confirma el pago y el monto coincide, el pedido se marca pagado automáticamente.</li>
   <li><strong>Clave de rastreo manual:</strong> el cliente escribe la clave, el banco emisor y la fecha. La plataforma consulta Banxico sin costo por consulta.</li>
 </ul>
+<p><strong>Fuera de horario de Banxico (09:30 a 23:00):</strong> Gemini analiza el comprobante y puede preaprobar pedidos de hasta $200. Arriba de ese monto, el pedido queda retenido y te llega un aviso push para confirmarlo. Al abrir Banxico se reintenta la validación automáticamente.</p>
+<p><strong>Transferencias del mismo banco:</strong> Banxico no emite CEP. Gemini las preaprueba hasta el límite configurado y te llega un aviso para verificar el ingreso en tu estado de cuenta.</p>
+<p><strong>Si Banxico no confirma a las 9:30:</strong> el monto se carga al saldo pendiente del cliente, se le avisa por correo y push, y tú recibes el aviso para dar seguimiento. Si el pedido aún no se había preparado, se cancela sin cargo.</p>
 <p>El panel de comprobantes muestra:</p>
 <ul>
   <li>Porcentaje de certeza.</li>

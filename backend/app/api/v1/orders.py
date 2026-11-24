@@ -45,8 +45,9 @@ from app.services.restaurant_access import ORDER_ROLES, have_role
 from app.services.estimation_service import calculate_estimated_time
 from app.services.order_service import calculate_order_totals, get_approval_timeout_min, get_setting_value, resolve_item_options
 from app.services.order_serialization import order_out
+from app.services.order_transfer_service import apply_preapproved_transfer
 from app.services.loyalty_service import apply_redemption, preview_redemption, award_on_delivery
-from app.services.push_service import schedule_available_order, schedule_courier_preparing, schedule_courier_ready, schedule_new_order, schedule_order_status
+from app.services.push_service import schedule_available_order, schedule_courier_preparing, schedule_courier_ready, schedule_new_order, schedule_order_status, schedule_admin_transfer_review
 from app.services.schedule_service import restaurant_open_state
 from app.services.tracking_service import build_tracking
 from app.ws.manager import ConnectionManager
@@ -857,6 +858,7 @@ async def validate_transfer_payment(
             "receiver_mismatch": 409,
             "sender_mismatch": 409,
             "key_mismatch": 409,
+            "same_bank": 409,
             "error": 502,
         }
         raise HTTPException(
@@ -921,12 +923,16 @@ async def validate_transfer_receipt(
             detail="La lectura automática de comprobantes no está activada.",
         )
     if not (await get_setting_value(db, "APICEP_API_KEY", "")).strip():
-        raise HTTPException(
-            status_code=400,
-            detail="La cuenta de apiCEP no está configurada.",
-        )
+        gemini_key = (
+            await get_setting_value(db, "GEMINI_API_KEY", "")
+        ).strip()
+        if not gemini_key:
+            raise HTTPException(
+                status_code=400,
+                detail="La validación automática no está configurada.",
+            )
 
-    _, receiver_bank = await _transfer_receiver_account(db)
+    receiver_account, receiver_bank = await _transfer_receiver_account(db)
 
     try:
         file_url = await save_document(file)
@@ -940,7 +946,64 @@ async def validate_transfer_receipt(
         file_url,
         TRANSFER_RECEIPT,
         expected_amount=order.total,
+        expected_date=order.placed_at or datetime.now(timezone.utc),
+        expected_recipient=receiver_account,
     )
+
+    if record.status == "preapproved":
+        await apply_preapproved_transfer(db, record, actor_id=current_user.id)
+        await db.commit()
+        if (record.extracted or {}).get("_same_bank"):
+            schedule_admin_transfer_review(
+                str(order.id),
+                order.total,
+                current_user.name,
+                "Mismo banco: verifica el ingreso en tu estado de cuenta.",
+            )
+        return {
+            "payment_status": "approved",
+            "cep_status": "preapproved",
+            "message": (
+                "Pago preaprobado. El negocio ya puede preparar tu pedido; "
+                "a las 9:30 se confirmará con Banxico."
+            ),
+        }
+
+    if record.status == "pending_cep":
+        return {
+            "payment_status": "pending",
+            "cep_status": "pending_cep",
+            "message": record.summary or (
+                "Tu comprobante quedó pendiente. Banxico valida de 09:30 a 23:00; "
+                "lo validaremos automáticamente al abrir."
+            ),
+        }
+
+    if record.status == "review":
+        reason = record.summary or "Pago en revisión."
+        issues = record.issues or []
+        if issues:
+            reason = f"{reason} {issues[0]}"
+        schedule_admin_transfer_review(
+            str(order.id), order.total, current_user.name, reason
+        )
+        try:
+            timeout_min = int(
+                await get_setting_value(db, "RECEIPT_REVIEW_TIMEOUT_MIN", "30")
+            )
+        except (TypeError, ValueError):
+            timeout_min = 30
+        return {
+            "payment_status": "pending",
+            "cep_status": "review",
+            "message": (
+                "Tu pedido quedó en revisión de pago. "
+                "El administrador debe confirmar tu transferencia. "
+                f"Si no se confirma en los próximos {timeout_min} minutos, "
+                "el pedido se cancelará y no se te cobrará."
+            ),
+        }
+
     if record.status != "high":
         issues = record.issues or []
         detail = record.error or (str(issues[0]) if issues else "")
@@ -1048,6 +1111,19 @@ async def update_order_status(
         )
 
     requested = body.status
+    if (
+        order.payment_method == "transfer"
+        and order.payment_status != "approved"
+        and requested in ("confirmed", "preparing", "ready")
+        and not current_user.is_superuser
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "El pago por transferencia aún no está confirmado. "
+                "No prepares el pedido hasta que se valide."
+            ),
+        )
     if (
         requested == "confirmed"
         and order.requires_courier_approval

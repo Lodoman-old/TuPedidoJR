@@ -27,7 +27,7 @@ def _digits(value) -> str:
     return "".join(ch for ch in str(value or "") if ch.isdigit())
 
 
-def _banxico_open() -> bool:
+def banxico_open() -> bool:
     now = datetime.now(BANXICO_TZ)
     if now.hour < 9 or now.hour >= 23:
         return False
@@ -68,14 +68,21 @@ async def validate_transfer(
         )
     if amount_cents <= 0:
         raise CepValidationError("invalid_amount", "El monto del pedido no es válido.")
+    if sender_bank == receiver_bank:
+        raise CepValidationError(
+            "same_bank",
+            "Tu transferencia es entre cuentas del mismo banco. Banxico no puede "
+            "validarla; sube tu comprobante para revisión manual.",
+        )
     if transfer_date > date.today():
         raise CepValidationError(
             "invalid_date", "La fecha de la transferencia no puede ser futura."
         )
-    if not _banxico_open():
+    if not banxico_open():
         raise CepValidationError(
             "closed",
-            "Banxico valida transferencias de 09:30 a 23:00. Intenta dentro de ese horario.",
+            "Banxico valida transferencias de 09:30 a 23:00. Sube tu comprobante "
+            "para preaprobarlo con Gemini o intenta dentro de ese horario.",
         )
 
     def _run():

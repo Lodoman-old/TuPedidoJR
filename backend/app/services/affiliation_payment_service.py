@@ -90,7 +90,7 @@ async def _run_validation(restaurant_id: str, proof_url: str, months: int) -> No
         except Exception:
             logger.exception("No se pudo validar la afiliación de %s", restaurant_id)
             return
-        if record is None or record.status != "high":
+        if record is None or record.status not in ("high", "preapproved"):
             return
 
         previous = restaurant.affiliation_expires_at

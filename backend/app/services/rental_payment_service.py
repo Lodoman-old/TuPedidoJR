@@ -32,8 +32,9 @@ async def _run_validation(booking_id: str) -> None:
             record = None
 
         if record is not None:
-            booking.receipt_status = "approved" if record.status == "high" else "review"
-            if record.status == "high":
+            payment_ok = record.status in ("high", "preapproved")
+            booking.receipt_status = "approved" if payment_ok else "review"
+            if payment_ok:
                 booking.payment_status = (
                     "paid" if booking.payment_mode == "full" else "deposit_paid"
                 )

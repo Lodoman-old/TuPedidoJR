@@ -210,6 +210,41 @@ KNOWN_SETTINGS: dict[str, dict] = {
             {"value": "apicep", "label": "apiCEP (OCR + Banxico)"},
         ],
     },
+    "RECEIPT_GEMINI_FALLBACK_ENABLED": {
+        "group": "Validación de comprobantes", "label": "Respaldo con Gemini fuera de horario",
+        "description": "Si Banxico está cerrado o no puede validar, analiza el comprobante con Gemini. Solo preaprueba montos bajos y con alta confianza.",
+        "type": "bool", "default": "true",
+    },
+    "RECEIPT_AUTO_APPROVE_MAX_AMOUNT": {
+        "group": "Validación de comprobantes", "label": "Límite de autoaprobación fuera de horario",
+        "description": "Monto máximo por pedido que se puede preaprobar con Gemini sin admin. Arriba de este monto, el admin debe confirmar.",
+        "type": "money", "default": "200.0",
+    },
+    "RECEIPT_SAME_BANK_MAX_AMOUNT": {
+        "group": "Validación de comprobantes", "label": "Límite para transferencias del mismo banco",
+        "description": "Monto máximo para preaprobar una transferencia del mismo banco. No tiene CEP de Banxico, así que el riesgo es mayor.",
+        "type": "money", "default": "200.0",
+    },
+    "RECEIPT_GEMINI_MIN_CONFIDENCE": {
+        "group": "Validación de comprobantes", "label": "Confianza mínima de Gemini",
+        "description": "Porcentaje mínimo para preaprobar un pago fuera de horario.",
+        "type": "int", "default": "95",
+    },
+    "RECEIPT_CEP_RETRY_INTERVAL_MIN": {
+        "group": "Validación de comprobantes", "label": "Reintento CEP (minutos)",
+        "description": "Cada cuántos minutos se reintenta validar con Banxico un pago pendiente.",
+        "type": "int", "default": "15",
+    },
+    "RECEIPT_CEP_RETRY_MAX_ATTEMPTS": {
+        "group": "Validación de comprobantes", "label": "Máximo de reintentos CEP",
+        "description": "Intentos antes de mandar el comprobante a revisión manual.",
+        "type": "int", "default": "6",
+    },
+    "RECEIPT_REVIEW_TIMEOUT_MIN": {
+        "group": "Validación de comprobantes", "label": "Tiempo de revisión de pago (minutos)",
+        "description": "Si un pago por transferencia no se confirma en este tiempo, el pedido se cancela. Aplica a pedidos retenidos por monto o revisión.",
+        "type": "int", "default": "30",
+    },
     "APICEP_API_KEY": {
         "group": "Validación de comprobantes", "label": "apiCEP API key",
         "description": "Clave secreta de apiCEP. Se usa solo en el servidor.",

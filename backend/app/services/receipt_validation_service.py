@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import async_session
 from app.models.receipt_validation import ReceiptValidation
 from app.services.api_cep_service import ApiCepError, validate_receipt as validate_apicep_receipt
+from app.services.cep_validation_service import banxico_open
 from app.services.file_service import UPLOAD_DIR
 from app.services.order_service import get_setting_value
 
@@ -278,6 +279,46 @@ def _recipient_ok(expected: str | None, extracted: dict) -> bool | None:
     return False
 
 
+def _is_same_bank_error(text: str) -> bool:
+    lowered = (text or "").lower()
+    return (
+        "misma institución" in lowered
+        or "misma institucion" in lowered
+        or "same institution" in lowered
+        or "banco emisor y el banco receptor" in lowered
+    )
+
+
+def _apicep_error_allows_fallback(text: str) -> bool:
+    lowered = (text or "").lower()
+    blocked = (
+        "no se encontró",
+        "no se encontro",
+        "not found",
+        "ya fue usado",
+        "ya fue validado",
+        "monto",
+        "misma institución",
+        "misma institucion",
+    )
+    return not any(token in lowered for token in blocked)
+
+
+async def _mark_pending_cep(
+    db: AsyncSession, record: ReceiptValidation, message: str
+) -> ReceiptValidation:
+    record.provider = "apicep"
+    record.model = "apicep"
+    record.status = "pending_cep"
+    record.confidence = max(int(record.confidence or 0), 40)
+    record.issues = [message]
+    record.summary = message[:1000]
+    record.error = None
+    await db.commit()
+    await db.refresh(record)
+    return record
+
+
 async def _validate_with_apicep(
     db: AsyncSession, record: ReceiptValidation
 ) -> ReceiptValidation:
@@ -290,9 +331,26 @@ async def _validate_with_apicep(
             expected_amount=record.expected_amount,
         )
     except ApiCepError as exc:
+        text = (exc.message or "").strip()
+        if exc.status == "closed":
+            return await _mark_pending_cep(db, record, text)
         record.confidence = 0
-        record.status = "low"
-        record.error = exc.message[:500]
+        record.error = text[:500]
+        record.issues = [text[:500]] if text else []
+        if _is_same_bank_error(text):
+            record.status = "review"
+            record.extracted = {
+                **(record.extracted or {}),
+                "_same_bank": True,
+            }
+            record.summary = (
+                "Transferencia entre cuentas del mismo banco. "
+                "Banxico no puede validarla automáticamente; requiere revisión manual."
+            )
+            record.error = None
+        else:
+            record.status = "low"
+            record.summary = text[:1000]
         await db.commit()
         await db.refresh(record)
         return record
@@ -321,12 +379,35 @@ async def _validate_with_apicep(
         )
 
     confirmed = bool(validation.get("banxicoConfirmed"))
-    cep_status = str(validation.get("cepStatus") or "").upper()
+    cep_status = str(validation.get("cepStatus") or "").upper().replace(" ", "_")
     reused = validation.get("cepPreviouslyValidated") is True
+    error_text = str(data.get("error") or "")
+
+    if _is_same_bank_error(error_text):
+        record.confidence = min(confidence, 40)
+        record.status = "review"
+        record.document_type = TRANSFER
+        record.extracted = {
+            **extracted,
+            "validation": validation,
+            "_same_bank": True,
+        }
+        record.issues = [
+            "Transferencia entre cuentas del mismo banco. "
+            "Banxico no puede validarla automáticamente; requiere revisión manual."
+        ]
+        record.summary = (
+            "Mismo banco: no hay CEP de Banxico. Revisa el comprobante manualmente."
+        )
+        record.error = None
+        await db.commit()
+        await db.refresh(record)
+        return record
+
     issues: list[str] = []
     if status != "valid" or not confirmed or cep_status != "LIQUIDADO":
         issues.append(
-            data.get("error") or "apiCEP no confirmó la transferencia con Banxico."
+            error_text or "apiCEP no confirmó la transferencia con Banxico."
         )
     if amount_ok is False:
         issues.append("El monto no coincide con el esperado.")
@@ -340,9 +421,17 @@ async def _validate_with_apicep(
         and amount_ok is not False
         and not reused
     )
+    pending_cep = status == "pending" or cep_status == "EN_PROCESO"
     record.document_type = TRANSFER
     record.confidence = 100 if valid else min(confidence, 40)
-    record.status = "high" if valid else ("review" if status == "valid" else "low")
+    if pending_cep:
+        record.status = "pending_cep"
+    elif valid:
+        record.status = "high"
+    elif status == "valid":
+        record.status = "review"
+    else:
+        record.status = "low"
     record.extracted = {
         **extracted,
         "validation": validation,
@@ -353,40 +442,32 @@ async def _validate_with_apicep(
     record.summary = (
         "Transferencia validada por Banxico."
         if valid
-        else (data.get("error") or "No se pudo confirmar la transferencia.")
+        else (
+            "Banxico todavía no genera el CEP. Se reintentará automáticamente."
+            if pending_cep
+            else (error_text or "No se pudo confirmar la transferencia.")
+        )
     )[:1000]
-    record.error = None if valid else (data.get("error") or None)
+    record.error = None if valid else (error_text or None)
     await db.commit()
     await db.refresh(record)
     return record
 
 
-async def _validate_record(db: AsyncSession, record: ReceiptValidation) -> ReceiptValidation:
-    enabled = (await get_setting_value(db, "RECEIPT_VALIDATION_ENABLED", "false")).lower() == "true"
-    if not enabled:
-        return record
-
-    provider = (
-        await get_setting_value(db, "RECEIPT_VALIDATION_PROVIDER", "gemini")
-    ).strip().lower()
-    apicep_key = (await get_setting_value(db, "APICEP_API_KEY", "")).strip()
-    if provider == "apicep" and record.expected_kind == TRANSFER:
-        if apicep_key:
-            return await _validate_with_apicep(db, record)
-        record.provider = "apicep"
-        record.status = "low"
-        record.error = "Falta configurar la API key de apiCEP."
+async def _validate_with_gemini(db: AsyncSession, record: ReceiptValidation) -> ReceiptValidation:
+    api_key = (await get_setting_value(db, "GEMINI_API_KEY", "")).strip()
+    model = (await get_setting_value(db, "GEMINI_MODEL", "gemini-3.5-flash-lite")).strip()
+    record.provider = "gemini"
+    record.model = model
+    if not api_key:
+        record.status = "review"
+        record.error = "Falta configurar la API key de Gemini."
+        record.summary = "El respaldo con Gemini no está configurado."
+        record.issues = ["Falta configurar la API key de Gemini."]
         await db.commit()
         await db.refresh(record)
         return record
 
-    api_key = (await get_setting_value(db, "GEMINI_API_KEY", "")).strip()
-    model = (await get_setting_value(db, "GEMINI_MODEL", "gemini-3.5-flash-lite")).strip()
-    if not api_key:
-        return record
-
-    record.provider = "gemini"
-    record.model = model
     path = _file_path(record.file_url)
     if not path.exists():
         record.confidence = 0
@@ -471,6 +552,12 @@ async def _validate_record(db: AsyncSession, record: ReceiptValidation) -> Recei
     record.document_type = document_type
     record.confidence = confidence
     record.status = status
+    extracted["_checks"] = {
+        "amount_ok": amount_ok,
+        "date_ok": date_ok,
+        "recipient_ok": recipient_ok,
+        "fields_ok": fields_ok,
+    }
     record.extracted = extracted
     record.issues = issues
     record.summary = (extracted.get("summary") or "")[:1000] or None
@@ -478,6 +565,234 @@ async def _validate_record(db: AsyncSession, record: ReceiptValidation) -> Recei
     await db.commit()
     await db.refresh(record)
     return record
+
+
+async def _fallback_with_gemini(
+    db: AsyncSession,
+    record: ReceiptValidation,
+    reason: str,
+    *,
+    same_bank: bool = False,
+) -> ReceiptValidation:
+    fallback_enabled = (
+        await get_setting_value(db, "RECEIPT_GEMINI_FALLBACK_ENABLED", "true")
+    ).lower() == "true"
+    gemini_key = (await get_setting_value(db, "GEMINI_API_KEY", "")).strip()
+
+    if not fallback_enabled:
+        if same_bank:
+            message = (
+                "Transferencia entre cuentas del mismo banco y sin respaldo de Gemini. "
+                "Requiere revisión manual."
+            )
+            record.provider = "apicep"
+            record.status = "review"
+            record.issues = [message] + (record.issues or [])
+            record.summary = message
+            record.error = None
+            record.extracted = {
+                **(record.extracted or {}),
+                "_same_bank": True,
+                "_fallback_reason": reason,
+            }
+            await db.commit()
+            await db.refresh(record)
+            return record
+        return await _mark_pending_cep(
+            db,
+            record,
+            "Banxico valida de 09:30 a 23:00. "
+            "Tu comprobante quedó pendiente para intentar al abrir.",
+        )
+
+    if not gemini_key:
+        if same_bank:
+            message = (
+                "Transferencia entre cuentas del mismo banco y sin respaldo de Gemini. "
+                "Requiere revisión manual."
+            )
+            record.provider = "apicep"
+            record.status = "review"
+            record.issues = [message] + (record.issues or [])
+            record.summary = message
+            record.error = None
+            record.extracted = {
+                **(record.extracted or {}),
+                "_same_bank": True,
+                "_fallback_reason": reason,
+            }
+            await db.commit()
+            await db.refresh(record)
+            return record
+        return await _mark_pending_cep(
+            db,
+            record,
+            "Banxico valida de 09:30 a 23:00. "
+            "Tu comprobante quedó pendiente para reintentar al abrir.",
+        )
+
+    gemini = await _validate_with_gemini(db, record)
+    checks = (gemini.extracted or {}).get("_checks") or {}
+
+    if record.entity_type != "order_transfer":
+        gemini.extracted = {
+            **(gemini.extracted or {}),
+            "_same_bank": same_bank,
+            "_fallback_reason": reason,
+        }
+        gemini.status = "review"
+        gemini.summary = (
+            "Mismo banco: Banxico no emite CEP. Revisión manual."
+            if same_bank
+            else "Banxico está fuera de horario. Revisión manual del comprobante."
+        )
+        gemini.error = None
+        await db.commit()
+        await db.refresh(gemini)
+        return gemini
+
+    try:
+        min_conf = int(
+            await get_setting_value(db, "RECEIPT_GEMINI_MIN_CONFIDENCE", "95")
+        )
+    except (TypeError, ValueError):
+        min_conf = 95
+    try:
+        cap_key = (
+            "RECEIPT_SAME_BANK_MAX_AMOUNT"
+            if same_bank
+            else "RECEIPT_AUTO_APPROVE_MAX_AMOUNT"
+        )
+        cap = Decimal(
+            await get_setting_value(db, cap_key, "200.0")
+        )
+    except (InvalidOperation, ValueError):
+        cap = Decimal("200.0")
+
+    expected_value = None
+    if record.expected_amount is not None:
+        try:
+            expected_value = Decimal(str(record.expected_amount))
+        except (InvalidOperation, ValueError):
+            expected_value = None
+    total = _parse_amount((gemini.extracted or {}).get("total"))
+    exact_amount = (
+        total is not None
+        and expected_value is not None
+        and total == expected_value
+    )
+
+    exact = (
+        gemini.document_type == TRANSFER
+        and expected_value is not None
+        and expected_value <= cap
+        and gemini.confidence >= min_conf
+        and exact_amount
+        and checks.get("recipient_ok") is True
+        and checks.get("date_ok") in (True, None)
+        and checks.get("fields_ok") is True
+        and not gemini.issues
+    )
+
+    extracted = dict(gemini.extracted or {})
+    extracted["_same_bank"] = same_bank
+    extracted["_fallback_reason"] = reason
+
+    if exact:
+        extracted["_preapproved"] = True
+        gemini.extracted = extracted
+        gemini.status = "preapproved"
+        gemini.issues = []
+        gemini.summary = (
+            "Pago preaprobado con Gemini. Se confirmará con Banxico al abrir."
+            if not same_bank
+            else "Pago preaprobado con Gemini (mismo banco). Verifica el ingreso en tu cuenta."
+        )
+        gemini.error = None
+        await db.commit()
+        await db.refresh(gemini)
+        return gemini
+
+    issues = list(gemini.issues or [])
+    if expected_value is not None and expected_value > cap:
+        issues.append(
+            f"El monto supera el límite de autoaprobación (${cap:,.2f})."
+        )
+    if gemini.confidence < min_conf:
+        issues.append(
+            f"La confianza de Gemini ({gemini.confidence}%) es menor al mínimo ({min_conf}%)."
+        )
+    if not exact_amount:
+        issues.append("No se pudo confirmar que el monto coincida exactamente.")
+    if checks.get("recipient_ok") is not True:
+        issues.append("No se pudo confirmar la CLABE destino.")
+    if same_bank:
+        issues.append(
+            "Mismo banco: Banxico no emite CEP; requiere revisión manual."
+        )
+    gemini.extracted = extracted
+    gemini.status = "review"
+    gemini.issues = issues
+    gemini.summary = (
+        "Pago en revisión. El administrador debe confirmar la transferencia."
+    )
+    gemini.error = None
+    await db.commit()
+    await db.refresh(gemini)
+    return gemini
+
+
+async def _validate_record(
+    db: AsyncSession, record: ReceiptValidation
+) -> ReceiptValidation:
+    enabled = (
+        await get_setting_value(db, "RECEIPT_VALIDATION_ENABLED", "false")
+    ).lower() == "true"
+    if not enabled:
+        return record
+
+    provider = (
+        await get_setting_value(db, "RECEIPT_VALIDATION_PROVIDER", "gemini")
+    ).strip().lower()
+    if provider != "apicep" or record.expected_kind != TRANSFER:
+        return await _validate_with_gemini(db, record)
+
+    if not banxico_open():
+        return await _fallback_with_gemini(
+            db,
+            record,
+            "Banxico está fuera de horario (09:30 a 23:00).",
+        )
+
+    apicep_key = (await get_setting_value(db, "APICEP_API_KEY", "")).strip()
+    if not apicep_key:
+        return await _fallback_with_gemini(
+            db,
+            record,
+            "apiCEP no está configurado.",
+        )
+
+    result = await _validate_with_apicep(db, record)
+    if result.status == "high":
+        return result
+    if result.status == "pending_cep":
+        return await _fallback_with_gemini(
+            db,
+            result,
+            "Banxico todavía no tiene el CEP disponible.",
+        )
+    if (result.extracted or {}).get("_same_bank"):
+        return await _fallback_with_gemini(
+            db,
+            result,
+            "Transferencia entre cuentas del mismo banco.",
+            same_bank=True,
+        )
+    if result.status == "low":
+        reason = result.error or result.summary or ""
+        if _apicep_error_allows_fallback(reason):
+            return await _fallback_with_gemini(db, result, reason)
+    return result
 
 
 async def _run_validation(

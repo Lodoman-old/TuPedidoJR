@@ -345,6 +345,11 @@ async def web_order_detail(request: Request, order_id: str):
     return templates.TemplateResponse(request, "order_detail.html", {"order_id": order_id})
 
 
+@router.get("/balance")
+async def web_balance(request: Request):
+    return templates.TemplateResponse(request, "balance.html")
+
+
 @router.get("/profile")
 async def web_profile(request: Request):
     return templates.TemplateResponse(request, "profile.html")
@@ -441,6 +446,11 @@ async def web_admin_recargas(request: Request):
 @router.get("/admin/receipts")
 async def web_admin_receipts(request: Request):
     return templates.TemplateResponse(request, "receipts_admin.html")
+
+
+@router.get("/admin/transfers")
+async def web_admin_transfers(request: Request):
+    return templates.TemplateResponse(request, "transfers_admin.html")
 
 
 @router.get("/admin/agenda")

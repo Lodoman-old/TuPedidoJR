@@ -27,6 +27,7 @@ from app.api.v1.admin_mandados import router as admin_mandados_router
 from app.api.v1.admin_dashboard import router as admin_dashboard_router
 from app.api.v1.admin_audit import router as admin_audit_router
 from app.api.v1.admin_receipts import router as admin_receipts_router
+from app.api.v1.admin_transfers import router as admin_transfers_router
 from app.api.v1.admin_incidents import router as admin_incidents_router
 from app.api.v1.admin_restaurants import router as admin_restaurants_router
 from app.api.v1.admin_security import router as admin_security_router
@@ -39,6 +40,7 @@ from app.api.v1.restaurant_registration import router as restaurant_registration
 from app.api.v1.team import router as team_router
 from app.api.v1.analytics import router as analytics_router
 from app.api.v1.business_coupons import router as business_coupons_router
+from app.api.v1.balance import router as balance_router
 from app.api.v1.debug import router as debug_router
 
 router = APIRouter(prefix="/api/v1")
@@ -53,6 +55,7 @@ router.include_router(orders_router, prefix="/orders", tags=["Pedidos"])
 router.include_router(delivery_router, prefix="/delivery", tags=["Repartidores"])
 router.include_router(reviews_router, prefix="/reviews", tags=["Reseñas"])
 router.include_router(payments_router, prefix="/payments", tags=["Pagos"])
+router.include_router(balance_router, prefix="/balance", tags=["Saldo pendiente"])
 router.include_router(profile_router, prefix="/profile", tags=["Perfil"])
 router.include_router(coupons_router, prefix="/coupons", tags=["Cupones"])
 router.include_router(geocode_router, prefix="/geocode", tags=["Geocodificación"])
@@ -70,6 +73,7 @@ router.include_router(admin_mandados_router, prefix="/admin", tags=["Administrac
 router.include_router(admin_dashboard_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_audit_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_receipts_router, prefix="/admin", tags=["Administración"])
+router.include_router(admin_transfers_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_incidents_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_restaurants_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_security_router, prefix="/admin", tags=["Administración"])

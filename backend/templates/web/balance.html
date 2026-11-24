@@ -16,31 +16,44 @@
   <div id="balanceReview" class="alert alert-warning d-none"></div>
 
   <div id="balancePayment" class="d-none">
-    <div class="alert alert-info">
-      <div class="small text-muted">Referencia para tu transferencia</div>
-      <div class="fs-4 fw-bold" id="balanceReference">#--------</div>
-      <div class="small mt-1">Escribe esta referencia en el concepto y transfiere el total exacto.</div>
-    </div>
-
-    <div id="balanceAccounts"></div>
-
-    <div class="card p-2 mb-2">
-      <div class="small fw-bold mb-1"><i class="bi bi-camera"></i> ¿Ya transferiste? Sube tu comprobante</div>
-      <input type="file" id="balanceReceiptFile" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp,application/pdf">
-      <button class="btn btn-sm btn-primary mt-2" id="balanceUploadBtn" onclick="validateBalanceReceipt()">Validar mi comprobante</button>
-      <div class="small text-muted mt-1" id="balanceUploadMsg"></div>
-      <div class="form-text">Si el comprobante no se puede leer, usa la clave de rastreo de abajo.</div>
-    </div>
-
-    <div class="card p-2 mb-2">
-      <div class="small fw-bold mb-1"><i class="bi bi-key"></i> Capturar clave de rastreo</div>
-      <div class="row g-2">
-        <div class="col-12"><input id="balanceTrackingKey" class="form-control form-control-sm" maxlength="30" placeholder="Clave de rastreo"></div>
-        <div class="col-7"><select id="balanceSenderBank" class="form-select form-select-sm"><option value="">Banco emisor...</option></select></div>
-        <div class="col-5"><input type="date" id="balanceDate" class="form-control form-control-sm"></div>
+    <div class="card p-3 mb-3">
+      <label class="form-label small fw-bold">¿Desde qué banco vas a transferir?</label>
+      <select id="balanceSenderBankTop" class="form-select form-select-sm" onchange="onBalanceBankChange(this.value)">
+        <option value="">Selecciona tu banco...</option>
+      </select>
+      <div class="small text-muted mt-2">
+        Te mostraremos la cuenta de un banco distinto al tuyo para que Banxico pueda validar la transferencia.
       </div>
-      <button class="btn btn-sm btn-outline-primary mt-2" id="balanceValidateBtn" onclick="validateBalanceTransfer()">Validar clave</button>
-      <div class="small text-muted mt-1" id="balanceManualMsg"></div>
+    </div>
+
+    <div id="balanceTransferInfo" class="d-none">
+      <div class="alert alert-info">
+        <div class="small text-muted">Referencia para tu transferencia</div>
+        <div class="fs-4 fw-bold" id="balanceReference">#--------</div>
+        <div class="small mt-1">Escribe esta referencia en el concepto y transfiere el total exacto.</div>
+      </div>
+
+      <div id="balanceAccount"></div>
+
+      <div class="card p-2 mb-2">
+        <div class="small fw-bold mb-1"><i class="bi bi-camera"></i> ¿Ya transferiste? Sube tu comprobante</div>
+        <input type="file" id="balanceReceiptFile" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp,application/pdf">
+        <button class="btn btn-sm btn-primary mt-2" id="balanceUploadBtn" onclick="validateBalanceReceipt()">Validar mi comprobante</button>
+        <div class="small text-muted mt-1" id="balanceUploadMsg"></div>
+      </div>
+
+      <div class="card p-2 mb-2">
+        <a class="small" data-bs-toggle="collapse" href="#balanceManual">Capturar clave de rastreo</a>
+        <div class="collapse" id="balanceManual">
+          <div class="row g-2 mt-1">
+            <div class="col-12"><input id="balanceTrackingKey" class="form-control form-control-sm" maxlength="30" placeholder="Clave de rastreo"></div>
+            <div class="col-7"><select id="balanceSenderBank" class="form-select form-select-sm" onchange="syncBalanceBankFromManual(this.value)"><option value="">Banco emisor...</option></select></div>
+            <div class="col-5"><input type="date" id="balanceDate" class="form-control form-control-sm"></div>
+          </div>
+          <button class="btn btn-sm btn-outline-primary mt-2" id="balanceValidateBtn" onclick="validateBalanceTransfer()">Validar clave</button>
+          <div class="small text-muted mt-1" id="balanceManualMsg"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -51,9 +64,20 @@
 {% block scripts %}
 <script>
   let balancePayment = null;
-  let balanceConfig = {};
   let balanceAccounts = [];
   let balanceBanks = [];
+
+  const BALANCE_BANKS = [
+    { code: '40002', name: 'Banamex' },
+    { code: '40127', name: 'Banco Azteca' },
+    { code: '40012', name: 'BBVA' },
+    { code: '40014', name: 'Santander' },
+    { code: '40072', name: 'Banorte' },
+    { code: '40021', name: 'HSBC' },
+    { code: '40044', name: 'Scotiabank' },
+    { code: '40036', name: 'Inbursa' },
+    { code: '0', name: 'Otro banco' },
+  ];
 
   function esc(v) {
     return String(v ?? '').replace(/[&<>"']/g, (c) => ({
@@ -66,25 +90,59 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
-  function renderBalanceAccounts() {
-    const box = document.getElementById('balanceAccounts');
-    if (!box) return;
-    if (!balanceAccounts.length) {
+  function recommendedBalanceAccount(senderCode) {
+    if (!balanceAccounts.length) return null;
+    if (!senderCode || senderCode === '0') return balanceAccounts[0];
+    return balanceAccounts.find((a) => a.bank_code !== senderCode) || balanceAccounts[0];
+  }
+
+  function renderBalanceAccount() {
+    const select = document.getElementById('balanceSenderBankTop');
+    const box = document.getElementById('balanceAccount');
+    const info = document.getElementById('balanceTransferInfo');
+    if (!select || !box || !info) return;
+    const sender = select.value;
+    if (!sender) {
+      info.classList.add('d-none');
+      return;
+    }
+    info.classList.remove('d-none');
+    const account = recommendedBalanceAccount(sender);
+    if (!account) {
       box.innerHTML = '<div class="alert alert-warning">La plataforma no tiene configurada la cuenta bancaria.</div>';
       return;
     }
-    box.innerHTML = balanceAccounts.map((account) => `
-      <div class="card p-2 mb-2">
-        <div class="small fw-bold">${esc(account.bank_name || 'Cuenta de la plataforma')}</div>
-        <div class="small">Titular: ${esc(account.account_holder || '—')}<br>
-        CLABE: <strong>${esc(account.clabe || '—')}</strong></div>
-      </div>
-    `).join('') + `<div class="small text-muted mb-2">
-      Si tu cuenta es Banamex, usa la de Banco Azteca; si es Banco Azteca, usa la de Banamex. Si es otro banco, cualquiera funciona.
+    box.innerHTML = `<div class="card p-2 mb-2">
+      <div class="small fw-bold">Transfiere a ${esc(account.bank_name || 'la plataforma')}</div>
+      <div class="small">Titular: ${esc(account.account_holder || '—')}<br>
+      CLABE: <strong>${esc(account.clabe || '—')}</strong></div>
+      <div class="small text-muted mt-1">Es un banco distinto al tuyo, así Banxico puede validar la transferencia.</div>
     </div>`;
+    const manualBank = document.getElementById('balanceSenderBank');
+    if (manualBank && sender !== '0') manualBank.value = sender;
   }
 
-  function fillBalanceBanks() {
+  function onBalanceBankChange(value) {
+    renderBalanceAccount();
+  }
+
+  function syncBalanceBankFromManual(value) {
+    const top = document.getElementById('balanceSenderBankTop');
+    if (top && value) {
+      top.value = value;
+      renderBalanceAccount();
+    }
+  }
+
+  function fillTopBanks() {
+    const select = document.getElementById('balanceSenderBankTop');
+    if (!select) return;
+    select.innerHTML = '<option value="">Selecciona tu banco...</option>' + BALANCE_BANKS.map(
+      (bank) => `<option value="${bank.code}">${esc(bank.name)}</option>`
+    ).join('');
+  }
+
+  function fillManualBanks() {
     const select = document.getElementById('balanceSenderBank');
     if (!select) return;
     select.innerHTML = '<option value="">Banco emisor...</option>' + balanceBanks.map(
@@ -103,7 +161,6 @@
         apiRequest('GET', '/payments/transfer-banks').catch(() => []),
         apiRequest('GET', '/balance').catch(() => ({ pending_balance: 0, payment: null })),
       ]);
-      balanceConfig = pc;
       balanceAccounts = (bd && bd.accounts) || [];
       balanceBanks = Array.isArray(banks) ? banks : [];
       balancePayment = summary.payment || null;
@@ -135,19 +192,18 @@
         return;
       }
 
-      if (!balancePayment) {
-        const created = await apiRequest('POST', '/balance/payments');
-        balancePayment = created.payment;
-      }
+      const created = await apiRequest('POST', '/balance/payments');
+      balancePayment = created.payment;
       if (!balancePayment) {
         throw new Error('No se pudo generar la referencia de pago.');
       }
 
       document.getElementById('balanceReference').textContent = '#' + balancePayment.reference;
       document.getElementById('balanceDate').value = todayLocal();
-      fillBalanceBanks();
-      renderBalanceAccounts();
+      fillTopBanks();
+      fillManualBanks();
       document.getElementById('balancePayment').classList.remove('d-none');
+      renderBalanceAccount();
     } catch (e) {
       loading.classList.add('d-none');
       content.classList.remove('d-none');

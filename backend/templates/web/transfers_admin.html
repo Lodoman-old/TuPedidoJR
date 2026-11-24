@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-1">Transferencias pendientes</h4>
+    <div class="small text-muted">Pedidos y saldos que esperan confirmación de Banxico o del administrador.</div>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary btn-sm" onclick="loadSummary()">
+      <i class="bi bi-arrow-clockwise"></i> Actualizar
+    </button>
+    <button class="btn btn-primary btn-sm" id="revalidateAllBtn" onclick="revalidateAll()">
+      <i class="bi bi-arrow-repeat"></i> Revalidar pendientes
+    </button>
+  </div>
+</div>
+
+<div id="transfersError" class="alert alert-danger d-none"></div>
+<div id="transfersLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+
+<div id="transfersContent" class="d-none">
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card p-3 h-100">
+        <div class="small text-muted">Pendientes</div>
+        <div class="fs-3 fw-bold" id="totalUnresolved">0</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card p-3 h-100">
+        <div class="small text-muted">Monto pendiente</div>
+        <div class="fs-3 fw-bold" id="totalAmount">$0</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card p-3 h-100">
+        <div class="small text-muted">Más de 1 hora</div>
+        <div class="fs-3 fw-bold text-danger" id="totalOld">0</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card p-3 h-100">
+        <div class="small text-muted">Fallidos</div>
+        <div class="fs-3 fw-bold text-danger" id="totalFailed">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap mb-3 small">
+    <span class="badge bg-info text-dark">Pendiente Banxico: <span id="countPendingCep">0</span></span>
+    <span class="badge bg-warning text-dark">En revisión: <span id="countReview">0</span></span>
+    <span class="badge bg-warning text-dark">Preaprobados: <span id="countPreapproved">0</span></span>
+    <span class="badge bg-danger">Revisar a fondo: <span id="countLow">0</span></span>
+  </div>
+
+  <div class="small text-muted mb-2">
+    “Revalidar pendientes” consulta Banxico para hasta 20 registros. Puede consumir consultas de apiCEP.
+  </div>
+
+  <div id="transfersList"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let transferRecords = [];
+
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function statusClass(status) {
+    if (status === 'pending_cep') return 'bg-info text-dark';
+    if (status === 'review' || status === 'preapproved') return 'bg-warning text-dark';
+    if (status === 'failed' || status === 'low') return 'bg-danger';
+    return 'bg-secondary';
+  }
+
+  function ageLabel(minutes) {
+    const value = Number(minutes || 0);
+    if (value < 60) return `${value} min`;
+    const hours = Math.floor(value / 60);
+    const rest = value % 60;
+    return rest ? `${hours} h ${rest} min` : `${hours} h`;
+  }
+
+  function whatsappLink(record) {
+    if (!record.customer_phone) return '';
+    const name = record.customer_name || 'cliente';
+    const text = record.status === 'failed'
+      ? `Hola ${name}, no pudimos confirmar tu transferencia del pago #${record.reference} por ${money0(record.amount)}. El monto se cargó a tu saldo pendiente. Si crees que es un error, respóndenos por aquí.`
+      : `Hola ${name}, tu pago #${record.reference} está en revisión. Si ya transferiste, respóndenos por aquí para revisarlo.`;
+    return `https://wa.me/${record.customer_phone}?text=${encodeURIComponent(text)}`;
+  }
+
+  function render() {
+    const box = document.getElementById('transfersList');
+    if (!transferRecords.length) {
+      box.innerHTML = '<div class="card p-4 text-center text-muted">No hay transferencias pendientes.</div>';
+      return;
+    }
+    box.innerHTML = transferRecords.map((record) => {
+      const wa = whatsappLink(record);
+      return `<div class="card mb-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+              <div class="fw-bold">${esc(record.entity_label)} · #${esc(record.reference)}</div>
+              <div class="small text-muted">
+                ${esc(record.customer_name || 'Cliente')} · ${money0(record.amount)} · hace ${esc(ageLabel(record.age_minutes))}
+              </div>
+            </div>
+            <div class="text-end">
+              <span class="badge ${statusClass(record.status)}">${esc(record.status_label)}</span>
+            </div>
+          </div>
+          ${record.summary ? `<div class="small mt-2">${esc(record.summary)}</div>` : ''}
+          ${record.error ? `<div class="alert alert-danger py-2 small mt-2">${esc(record.error)}</div>` : ''}
+          <div class="d-flex gap-2 mt-3 flex-wrap">
+            ${record.order_link ? `<a class="btn btn-sm btn-outline-primary" href="${esc(record.order_link)}"><i class="bi bi-receipt"></i> Ver pedido</a>` : ''}
+            ${record.file_url ? `<a class="btn btn-sm btn-outline-secondary" href="${esc(record.file_url)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-text"></i> Ver comprobante</a>` : ''}
+            <button class="btn btn-sm btn-outline-secondary" onclick="revalidateOne('${record.id}')"><i class="bi bi-arrow-repeat"></i> Validar de nuevo</button>
+            ${record.status !== 'failed' ? `<button class="btn btn-sm btn-success" onclick="approveOne('${record.id}')"><i class="bi bi-check2-circle"></i> Aprobar</button>` : ''}
+            ${wa ? `<a class="btn btn-sm btn-outline-success" href="${esc(wa)}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> WhatsApp</a>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function loadSummary() {
+    const loading = document.getElementById('transfersLoading');
+    const content = document.getElementById('transfersContent');
+    const error = document.getElementById('transfersError');
+    loading.classList.remove('d-none');
+    error.classList.add('d-none');
+    try {
+      const data = await apiRequest('GET', '/admin/transfers/summary');
+      const totals = data.totals || {};
+      document.getElementById('totalUnresolved').textContent = totals.unresolved || 0;
+      document.getElementById('totalAmount').textContent = money0(totals.amount || 0);
+      document.getElementById('totalOld').textContent = totals.older_than_1h || 0;
+      document.getElementById('totalFailed').textContent = totals.failed || 0;
+      document.getElementById('countPendingCep').textContent = totals.pending_cep || 0;
+      document.getElementById('countReview').textContent = totals.review || 0;
+      document.getElementById('countPreapproved').textContent = totals.preapproved || 0;
+      document.getElementById('countLow').textContent = totals.low || 0;
+      transferRecords = data.records || [];
+      loading.classList.add('d-none');
+      content.classList.remove('d-none');
+      render();
+    } catch (e) {
+      loading.classList.add('d-none');
+      error.classList.remove('d-none');
+      error.textContent = e.message;
+    }
+  }
+
+  async function revalidateAll() {
+    const btn = document.getElementById('revalidateAllBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Revalidando...'; }
+    try {
+      const res = await apiRequest('POST', '/admin/transfers/revalidate');
+      showToast(`Revisados: ${res.processed}. Confirmados: ${res.confirmed}.`);
+      await loadSummary();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Revalidar pendientes'; }
+    }
+  }
+
+  async function revalidateOne(id) {
+    try {
+      await apiRequest('POST', `/admin/receipts/${id}/revalidate`, {});
+      showToast('Comprobante revalidado.');
+      await loadSummary();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
+  async function approveOne(id) {
+    try {
+      await apiRequest('POST', `/admin/receipts/${id}/approve`, {});
+      showToast('Pago aprobado.');
+      await loadSummary();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
+  loadSummary();
+</script>
+{% endblock %}

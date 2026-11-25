@@ -1538,7 +1538,9 @@ class TestRechargesPage:
         assert "Próximamente" in resp.text
         assert "CLABE" in resp.text
         assert "Banxico" in resp.text
-        assert "$2 para el repartidor" in resp.text
+        assert "Sin comisión" in resp.text
+        assert "plataforma" in resp.text
+        assert "repartidor" in resp.text
         assert "Solicitar recarga" not in resp.text
 
 

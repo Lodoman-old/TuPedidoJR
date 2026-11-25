@@ -20,7 +20,7 @@ def _headers(token: str) -> dict:
 @pytest.fixture
 async def customer_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Cliente Zonas", "email": "cliente-zonas@test.com", "password": "pass123",
+        "name": "Cliente Zonas", "email": "cliente-zonas@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -28,7 +28,7 @@ async def customer_token(client: AsyncClient):
 @pytest.fixture
 async def courier(client: AsyncClient, db_session):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Repartidor Zonas", "email": "repartidor-zonas@test.com", "password": "pass123",
+        "name": "Repartidor Zonas", "email": "repartidor-zonas@test.com", "password": "pass1234",
     })
     token = resp.json()["access_token"]
     user_id = uuid.UUID(decode_access_token(token)["sub"])
@@ -44,7 +44,7 @@ async def courier(client: AsyncClient, db_session):
 @pytest.fixture
 async def superuser_token(client: AsyncClient, db_session):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Admin Zonas", "email": "admin-zonas@test.com", "password": "pass123",
+        "name": "Admin Zonas", "email": "admin-zonas@test.com", "password": "pass1234",
     })
     token = resp.json()["access_token"]
     user = await db_session.get(User, uuid.UUID(decode_access_token(token)["sub"]))

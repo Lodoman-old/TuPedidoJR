@@ -19,7 +19,7 @@ from app.models.user import User
 @pytest.fixture
 async def owner_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Rest Owner", "email": "owner@rest.com", "password": "pass123",
+        "name": "Rest Owner", "email": "owner@rest.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -27,7 +27,7 @@ async def owner_token(client: AsyncClient):
 @pytest.fixture
 async def other_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Other User", "email": "other@test.com", "password": "pass123",
+        "name": "Other User", "email": "other@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 

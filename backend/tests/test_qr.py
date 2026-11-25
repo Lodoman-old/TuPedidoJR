@@ -17,7 +17,7 @@ def _headers(token: str) -> dict:
 @pytest.fixture
 async def owner_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Dueño QR", "email": "owner-qr@test.com", "password": "pass123",
+        "name": "Dueño QR", "email": "owner-qr@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -103,7 +103,7 @@ async def test_owner_resends_qr_email(
 @pytest.mark.asyncio
 async def test_stranger_cannot_resend_qr(client: AsyncClient, business):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Ajeno", "email": "ajeno-qr@test.com", "password": "pass123",
+        "name": "Ajeno", "email": "ajeno-qr@test.com", "password": "pass1234",
     })
     token = resp.json()["access_token"]
     denied = await client.post(

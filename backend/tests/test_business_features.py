@@ -19,23 +19,29 @@ TZ = ZoneInfo("America/Mexico_City")
 @pytest.fixture
 async def owner_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Owner Biz", "email": "owner-biz@test.com", "password": "pass123",
+        "name": "Owner Biz", "email": "owner-biz@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
 
 @pytest.fixture
-async def customer_token(client: AsyncClient):
+async def customer_token(client: AsyncClient, db_session):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Customer Biz", "email": "customer-biz@test.com", "password": "pass123",
+        "name": "Customer Biz", "email": "customer-biz@test.com", "password": "pass1234",
     })
-    return resp.json()["access_token"]
+    token = resp.json()["access_token"]
+    from app.core.security import decode_access_token
+    payload = decode_access_token(token)
+    user = await db_session.get(User, uuid.UUID(payload["sub"]))
+    user.email_verified = True
+    await db_session.commit()
+    return token
 
 
 @pytest.fixture
 async def superuser_token(client: AsyncClient, db_session):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Admin Biz", "email": "admin-biz@test.com", "password": "pass123",
+        "name": "Admin Biz", "email": "admin-biz@test.com", "password": "pass1234",
     })
     token = resp.json()["access_token"]
     from app.core.security import decode_access_token
@@ -577,7 +583,7 @@ class TestCourierPerformance:
         resto, _item = restaurant
         delivery_token = (await client.post("/api/v1/auth/register", json={
             "name": "Courier Bonus", "email": "courier-bonus@test.com",
-            "password": "pass123",
+            "password": "pass1234",
         })).json()["access_token"]
         courier_user = decode_access_token(delivery_token)["sub"]
         customer_id = decode_access_token(customer_token)["sub"]
@@ -661,7 +667,7 @@ class TestCashAdvances:
         from app.models.delivery_person import DeliveryPerson
 
         token = (await client.post("/api/v1/auth/register", json={
-            "name": "Courier Advance", "email": email, "password": "pass123",
+            "name": "Courier Advance", "email": email, "password": "pass1234",
         })).json()["access_token"]
         dp = DeliveryPerson(
             user_id=decode_access_token(token)["sub"],
@@ -1241,7 +1247,7 @@ class TestLoyalty:
         self, client, restaurant, superuser_token,
     ):
         referrer = await client.post("/api/v1/auth/register", json={
-            "name": "Referrer", "email": "referrer-loyalty@test.com", "password": "pass123",
+            "name": "Referrer", "email": "referrer-loyalty@test.com", "password": "pass1234",
         })
         referrer_token = referrer.json()["access_token"]
         profile = await client.get("/api/v1/profile/me", headers=_headers(referrer_token))
@@ -1249,7 +1255,7 @@ class TestLoyalty:
         assert code
 
         invited = await client.post("/api/v1/auth/register", json={
-            "name": "Invited", "email": "invited-loyalty@test.com", "password": "pass123",
+            "name": "Invited", "email": "invited-loyalty@test.com", "password": "pass1234",
             "referral_code": code,
         })
         assert invited.status_code == 201
@@ -1382,7 +1388,7 @@ class TestRestaurantRegistrationAndTeam:
             "owner_name": "Dueño Nuevo",
             "email": email,
             "phone": "4121234567",
-            "password": "pass123",
+            "password": "pass1234",
             "restaurant_name": "Cocina Nueva",
             "cuisine": "Mexicana",
             "address": "Calle 1, Centro",
@@ -1393,7 +1399,7 @@ class TestRestaurantRegistrationAndTeam:
         restaurant_id = registered.json()["restaurant_id"]
 
         blocked = await client.post("/api/v1/auth/login", json={
-            "email": email, "password": "pass123",
+            "email": email, "password": "pass1234",
         })
         assert blocked.status_code == 403
 
@@ -1414,7 +1420,7 @@ class TestRestaurantRegistrationAndTeam:
         assert approved.json()["affiliation_expires_at"] is None
 
         login = await client.post("/api/v1/auth/login", json={
-            "email": email, "password": "pass123",
+            "email": email, "password": "pass1234",
         })
         assert login.status_code == 200
         owner_token = login.json()["access_token"]
@@ -1431,14 +1437,14 @@ class TestRestaurantRegistrationAndTeam:
             f"/api/v1/restaurants/{restaurant_id}/team",
             json={
                 "name": "Cajero Uno", "email": "cajero-nuevo@test.com",
-                "password": "pass123", "role": "cashier",
+                "password": "pass1234", "role": "cashier",
             },
             headers=_headers(owner_token),
         )
         assert member.status_code == 201
 
         staff_login = await client.post("/api/v1/auth/login", json={
-            "email": "cajero-nuevo@test.com", "password": "pass123",
+            "email": "cajero-nuevo@test.com", "password": "pass1234",
         })
         assert staff_login.status_code == 200
         staff_token = staff_login.json()["access_token"]
@@ -1468,7 +1474,7 @@ class TestRestaurantRegistrationAndTeam:
             "owner_name": "Tienda Nueva",
             "email": "tienda-nueva@test.com",
             "phone": "4121234567",
-            "password": "pass123",
+            "password": "pass1234",
             "restaurant_name": "Abarrotes Nueva",
             "cuisine": "Abarrotes",
             "business_type": "store",
@@ -1847,7 +1853,7 @@ class TestRestaurantTeamOrderStatus:
                 json={
                     "name": f"Rol {role}",
                     "email": email,
-                    "password": "pass123",
+                    "password": "pass1234",
                     "role": role,
                 },
                 headers=_headers(owner_token),
@@ -1855,7 +1861,7 @@ class TestRestaurantTeamOrderStatus:
             assert created.status_code == 201, created.text
             login = await client.post(
                 "/api/v1/auth/login",
-                json={"email": email, "password": "pass123"},
+                json={"email": email, "password": "pass1234"},
             )
             assert login.status_code == 200, login.text
             tokens[role] = login.json()["access_token"]

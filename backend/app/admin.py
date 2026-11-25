@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
-from app.core.security import hash_password, verify_password, decode_access_token, create_access_token
+from app.core.security import hash_password, verify_password, decode_access_token, create_access_token, password_fingerprint
 from app.db.session import async_session
 from app.services import totp_service
 from app.services.security_service import security_guard
@@ -139,7 +139,10 @@ class AdminAuth(AuthenticationBackend):
                     await db.commit()
 
         security_guard.reset_account_failures(email)
-        token = create_access_token(subject=str(user.id))
+        token = create_access_token(
+            subject=str(user.id),
+            extra={"pv": password_fingerprint(user.password_hash)},
+        )
         request.session.update({"token": token})
         return True
 
@@ -164,7 +167,11 @@ class AdminAuth(AuthenticationBackend):
                 )
             )
             user = result.scalar_one_or_none()
-        return user is not None
+        if user is None:
+            return False
+        if payload.get("pv") and payload["pv"] != password_fingerprint(user.password_hash):
+            return False
+        return True
 
 
 class UserAdmin(ModelView, model=User):

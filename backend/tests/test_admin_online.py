@@ -18,7 +18,7 @@ def _headers(token: str) -> dict:
 async def _register(client: AsyncClient, name: str, email: str) -> str:
     resp = await client.post(
         "/api/v1/auth/register",
-        json={"name": name, "email": email, "password": "pass123"},
+        json={"name": name, "email": email, "password": "pass1234"},
     )
     assert resp.status_code == 201, resp.text
     return resp.json()["access_token"]

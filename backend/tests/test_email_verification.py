@@ -20,7 +20,7 @@ async def _register(client: AsyncClient, email: str) -> str:
             "name": "Cuenta Nueva",
             "email": email,
             "phone": "4121234567",
-            "password": "pass123",
+            "password": "pass1234",
         },
     )
     assert resp.status_code == 201, resp.text
@@ -73,7 +73,7 @@ async def test_registration_honeypot_rejected(client):
             "name": "Bot",
             "email": "bot@test.com",
             "phone": "4121234567",
-            "password": "pass123",
+            "password": "pass1234",
             "website": "https://spam.example",
         },
     )

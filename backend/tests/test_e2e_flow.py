@@ -46,7 +46,7 @@ async def tokens(client: AsyncClient) -> dict[str, str]:
                 "name": name,
                 "email": email,
                 "phone": phone,
-                "password": "pass123",
+                "password": "pass1234",
             },
         )
         assert resp.status_code in (200, 201), resp.text

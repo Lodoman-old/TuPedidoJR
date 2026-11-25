@@ -447,8 +447,13 @@ KNOWN_SETTINGS: dict[str, dict] = {
     },
     "REQUIRE_EMAIL_VERIFICATION": {
         "group": "Clientes", "label": "Exigir correo confirmado para pedir",
-        "description": "Si se activa, el cliente debe confirmar su correo antes de hacer un pedido. El aviso aparece en la parte superior de la app.",
+        "description": "Si se activa, el cliente debe confirmar su correo desde el primer pedido. Si se desactiva, se aplica el margen de pedidos de cortesía.",
         "type": "bool", "default": "false",
+    },
+    "EMAIL_VERIFICATION_GRACE_ORDERS": {
+        "group": "Clientes", "label": "Pedidos de cortesía sin correo",
+        "description": "Cuántos pedidos puede hacer un cliente nuevo sin confirmar su correo. Al llegar al límite, se le pide confirmarlo para seguir pidiendo.",
+        "type": "int", "default": "3",
     },
     "LOYALTY_ENABLED": {
         "group": "Lealtad", "label": "Programa de puntos",

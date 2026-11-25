@@ -20,7 +20,7 @@ async def _owner(client, email: str = "dueno-recordatorio@test.com") -> str:
             "name": "Dueño Recordatorio",
             "email": email,
             "phone": "4121234567",
-            "password": "pass123",
+            "password": "pass1234",
         },
     )
     assert resp.status_code == 201, resp.text

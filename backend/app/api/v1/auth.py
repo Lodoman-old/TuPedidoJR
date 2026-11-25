@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.config import settings
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import create_access_token, hash_password, password_fingerprint, verify_password
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.auth import (
@@ -45,7 +45,7 @@ def _serializer() -> URLSafeTimedSerializer:
 
 
 def _fingerprint(password_hash: str) -> str:
-    return password_hash[-16:]
+    return password_fingerprint(password_hash)
 
 
 def _twofa_serializer() -> URLSafeTimedSerializer:
@@ -53,7 +53,10 @@ def _twofa_serializer() -> URLSafeTimedSerializer:
 
 
 def _token_response(user: User) -> TokenResponse:
-    token = create_access_token(subject=str(user.id))
+    token = create_access_token(
+        subject=str(user.id),
+        extra={"pv": password_fingerprint(user.password_hash)},
+    )
     expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     return TokenResponse(
         access_token=token,
@@ -123,7 +126,10 @@ async def register(
         # El registro no debe fallar si el correo no está configurado.
         pass
 
-    token = create_access_token(subject=str(user.id))
+    token = create_access_token(
+        subject=str(user.id),
+        extra={"pv": password_fingerprint(user.password_hash)},
+    )
     expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     return TokenResponse(access_token=token, expires_in=expires_in, is_superuser=user.is_superuser)
 
@@ -222,7 +228,11 @@ async def create_device_token(current_user: User = Depends(get_current_user)):
     token = create_access_token(
         subject=str(current_user.id),
         expires_delta=minutes,
-        extra={"dev": True, "fp": _fingerprint(current_user.password_hash)},
+        extra={
+            "dev": True,
+            "fp": _fingerprint(current_user.password_hash),
+            "pv": password_fingerprint(current_user.password_hash),
+        },
     )
     return {
         "access_token": token,

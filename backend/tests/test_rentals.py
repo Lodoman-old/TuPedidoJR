@@ -17,7 +17,7 @@ def _headers(token: str) -> dict:
 @pytest.fixture
 async def owner_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Dueño Rentas", "email": "owner-rentas@test.com", "password": "pass123",
+        "name": "Dueño Rentas", "email": "owner-rentas@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -25,7 +25,7 @@ async def owner_token(client: AsyncClient):
 @pytest.fixture
 async def customer_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Cliente Rentas", "email": "cliente-rentas@test.com", "password": "pass123",
+        "name": "Cliente Rentas", "email": "cliente-rentas@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 

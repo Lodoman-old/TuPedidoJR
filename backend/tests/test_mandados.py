@@ -14,7 +14,7 @@ from app.models.user import User
 @pytest.fixture
 async def user_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Mandado User", "email": "mandado@test.com", "password": "pass123",
+        "name": "Mandado User", "email": "mandado@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -22,7 +22,7 @@ async def user_token(client: AsyncClient):
 @pytest.fixture
 async def other_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Other Mandado User", "email": "mandado2@test.com", "password": "pass123",
+        "name": "Other Mandado User", "email": "mandado2@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -30,7 +30,7 @@ async def other_token(client: AsyncClient):
 @pytest.fixture
 async def superuser_token(client: AsyncClient, db_session):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Admin Mandados", "email": "admin-mandados@test.com", "password": "pass123",
+        "name": "Admin Mandados", "email": "admin-mandados@test.com", "password": "pass1234",
     })
     token = resp.json()["access_token"]
     user = await db_session.get(
@@ -191,7 +191,7 @@ class TestMandadoPrepayment:
             json={
                 "name": "Mandadero Pickup",
                 "email": "mandadero-pickup@test.com",
-                "password": "pass123",
+                "password": "pass1234",
             },
         )
         courier_token = courier_resp.json()["access_token"]
@@ -257,7 +257,7 @@ class TestMandadoPrepayment:
             json={
                 "name": "Mandadero Prueba",
                 "email": "mandadero-advance@test.com",
-                "password": "pass123",
+                "password": "pass1234",
             },
         )
         courier_token = courier_resp.json()["access_token"]

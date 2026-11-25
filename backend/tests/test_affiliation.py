@@ -23,7 +23,7 @@ def _headers(token: str) -> dict:
 @pytest.fixture
 async def owner_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Owner Afiliación", "email": "owner-aff@test.com", "password": "pass123",
+        "name": "Owner Afiliación", "email": "owner-aff@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -31,7 +31,7 @@ async def owner_token(client: AsyncClient):
 @pytest.fixture
 async def superuser_token(client: AsyncClient, db_session):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Admin Afiliación", "email": "admin-aff@test.com", "password": "pass123",
+        "name": "Admin Afiliación", "email": "admin-aff@test.com", "password": "pass1234",
     })
     token = resp.json()["access_token"]
     from app.core.security import decode_access_token

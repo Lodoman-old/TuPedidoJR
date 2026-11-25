@@ -14,7 +14,7 @@ from app.models.user import User
 @pytest.fixture
 async def normal_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Push User", "email": "push@test.com", "password": "pass123",
+        "name": "Push User", "email": "push@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -22,7 +22,7 @@ async def normal_token(client: AsyncClient):
 @pytest.fixture
 async def superuser_token(client: AsyncClient, db_session):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Push Admin", "email": "pushadmin@test.com", "password": "pass123",
+        "name": "Push Admin", "email": "pushadmin@test.com", "password": "pass1234",
     })
     token = resp.json()["access_token"]
     user_id = decode_access_token(token)["sub"]

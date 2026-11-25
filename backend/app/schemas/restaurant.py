@@ -270,7 +270,7 @@ class RestaurantRegistrationCreate(BaseModel):
     owner_name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
     phone: str | None = Field(default=None, max_length=20)
-    password: str = Field(..., min_length=6, max_length=128)
+    password: str = Field(..., min_length=8, max_length=128)
     restaurant_name: str = Field(..., min_length=2, max_length=150)
     cuisine: str | None = Field(default=None, max_length=100)
     business_type: str = Field(default="restaurant", pattern="^(restaurant|store|pharmacy|grocery|hardware|services|rental|other)$")
@@ -306,7 +306,7 @@ class RestaurantApprovalRequest(BaseModel):
 class TeamMemberCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
-    password: str = Field(..., min_length=6, max_length=128)
+    password: str = Field(..., min_length=8, max_length=128)
     role: str = Field(default="staff", pattern="^(manager|staff|cashier|kitchen)$")
 
 

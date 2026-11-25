@@ -14,7 +14,7 @@ from app.models.restaurant import Restaurant
 @pytest.fixture
 async def user_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Order User", "email": "order@test.com", "password": "pass123",
+        "name": "Order User", "email": "order@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -22,7 +22,7 @@ async def user_token(client: AsyncClient):
 @pytest.fixture
 async def other_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Other User", "email": "other2@test.com", "password": "pass123",
+        "name": "Other User", "email": "other2@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 

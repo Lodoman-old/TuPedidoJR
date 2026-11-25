@@ -17,7 +17,7 @@ def _headers(token: str) -> dict:
 @pytest.fixture
 async def admin(client: AsyncClient, db_session):
     email = "admin-2fa@test.com"
-    password = "pass123"
+    password = "pass1234"
     resp = await client.post("/api/v1/auth/register", json={
         "name": "Admin 2FA",
         "email": email,
@@ -152,7 +152,7 @@ class TestAccountLockout:
         await client.post("/api/v1/auth/register", json={
             "name": "Bloqueo",
             "email": email,
-            "password": "pass123",
+            "password": "pass1234",
         })
         for _ in range(5):
             resp = await client.post(
@@ -166,6 +166,6 @@ class TestAccountLockout:
         assert locked.status_code == 429
 
         good = await client.post(
-            "/api/v1/auth/login", json={"email": email, "password": "pass123"}
+            "/api/v1/auth/login", json={"email": email, "password": "pass1234"}
         )
         assert good.status_code == 429

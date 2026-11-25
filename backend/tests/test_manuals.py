@@ -14,7 +14,7 @@ async def superuser_token(client: AsyncClient, db_session):
     resp = await client.post("/api/v1/auth/register", json={
         "name": "Admin Manuales",
         "email": "admin-manuales@test.com",
-        "password": "pass123",
+        "password": "pass1234",
     })
     token = resp.json()["access_token"]
     user = await db_session.get(User, uuid.UUID(decode_access_token(token)["sub"]))

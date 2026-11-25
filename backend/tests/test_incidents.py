@@ -24,7 +24,7 @@ def _headers(token: str) -> dict:
 @pytest.fixture
 async def customer_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Cliente Incidencias", "email": "inc-customer@test.com", "password": "pass123",
+        "name": "Cliente Incidencias", "email": "inc-customer@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -32,7 +32,7 @@ async def customer_token(client: AsyncClient):
 @pytest.fixture
 async def admin_token(client: AsyncClient, db_session):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Admin Incidencias", "email": "inc-admin@test.com", "password": "pass123",
+        "name": "Admin Incidencias", "email": "inc-admin@test.com", "password": "pass1234",
     })
     token = resp.json()["access_token"]
     user = await db_session.get(User, uuid.UUID(decode_access_token(token)["sub"]))
@@ -44,7 +44,7 @@ async def admin_token(client: AsyncClient, db_session):
 @pytest.fixture
 async def courier(client: AsyncClient, db_session):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Repartidor Incidencias", "email": "inc-courier@test.com", "password": "pass123",
+        "name": "Repartidor Incidencias", "email": "inc-courier@test.com", "password": "pass1234",
     })
     token = resp.json()["access_token"]
     dp = DeliveryPerson(

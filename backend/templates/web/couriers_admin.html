@@ -72,7 +72,7 @@
           </div>
           <div class="col-12 col-md-6">
             <label class="form-label small mb-1" for="courierPassword">Contraseña inicial</label>
-            <input type="text" class="form-control" id="courierPassword" minlength="6" maxlength="128" placeholder="Mínimo 6 caracteres">
+            <input type="text" class="form-control" id="courierPassword" minlength="8" maxlength="128" placeholder="Mínimo 8 caracteres">
           </div>
           <div class="col-12 col-md-6">
             <label class="form-label small mb-1" for="courierVehicle">Vehículo</label>
@@ -322,7 +322,7 @@
     set('courierPassword', '');
     document.getElementById('courierPassword').placeholder = c
       ? 'Dejar vacío para conservarla'
-      : 'Mínimo 6 caracteres';
+      : 'Mínimo 8 caracteres';
     document.getElementById('courierVehicle').value = c?.vehicle_type || 'motorcycle';
     document.getElementById('courierPayout').value = c?.payout_method || 'cash';
     set('courierBonus', c?.delivery_bonus_per_order || '0');
@@ -363,8 +363,8 @@
     if (!email || !email.includes('@')) { error.textContent = 'Escribe un correo válido'; error.classList.remove('d-none'); return; }
     const phoneDigits = document.getElementById('courierPhone').value.replace(/\D/g, '');
     if (phoneDigits.length < 10) { error.textContent = 'Escribe un teléfono de 10 dígitos'; error.classList.remove('d-none'); return; }
-    if (!editing && password.length < 6) { error.textContent = 'La contraseña debe tener al menos 6 caracteres'; error.classList.remove('d-none'); return; }
-    if (editing && password && password.length < 6) { error.textContent = 'La nueva contraseña debe tener al menos 6 caracteres'; error.classList.remove('d-none'); return; }
+    if (!editing && password.length < 8) { error.textContent = 'La contraseña debe tener al menos 8 caracteres'; error.classList.remove('d-none'); return; }
+    if (editing && password && password.length < 8) { error.textContent = 'La nueva contraseña debe tener al menos 8 caracteres'; error.classList.remove('d-none'); return; }
     if (payout === 'transfer' && (!document.getElementById('courierBank').value.trim()
         || !document.getElementById('courierHolder').value.trim() || clabe.length !== 18)) {
       error.textContent = 'Para transferencia completa banco, titular y CLABE de 18 dígitos';

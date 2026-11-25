@@ -15,7 +15,7 @@ from app.core.constants import OrderStatus
 @pytest.fixture
 async def user_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Normal User", "email": "normal@test.com", "password": "pass123",
+        "name": "Normal User", "email": "normal@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -23,7 +23,7 @@ async def user_token(client: AsyncClient):
 @pytest.fixture
 async def delivery_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Repartidor Test", "email": "repartidor@test.com", "password": "pass123",
+        "name": "Repartidor Test", "email": "repartidor@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 

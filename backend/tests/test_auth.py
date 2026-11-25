@@ -32,6 +32,18 @@ class TestRegister:
         resp = await client.post("/api/v1/auth/register", json=self._payload(email="not-an-email"))
         assert resp.status_code == 422
 
+    async def test_register_password_too_short(self, client: AsyncClient):
+        resp = await client.post(
+            "/api/v1/auth/register", json=self._payload(password="corta12")
+        )
+        assert resp.status_code == 422
+
+    async def test_register_password_minimum_length(self, client: AsyncClient):
+        resp = await client.post(
+            "/api/v1/auth/register", json=self._payload(password="ocho1234")
+        )
+        assert resp.status_code == 201, resp.text
+
     async def test_duplicate_phone_is_detected_but_not_blocked(
         self, client: AsyncClient, monkeypatch
     ):
@@ -110,3 +122,42 @@ class TestMe:
     async def test_me_invalid_token(self, client: AsyncClient):
         resp = await client.get("/api/v1/auth/me", headers={"Authorization": "Bearer invalid"})
         assert resp.status_code == 401
+
+
+class TestPasswordChange:
+    async def test_old_sessions_invalidated_on_password_change(
+        self, client: AsyncClient, db_session
+    ):
+        import uuid
+
+        from app.core.security import decode_access_token, hash_password
+        from app.models.user import User
+
+        resp = await client.post("/api/v1/auth/register", json={
+            "name": "Cambio Clave", "email": "cambio-clave@test.com",
+            "password": "password123",
+        })
+        assert resp.status_code == 201, resp.text
+        token = resp.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        assert (await client.get("/api/v1/auth/me", headers=headers)).status_code == 200
+
+        user = await db_session.get(
+            User, uuid.UUID(decode_access_token(token)["sub"])
+        )
+        user.password_hash = hash_password("nuevaClave9")
+        await db_session.commit()
+
+        old = await client.get("/api/v1/auth/me", headers=headers)
+        assert old.status_code == 401
+        assert "contraseña" in old.json()["detail"].lower()
+
+        login = await client.post("/api/v1/auth/login", json={
+            "email": "cambio-clave@test.com", "password": "nuevaClave9",
+        })
+        assert login.status_code == 200, login.text
+        fresh = await client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+        )
+        assert fresh.status_code == 200

@@ -16,7 +16,7 @@ def _headers(token: str) -> dict:
 @pytest.fixture
 async def owner_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Dueño Cupones", "email": "owner-cupones@test.com", "password": "pass123",
+        "name": "Dueño Cupones", "email": "owner-cupones@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -24,7 +24,7 @@ async def owner_token(client: AsyncClient):
 @pytest.fixture
 async def customer_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Cliente Cupones", "email": "cliente-cupones@test.com", "password": "pass123",
+        "name": "Cliente Cupones", "email": "cliente-cupones@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -136,7 +136,7 @@ async def test_other_business_cannot_manage_coupons(
     client: AsyncClient, restaurant
 ):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Otro Dueño", "email": "otro-cupones@test.com", "password": "pass123",
+        "name": "Otro Dueño", "email": "otro-cupones@test.com", "password": "pass1234",
     })
     token = resp.json()["access_token"]
     denied = await client.get(

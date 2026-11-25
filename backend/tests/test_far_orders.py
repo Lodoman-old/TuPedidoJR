@@ -19,7 +19,7 @@ def _headers(token: str) -> dict:
 
 async def _register(client: AsyncClient, name: str, email: str) -> str:
     resp = await client.post("/api/v1/auth/register", json={
-        "name": name, "email": email, "password": "pass123",
+        "name": name, "email": email, "password": "pass1234",
     })
     return resp.json()["access_token"]
 

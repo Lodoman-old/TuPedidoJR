@@ -21,7 +21,7 @@ def _headers(token: str) -> dict:
 @pytest.fixture
 async def customer_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Cliente Reseñas", "email": "cliente-resenas@test.com", "password": "pass123",
+        "name": "Cliente Reseñas", "email": "cliente-resenas@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -29,7 +29,7 @@ async def customer_token(client: AsyncClient):
 @pytest.fixture
 async def owner_token(client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Dueño Reseñas", "email": "dueno-resenas@test.com", "password": "pass123",
+        "name": "Dueño Reseñas", "email": "dueno-resenas@test.com", "password": "pass1234",
     })
     return resp.json()["access_token"]
 
@@ -37,7 +37,7 @@ async def owner_token(client: AsyncClient):
 @pytest.fixture
 async def courier(db_session, client: AsyncClient):
     resp = await client.post("/api/v1/auth/register", json={
-        "name": "Repartidor Reseñas", "email": "repartidor-resenas@test.com", "password": "pass123",
+        "name": "Repartidor Reseñas", "email": "repartidor-resenas@test.com", "password": "pass1234",
     })
     payload = decode_access_token(resp.json()["access_token"])
     dp = DeliveryPerson(

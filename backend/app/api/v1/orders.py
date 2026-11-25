@@ -5,7 +5,7 @@ import uuid
 
 import clabe
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy import select, text, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -77,6 +77,63 @@ async def _restaurant_coords(db: AsyncSession, restaurant: Restaurant) -> tuple[
 
 def _is_pickup(body: OrderCreate) -> bool:
     return body.fulfillment_type == "pickup"
+
+
+DEFAULT_EMAIL_GRACE_ORDERS = 3
+
+
+async def _email_verification_block(
+    db: AsyncSession, user: User
+) -> str | None:
+    """Mensaje de bloqueo si debe confirmar el correo; None si puede pedir.
+
+    Da un margen de pedidos (3 por defecto) para que la persona pruebe el
+    servicio. Al agotarlo, debe confirmar el correo. Si el administrador
+    activa "Exigir correo confirmado", se pide desde el primer pedido.
+    """
+    if user.email_verified or user.is_superuser:
+        return None
+
+    required = (
+        await get_setting_value(db, "REQUIRE_EMAIL_VERIFICATION", "false")
+    ).strip().lower() == "true"
+    if required:
+        return (
+            "Confirma tu correo antes de hacer tu pedido. "
+            "Revisa tu bandeja o usa «Reenviar correo» en el aviso superior."
+        )
+
+    try:
+        grace = int(
+            (await get_setting_value(
+                db, "EMAIL_VERIFICATION_GRACE_ORDERS", str(DEFAULT_EMAIL_GRACE_ORDERS)
+            )).strip()
+        )
+    except (TypeError, ValueError):
+        grace = DEFAULT_EMAIL_GRACE_ORDERS
+    grace = max(0, grace)
+    if grace <= 0:
+        return (
+            "Confirma tu correo antes de hacer tu pedido. "
+            "Revisa tu bandeja o usa «Reenviar correo» en el aviso superior."
+        )
+
+    used = int(
+        await db.scalar(
+            select(func.count(Order.id)).where(
+                Order.user_id == user.id,
+                Order.status != OrderStatus.CANCELLED.value,
+            )
+        ) or 0
+    )
+    if used < grace:
+        return None
+
+    return (
+        f"Llegaste al límite de {grace} pedidos sin confirmar tu correo. "
+        "Confírmalo para seguir pidiendo: revisa tu bandeja o usa "
+        "«Reenviar correo» en el aviso superior."
+    )
 
 
 @router.post("/estimate")
@@ -325,17 +382,9 @@ async def create_order(
         raise HTTPException(status_code=409, detail="El restaurante todavía no está activo")
 
     if not current_user.is_superuser:
-        require_verified = (
-            await get_setting_value(db, "REQUIRE_EMAIL_VERIFICATION", "false")
-        ).lower() == "true"
-        if require_verified and not current_user.email_verified:
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    "Confirma tu correo antes de hacer tu pedido. "
-                    "Revisa tu bandeja o pide un enlace nuevo."
-                ),
-            )
+        email_block = await _email_verification_block(db, current_user)
+        if email_block:
+            raise HTTPException(status_code=403, detail=email_block)
 
     appointment_link = None
     if body.appointment_id:

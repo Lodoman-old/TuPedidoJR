@@ -34,7 +34,7 @@ async def _register(client: AsyncClient, email: str) -> str:
             "name": "Cliente CEP",
             "email": email,
             "phone": "4121234567",
-            "password": "pass123",
+            "password": "pass1234",
         },
     )
     assert resp.status_code == 201, resp.text

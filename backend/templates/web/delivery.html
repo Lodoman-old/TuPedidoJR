@@ -61,7 +61,6 @@
       <span id="myordersActiveBadge" class="badge bg-primary d-none" title="En proceso">0</span>
     </button>
     <button class="dp-tab-btn text-center" data-tab="payouts" onclick="switchTab('payouts')">Ganancias</button>
-    <button class="dp-tab-btn text-center" data-tab="recargas" onclick="switchTab('recargas')">Recargas</button>
     <button class="dp-tab-btn text-center" data-tab="zones" onclick="switchTab('zones')">Zonas 🔥</button>
     <button class="dp-tab-btn text-center" data-tab="settings" onclick="switchTab('settings')">Ajustes</button>
   </div>
@@ -70,7 +69,6 @@
     <div class="tab-pane active" id="tab-available">Cargando...</div>
     <div class="tab-pane" id="tab-myorders"></div>
     <div class="tab-pane" id="tab-payouts"></div>
-    <div class="tab-pane" id="tab-recargas"></div>
     <div class="tab-pane" id="tab-zones"></div>
     <div class="tab-pane" id="tab-settings"></div>
     <div class="tab-pane" id="tab-mandados"></div>
@@ -617,7 +615,6 @@ function deliverOrder(oid) {
       } else {
         showToast('Pedido entregado');
       }
-      offerRecarga(order);
       loadMyOrders();
       refreshTabBadges();
     } catch (e) {

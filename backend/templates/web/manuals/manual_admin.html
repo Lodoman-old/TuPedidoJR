@@ -89,14 +89,13 @@
 <div class="note">Cuando un negocio o repartidor solicita pago o entrega de efectivo, recibes una notificación push, un número en <strong>Pagos y cobros</strong> y un aviso dentro del panel.</div>
 
 <h3>4.1 Recargas</h3>
-<p>Mientras se integra el proveedor, las recargas se procesan manualmente desde <strong>Operación → Recargas</strong>.</p>
+<p>Las recargas están <strong>en pausa</strong> hasta integrar al proveedor. El acceso directo al historial sigue en <code>/web/admin/recargas</code>, pero no se pueden crear solicitudes nuevas desde la app ni el portal.</p>
 <ul>
-  <li><strong>Portal por transferencia</strong>: confirma el pago y después marca la recarga como completada.</li>
-  <li><strong>Efectivo con repartidor</strong>: el repartidor cobra el monto + <strong>$2 de comisión</strong>. El monto queda como deuda del repartidor y los $2 como su ganancia.</li>
-  <li><strong>Completar</strong>: registra la referencia del proveedor.</li>
-  <li><strong>Falló</strong>: si no se pudo procesar, puedes reintentar o reembolsar. Al reembolsar se revierte la deuda y la comisión.</li>
+  <li><strong>Cuando se active:</strong> el cliente pagará por transferencia validada con Banxico. Al confirmarse el pago, la recarga se aplica automáticamente.</li>
+  <li><strong>Efectivo:</strong> solo al entregar un pedido o si el repartidor la ofrece en la entrega. Se cobra el monto + <strong>$2 para el repartidor</strong>.</li>
+  <li><strong>Registros anteriores:</strong> si existen recargas previas, aún puedes completarlas, reintentarlas o reembolsarlas desde el panel.</li>
 </ul>
-<div class="note">Las recargas se pueden ofrecer al entregar un pedido o de forma suelta desde el panel del repartidor.</div>
+<div class="note">No se cobra comisión de la plataforma por la recarga. Los $2 son solo para el repartidor cuando la cobra en efectivo al entregar.</div>
 
 <h3>5. Validación de comprobantes</h3>
 <figure class="shot">

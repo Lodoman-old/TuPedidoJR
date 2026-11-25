@@ -3,17 +3,16 @@
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div>
     <h4 class="m-0"><i class="bi bi-phone"></i> Recargas</h4>
-    <small class="text-muted">Control manual mientras se integra el proveedor. Aquí confirmas pagos y cierras recargas.</small>
+    <small class="text-muted">Historial de recargas anteriores. La función está en pausa hasta integrar al proveedor.</small>
   </div>
   <button class="btn btn-sm btn-outline-secondary" onclick="loadRecargas()">
     <i class="bi bi-arrow-clockwise"></i> Actualizar
   </button>
 </div>
 
-<div class="alert alert-info small">
-  Las recargas en efectivo ya cobradas por el repartidor quedan como <strong>pendientes de procesar</strong>.
-  Al completarlas, registra la referencia del proveedor. Si fallan, puedes reintentar o reembolsar.
-  El monto cobrado queda como deuda del repartidor y los <strong>$2</strong> como su comisión.
+<div class="alert alert-warning small">
+  <strong>Recargas en pausa.</strong> No se pueden crear solicitudes nuevas desde la app ni el portal.
+  Aquí solo quedan disponibles los registros anteriores para completarlos, reintentarlos o reembolsarlos.
 </div>
 
 <div class="row g-2 mb-2 align-items-center">

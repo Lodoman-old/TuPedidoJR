@@ -1532,12 +1532,14 @@ class TestRestaurantRegistrationAndTeam:
 
 
 class TestRechargesPage:
-    async def test_recharges_page_offers_transfer_request(self, client):
+    async def test_recharges_page_shows_coming_soon(self, client):
         resp = await client.get("/web/recargas")
         assert resp.status_code == 200
-        assert "Solicitar recarga" in resp.text
-        assert "Sin comisión" in resp.text
-        assert "Pago de servicios" in resp.text
+        assert "Próximamente" in resp.text
+        assert "CLABE" in resp.text
+        assert "Banxico" in resp.text
+        assert "$2 para el repartidor" in resp.text
+        assert "Solicitar recarga" not in resp.text
 
 
 class TestImageOptimization:

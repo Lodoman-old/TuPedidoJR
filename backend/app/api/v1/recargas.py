@@ -17,6 +17,11 @@ from app.services import recarga_service
 router = APIRouter()
 admin_router = APIRouter()
 
+# Recargas en pausa hasta integrar al proveedor y el pago validado por Banxico.
+# El historial y las acciones administrativas siguen disponibles para registros
+# anteriores, pero no se pueden crear solicitudes nuevas.
+RECARGAS_AVAILABLE = False
+
 
 def _uuid(value: str) -> UUID:
     try:
@@ -45,6 +50,11 @@ async def create_recarga(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if not RECARGAS_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Las recargas estarán disponibles próximamente.",
+        )
     dp = await _courier_for_user(db, current_user)
     order = None
     if body.order_id:

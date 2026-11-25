@@ -64,18 +64,7 @@ def _token_response(user: User) -> TokenResponse:
 
 def _check_second_factor(user: User, code: str) -> tuple[bool, bool]:
     """Devuelve (válido, usó_código_de_recuperación)."""
-    if totp_service.verify(user.totp_secret or "", code):
-        return True, False
-    hashed = totp_service.hash_code(code)
-    try:
-        saved = json.loads(user.totp_recovery_codes or "[]")
-    except (TypeError, ValueError):
-        saved = []
-    if hashed in saved:
-        saved.remove(hashed)
-        user.totp_recovery_codes = json.dumps(saved)
-        return True, True
-    return False, False
+    return totp_service.check_second_factor(user, code)
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import secrets
 import struct
 import time
@@ -80,3 +81,23 @@ def generate_recovery_codes(count: int = 8) -> list[str]:
 def hash_code(code: str) -> str:
     normalized = "".join(ch for ch in str(code or "").upper() if ch.isalnum())
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def check_second_factor(user, code: str) -> tuple[bool, bool]:
+    """Valida un código TOTP o de recuperación.
+
+    Devuelve (válido, usó_código_de_recuperación). Cuando se usa un código de
+    recuperación se descuenta del usuario; el llamador debe guardar el cambio.
+    """
+    if verify(user.totp_secret or "", code):
+        return True, False
+    hashed = hash_code(code)
+    try:
+        saved = json.loads(user.totp_recovery_codes or "[]")
+    except (TypeError, ValueError):
+        saved = []
+    if hashed in saved:
+        saved.remove(hashed)
+        user.totp_recovery_codes = json.dumps(saved)
+        return True, True
+    return False, False

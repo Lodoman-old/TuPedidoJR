@@ -2,12 +2,14 @@
 
 from sqladmin import Admin, ModelView, action
 from sqladmin.authentication import AuthenticationBackend
-from sqlalchemy import select
+from sqlalchemy import func, select
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
 from app.core.security import hash_password, verify_password, decode_access_token, create_access_token
 from app.db.session import async_session
+from app.services import totp_service
+from app.services.security_service import security_guard
 from app.models.cash_advance import CashAdvance
 from app.models.delivery_location import DeliveryLocation
 from app.models.delivery_payout import DeliveryPayout
@@ -106,17 +108,37 @@ def _es(mapping: dict, value):
 class AdminAuth(AuthenticationBackend):
     async def login(self, request: Request) -> bool:
         form = await request.form()
-        email = form.get("username", "")
+        email = str(form.get("username", "")).strip().lower()
         password = form.get("password", "")
+        code = str(form.get("totp_code", "")).strip()
 
-        from sqlalchemy import select
-        async with async_session() as db:
-            result = await db.execute(select(User).where(User.email == email))
-            user = result.scalar_one_or_none()
-
-        if not user or not verify_password(password, user.password_hash):
+        if security_guard.account_locked_for(email) > 0:
             return False
 
+        async with async_session() as db:
+            result = await db.execute(
+                select(User).where(func.lower(User.email) == email)
+            )
+            user = result.scalar_one_or_none()
+
+            if (
+                not user
+                or not user.is_active
+                or not user.is_superuser
+                or not verify_password(password, user.password_hash)
+            ):
+                security_guard.register_account_failure(email)
+                return False
+
+            if user.totp_enabled:
+                valid, used_recovery = totp_service.check_second_factor(user, code)
+                if not valid:
+                    security_guard.register_account_failure(email)
+                    return False
+                if used_recovery:
+                    await db.commit()
+
+        security_guard.reset_account_failures(email)
         token = create_access_token(subject=str(user.id))
         request.session.update({"token": token})
         return True
@@ -135,7 +157,11 @@ class AdminAuth(AuthenticationBackend):
         from sqlalchemy import select
         async with async_session() as db:
             result = await db.execute(
-                select(User).where(User.id == payload.get("sub"), User.is_superuser == True)
+                select(User).where(
+                    User.id == payload.get("sub"),
+                    User.is_superuser == True,
+                    User.is_active == True,
+                )
             )
             user = result.scalar_one_or_none()
         return user is not None

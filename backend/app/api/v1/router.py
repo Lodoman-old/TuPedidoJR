@@ -32,6 +32,7 @@ from app.api.v1.admin_incidents import router as admin_incidents_router
 from app.api.v1.admin_restaurants import router as admin_restaurants_router
 from app.api.v1.admin_security import router as admin_security_router
 from app.api.v1.admin_users import router as admin_users_router
+from app.api.v1.admin_online import router as admin_online_router
 from app.api.v1.admin_agenda import router as admin_agenda_router
 from app.api.v1.agenda import router as agenda_router
 from app.api.v1.rentals import router as rentals_router
@@ -78,6 +79,7 @@ router.include_router(admin_incidents_router, prefix="/admin", tags=["Administra
 router.include_router(admin_restaurants_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_security_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_users_router, prefix="/admin/users", tags=["Usuarios"])
+router.include_router(admin_online_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_agenda_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_recargas_router, prefix="/admin", tags=["Recargas"])
 router.include_router(recargas_router, prefix="/recargas", tags=["Recargas"])

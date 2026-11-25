@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h4 class="mb-1"><i class="bi bi-broadcast"></i> Usuarios en línea</h4>
+    <div class="small text-muted">Quién está activo, quién entró hace poco y quién no.</div>
+  </div>
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <div class="form-check form-switch mb-0">
+      <input class="form-check-input" type="checkbox" id="autoRefresh" checked onchange="toggleAutoRefresh()">
+      <label class="form-check-label small" for="autoRefresh">Actualizar solo</label>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" onclick="loadOnline()">
+      <i class="bi bi-arrow-clockwise"></i> Actualizar
+    </button>
+  </div>
+</div>
+
+<div id="onlineError" class="alert alert-danger d-none"></div>
+<div id="onlineLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+
+<div id="onlineContent" class="d-none">
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card p-3 h-100">
+        <div class="small text-muted">En línea ahora</div>
+        <div class="fs-3 fw-bold text-success" id="totalOnline">0</div>
+        <div class="small text-muted">Últimos <span id="onlineWindow">5</span> min</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card p-3 h-100">
+        <div class="small text-muted">Hace poco</div>
+        <div class="fs-3 fw-bold text-warning" id="totalRecent">0</div>
+        <div class="small text-muted">Última hora</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card p-3 h-100">
+        <div class="small text-muted">Inactivos</div>
+        <div class="fs-3 fw-bold text-secondary" id="totalOffline">0</div>
+        <div class="small text-muted">Sin actividad reciente</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card p-3 h-100">
+        <div class="small text-muted">Total de cuentas</div>
+        <div class="fs-3 fw-bold" id="totalUsers">0</div>
+        <div class="small text-muted"><span id="activeAccounts">0</span> activas · <span id="suspendedAccounts">0</span> suspendidas</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-3 mb-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-4">
+        <label class="form-label small mb-1" for="onlineSearch">Buscar</label>
+        <input class="form-control form-control-sm" id="onlineSearch" placeholder="Nombre, correo o teléfono" oninput="onSearchInput()">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small mb-1" for="onlineRole">Tipo de cuenta</label>
+        <select class="form-select form-select-sm" id="onlineRole" onchange="applyFilters()">
+          <option value="all">Todos</option>
+          <option value="cliente">Clientes</option>
+          <option value="negocio">Negocios</option>
+          <option value="repartidor">Repartidores</option>
+          <option value="admin">Administradores</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small mb-1" for="onlineStatus">Actividad</label>
+        <select class="form-select form-select-sm" id="onlineStatus" onchange="applyFilters()">
+          <option value="all">Todos</option>
+          <option value="online">En línea</option>
+          <option value="recent">Hace poco</option>
+          <option value="offline">Inactivos</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small mb-1" for="onlinePageSize">Por página</label>
+        <select class="form-select form-select-sm" id="onlinePageSize" onchange="changePageSize()">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+    <div class="small text-muted" id="onlineListSummary"></div>
+    <div class="small text-muted" id="onlineUpdatedAt"></div>
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Usuario</th>
+            <th>Tipo</th>
+            <th class="d-none d-lg-table-cell">Negocio</th>
+            <th class="d-none d-md-table-cell">Contacto</th>
+            <th>Última actividad</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody id="onlineTableBody">
+          <tr><td colspan="6" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="d-flex justify-content-between align-items-center p-2 flex-wrap gap-2 border-top">
+      <button class="btn btn-sm btn-outline-secondary" id="prevPageBtn" onclick="changePage(-1)">Anterior</button>
+      <span class="small text-muted" id="pageLabel"></span>
+      <button class="btn btn-sm btn-outline-secondary" id="nextPageBtn" onclick="changePage(1)">Siguiente</button>
+    </div>
+  </div>
+
+  <div class="small text-muted mt-3">
+    Se considera <strong>en línea</strong> a quien tuvo actividad en los últimos
+    <span id="onlineWindowHelp">5</span> minutos. La actividad se registra mientras la persona
+    usa la app o el sitio. Las cuentas desactivadas se muestran como suspendidas.
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const PRESENCE_CLASS = {
+    online: 'bg-success',
+    recent: 'bg-warning text-dark',
+    offline: 'bg-secondary',
+    never: 'bg-light text-dark border',
+  };
+  let onlineState = {
+    page: 1,
+    pageSize: 50,
+    total: 0,
+    q: '',
+    role: 'all',
+    status: 'all',
+    timer: null,
+    loading: false,
+  };
+
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function agoLabel(minutes) {
+    if (minutes === null || minutes === undefined) return 'Sin actividad registrada';
+    const value = Number(minutes);
+    if (value <= 0) return 'Ahora';
+    if (value < 60) return `Hace ${value} min`;
+    const hours = Math.floor(value / 60);
+    if (hours < 24) return `Hace ${hours} h`;
+    const days = Math.floor(hours / 24);
+    return `Hace ${days} d`;
+  }
+
+  function lastSeenTitle(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleString('es-MX');
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function roleBadges(item) {
+    const colors = {
+      admin: 'bg-dark',
+      negocio: 'bg-primary',
+      repartidor: 'bg-info text-dark',
+      cliente: 'bg-secondary',
+    };
+    return (item.roles || []).map((role, index) => {
+      const label = item.role_labels?.[index] || role;
+      return `<span class="badge ${colors[role] || 'bg-secondary'}">${esc(label)}</span>`;
+    }).join(' ');
+  }
+
+  function businessLabel(item) {
+    const list = item.businesses || [];
+    if (!list.length) return '<span class="text-muted">—</span>';
+    const names = list.slice(0, 2).map((b) => esc(b.name));
+    const extra = list.length > 2 ? ` +${list.length - 2}` : '';
+    return names.join('<br>') + extra;
+  }
+
+  function contactLabel(item) {
+    const phone = item.phone ? `<div class="small">${esc(item.phone)}</div>` : '';
+    return `<div class="small">${esc(item.email)}</div>${phone}`;
+  }
+
+  function renderRows(items) {
+    const body = document.getElementById('onlineTableBody');
+    if (!items.length) {
+      body.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No hay usuarios con estos filtros.</td></tr>';
+      return;
+    }
+    body.innerHTML = items.map((item) => {
+      const presenceClass = PRESENCE_CLASS[item.presence] || 'bg-secondary';
+      const accountBadge = item.is_active
+        ? ''
+        : '<span class="badge bg-danger ms-1">Cuenta suspendida</span>';
+      const courierBadge = item.courier
+        ? `<div class="small text-muted mt-1">${item.courier.is_available ? 'Disponible' : 'No disponible'}${item.courier.vehicle_type ? ' · ' + esc(item.courier.vehicle_type) : ''}</div>`
+        : '';
+      return `<tr>
+        <td>
+          <div class="fw-semibold">${esc(item.name)}</div>
+          <div class="small text-muted">${esc(item.email)}</div>
+          ${accountBadge}
+        </td>
+        <td>${roleBadges(item)}${courierBadge}</td>
+        <td class="d-none d-lg-table-cell small">${businessLabel(item)}</td>
+        <td class="d-none d-md-table-cell">${contactLabel(item)}</td>
+        <td>
+          <div title="${esc(lastSeenTitle(item.last_seen_at))}">${esc(agoLabel(item.minutes_ago))}</div>
+          <div class="small text-muted">${esc(item.last_seen_at ? lastSeenTitle(item.last_seen_at) : 'Nunca')}</div>
+        </td>
+        <td><span class="badge ${presenceClass}">${esc(item.presence_label)}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderPager() {
+    const pages = Math.max(1, Math.ceil(onlineState.total / onlineState.pageSize));
+    document.getElementById('pageLabel').textContent = `Página ${onlineState.page} de ${pages}`;
+    document.getElementById('prevPageBtn').disabled = onlineState.page <= 1;
+    document.getElementById('nextPageBtn').disabled = onlineState.page >= pages;
+    document.getElementById('onlineListSummary').textContent =
+      `${onlineState.total} usuario(s)`;
+  }
+
+  async function loadOnline() {
+    if (onlineState.loading) return;
+    onlineState.loading = true;
+    const loading = document.getElementById('onlineLoading');
+    const content = document.getElementById('onlineContent');
+    const error = document.getElementById('onlineError');
+    if (!onlineState.total) loading.classList.remove('d-none');
+    error.classList.add('d-none');
+    try {
+      const params = new URLSearchParams({
+        status: onlineState.status,
+        role: onlineState.role,
+        page: String(onlineState.page),
+        page_size: String(onlineState.pageSize),
+      });
+      if (onlineState.q) params.set('q', onlineState.q);
+      const data = await apiRequest('GET', `/admin/online-users?${params.toString()}`);
+      const summary = data.summary || {};
+      document.getElementById('totalOnline').textContent = summary.online || 0;
+      document.getElementById('totalRecent').textContent = summary.recent || 0;
+      document.getElementById('totalOffline').textContent = (summary.offline || 0) + (summary.never || 0);
+      document.getElementById('totalUsers').textContent = summary.total || 0;
+      document.getElementById('activeAccounts').textContent = summary.active_accounts || 0;
+      document.getElementById('suspendedAccounts').textContent = summary.suspended_accounts || 0;
+      document.getElementById('onlineWindow').textContent = data.online_window_minutes || 5;
+      document.getElementById('onlineWindowHelp').textContent = data.online_window_minutes || 5;
+      onlineState.total = data.total || 0;
+      renderRows(data.items || []);
+      renderPager();
+      document.getElementById('onlineUpdatedAt').textContent =
+        'Actualizado: ' + new Date(data.generated_at).toLocaleTimeString('es-MX');
+      loading.classList.add('d-none');
+      content.classList.remove('d-none');
+    } catch (e) {
+      loading.classList.add('d-none');
+      error.classList.remove('d-none');
+      error.textContent = e.message;
+    } finally {
+      onlineState.loading = false;
+    }
+  }
+
+  let _searchTimer = null;
+  function onSearchInput() {
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(() => {
+      onlineState.q = document.getElementById('onlineSearch').value.trim();
+      onlineState.page = 1;
+      loadOnline();
+    }, 350);
+  }
+
+  function applyFilters() {
+    onlineState.role = document.getElementById('onlineRole').value;
+    onlineState.status = document.getElementById('onlineStatus').value;
+    onlineState.page = 1;
+    loadOnline();
+  }
+
+  function changePageSize() {
+    onlineState.pageSize = Number(document.getElementById('onlinePageSize').value);
+    onlineState.page = 1;
+    loadOnline();
+  }
+
+  function changePage(delta) {
+    const pages = Math.max(1, Math.ceil(onlineState.total / onlineState.pageSize));
+    const next = Math.min(pages, Math.max(1, onlineState.page + delta));
+    if (next === onlineState.page) return;
+    onlineState.page = next;
+    loadOnline();
+  }
+
+  function startAutoRefresh() {
+    if (onlineState.timer) return;
+    onlineState.timer = setInterval(() => {
+      if (document.hidden) return;
+      loadOnline();
+    }, 30000);
+  }
+
+  function stopAutoRefresh() {
+    if (onlineState.timer) clearInterval(onlineState.timer);
+    onlineState.timer = null;
+  }
+
+  function toggleAutoRefresh() {
+    if (document.getElementById('autoRefresh').checked) startAutoRefresh();
+    else stopAutoRefresh();
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    startAutoRefresh();
+  });
+
+  loadOnline();
+</script>
+{% endblock %}

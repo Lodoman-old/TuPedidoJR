@@ -31,3 +31,4 @@ class User(TimestampMixin, Base):
     totp_secret = Column(String(64), nullable=True)
     totp_enabled = Column(Boolean, default=False, nullable=False)
     totp_recovery_codes = Column(Text, nullable=True)
+    last_seen_at = Column(DateTime(timezone=True), nullable=True, index=True)

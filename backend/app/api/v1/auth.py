@@ -30,6 +30,7 @@ from app.schemas.auth import (
 from app.services import email_verification_service, registration_guard, totp_service
 from app.services.email_service import send_password_reset, email_typo_suggestion
 from app.services.phone_service import phone_in_use
+from app.services.presence_service import touch_last_seen
 from app.services.push_service import schedule_admin_duplicate_phone
 from app.services.order_service import get_setting_value
 from app.services.security_service import security_guard
@@ -125,6 +126,8 @@ async def register(
     if duplicate_phone:
         schedule_admin_duplicate_phone(str(user.id))
 
+    await touch_last_seen(db, user, force=True)
+
     try:
         await email_verification_service.send_verification(db, user)
     except Exception:
@@ -192,6 +195,8 @@ async def login(
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo")
 
+    await touch_last_seen(db, user, force=True)
+
     if user.is_superuser and user.totp_enabled:
         return {
             "requires_2fa": True,
@@ -204,6 +209,17 @@ async def login(
 @router.get("/me", response_model=UserOut)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/heartbeat")
+async def heartbeat(current_user: User = Depends(get_current_user)):
+    """Mantiene al día la última actividad mientras la app está abierta."""
+    return {
+        "ok": True,
+        "last_seen_at": current_user.last_seen_at.isoformat()
+        if current_user.last_seen_at
+        else None,
+    }
 
 
 @router.post("/device-token")
@@ -363,6 +379,7 @@ async def twofa_verify(
     valid, used_recovery = _check_second_factor(user, body.code)
     if not valid:
         raise HTTPException(status_code=401, detail="Código incorrecto")
+    await touch_last_seen(db, user, force=True)
     if used_recovery:
         await db.commit()
     return _token_response(user)

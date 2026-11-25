@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.user import User
+from app.services.presence_service import touch_last_seen
 
 security_scheme = HTTPBearer()
 optional_security_scheme = HTTPBearer(auto_error=False)
@@ -34,6 +35,8 @@ async def get_current_user(
             detail="La contraseña cambió. Vuelve a iniciar sesión",
         )
 
+    await touch_last_seen(db, user)
+
     return user
 
 
@@ -60,4 +63,7 @@ async def get_optional_user(
         return None
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
-    return user if user and user.is_active else None
+    if not user or not user.is_active:
+        return None
+    await touch_last_seen(db, user)
+    return user

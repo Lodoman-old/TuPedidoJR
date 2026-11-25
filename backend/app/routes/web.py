@@ -498,6 +498,11 @@ async def web_admin_users(request: Request):
     return templates.TemplateResponse(request, "users_admin.html")
 
 
+@router.get("/admin/online")
+async def web_admin_online(request: Request):
+    return templates.TemplateResponse(request, "online_admin.html")
+
+
 @router.get("/manifest.json")
 async def web_manifest():
     return JSONResponse({

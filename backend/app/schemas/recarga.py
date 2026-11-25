@@ -21,6 +21,7 @@ class RecargaOut(BaseModel):
     delivery_person_id: UUID | None = None
     order_id: UUID | None = None
     order_code: str | None = None
+    origin: str | None = None
     courier_name: str | None = None
     company: str
     phone: str

@@ -128,7 +128,7 @@ async def receipt_contact(
         "phone": _whatsapp_number(customer.phone if customer else None),
         "order_id": str(order.id),
         "order_short": str(order.id)[:8].upper(),
-        "amount": str(order.total or 0),
+        "amount": str(order.total_to_pay or 0),
         "status": record.status,
     }
 

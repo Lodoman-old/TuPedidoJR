@@ -249,7 +249,7 @@
             </ul>
           </li>
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/mandados"><i class="bi bi-box"></i> Mandados</a></li>
-          <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/recargas"><i class="bi bi-phone"></i> Recargas <span class="badge bg-warning text-dark">Pronto</span></a></li>
+          <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/recargas"><i class="bi bi-phone"></i> Recargas</a></li>
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/orders"><i class="bi bi-list-check"></i> Pedidos</a></li>
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/reservations"><i class="bi bi-calendar-check"></i> Reservaciones</a></li>
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/my-appointments"><i class="bi bi-calendar2-check"></i> Mis citas</a></li>
@@ -266,6 +266,7 @@
               <li><a class="dropdown-item" href="/web/admin/dashboard"><i class="bi bi-speedometer2"></i> Resumen operativo</a></li>
               <li><a class="dropdown-item" href="/web/admin/restaurants"><i class="bi bi-shop"></i> Negocios <span id="pendingRestaurantsBadge" class="badge rounded-pill bg-danger d-none">0</span></a></li>
               <li><a class="dropdown-item" href="/web/admin/couriers"><i class="bi bi-bicycle"></i> Repartidores</a></li>
+              <li><a class="dropdown-item" href="/web/admin/recargas"><i class="bi bi-phone"></i> Recargas</a></li>
               <li><a class="dropdown-item" href="/web/admin/users"><i class="bi bi-people"></i> Usuarios</a></li>
               <li><a class="dropdown-item" href="/web/admin/online"><i class="bi bi-broadcast"></i> Usuarios en línea</a></li>
               <li><hr class="dropdown-divider"></li>
@@ -506,20 +507,23 @@ async function updateRestaurantOrderStatus(restaurantId, orderId, status) {
 async function estimateTime(restaurantId, items, lat, lng) {
   return await apiRequest('POST', '/orders/estimate', { restaurant_id: restaurantId, items, delivery_address: 'placeholder', delivery_location: { lat, lng } });
 }
-async function estimatePrice(restaurantId, items, lat, lng, couponCode, tipAmount, pointsToRedeem, fulfillmentType) {
+async function estimatePrice(restaurantId, items, lat, lng, couponCode, tipAmount, pointsToRedeem, fulfillmentType, paymentMethod, recharge) {
   return await apiRequest('POST', '/orders/estimate-price', {
     restaurant_id: restaurantId,
     items,
     delivery_address: 'placeholder',
     delivery_location: lat != null && lng != null ? { lat, lng } : null,
     coupon_code: couponCode || null,
-    payment_method: 'cash',
+    payment_method: paymentMethod || 'cash',
     tip_amount: tipAmount || 0,
     points_to_redeem: pointsToRedeem || 0,
     fulfillment_type: fulfillmentType || 'delivery',
+    recharge_company: recharge?.company || null,
+    recharge_phone: recharge?.phone || null,
+    recharge_amount: recharge?.amount || 0,
   });
 }
-async function createOrder(restaurantId, items, deliveryAddress, lat, lng, notes, couponCode, paymentMethod, tipAmount, scheduledFor, pointsToRedeem, fulfillmentType, refundAccount, debtPaymentMode) {
+async function createOrder(restaurantId, items, deliveryAddress, lat, lng, notes, couponCode, paymentMethod, tipAmount, scheduledFor, pointsToRedeem, fulfillmentType, refundAccount, debtPaymentMode, recharge) {
   const body = {
     restaurant_id: restaurantId, items,
     delivery_address: deliveryAddress || null,
@@ -536,6 +540,11 @@ async function createOrder(restaurantId, items, deliveryAddress, lat, lng, notes
     body.refund_clabe = refundAccount.clabe;
   }
   if (debtPaymentMode) body.debt_payment_mode = debtPaymentMode;
+  if (recharge && recharge.amount > 0) {
+    body.recharge_company = recharge.company;
+    body.recharge_phone = recharge.phone;
+    body.recharge_amount = recharge.amount;
+  }
   return await apiRequest('POST', '/orders', body);
 }
 async function updateRefundAccount(orderId, holder, bank, clabe) {

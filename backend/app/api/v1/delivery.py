@@ -352,9 +352,16 @@ async def deliver_order(
     dp.current_order_id = remaining_order_id
     if order.payment_method == "cash":
         de = order.delivery_earnings or Decimal("0")
-        debt = (order.total or Decimal("0")) - de
+        debt = (
+            (order.total or Decimal("0"))
+            + (order.recharge_total or Decimal("0"))
+            - de
+        )
         if debt > Decimal("0"):
             dp.pending_platform_debt = (dp.pending_platform_debt or Decimal("0")) + debt
+    from app.services import recarga_service
+
+    await recarga_service.attach_courier(db, order, dp.id)
     dp.total_deliveries = (dp.total_deliveries or 0) + 1
     from app.services.payout_service import credit_courier_for_order
     await credit_courier_for_order(db, order)

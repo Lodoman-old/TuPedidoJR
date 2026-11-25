@@ -11,6 +11,9 @@ from app.models.recarga_order import RecargaOrder
 from app.models.user import User
 
 RECARGA_FEE = Decimal("2.00")
+CHECKOUT_RECHARGE_FEE = Decimal("2.00")
+MIN_RECHARGE = Decimal("10.00")
+MAX_RECHARGE = Decimal("500.00")
 CASH_METHODS = {"cash"}
 
 
@@ -26,6 +29,10 @@ def normalize_phone(value: str) -> str:
 
 
 def _apply_cash_accounting(dp: DeliveryPerson, recarga: RecargaOrder) -> None:
+    if recarga.origin == "checkout":
+        # En las recargas agregadas al pedido, el efectivo se liquida junto
+        # con el total del pedido; no se abona comisión al repartidor.
+        return
     if recarga.payment_method not in CASH_METHODS:
         return
     if recarga.payment_status != "paid":
@@ -69,6 +76,7 @@ async def create_cash_recarga(
         customer_name=(customer_name or "").strip() or None,
         delivery_person_id=dp.id,
         order_id=order.id if order else None,
+        origin="courier",
         company=company.strip(),
         phone=phone,
         amount=amount,
@@ -102,6 +110,7 @@ async def create_transfer_recarga(
     recarga = RecargaOrder(
         user_id=user.id,
         customer_name=(customer_name or user.name or "").strip() or None,
+        origin="portal",
         company=company.strip(),
         phone=phone,
         amount=amount,
@@ -168,6 +177,10 @@ async def complete_recarga(
     recarga.provider_reference = (reference or "").strip() or recarga.provider_reference
     if notes:
         recarga.notes = notes
+    if recarga.order_id:
+        order = await db.get(Order, recarga.order_id)
+        if order is not None and (order.recharge_amount or 0) > 0:
+            order.recharge_status = "completed"
     await db.commit()
     await db.refresh(recarga)
     return recarga
@@ -210,3 +223,87 @@ async def retry_recarga(db: AsyncSession, recarga: RecargaOrder) -> RecargaOrder
     await db.commit()
     await db.refresh(recarga)
     return recarga
+
+
+# ---------------------------------------------------------------------------
+# Recargas agregadas al pedido
+# ---------------------------------------------------------------------------
+
+def checkout_fee(payment_method: str, amount: Decimal) -> Decimal:
+    """Comisión de $2 solo cuando la recarga del pedido se paga en efectivo."""
+    if Decimal(amount or 0) <= 0:
+        return Decimal("0.00")
+    return CHECKOUT_RECHARGE_FEE if payment_method == "cash" else Decimal("0.00")
+
+
+async def get_checkout_recarga(
+    db: AsyncSession, order_id
+) -> RecargaOrder | None:
+    return await db.scalar(
+        select(RecargaOrder).where(
+            RecargaOrder.order_id == order_id,
+            RecargaOrder.origin == "checkout",
+        )
+    )
+
+
+async def confirm_checkout_recharge(
+    db: AsyncSession, order
+) -> RecargaOrder | None:
+    """Marca como pagada la recarga del pedido al confirmarse la transferencia."""
+    recarga = await get_checkout_recarga(db, order.id)
+    if recarga is None:
+        return None
+    if recarga.payment_status != "paid":
+        recarga.payment_status = "paid"
+        recarga.paid_at = _now()
+    return recarga
+
+
+async def attach_courier(
+    db: AsyncSession, order, delivery_person_id
+) -> RecargaOrder | None:
+    """Asocia la recarga del pedido al repartidor que lo entrega."""
+    recarga = await get_checkout_recarga(db, order.id)
+    if recarga is not None and recarga.delivery_person_id is None:
+        recarga.delivery_person_id = delivery_person_id
+    return recarga
+
+
+async def charge_cancelled_checkout_recharge(
+    db: AsyncSession, order
+) -> Decimal:
+    """Al cancelar un pedido en efectivo, la recarga ya aplicada queda a saldo."""
+    amount = Decimal(order.recharge_amount or 0)
+    if amount <= 0 or order.recharge_status == "charged":
+        return Decimal("0.00")
+
+    customer = await db.get(User, order.user_id) if order.user_id else None
+    if customer is not None:
+        customer.pending_balance = (customer.pending_balance or Decimal("0")) + amount
+    order.recharge_status = "charged"
+    recarga = await get_checkout_recarga(db, order.id)
+    if recarga is not None:
+        recarga.notes = (
+            "Pedido cancelado: el monto de la recarga se cargó al saldo del cliente."
+        )
+    return amount
+
+
+async def cancel_pending_checkout_recharge(
+    db: AsyncSession, order, reason: str
+) -> RecargaOrder | None:
+    """Cancela la recarga si el pedido se cancela antes de pagarla."""
+    recarga = await get_checkout_recarga(db, order.id)
+    if recarga is None:
+        return None
+    if recarga.payment_status != "paid":
+        recarga.status = "cancelled"
+        recarga.payment_status = "cancelled"
+        recarga.notes = reason
+    return recarga
+
+
+async def checkout_recharge_was_paid(db: AsyncSession, order) -> bool:
+    recarga = await get_checkout_recarga(db, order.id)
+    return bool(recarga and recarga.payment_status == "paid")

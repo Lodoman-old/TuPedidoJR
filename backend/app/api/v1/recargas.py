@@ -17,11 +17,6 @@ from app.services import recarga_service
 router = APIRouter()
 admin_router = APIRouter()
 
-# Recargas en pausa hasta integrar al proveedor y el pago validado por Banxico.
-# El historial y las acciones administrativas siguen disponibles para registros
-# anteriores, pero no se pueden crear solicitudes nuevas.
-RECARGAS_AVAILABLE = False
-
 
 def _uuid(value: str) -> UUID:
     try:
@@ -50,45 +45,46 @@ async def create_recarga(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not RECARGAS_AVAILABLE:
+    if body.payment_method != "cash":
         raise HTTPException(
             status_code=503,
-            detail="Las recargas estarán disponibles próximamente.",
+            detail=(
+                "La recarga por transferencia desde el portal estará "
+                "disponible próximamente."
+            ),
         )
+    if not body.order_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "La recarga en efectivo solo se ofrece al entregar un pedido."
+            ),
+        )
+
     dp = await _courier_for_user(db, current_user)
-    order = None
-    if body.order_id:
-        order = await db.get(Order, body.order_id)
-        if not order:
-            raise HTTPException(status_code=404, detail="Pedido no encontrado")
-        if dp is None or order.delivery_person_id != dp.id:
-            raise HTTPException(status_code=403, detail="Ese pedido no te pertenece")
+    order = await db.get(Order, body.order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if dp is None or order.delivery_person_id != dp.id:
+        raise HTTPException(status_code=403, detail="Ese pedido no te pertenece")
+    if order.status not in ("in_delivery", "picked_up", "delivered"):
+        raise HTTPException(
+            status_code=400,
+            detail="La recarga solo se puede ofrecer al entregar el pedido.",
+        )
+
     try:
-        if body.payment_method == "cash":
-            if dp is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Las recargas en efectivo solo las puede cobrar un repartidor",
-                )
-            recarga = await recarga_service.create_cash_recarga(
-                db, dp,
-                company=body.company,
-                phone=body.phone,
-                amount=body.amount,
-                order=order,
-                customer_name=body.customer_name,
-            )
-        else:
-            recarga = await recarga_service.create_transfer_recarga(
-                db, current_user,
-                company=body.company,
-                phone=body.phone,
-                amount=body.amount,
-                customer_name=body.customer_name,
-            )
+        recarga = await recarga_service.create_cash_recarga(
+            db, dp,
+            company=body.company,
+            phone=body.phone,
+            amount=body.amount,
+            order=order,
+            customer_name=body.customer_name,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return _out(recarga, current_user.name if dp else None)
+    return _out(recarga, current_user.name)
 
 
 @router.get("/my", response_model=list[RecargaOut])

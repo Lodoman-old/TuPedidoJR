@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.coupon import Coupon
 from app.models.order import Order
 from app.services.order_service import get_setting_value
+from app.services import recarga_service
 
 CUSTOMER_DEFAULT_STATUSES = ["pending", "confirmed", "awaiting_courier"]
 RESTAURANT_DEFAULT_STATUSES = ["pending", "confirmed", "awaiting_courier", "preparing", "ready"]
@@ -153,6 +154,19 @@ async def apply_cancellation(
     order.refund_amount = refund_amount
     order.refund_status = refund_status
     order.payment_status = payment_status
+
+    if (order.recharge_amount or 0) > 0:
+        if order.payment_method == "cash":
+            await recarga_service.charge_cancelled_checkout_recharge(db, order)
+        elif order.payment_status in ("approved", "paid"):
+            # La recarga ya se aplicó: el reembolso solo cubre el pedido,
+            # no el monto de la recarga.
+            order.recharge_status = "retained"
+        else:
+            await recarga_service.cancel_pending_checkout_recharge(
+                db, order, "Pedido cancelado antes de confirmar el pago."
+            )
+            order.recharge_status = "cancelled"
 
     if order.coupon_id:
         result = await db.execute(select(Coupon).where(Coupon.id == order.coupon_id))

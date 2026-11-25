@@ -27,6 +27,7 @@ from app.services.cash_advance_service import (
     settle_advance,
 )
 from app.services.order_service import get_setting_value
+from app.services import recarga_service
 from app.services.schedule_service import local_today
 from app.services.push_service import schedule_new_reservation
 from app.services.payout_service import (
@@ -682,7 +683,11 @@ async def courier_payout_detail(
     for order in balance["orders"]:
         is_cash = order.payment_method == "cash"
         earnings = order.delivery_earnings or Decimal("0")
-        collected = order.total if is_cash else Decimal("0")
+        collected = (
+            (order.total or Decimal("0")) + (order.recharge_total or Decimal("0"))
+            if is_cash
+            else Decimal("0")
+        )
         orders.append({
             "id": str(order.id),
             "date": (order.delivered_at or order.placed_at).isoformat()
@@ -691,6 +696,7 @@ async def courier_payout_detail(
             "flat_fee": _money(order.flat_usage_fee),
             "delivery_fee": _money(order.delivery_fee),
             "total": _money(order.total),
+            "recharge": _money(order.recharge_total),
             "earnings": _money(earnings),
             "collected": _money(collected),
             "debt": _money(max(collected - earnings, Decimal("0"))) if is_cash else "0.00",
@@ -852,6 +858,7 @@ async def confirm_transfer_received(
     if not order or order.payment_method != "transfer":
         raise HTTPException(status_code=404, detail="Transferencia no encontrada")
     order.payment_status = "approved"
+    await recarga_service.confirm_checkout_recharge(db, order)
     from app.services.payout_service import credit_courier_for_order
     await credit_courier_for_order(db, order)
     await log_action(

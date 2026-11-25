@@ -89,14 +89,14 @@
 <div class="note">Cuando un negocio o repartidor solicita pago o entrega de efectivo, recibes una notificación push, un número en <strong>Pagos y cobros</strong> y un aviso dentro del panel.</div>
 
 <h3>4.1 Recargas</h3>
-<p>Las recargas están <strong>en pausa</strong> hasta integrar al proveedor. El acceso directo al historial sigue en <code>/web/admin/recargas</code>, pero no se pueden crear solicitudes nuevas desde la app ni el portal.</p>
+<p>Las recargas se crean al agregarlas a un pedido o cuando el repartidor las ofrece al entregar. La solicitud directa desde el portal sigue en pausa.</p>
 <ul>
-  <li><strong>Transferencia</strong> (portal o junto con el pedido): sin comisión de $2. Se valida con Banxico y la recarga se aplica automáticamente.</li>
-  <li><strong>Efectivo agregado al pedido:</strong> monto + $2. Esos $2 son ingreso de la plataforma.</li>
+  <li><strong>Transferencia</strong> (junto con el pedido): sin comisión de $2. Se valida con Banxico y la recarga se aplica automáticamente.</li>
+  <li><strong>Efectivo agregado al pedido:</strong> monto + $2. Esos $2 son ingreso de la plataforma y el monto se liquida con el repartidor al entregar.</li>
   <li><strong>Efectivo ofrecido por el repartidor:</strong> monto + $2. Esos $2 son crédito del repartidor.</li>
-  <li><strong>Registros anteriores:</strong> si existen recargas previas, aún puedes completarlas, reintentarlas o reembolsarlas desde el panel.</li>
+  <li><strong>Procesamiento:</strong> mientras no esté conectado el proveedor, las recargas quedan pendientes en este panel para completarlas o reembolsarlas.</li>
 </ul>
-<div class="note">El efectivo solo aplica en el contexto de una entrega: la recarga agregada al pedido o la que el repartidor ofrece al entregar. No hay recargas en efectivo sin pedido.</div>
+<div class="note">El efectivo solo aplica en el contexto de una entrega. No hay recargas en efectivo sin pedido.</div>
 
 <h3>5. Validación de comprobantes</h3>
 <figure class="shot">

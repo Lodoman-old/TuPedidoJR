@@ -67,7 +67,7 @@ async def _record_row(
 
     amount = record.expected_amount
     if order is not None and order.total is not None:
-        amount = order.total
+        amount = order.total_to_pay
     elif payment is not None and payment.amount is not None:
         amount = payment.amount
 

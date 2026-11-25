@@ -69,6 +69,7 @@
   let coverageInside = null;
 let scheduleState = { enabled: false, value: '' };
   let cartNotice = '';
+  let rechargeState = { enabled: false, company: '', phone: '', amount: 0 };
 
   function sanitizeCartWithMenu(info) {
     const menu = info?.menu || [];
@@ -336,8 +337,45 @@ let scheduleState = { enabled: false, value: '' };
       <div class="form-text">La propina es 100 % para el repartidor.</div>
     </div>`;
 
-    html += `<div class="card p-3 mb-3 d-none" id="loyaltyCard">
-      <div class="d-flex justify-content-between align-items-center">
+    if (restaurantInfo?.delivery_mode === 'platform') {
+    html += `<div class="card p-3 mb-3" id="rechargeCard">
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" role="switch" id="rechargeToggle" ${rechargeState.enabled ? 'checked' : ''}>
+        <label class="form-check-label fw-semibold" for="rechargeToggle">
+          <i class="bi bi-phone"></i> Agregar recarga de tiempo aire
+        </label>
+      </div>
+      <div class="form-text">Para tu celular o para otra persona. Se cobra junto con el pedido.</div>
+      <div id="rechargeFields" class="${rechargeState.enabled ? '' : 'd-none'} mt-2">
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small mb-1" for="rechargeCompany">Compañía</label>
+            <input id="rechargeCompany" class="form-control form-control-sm" list="rechargeCompanies" placeholder="Telcel, AT&T..." value="${esc(rechargeState.company || '')}">
+            <datalist id="rechargeCompanies">
+              <option value="Telcel"></option>
+              <option value="AT&amp;T"></option>
+              <option value="Movistar"></option>
+              <option value="Bait"></option>
+              <option value="Unefon"></option>
+            </datalist>
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1" for="rechargePhone">Celular</label>
+            <input id="rechargePhone" class="form-control form-control-sm" inputmode="numeric" maxlength="10" placeholder="10 dígitos" value="${esc(rechargeState.phone || '')}">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1" for="rechargeAmount">Monto</label>
+            <input id="rechargeAmount" type="number" min="10" max="500" step="1" class="form-control form-control-sm" placeholder="10 a 500" value="${rechargeState.amount > 0 ? esc(String(rechargeState.amount)) : ''}">
+          </div>
+        </div>
+        <div class="small text-muted mt-2" id="rechargeHint"></div>
+      </div>
+    </div>`;
+    } else {
+      rechargeState = { enabled: false, company: '', phone: '', amount: 0 };
+    }
+
+    html += `<div class="card p-3 mb-3 d-none" id="loyaltyCard">      <div class="d-flex justify-content-between align-items-center">
         <strong><i class="bi bi-stars"></i> Puntos de lealtad</strong>
         <span class="badge bg-primary" id="loyaltyBalance">0 pts</span>
       </div>
@@ -366,6 +404,8 @@ let scheduleState = { enabled: false, value: '' };
       <div class="d-flex justify-content-between"><span>Propina</span><span id="tipRow">$0.00</span></div>
       <div id="loyaltyRow" class="d-none d-flex justify-content-between text-primary"><span>Puntos canjeados</span><span id="loyaltyAmount">-$0.00</span></div>
       <div id="discountRow" class="d-none d-flex justify-content-between text-success"><span>Descuento</span><span id="discountAmount">-$0.00</span></div>
+      <div id="rechargeRow" class="d-none d-flex justify-content-between"><span>Recarga de tiempo aire</span><span id="rechargeAmountDisplay">$0</span></div>
+      <div id="rechargeFeeRow" class="d-none d-flex justify-content-between"><span>Comisión de recarga</span><span id="rechargeFeeDisplay">$0</span></div>
       <hr>
       <div class="d-flex justify-content-between fw-bold fs-5"><span>Total</span><span id="totalAmount">${money(subtotal)}</span></div>
       <div id="debtCard" class="d-none mt-2 border-top pt-2">
@@ -399,6 +439,7 @@ let scheduleState = { enabled: false, value: '' };
       setTimeout(useMyLocation, 500);
     }
     refreshEstimate();
+    updateRechargeHint();
     loadDebtInfo();
   }
 
@@ -852,13 +893,21 @@ let scheduleState = { enabled: false, value: '' };
     document.getElementById('deliveryAddressCard')?.classList.toggle('d-none', pickup);
     document.getElementById('pickupInfoCard')?.classList.toggle('d-none', !pickup);
     document.getElementById('tipCard')?.classList.toggle('d-none', pickup);
+    document.getElementById('rechargeCard')?.classList.toggle('d-none', pickup);
     updateScheduleHint();
     if (pickup) {
       tipAmount = 0;
       const custom = document.getElementById('tipCustom');
       if (custom) custom.value = '';
       updateTipButtons();
+      if (rechargeState.enabled) {
+        rechargeState.enabled = false;
+        const toggle = document.getElementById('rechargeToggle');
+        if (toggle) toggle.checked = false;
+        document.getElementById('rechargeFields')?.classList.add('d-none');
+      }
     }
+    updateRechargeHint();
     updateCoverageUi();
     refreshEstimate();
   }
@@ -866,6 +915,81 @@ let scheduleState = { enabled: false, value: '' };
   function selectedPaymentMethod() {
   return document.querySelector('input[name="paymentMethod"]:checked')?.value || 'cash';
 }
+
+  function rechargeTotalClient() {
+    if (!rechargeState.enabled) return 0;
+    const amount = Number(rechargeState.amount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) return 0;
+    return amount + (selectedPaymentMethod() === 'cash' ? 2 : 0);
+  }
+
+  function renderRechargeRows(amount, fee) {
+    const amountValue = Number(amount || 0);
+    const feeValue = Number(fee || 0);
+    const rechargeRow = document.getElementById('rechargeRow');
+    const rechargeFeeRow = document.getElementById('rechargeFeeRow');
+    if (rechargeRow) {
+      rechargeRow.classList.toggle('d-none', amountValue <= 0);
+      const display = document.getElementById('rechargeAmountDisplay');
+      if (display) display.textContent = money(amountValue);
+    }
+    if (rechargeFeeRow) {
+      rechargeFeeRow.classList.toggle('d-none', feeValue <= 0);
+      const display = document.getElementById('rechargeFeeDisplay');
+      if (display) display.textContent = money(feeValue);
+    }
+  }
+
+  function updateRechargeHint() {
+    const hint = document.getElementById('rechargeHint');
+    if (!hint) return;
+    if (!rechargeState.enabled) {
+      hint.textContent = '';
+      return;
+    }
+    hint.innerHTML = selectedPaymentMethod() === 'cash'
+      ? 'En efectivo se agregan <strong>$2</strong> de comisión para la plataforma.'
+      : 'Con transferencia no se cobra comisión de $2.';
+  }
+
+  function readRechargeUi() {
+    const toggle = document.getElementById('rechargeToggle');
+    const fields = document.getElementById('rechargeFields');
+    if (!toggle) return;
+    rechargeState.enabled = toggle.checked;
+    fields?.classList.toggle('d-none', !rechargeState.enabled);
+    if (rechargeState.enabled) {
+      rechargeState.company = (document.getElementById('rechargeCompany')?.value || '').trim();
+      rechargeState.phone = (document.getElementById('rechargePhone')?.value || '').replace(/\D/g, '').slice(0, 10);
+      const amount = Number(document.getElementById('rechargeAmount')?.value || 0);
+      rechargeState.amount = Number.isFinite(amount) ? amount : 0;
+    }
+    updateRechargeHint();
+    refreshEstimate();
+  }
+
+  let _rechargeDebounce = null;
+  function onRechargeInput() {
+    clearTimeout(_rechargeDebounce);
+    _rechargeDebounce = setTimeout(readRechargeUi, 350);
+  }
+
+  function validateRechargeSelection() {
+    if (!rechargeState.enabled) return true;
+    if (fulfillment === 'pickup') {
+      showToast('La recarga solo aplica con entrega a domicilio', 'danger');
+      return false;
+    }
+    if (rechargeState.company.length < 2 || rechargeState.phone.length !== 10) {
+      showToast('Completa la compañía y un número de 10 dígitos para la recarga', 'danger');
+      return false;
+    }
+    if (!(rechargeState.amount >= 10 && rechargeState.amount <= 500)) {
+      showToast('La recarga debe ser entre $10 y $500', 'danger');
+      return false;
+    }
+    return true;
+  }
 
 function updateApprovalUi() {
   const card = document.getElementById('approvalCard');
@@ -931,7 +1055,11 @@ async function refreshEstimate() {
     if (!rid) {
       feeEl.textContent = '—';
       flatEl.textContent = '—';
-      totalEl.textContent = money(subtotal + tipAmount);
+      renderRechargeRows(
+        rechargeState.enabled ? Number(rechargeState.amount || 0) : 0,
+        rechargeState.enabled && selectedPaymentMethod() === 'cash' ? 2 : 0,
+      );
+      totalEl.textContent = money(subtotal + tipAmount + rechargeTotalClient());
       if (estimateMsg) estimateMsg.textContent = 'No se encontró el negocio del carrito. Vuelve a agregar los productos.';
       return;
     }
@@ -940,7 +1068,11 @@ async function refreshEstimate() {
     if (fulfillment !== 'pickup' && (addressState.lat == null || addressState.lng == null)) {
       feeEl.textContent = '—';
       flatEl.textContent = '—';
-      totalEl.textContent = money(subtotal + tipAmount);
+      renderRechargeRows(
+        rechargeState.enabled ? Number(rechargeState.amount || 0) : 0,
+        rechargeState.enabled && selectedPaymentMethod() === 'cash' ? 2 : 0,
+      );
+      totalEl.textContent = money(subtotal + tipAmount + rechargeTotalClient());
       if (loyaltyRow) loyaltyRow.classList.add('d-none');
       updateTipButtons();
       if (estimateMsg) estimateMsg.textContent = 'Ingresa tu dirección y pulsa “Buscar dirección” para calcular el envío.';
@@ -949,7 +1081,11 @@ async function refreshEstimate() {
     if (fulfillment !== 'pickup' && coverageInside === false) {
       feeEl.textContent = '—';
       flatEl.textContent = '—';
-      totalEl.textContent = money(subtotal + tipAmount);
+      renderRechargeRows(
+        rechargeState.enabled ? Number(rechargeState.amount || 0) : 0,
+        rechargeState.enabled && selectedPaymentMethod() === 'cash' ? 2 : 0,
+      );
+      totalEl.textContent = money(subtotal + tipAmount + rechargeTotalClient());
       if (loyaltyRow) loyaltyRow.classList.add('d-none');
       updateCoverageUi();
       if (estimateMsg) {
@@ -963,6 +1099,8 @@ async function refreshEstimate() {
         fulfillment === 'pickup' ? null : addressState.lat,
         fulfillment === 'pickup' ? null : addressState.lng,
         appliedCoupon, tipAmount, pointsToRedeem, fulfillment,
+        selectedPaymentMethod(),
+        rechargeState.enabled ? rechargeState : null,
       );
       document.getElementById('estimateError')?.classList.add('d-none');
       feeEl.textContent = money(res.delivery_fee);
@@ -1005,7 +1143,10 @@ async function refreshEstimate() {
       const appliedTip = parseFloat(res.tip_amount != null ? res.tip_amount : tipAmount) || 0;
       const tipRow = document.getElementById('tipRow');
       if (tipRow) tipRow.textContent = money(appliedTip);
-      totalEl.textContent = money(res.total);
+      const rechargeAmount = parseFloat(res.recharge_amount || 0) || 0;
+      const rechargeFee = parseFloat(res.recharge_fee || 0) || 0;
+      renderRechargeRows(rechargeAmount, rechargeFee);
+      totalEl.textContent = money(res.total_to_pay ?? res.total);
       if (estimateMsg) {
         estimateMsg.textContent = res.distance_km != null
           ? `Distancia estimada: ${parseFloat(res.distance_km).toFixed(2)} km.`
@@ -1099,6 +1240,13 @@ async function refreshEstimate() {
     }
     updateLoyaltyUi();
     updateTipButtons();
+    const rechargeToggle = document.getElementById('rechargeToggle');
+    if (rechargeToggle) {
+      rechargeToggle.addEventListener('change', readRechargeUi);
+      ['rechargeCompany', 'rechargePhone', 'rechargeAmount'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('input', onRechargeInput);
+      });
+    }
     document.querySelectorAll('input[name="fulfillment"]').forEach(radio => {
       radio.addEventListener('change', () => {
         fulfillment = radio.value;
@@ -1185,7 +1333,9 @@ async function refreshEstimate() {
         } else if (bankInfo) {
           bankInfo.classList.add('d-none');
         }
+        updateRechargeHint();
         updateApprovalUi();
+        refreshEstimate();
       });
     });
 
@@ -1257,6 +1407,12 @@ async function refreshEstimate() {
       const scheduledInput = scheduleState.enabled ? scheduleState.value : '';
       const scheduledFor = scheduledInput ? new Date(scheduledInput).toISOString() : null;
       const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked')?.value || 'cash';
+      if (rechargeState.enabled) {
+        rechargeState.company = (document.getElementById('rechargeCompany')?.value || '').trim();
+        rechargeState.phone = (document.getElementById('rechargePhone')?.value || '').replace(/\D/g, '').slice(0, 10);
+        rechargeState.amount = Number(document.getElementById('rechargeAmount')?.value || 0) || 0;
+        if (!validateRechargeSelection()) return;
+      }
       const debtMode = document.querySelector('input[name="debtMode"]:checked')?.value || null;
       let refundAccount = null;
       if (estimateState.requires_courier_approval && paymentMethod === 'transfer') {
@@ -1278,6 +1434,7 @@ async function refreshEstimate() {
           notes || null, appliedCoupon, paymentMethod,
           pickup ? 0 : tipAmount, scheduledFor, pointsToRedeem, pickup ? 'pickup' : 'delivery',
           refundAccount, debtMode,
+          rechargeState.enabled ? { ...rechargeState } : null,
         );
         await clearCartNow();
         if (paymentMethod === 'cash') showToast(pickup ? 'Pedido creado — pagarás al recoger' : 'Pedido creado — pagarás en efectivo al recibir');

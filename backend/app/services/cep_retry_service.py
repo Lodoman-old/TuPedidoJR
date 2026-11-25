@@ -98,7 +98,7 @@ async def retry_pending_cep(limit: int = 20) -> int:
                     await db.commit()
                     await notify_admin_transfer_review(
                         str(order.id),
-                        order.total,
+                        order.total_to_pay,
                         customer_name,
                         "Se agotaron los reintentos con Banxico.",
                     )
@@ -134,7 +134,7 @@ async def retry_pending_cep(limit: int = 20) -> int:
                 if not was_preapproved:
                     await notify_admin_transfer_review(
                         str(order.id),
-                        order.total,
+                        order.total_to_pay,
                         customer_name,
                         "Mismo banco: verifica el ingreso manualmente.",
                     )
@@ -163,7 +163,7 @@ async def retry_pending_cep(limit: int = 20) -> int:
                         await db.commit()
                         await notify_admin_transfer_review(
                             str(order.id),
-                            order.total,
+                            order.total_to_pay,
                             customer_name,
                             "Se agotaron los reintentos con Banxico.",
                         )
@@ -207,7 +207,7 @@ async def retry_pending_cep(limit: int = 20) -> int:
                 await db.commit()
                 await notify_admin_transfer_review(
                     str(order.id),
-                    order.total,
+                    order.total_to_pay,
                     customer_name,
                     "Se agotaron los reintentos con Banxico.",
                 )

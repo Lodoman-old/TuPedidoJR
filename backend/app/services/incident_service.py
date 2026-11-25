@@ -26,6 +26,7 @@ from app.models.restaurant_adjustment import RestaurantAdjustment
 from app.models.shipment import Shipment
 from app.models.user import User
 from app.services.order_service import get_setting_value
+from app.services import recarga_service
 from app.services.push_service import (
     schedule_mandado_status,
     schedule_order_status,
@@ -357,7 +358,14 @@ async def return_to_business(
             order.cancellation_reason = "Producto devuelto al negocio"
             if order.payment_method in ("transfer", "mp") and order.payment_status in ("approved", "paid"):
                 # No perecedero pagado: se devuelve el producto, se descuenta el envío.
+                # El monto de la recarga no se reembolsa porque ya se aplicó.
                 await _refund_customer(db, incident, order.subtotal or Decimal("0"))
+            elif order.payment_method == "cash" and (order.recharge_amount or 0) > 0:
+                await recarga_service.charge_cancelled_checkout_recharge(db, order)
+            elif (order.recharge_amount or 0) > 0:
+                await recarga_service.cancel_pending_checkout_recharge(
+                    db, order, "Pedido devuelto al negocio."
+                )
             schedule_order_status(str(order.id), "cancelled")
     elif incident.entity_type == "mandado":
         mandado = await db.get(Mandado, incident.entity_id)
@@ -401,8 +409,12 @@ async def discard_item(
     if incident.entity_type == "order":
         order = await db.get(Order, incident.entity_id)
         if order and order.payment_method == "cash":
-            # No pagó y no recibió: debe el total del pedido.
-            await _charge_customer(db, incident, order.total or Decimal("0"))
+            # No pagó y no recibió: debe el total del pedido. Si la recarga
+            # agregada al pedido ya se aplicó, también se le carga.
+            amount = order.total or Decimal("0")
+            if await recarga_service.checkout_recharge_was_paid(db, order):
+                amount += order.recharge_amount or Decimal("0")
+            await _charge_customer(db, incident, amount)
     elif incident.entity_type == "mandado":
         mandado = await db.get(Mandado, incident.entity_id)
         if mandado and mandado.payment_method == "cash" and not mandado.prepayment_required:

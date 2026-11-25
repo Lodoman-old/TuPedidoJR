@@ -16,6 +16,7 @@ from app.models.user import User
 from app.services.audit_service import log_action
 from app.services.email_service import send_email
 from app.services.order_service import get_setting_value
+from app.services import recarga_service
 from app.services.push_service import (
     notify_admin_transfer_failed,
     schedule_order_release,
@@ -40,6 +41,7 @@ async def apply_preapproved_transfer(
     extracted = record.extracted or {}
     order.cep_status = "preapproved"
     order.payment_status = "approved"
+    await recarga_service.confirm_checkout_recharge(db, order)
     order.cep_payload = {
         **(order.cep_payload or {}),
         "preapproved": True,
@@ -57,7 +59,7 @@ async def apply_preapproved_transfer(
         "order",
         order.id,
         {
-            "total": str(order.total),
+            "total": str(order.total_to_pay),
             "same_bank": bool(extracted.get("_same_bank")),
         },
     )
@@ -126,6 +128,7 @@ async def settle_order_transfer(
         details.get("receiverBank") or order.cep_receiver_bank
     )
     order.payment_status = "approved"
+    await recarga_service.confirm_checkout_recharge(db, order)
 
     if not already_paid:
         from app.services.payout_service import credit_courier_for_order
@@ -139,7 +142,7 @@ async def settle_order_transfer(
             "transfer.cep_approved",
             "order",
             order.id,
-            {"total": str(order.total)},
+            {"total": str(order.total_to_pay)},
         )
 
     if not already_paid:
@@ -178,11 +181,14 @@ async def charge_failed_transfer(
         record.status = "failed"
         record.summary = "Pago no confirmado. El pedido se canceló sin cargo."
         record.extracted = extracted
+        await recarga_service.cancel_pending_checkout_recharge(
+            db, order, "Transferencia no confirmada."
+        )
         await db.commit()
         await _notify_customer_failed(db, customer, order, Decimal("0"), cancelled=True)
         await notify_admin_transfer_failed(
             str(order.id),
-            order.total,
+            order.total_to_pay,
             customer.name if customer else "Cliente",
             reason,
             charged=False,
@@ -190,6 +196,13 @@ async def charge_failed_transfer(
         return
 
     amount = round_half_down(Decimal(order.total or 0))
+    recarga_paid = await recarga_service.checkout_recharge_was_paid(db, order)
+    if recarga_paid:
+        amount = round_half_down(Decimal(order.total_to_pay or 0))
+    else:
+        await recarga_service.cancel_pending_checkout_recharge(
+            db, order, "Transferencia no confirmada."
+        )
     charged = bool(customer and amount > 0)
     if charged:
         customer.pending_balance = round_half_down(
@@ -241,12 +254,15 @@ async def cancel_unpaid_transfer(
         order.cancellation_reason = reason
         order.cancelled_at = datetime.now(timezone.utc)
     order.cep_status = "expired"
+    await recarga_service.cancel_pending_checkout_recharge(
+        db, order, "Transferencia no confirmada a tiempo."
+    )
     await db.commit()
     customer = await db.get(User, order.user_id) if order.user_id else None
     await _notify_customer_failed(db, customer, order, Decimal("0"), cancelled=True)
     await notify_admin_transfer_failed(
         str(order.id),
-        order.total,
+        order.total_to_pay,
         customer.name if customer else "Cliente",
         reason,
         charged=False,

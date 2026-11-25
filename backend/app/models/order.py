@@ -76,4 +76,18 @@ class Order(TimestampMixin, Base):
     refund_bank = Column(String(100), nullable=True)
     refund_clabe = Column(String(18), nullable=True)
 
+    recharge_company = Column(String(40), nullable=True)
+    recharge_phone = Column(String(20), nullable=True)
+    recharge_amount = Column(DECIMAL(10, 2), default=0, nullable=False)
+    recharge_fee = Column(DECIMAL(10, 2), default=0, nullable=False)
+    recharge_status = Column(String(20), nullable=True)
+
+    @property
+    def recharge_total(self):
+        return (self.recharge_amount or 0) + (self.recharge_fee or 0)
+
+    @property
+    def total_to_pay(self):
+        return (self.total or 0) + self.recharge_total
+
     items = relationship("OrderItem", backref="order", lazy="selectin")

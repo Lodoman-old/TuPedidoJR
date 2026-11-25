@@ -31,6 +31,9 @@ class OrderCreate(BaseModel):
     refund_bank: str | None = Field(default=None, max_length=100)
     refund_clabe: str | None = Field(default=None, max_length=18)
     debt_payment_mode: str | None = Field(default=None, pattern="^(full|installments)$")
+    recharge_company: str | None = Field(default=None, max_length=40)
+    recharge_phone: str | None = Field(default=None, max_length=20)
+    recharge_amount: Decimal = Field(default=Decimal("0"), ge=0)
 
 
 class OrderItemOptionOut(BaseModel):
@@ -68,6 +71,13 @@ class OrderOut(BaseModel):
     subtotal: Decimal
     delivery_fee: Decimal
     total: Decimal
+    recharge_company: str | None = None
+    recharge_phone: str | None = None
+    recharge_amount: Decimal = Decimal("0")
+    recharge_fee: Decimal = Decimal("0")
+    recharge_status: str | None = None
+    recharge_total: Decimal = Decimal("0")
+    total_to_pay: Decimal = Decimal("0")
     delivery_address: str
     customer_phone: str | None = None
     notes: str | None

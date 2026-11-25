@@ -15,6 +15,7 @@ class RecargaOrder(TimestampMixin, Base):
     order_id = Column(
         UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"), nullable=True
     )
+    origin = Column(String(20), nullable=True, index=True)
     company = Column(String(40), nullable=False)
     phone = Column(String(20), nullable=False)
     amount = Column(DECIMAL(10, 2), nullable=False)

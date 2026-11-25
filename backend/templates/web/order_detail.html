@@ -237,8 +237,10 @@
         (o.discount_amount > 0 ? `<div class="d-flex justify-content-between small text-success"><span>Descuento</span><span>−${money0(o.discount_amount)}</span></div>` : '') +
         (parseFloat(o.loyalty_discount || 0) > 0 ? `<div class="d-flex justify-content-between small text-primary"><span>Puntos canjeados (${o.points_redeemed || 0})</span><span>−${money0(o.loyalty_discount)}</span></div>` : '') +
         (parseFloat(o.tip_amount || 0) > 0 ? `<div class="d-flex justify-content-between small text-success"><span>Propina</span><span>${money0(o.tip_amount)}</span></div>` : '') +
+        (parseFloat(o.recharge_amount || 0) > 0 ? `<div class="d-flex justify-content-between small"><span>Recarga ${escHtml(o.recharge_company || '')} ${escHtml(o.recharge_phone || '')}</span><span>${money0(o.recharge_amount)}</span></div>` : '') +
+        (parseFloat(o.recharge_fee || 0) > 0 ? `<div class="d-flex justify-content-between small"><span>Comisión de recarga (efectivo)</span><span>${money0(o.recharge_fee)}</span></div>` : '') +
         `<hr>
-        <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>${money0(o.total)}</span></div>
+        <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>${money0(o.total_to_pay || o.total)}</span></div>
         <div class="small text-muted mt-1">${o.fulfillment_type === 'pickup' ? 'Recoger en' : 'Dirección'}: ${o.delivery_address}</div>
       ${o.estimated_delivery_min ? `<div class="small text-primary mt-1">Tiempo estimado original: ~${o.estimated_delivery_min} min</div>` : ''}
       ${o.scheduled_for ? `<div class="small text-info mt-1">Pedido programado para: ${new Date(o.scheduled_for).toLocaleString()}</div>` : ''}
@@ -274,7 +276,7 @@
             : 'Pago validado';
           html += `<div class="alert alert-success mb-2">
             <div class="fw-bold"><i class="bi bi-check2-circle"></i> ${validated}</div>
-            <div class="small">Total pagado: ${money0(o.total)}. El negocio ya puede preparar tu pedido.</div>
+            <div class="small">Total pagado: ${money0(o.total_to_pay || o.total)}. El negocio ya puede preparar tu pedido.</div>
           </div>`;
         }
       } else if (accounts.length || hasBank) {

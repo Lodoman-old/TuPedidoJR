@@ -3,16 +3,17 @@
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div>
     <h4 class="m-0"><i class="bi bi-phone"></i> Recargas</h4>
-    <small class="text-muted">Historial de recargas anteriores. La función está en pausa hasta integrar al proveedor.</small>
+    <small class="text-muted">Recargas agregadas a pedidos y ofrecidas por repartidores.</small>
   </div>
   <button class="btn btn-sm btn-outline-secondary" onclick="loadRecargas()">
     <i class="bi bi-arrow-clockwise"></i> Actualizar
   </button>
 </div>
 
-<div class="alert alert-warning small">
-  <strong>Recargas en pausa.</strong> No se pueden crear solicitudes nuevas desde la app ni el portal.
-  Aquí solo quedan disponibles los registros anteriores para completarlos, reintentarlos o reembolsarlos.
+<div class="alert alert-info small">
+  Las recargas de pedidos en efectivo cobran <strong>$2</strong> que son ingreso de la plataforma.
+  Las que ofrece el repartidor al entregar cobran <strong>$2</strong> que son crédito del repartidor.
+  Las de transferencia no llevan $2. Mientras no esté conectado el proveedor, complétalas aquí cuando las proceses.
 </div>
 
 <div class="row g-2 mb-2 align-items-center">
@@ -110,7 +111,7 @@
           return `<tr>
             <td class="small">${new Date(r.created_at).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
             <td class="small">${esc(r.customer_name || 'Cliente')}<br><span class="text-muted">${esc(r.courier_name || 'Sin repartidor')}</span></td>
-            <td class="small">${r.order_code ? '#' + esc(r.order_code) : 'Suelta'}</td>
+            <td class="small">${r.order_code ? '#' + esc(r.order_code) : 'Suelta'}${r.origin === 'checkout' ? '<br><span class="badge bg-dark">Con pedido</span>' : r.origin === 'courier' ? '<br><span class="badge bg-info text-dark">Repartidor</span>' : r.origin === 'portal' ? '<br><span class="badge bg-secondary">Portal</span>' : ''}</td>
             <td>${esc(r.company)}</td>
             <td>${esc(r.phone)}</td>
             <td class="text-end">${money(r.amount)}</td>

@@ -19,6 +19,7 @@ from app.models.menu_item import MenuItem
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.order_item_option import OrderItemOption
+from app.models.recarga_order import RecargaOrder
 from app.models.receipt_validation import ReceiptValidation
 from app.models.restaurant import Restaurant
 from app.models.user import User
@@ -47,6 +48,7 @@ from app.services.estimation_service import calculate_estimated_time
 from app.services.order_service import calculate_order_totals, get_approval_timeout_min, get_setting_value, resolve_item_options
 from app.services.order_serialization import order_out
 from app.services.order_transfer_service import apply_preapproved_transfer
+from app.services import recarga_service
 from app.services.loyalty_service import apply_redemption, preview_redemption, award_on_delivery
 from app.services.push_service import schedule_available_order, schedule_courier_preparing, schedule_courier_ready, schedule_new_order, schedule_order_release, schedule_order_status, schedule_admin_transfer_review
 from app.services.schedule_service import restaurant_open_state
@@ -77,6 +79,45 @@ async def _restaurant_coords(db: AsyncSession, restaurant: Restaurant) -> tuple[
 
 def _is_pickup(body: OrderCreate) -> bool:
     return body.fulfillment_type == "pickup"
+
+
+def _validate_checkout_recharge(body: OrderCreate) -> None:
+    """Valida la recarga solo al crear el pedido, no en la vista previa."""
+    amount = Decimal(body.recharge_amount or 0)
+    if amount <= 0:
+        body.recharge_company = None
+        body.recharge_phone = None
+        body.recharge_amount = Decimal("0")
+        return
+    if _is_pickup(body):
+        raise HTTPException(
+            status_code=400,
+            detail="La recarga solo aplica con entrega a domicilio.",
+        )
+    if amount < recarga_service.MIN_RECHARGE:
+        raise HTTPException(
+            status_code=400,
+            detail="La recarga mínima es de $10.",
+        )
+    if amount > recarga_service.MAX_RECHARGE:
+        raise HTTPException(
+            status_code=400,
+            detail="La recarga máxima es de $500.",
+        )
+    company = (body.recharge_company or "").strip()
+    if len(company) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Escribe la compañía de la recarga.",
+        )
+    digits = "".join(ch for ch in str(body.recharge_phone or "") if ch.isdigit())
+    if len(digits) != 10:
+        raise HTTPException(
+            status_code=400,
+            detail="Escribe un número de 10 dígitos para la recarga.",
+        )
+    body.recharge_company = company
+    body.recharge_phone = digits
 
 
 DEFAULT_EMAIL_GRACE_ORDERS = 3
@@ -315,6 +356,16 @@ async def estimate_price(
     if loyalty_discount:
         total = max(total - loyalty_discount, Decimal("0"))
 
+    recharge_amount = round_half_down(
+        min(
+            max(Decimal(body.recharge_amount or 0), Decimal("0")),
+            recarga_service.MAX_RECHARGE,
+        )
+    )
+    recharge_fee = recarga_service.checkout_fee(body.payment_method, recharge_amount)
+    recharge_total = round_half_down(recharge_amount + recharge_fee)
+    total_to_pay = round_half_down(total + recharge_total)
+
     warn_raw = await get_setting_value(db, "DELIVERY_WARN_KM", "8")
     try:
         warn_km = float(warn_raw)
@@ -358,6 +409,12 @@ async def estimate_price(
         "points_redeemed": points_redeemed,
         "loyalty_discount": f"{loyalty_discount:.2f}",
         "total": f"{total:.2f}",
+        "recharge_company": body.recharge_company,
+        "recharge_phone": body.recharge_phone,
+        "recharge_amount": f"{recharge_amount:.2f}",
+        "recharge_fee": f"{recharge_fee:.2f}",
+        "recharge_total": f"{recharge_total:.2f}",
+        "total_to_pay": f"{total_to_pay:.2f}",
         "distance_km": distance_km,
         "distance_warning": distance_warning,
         "requires_courier_approval": requires_approval,
@@ -380,6 +437,8 @@ async def create_order(
         raise HTTPException(status_code=404, detail="Restaurante no encontrado")
     if restaurant.status != "active" and not current_user.is_superuser:
         raise HTTPException(status_code=409, detail="El restaurante todavía no está activo")
+
+    _validate_checkout_recharge(body)
 
     if not current_user.is_superuser:
         email_block = await _email_verification_block(db, current_user)
@@ -566,6 +625,15 @@ async def create_order(
     if loyalty_discount:
         total = max(total - loyalty_discount, Decimal("0"))
 
+    recharge_amount = round_half_down(Decimal(body.recharge_amount or 0))
+    recharge_fee = recarga_service.checkout_fee(payment_method, recharge_amount)
+    recharge_total = round_half_down(recharge_amount + recharge_fee)
+    if recharge_amount > 0 and restaurant.delivery_mode != "platform":
+        raise HTTPException(
+            status_code=400,
+            detail="La recarga de tiempo aire solo está disponible con reparto de TuPedidoJR.",
+        )
+
     debt_charged = Decimal("0")
     pending_balance = Decimal(str(current_user.pending_balance or 0))
     if pending_balance > 0:
@@ -634,9 +702,33 @@ async def create_order(
         refund_account_holder=refund_holder or None,
         refund_bank=refund_bank or None,
         refund_clabe=refund_clabe or None,
+        recharge_company=body.recharge_company if recharge_amount > 0 else None,
+        recharge_phone=body.recharge_phone if recharge_amount > 0 else None,
+        recharge_amount=recharge_amount,
+        recharge_fee=recharge_fee,
+        recharge_status="pending" if recharge_amount > 0 else None,
     )
     db.add(order)
     await db.flush()
+
+    if recharge_amount > 0:
+        db.add(RecargaOrder(
+            user_id=current_user.id,
+            customer_name=current_user.name,
+            order_id=order.id,
+            origin="checkout",
+            company=body.recharge_company,
+            phone=body.recharge_phone,
+            amount=recharge_amount,
+            fee=recharge_fee,
+            total=recharge_total,
+            payment_method=payment_method,
+            payment_status="paid" if payment_method == "cash" else "pending",
+            status="pending",
+            debt_applied=True,
+            credit_applied=True,
+            paid_at=datetime.now(timezone.utc) if payment_method == "cash" else None,
+        ))
 
     for entry in items_data:
         menu_item = entry["menu_item"]
@@ -811,6 +903,7 @@ async def _apply_cep_payment(
     order.cep_receiver_bank = receiver_bank
     order.cep_payload = cep_payload
     order.payment_status = "approved"
+    await recarga_service.confirm_checkout_recharge(db, order)
 
     from app.services.payout_service import credit_courier_for_order
 
@@ -821,7 +914,7 @@ async def _apply_cep_payment(
         "transfer.cep_validated",
         "order",
         order.id,
-        {"clave_rastreo": key, "total": str(order.total)},
+        {"clave_rastreo": key, "total": str(order.total_to_pay)},
     )
     try:
         await db.commit()
@@ -937,6 +1030,16 @@ async def switch_order_to_cash(
     order.cep_receiver_bank = None
     order.cep_payload = None
 
+    if (order.recharge_amount or 0) > 0:
+        order.recharge_fee = recarga_service.CHECKOUT_RECHARGE_FEE
+        recarga = await recarga_service.get_checkout_recarga(db, order.id)
+        if recarga is not None:
+            recarga.fee = order.recharge_fee
+            recarga.total = (order.recharge_amount or 0) + order.recharge_fee
+            recarga.payment_method = "cash"
+            recarga.payment_status = "paid"
+            recarga.paid_at = datetime.now(timezone.utc)
+
     record = await db.scalar(
         select(ReceiptValidation)
         .where(
@@ -1028,7 +1131,7 @@ async def validate_transfer_payment(
             ),
         )
 
-    amount_cents = int((Decimal(order.total or 0) * 100).to_integral_value())
+    amount_cents = int((Decimal(order.total_to_pay or 0) * 100).to_integral_value())
     transfer_date = body.transfer_date or date.today()
     try:
         cep = await validate_transfer(
@@ -1160,7 +1263,7 @@ async def validate_transfer_receipt(
         order.id,
         file_url,
         TRANSFER_RECEIPT,
-        expected_amount=order.total,
+        expected_amount=order.total_to_pay,
         expected_date=order.placed_at or datetime.now(timezone.utc),
         expected_recipient=expected_recipient,
     )
@@ -1174,7 +1277,7 @@ async def validate_transfer_receipt(
         if (record.extracted or {}).get("_same_bank"):
             schedule_admin_transfer_review(
                 str(order.id),
-                order.total,
+                order.total_to_pay,
                 current_user.name,
                 "Mismo banco: verifica el ingreso en tu estado de cuenta.",
             )
@@ -1207,7 +1310,7 @@ async def validate_transfer_receipt(
         if issues:
             reason = f"{reason} {issues[0]}"
         schedule_admin_transfer_review(
-            str(order.id), order.total, current_user.name, reason
+            str(order.id), order.total_to_pay, current_user.name, reason
         )
         try:
             timeout_min = int(

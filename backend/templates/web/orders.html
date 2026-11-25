@@ -59,7 +59,7 @@
                     </div>
                     <div class="text-end">
                       <span class="status-pill ${STATUS_COLORS[o.status] || 'bg-secondary'}">${STATUS_LABELS[o.status] || o.status}</span>
-                      <div class="fw-bold mt-1">$${parseFloat(o.total).toFixed(2)}</div>
+                      <div class="fw-bold mt-1">$${parseFloat(o.total_to_pay ?? o.total).toFixed(2)}</div>
                     </div>
                   </div>
                 </div>`).join('');
@@ -94,7 +94,7 @@
               </div>
               <div class="text-end">
                 <span class="status-pill ${STATUS_COLORS[o.status] || 'bg-secondary'}">${STATUS_LABELS[o.status] || o.status}</span>
-                <div class="fw-bold mt-1">$${parseFloat(o.total).toFixed(2)}</div>
+                <div class="fw-bold mt-1">$${parseFloat(o.total_to_pay ?? o.total).toFixed(2)}</div>
                 ${o.status === 'delivered' ? '<div class="small mt-1 text-warning fw-bold"><i class="bi bi-star-fill"></i> Califica tu pedido</div>' : ''}
               </div>
             </div>

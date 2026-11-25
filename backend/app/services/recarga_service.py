@@ -9,12 +9,18 @@ from app.models.delivery_person import DeliveryPerson
 from app.models.order import Order
 from app.models.recarga_order import RecargaOrder
 from app.models.user import User
+from app.services.order_service import get_setting_value
 
 RECARGA_FEE = Decimal("2.00")
 CHECKOUT_RECHARGE_FEE = Decimal("2.00")
 MIN_RECHARGE = Decimal("10.00")
 MAX_RECHARGE = Decimal("500.00")
 CASH_METHODS = {"cash"}
+
+
+async def recharges_enabled(db: AsyncSession) -> bool:
+    value = await get_setting_value(db, "RECHARGES_ENABLED", "false")
+    return str(value).strip().lower() == "true"
 
 
 def _now():

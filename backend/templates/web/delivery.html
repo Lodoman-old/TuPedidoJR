@@ -61,7 +61,7 @@
       <span id="myordersActiveBadge" class="badge bg-primary d-none" title="En proceso">0</span>
     </button>
     <button class="dp-tab-btn text-center" data-tab="payouts" onclick="switchTab('payouts')">Ganancias</button>
-    <button class="dp-tab-btn text-center" data-tab="recargas" onclick="switchTab('recargas')">Recargas</button>
+    <button class="dp-tab-btn text-center" id="rechargesTabBtn" data-tab="recargas" onclick="switchTab('recargas')">Recargas</button>
     <button class="dp-tab-btn text-center" data-tab="zones" onclick="switchTab('zones')">Zonas 🔥</button>
     <button class="dp-tab-btn text-center" data-tab="settings" onclick="switchTab('settings')">Ajustes</button>
   </div>
@@ -127,9 +127,22 @@ let availableTimer = null;
 let audioCtx = null;
 let myDeliveryOrdersCache = [];
 let serviceLimits = { active: 0, max: 5, warn: 4 };
+let rechargesEnabled = false;
+
+async function loadRechargeConfig() {
+  try {
+    const cfg = await apiRequest('GET', '/payments/config');
+    rechargesEnabled = Boolean(cfg.recharges_enabled);
+  } catch (e) { /* sin conexión: se deja oculto */ }
+  document.getElementById('rechargesTabBtn')?.classList.toggle('d-none', !rechargesEnabled);
+  if (!rechargesEnabled && document.getElementById('tab-recargas')?.classList.contains('active')) {
+    switchTab('available');
+  }
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   loadDeliveryData().then(() => refreshTabBadges());
+  loadRechargeConfig();
   window.addEventListener('push-received', (e) => {
     const data = (e.detail && e.detail.data) || {};
     if (data.type === 'available_order' || data.type === 'assigned_order') {
@@ -199,6 +212,7 @@ function clearAvailableBadge() {
 }
 
 function switchTab(name) {
+  if (name === 'recargas' && !rechargesEnabled) return;
   document.querySelectorAll('.dp-tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.querySelector(`[data-tab="${name}"]`)?.classList.add('active');
@@ -794,6 +808,7 @@ async function retryMyRecarga(id) {
 }
 
 function offerRecarga(order) {
+  if (!rechargesEnabled) return;
   const modal = document.createElement('div');
   modal.className = 'modal fade';
   modal.innerHTML = `

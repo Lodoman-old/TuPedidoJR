@@ -47,7 +47,7 @@
 {% endblock %}
 {% block scripts %}
 <script>
-  let paymentConfig = { cash_enabled: true, mp_enabled: false, transfer_enabled: false };
+  let paymentConfig = { cash_enabled: true, mp_enabled: false, transfer_enabled: false, recharges_enabled: false };
   let appliedCoupon = null;
   let bankDetails = null;
   let estimateState = { requires_courier_approval: false, approval_km: 8, approval_timeout_min: 30, distance_km: null };
@@ -337,7 +337,7 @@ let scheduleState = { enabled: false, value: '' };
       <div class="form-text">La propina es 100 % para el repartidor.</div>
     </div>`;
 
-    if (restaurantInfo?.delivery_mode === 'platform') {
+    if (restaurantInfo?.delivery_mode === 'platform' && paymentConfig.recharges_enabled) {
     html += `<div class="card p-3 mb-3" id="rechargeCard">
       <div class="form-check form-switch">
         <input class="form-check-input" type="checkbox" role="switch" id="rechargeToggle" ${rechargeState.enabled ? 'checked' : ''}>
@@ -948,7 +948,7 @@ let scheduleState = { enabled: false, value: '' };
       return;
     }
     hint.innerHTML = selectedPaymentMethod() === 'cash'
-      ? 'En efectivo se agregan <strong>$2</strong> de comisión para la plataforma.'
+      ? 'En efectivo se agregan <strong>$2</strong> de comisión.'
       : 'Con transferencia no se cobra comisión de $2.';
   }
 

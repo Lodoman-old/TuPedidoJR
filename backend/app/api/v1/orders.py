@@ -361,7 +361,7 @@ async def estimate_price(
             max(Decimal(body.recharge_amount or 0), Decimal("0")),
             recarga_service.MAX_RECHARGE,
         )
-    )
+    ) if await recarga_service.recharges_enabled(db) else Decimal("0.00")
     recharge_fee = recarga_service.checkout_fee(body.payment_method, recharge_amount)
     recharge_total = round_half_down(recharge_amount + recharge_fee)
     total_to_pay = round_half_down(total + recharge_total)
@@ -439,6 +439,11 @@ async def create_order(
         raise HTTPException(status_code=409, detail="El restaurante todavía no está activo")
 
     _validate_checkout_recharge(body)
+    if (body.recharge_amount or 0) > 0 and not await recarga_service.recharges_enabled(db):
+        raise HTTPException(
+            status_code=400,
+            detail="Las recargas de tiempo aire no están disponibles por ahora.",
+        )
 
     if not current_user.is_superuser:
         email_block = await _email_verification_block(db, current_user)

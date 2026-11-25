@@ -37,12 +37,21 @@
 {% endblock %}
 {% block content %}
 <div class="recharge-hero p-4 mb-3">
+  {% if recharges_enabled %}
   <span class="badge bg-warning text-dark mb-2"><i class="bi bi-phone"></i> Con tu pedido</span>
   <h4 class="mb-1"><i class="bi bi-phone"></i> Recargas de tiempo aire</h4>
   <p class="mb-0 opacity-75">
     Ya puedes agregar una recarga al hacer tu pedido y pagarla junto con él.
     La solicitud directa desde el portal estará disponible próximamente.
   </p>
+  {% else %}
+  <span class="badge bg-warning text-dark mb-2"><i class="bi bi-clock"></i> Próximamente</span>
+  <h4 class="mb-1"><i class="bi bi-phone"></i> Recargas de tiempo aire</h4>
+  <p class="mb-0 opacity-75">
+    Estamos preparando la conexión con el proveedor automático. Por ahora no verás
+    la opción en el carrito ni en el panel del repartidor, y no hay solicitudes manuales.
+  </p>
+  {% endif %}
 </div>
 
 <div class="row g-3">
@@ -52,7 +61,7 @@
       <div class="d-flex gap-3 mb-3">
         <span class="recharge-step">1</span>
         <div>
-          <div class="fw-semibold">La agregas al hacer tu pedido</div>
+          <div class="fw-semibold">{% if recharges_enabled %}La agregas al hacer tu pedido{% else %}La podrás agregar al hacer tu pedido{% endif %}</div>
           <div class="small text-muted">Antes de confirmar, activa “Agregar recarga de tiempo aire” y elige compañía, número y monto.</div>
         </div>
       </div>
@@ -100,10 +109,9 @@
       <div>
         <div class="fw-semibold small"><i class="bi bi-cash-coin"></i> Efectivo al recibir un pedido</div>
         <div class="small text-muted">
-          Siempre se cobra el monto <strong>+ $2</strong>, pero el destino cambia:
-          si tú agregas la recarga al hacer el pedido, los $2 son para la
-          <strong>plataforma</strong>; si no la agregaste y el repartidor te la
-          ofrece al entregar, los $2 son para el <strong>repartidor</strong>.
+          Siempre se cobra el monto <strong>+ $2</strong>. Si no la agregaste al
+          pedido y el repartidor te la ofrece al entregar, esos $2 son para el
+          <strong>repartidor</strong>.
         </div>
       </div>
     </div>
@@ -113,9 +121,15 @@
 <div class="alert alert-light border mt-3 d-flex gap-2 align-items-start">
   <i class="bi bi-info-circle text-primary fs-5"></i>
   <div class="small">
+    {% if recharges_enabled %}
     <strong>Recarga directa desde el portal: Próximamente.</strong><br>
     Por ahora solo puedes agregarla al hacer un pedido o aceptarla cuando el repartidor
     te la ofrezca al entregar.
+    {% else %}
+    <strong>Próximamente.</strong><br>
+    La opción aparecerá en el carrito cuando el proveedor automático esté conectado.
+    No habrá solicitudes manuales.
+    {% endif %}
   </div>
 </div>
 

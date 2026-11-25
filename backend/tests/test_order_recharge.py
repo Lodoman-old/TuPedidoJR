@@ -55,6 +55,7 @@ async def _seed(client: AsyncClient, db_session):
     )
     db_session.add(restaurant)
     db_session.add(item)
+    await set_setting(db_session, "RECHARGES_ENABLED", "true")
     await db_session.commit()
     return customer, restaurant, item
 
@@ -169,6 +170,31 @@ async def test_transfer_order_creates_pending_recharge(client, db_session):
     recarga = await db_session.scalar(select_recarga(data["id"]))
     assert recarga.payment_method == "transfer"
     assert recarga.payment_status == "pending"
+
+
+async def test_recharges_can_be_hidden_with_setting(client, db_session):
+    customer, restaurant, item = await _seed(client, db_session)
+    await set_setting(db_session, "RECHARGES_ENABLED", "false")
+    await db_session.commit()
+
+    estimate = await client.post(
+        "/api/v1/orders/estimate-price",
+        json=_payload(restaurant, item),
+        headers=_headers(customer),
+    )
+    assert estimate.status_code == 200, estimate.text
+    assert Decimal(estimate.json()["recharge_amount"]) == Decimal("0.00")
+    assert Decimal(estimate.json()["total_to_pay"]) == Decimal(estimate.json()["total"])
+
+    blocked = await client.post(
+        "/api/v1/orders", json=_payload(restaurant, item), headers=_headers(customer)
+    )
+    assert blocked.status_code == 400
+    assert "no están disponibles" in blocked.json()["detail"].lower()
+
+    config = await client.get("/api/v1/payments/config")
+    assert config.status_code == 200
+    assert config.json()["recharges_enabled"] is False
 
 
 async def test_pickup_and_small_recharge_are_rejected(client, db_session):

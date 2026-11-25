@@ -450,6 +450,11 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Si se activa, el cliente debe confirmar su correo desde el primer pedido. Si se desactiva, se aplica el margen de pedidos de cortesía.",
         "type": "bool", "default": "false",
     },
+    "RECHARGES_ENABLED": {
+        "group": "Recargas", "label": "Mostrar recargas de tiempo aire",
+        "description": "Actívalo solo cuando el proveedor automático esté conectado. Si está apagado, no se ofrece la recarga en el carrito ni al repartidor.",
+        "type": "bool", "default": "false",
+    },
     "EMAIL_VERIFICATION_GRACE_ORDERS": {
         "group": "Clientes", "label": "Pedidos de cortesía sin correo",
         "description": "Cuántos pedidos puede hacer un cliente nuevo sin confirmar su correo. Al llegar al límite, se le pide confirmarlo para seguir pidiendo.",

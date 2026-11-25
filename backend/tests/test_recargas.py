@@ -12,6 +12,7 @@ from app.models.order import Order
 from app.models.restaurant import Restaurant
 from app.models.user import User
 from app.services import recarga_service
+from app.services.setting_service import set_setting
 
 
 def _headers(token: str) -> dict:
@@ -64,6 +65,8 @@ async def test_courier_payout_detail_works(
 async def test_standalone_cash_recarga_requires_order(
     client: AsyncClient, db_session, courier_account
 ):
+    await set_setting(db_session, "RECHARGES_ENABLED", "true")
+    await db_session.commit()
     resp = await client.post(
         "/api/v1/recargas",
         json={"company": "Telcel", "phone": "4121234567", "amount": 50, "payment_method": "cash"},
@@ -79,8 +82,10 @@ async def test_standalone_cash_recarga_requires_order(
 
 
 async def test_portal_transfer_recarga_still_paused(
-    client: AsyncClient, courier_account
+    client: AsyncClient, courier_account, db_session
 ):
+    await set_setting(db_session, "RECHARGES_ENABLED", "true")
+    await db_session.commit()
     resp = await client.post(
         "/api/v1/recargas",
         json={
@@ -98,6 +103,8 @@ async def test_portal_transfer_recarga_still_paused(
 async def test_courier_can_offer_recarga_on_delivered_order(
     client: AsyncClient, db_session, courier_account
 ):
+    await set_setting(db_session, "RECHARGES_ENABLED", "true")
+    await db_session.commit()
     dp = await _courier(db_session, courier_account)
     customer = User(
         name="Cliente Recarga",

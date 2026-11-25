@@ -386,8 +386,13 @@ async def web_mandado_detail(request: Request, mandado_id: str):
 
 
 @router.get("/recargas")
-async def web_recharges(request: Request):
-    return templates.TemplateResponse(request, "recargas.html")
+async def web_recharges(request: Request, db: AsyncSession = Depends(get_db)):
+    enabled = (
+        await get_setting_value(db, "RECHARGES_ENABLED", "false")
+    ).strip().lower() == "true"
+    return templates.TemplateResponse(
+        request, "recargas.html", {"recharges_enabled": enabled}
+    )
 
 
 @router.get("/app")

@@ -79,8 +79,12 @@ async def _payment_flags(db: AsyncSession) -> dict:
         )
     )
     loyalty = await loyalty_config(db)
+    recharges_enabled = (
+        await get_setting(db, "RECHARGES_ENABLED", "false")
+    ).lower() == "true"
     return {
         "cash_enabled": True,
+        "recharges_enabled": recharges_enabled,
         "mp_enabled": mp_enabled,
         "transfer_enabled": transfer_enabled,
         "cep_enabled": cep_enabled,

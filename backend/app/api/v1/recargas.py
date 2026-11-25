@@ -45,6 +45,11 @@ async def create_recarga(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if not await recarga_service.recharges_enabled(db):
+        raise HTTPException(
+            status_code=503,
+            detail="Las recargas de tiempo aire no están disponibles por ahora.",
+        )
     if body.payment_method != "cash":
         raise HTTPException(
             status_code=503,

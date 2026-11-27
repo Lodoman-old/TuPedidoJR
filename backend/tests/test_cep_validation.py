@@ -462,11 +462,15 @@ def _fake_gemini(total, confidence=97):
         record.extracted = {
             "total": total,
             "recipient": "012180004643051249",
+            "operation_status": "completed",
+            "visual_integrity": "ok",
             "_checks": {
                 "amount_ok": True,
                 "date_ok": True,
                 "recipient_ok": True,
                 "fields_ok": True,
+                "operation_ok": True,
+                "visual_ok": True,
             },
         }
         return record
@@ -1064,11 +1068,15 @@ async def _fake_transfer_gemini(account: str):
             "recipient": "OSCAR LOPEZ DAMIAN",
             "account": account,
             "merchant": "Banamex",
+            "operation_status": "completed",
+            "visual_integrity": "ok",
             "_checks": {
                 "amount_ok": True,
                 "date_ok": True,
                 "recipient_ok": True,
                 "fields_ok": True,
+                "operation_ok": True,
+                "visual_ok": True,
             },
         }
         return record
@@ -1279,6 +1287,8 @@ async def test_gemini_does_not_escalate_when_reading_is_good(
             "time": datetime.now(timezone.utc).strftime("%H:%M"),
             "recipient": "OSCAR LOPEZ DAMIAN",
             "account": "**709",
+            "operation_status": "completed",
+            "visual_integrity": "ok",
             "confidence": 97,
             "issues": [
                 "La hora del comprobante (10:22) difiere por un minuto "
@@ -1294,3 +1304,109 @@ async def test_gemini_does_not_escalate_when_reading_is_good(
     assert result.model == "gemini-3.5-flash-lite"
     assert not result.extracted.get("_escalated")
     assert not any("minuto" in issue for issue in (result.issues or []))
+
+
+def test_recipient_ok_requires_four_digits_or_holder():
+    accounts = BOTH_RECIPIENTS
+    assert rvs._recipient_ok(accounts, {"account": "****1709"}) is True
+    assert rvs._recipient_ok(accounts, {"account": "****9070"}) is True
+    assert rvs._recipient_ok(accounts, {"account": "**709"}) is False
+    assert rvs._recipient_ok(
+        accounts, {"account": "**709", "recipient": "OSCAR LOPEZ DAMIAN"}
+    ) is True
+    assert rvs._recipient_ok(
+        accounts, {"account": "**709", "recipient": "OSCAR LOPEZ D."}
+    ) is True
+
+
+async def test_pending_operation_forces_review(db_session, monkeypatch, tmp_path):
+    await _gemini_settings(db_session)
+    record, path = await _gemini_record(db_session, tmp_path)
+    now = datetime.now(timezone.utc)
+
+    async def fake_call(api_key, model, mime, content, prompt):
+        return {
+            "document_type": "transfer_receipt",
+            "total": 100,
+            "date": now.strftime("%Y-%m-%d"),
+            "time": now.strftime("%H:%M"),
+            "recipient": "OSCAR LOPEZ DAMIAN",
+            "account": "****1709",
+            "operation_status": "pending",
+            "status_text": "Operación programada",
+            "visual_integrity": "ok",
+            "confidence": 98,
+        }
+
+    monkeypatch.setattr(rvs, "_file_path", lambda url: path)
+    monkeypatch.setattr(rvs, "_call_gemini", fake_call)
+    result = await rvs._validate_with_gemini(db_session, record)
+
+    assert result.status == "review"
+    assert result.extracted["_checks"]["operation_ok"] is False
+    assert any("no está liquidada" in issue for issue in result.issues)
+
+
+async def test_suspicious_integrity_forces_review(db_session, monkeypatch, tmp_path):
+    await _gemini_settings(db_session)
+    record, path = await _gemini_record(db_session, tmp_path)
+    now = datetime.now(timezone.utc)
+
+    async def fake_call(api_key, model, mime, content, prompt):
+        return {
+            "document_type": "transfer_receipt",
+            "total": 100,
+            "date": now.strftime("%Y-%m-%d"),
+            "time": now.strftime("%H:%M"),
+            "recipient": "OSCAR LOPEZ DAMIAN",
+            "account": "****1709",
+            "operation_status": "completed",
+            "visual_integrity": "suspicious",
+            "integrity_notes": "Fuente distinta en el monto.",
+            "confidence": 98,
+        }
+
+    monkeypatch.setattr(rvs, "_file_path", lambda url: path)
+    monkeypatch.setattr(rvs, "_call_gemini", fake_call)
+    result = await rvs._validate_with_gemini(db_session, record)
+
+    assert result.status == "review"
+    assert result.extracted["_checks"]["visual_ok"] is False
+    assert any("señales de edición" in issue for issue in result.issues)
+
+
+async def test_unknown_operation_blocks_preapproval(db_session, monkeypatch):
+    await _fallback_settings(db_session)
+    record = await _receipt_record(db_session)
+    record.expected_date = datetime.now(timezone.utc)
+    record.expected_recipient = "012180004643051249"
+    await db_session.commit()
+
+    async def fake_gemini(db, rec):
+        rec.provider = "gemini"
+        rec.document_type = rvs.TRANSFER
+        rec.confidence = 97
+        rec.status = "high"
+        rec.issues = []
+        rec.extracted = {
+            "total": 100.0,
+            "recipient": "012180004643051249",
+            "operation_status": "unknown",
+            "visual_integrity": "ok",
+            "_checks": {
+                "amount_ok": True,
+                "date_ok": True,
+                "recipient_ok": True,
+                "fields_ok": True,
+                "operation_ok": None,
+                "visual_ok": True,
+            },
+        }
+        return rec
+
+    monkeypatch.setattr(rvs, "banxico_open", lambda: False)
+    monkeypatch.setattr(rvs, "_validate_with_gemini", fake_gemini)
+    result = await rvs.revalidate_receipt(db_session, record)
+
+    assert result.status == "review"
+    assert not result.extracted.get("_preapproved")

@@ -198,10 +198,21 @@ Fecha esperada (hora de México, UTC-6): {date_label}.
 Destinatario/CLABE esperada: {recipient_label}.
 Referencia o descripción: {context_label}.
 
-Las fechas y horas del comprobante están en hora de México (UTC-6). No reportes
-diferencias de horario por la zona horaria; solo si la fecha u hora es distinta
-en esa misma zona. Ignora diferencias de hasta 5 minutos: no las incluyas en
-"issues" ni afectan tu confianza.
+Reglas:
+1. Las fechas están en hora de México (UTC-6). Ignora diferencias de hasta
+   5 minutos; no las incluyas en "issues" ni bajes la confianza por ello.
+2. Muchos bancos ocultan parte de la CLABE (ej. ****9070 o ****1709).
+   Considera válido el destinatario si coinciden los últimos 4 dígitos o el
+   nombre del titular, incluso con acentos, mayúsculas o abreviaturas.
+3. Revisa si la operación aparece como exitosa, liquidada o enviada. Si dice
+   programada, pendiente, en proceso o rechazada, regístralo en
+   "operation_status" y en "issues". En un ticket de compra usa "completed"
+   si el ticket no está cancelado y "unknown" si no aplica.
+4. Revisa señales visibles de edición digital: fuentes desalineadas, colores
+   distintos o parches alrededor del monto, fecha o cuenta. No acuses fraude:
+   solo describe lo que ves en "visual_integrity" e "integrity_notes".
+5. No inventes datos. Si un campo no es visible o legible, usa null.
+   No apruebes ni rechaces el pago: solo extrae lo que ves y tu certeza.
 
 Devuelve SOLO un JSON válido, sin markdown, con esta forma:
 {{
@@ -215,6 +226,10 @@ Devuelve SOLO un JSON válido, sin markdown, con esta forma:
   "reference": "",
   "recipient": "",
   "account": "",
+  "operation_status": "completed" | "pending" | "scheduled" | "rejected" | "unknown",
+  "status_text": "",
+  "visual_integrity": "ok" | "suspicious" | "unknown",
+  "integrity_notes": "",
   "confidence": 0,
   "issues": [],
   "summary": ""
@@ -291,21 +306,29 @@ def _recipient_ok(expected: str | None, extracted: dict) -> bool | None:
     if not actual_norm:
         return False
     actual_digits = re.sub(r"\D", "", actual_text)
+    account_text = str(extracted.get("account") or "")
 
-    expected_clabes = re.findall(r"\d{10,}", expected)
-    for digits in expected_clabes:
-        if digits in actual_digits:
-            return True
+    # Cada cuenta configurada se evalúa por separado para no mezclar titulares.
+    for chunk in re.split(r"\s+o\s+", expected, flags=re.IGNORECASE):
+        expected_clabes = re.findall(r"\d{10,}", chunk)
+        for digits in expected_clabes:
+            if digits in actual_digits:
+                return True
 
-    # Los comprobantes suelen mostrar la cuenta enmascarada ("**709").
-    # Se compara el sufijo visible contra cada CLABE configurada.
-    masked = re.findall(r"\d{3,6}", str(extracted.get("account") or ""))
-    for suffix in masked:
-        if any(digits.endswith(suffix) for digits in expected_clabes):
-            return True
+        # Los comprobantes suelen mostrar la cuenta enmascarada ("****1709").
+        # Se compara el sufijo visible (mínimo 4 dígitos) contra cada CLABE.
+        for suffix in re.findall(r"\d{4,6}", account_text):
+            if any(digits.endswith(suffix) for digits in expected_clabes):
+                return True
 
-    for token in re.split(r"[^a-z0-9]+", expected.lower()):
-        if len(token) >= 5 and not token.isdigit() and token in actual_norm:
+        name_tokens = {
+            token
+            for token in re.split(r"[^a-z0-9]+", chunk.lower())
+            if len(token) >= 5 and not token.isdigit()
+        }
+        matched = [token for token in name_tokens if token in actual_norm]
+        required = min(2, len(name_tokens))
+        if name_tokens and len(matched) >= required:
             return True
     return False
 
@@ -617,6 +640,8 @@ def _needs_escalation(data, min_confidence: int, expected_kind: str) -> bool:
         data.get("recipient") or data.get("account")
     ):
         return True
+    if not data.get("operation_status") or not data.get("visual_integrity"):
+        return True
     return False
 
 
@@ -820,6 +845,50 @@ async def _validate_with_gemini(db: AsyncSession, record: ReceiptValidation) -> 
             if item and not _small_time_issue(item)
         )
 
+    operation_status = (
+        str(extracted.get("operation_status") or "unknown").strip().lower()
+    )
+    if operation_status not in (
+        "completed", "pending", "scheduled", "rejected", "unknown"
+    ):
+        operation_status = "unknown"
+    visual_integrity = (
+        str(extracted.get("visual_integrity") or "unknown").strip().lower()
+    )
+    if visual_integrity not in ("ok", "suspicious", "unknown"):
+        visual_integrity = "unknown"
+    operation_ok = (
+        True
+        if operation_status == "completed"
+        else (
+            False
+            if operation_status in ("pending", "scheduled", "rejected")
+            else None
+        )
+    )
+    visual_ok = (
+        True
+        if visual_integrity == "ok"
+        else (False if visual_integrity == "suspicious" else None)
+    )
+    if record.expected_kind == TRANSFER and operation_ok is False:
+        status_text = str(extracted.get("status_text") or "").strip()
+        issues.append(
+            "El comprobante indica que la operación no está liquidada"
+            + (f": {status_text}." if status_text else ".")
+        )
+    if visual_ok is False:
+        note = str(extracted.get("integrity_notes") or "").strip()
+        issues.append(
+            "El comprobante muestra posibles señales de edición; "
+            "requiere revisión manual."
+            + (f" {note}" if note else "")
+        )
+    if operation_ok is False or visual_ok is False:
+        confidence = min(confidence, 60)
+        if status == "high":
+            status = "review"
+
     record.document_type = document_type
     record.confidence = confidence
     record.status = status
@@ -828,6 +897,10 @@ async def _validate_with_gemini(db: AsyncSession, record: ReceiptValidation) -> 
         "date_ok": date_ok,
         "recipient_ok": recipient_ok,
         "fields_ok": fields_ok,
+        "operation_ok": operation_ok,
+        "visual_ok": visual_ok,
+        "operation_status": operation_status,
+        "visual_integrity": visual_integrity,
     }
     record.extracted = extracted
     record.issues = issues
@@ -986,6 +1059,8 @@ async def _fallback_with_gemini(
         and checks.get("recipient_ok") is True
         and checks.get("date_ok") in (True, None)
         and checks.get("fields_ok") is True
+        and checks.get("operation_ok") is True
+        and checks.get("visual_ok") is not False
         and not gemini.issues
     )
 

@@ -89,14 +89,54 @@
 <div class="note">Cuando un negocio o repartidor solicita pago o entrega de efectivo, recibes una notificación push, un número en <strong>Pagos y cobros</strong> y un aviso dentro del panel.</div>
 
 <h3>4.1 Recargas</h3>
-<p>Las recargas se crean al agregarlas a un pedido o cuando el repartidor las ofrece al entregar. La solicitud directa desde el portal sigue en pausa.</p>
+<p>Las recargas se manejan con el proveedor automático <strong>Sivetel</strong>. El cliente elige un producto exacto del catálogo: saldo, paquetes de datos, internet por tiempo o paquetes de varios meses. No se captura un monto libre.</p>
+<table>
+  <tr><th>Origen de la recarga</th><th>Pago</th><th>Comisión de $2</th></tr>
+  <tr><td>Portal de recargas del cliente</td><td>Transferencia SPEI validada con Banxico</td><td>Sin comisión</td></tr>
+  <tr><td>Agregada al pedido</td><td>Transferencia</td><td>Sin comisión</td></tr>
+  <tr><td>Agregada al pedido</td><td>Efectivo al recibir</td><td>Para la plataforma</td></tr>
+  <tr><td>Vendida directamente por el repartidor</td><td>Efectivo</td><td>Para el repartidor</td></tr>
+</table>
+<p>El cliente puede comprar desde <strong>/web/recargas</strong> con transferencia. Sube su comprobante o captura la clave de rastreo; la plataforma valida con Banxico y, al confirmarse, envía la recarga a Sivetel automáticamente.</p>
+<p>En el carrito, el cliente elige compañía, tipo y producto. El servidor valida el código y el monto contra el catálogo de Sivetel para evitar cambios de precio desde el navegador.</p>
+<p>El repartidor también puede vender una recarga en efectivo al entregar un pedido o directamente a quien la necesite. Cobra el monto del producto más $2 de comisión. El monto de la recarga queda como deuda con la plataforma y los $2 como crédito del repartidor.</p>
+<h4>Panel de recargas</h4>
 <ul>
-  <li><strong>Transferencia</strong> (junto con el pedido): sin comisión de $2. Se valida con Banxico y la recarga se aplica automáticamente.</li>
-  <li><strong>Efectivo agregado al pedido:</strong> monto + $2. Esos $2 son ingreso de la plataforma y el monto se liquida con el repartidor al entregar.</li>
-  <li><strong>Efectivo ofrecido por el repartidor:</strong> monto + $2. Esos $2 son crédito del repartidor.</li>
-  <li><strong>Procesamiento:</strong> mientras no esté conectado el proveedor, las recargas quedan pendientes en este panel para completarlas o reembolsarlas.</li>
+  <li><strong>Por pagar:</strong> recargas del portal que aún no tienen transferencia validada.</li>
+  <li><strong>Pendientes de procesar:</strong> ya pagadas, esperando respuesta de Sivetel.</li>
+  <li><strong>Completadas:</strong> Sivetel confirmó el folio.</li>
+  <li><strong>Fallidas o reembolsadas:</strong> revisa el motivo y el estado del reembolso.</li>
+  <li><strong>Comisión:</strong> indica si los $2 son de la plataforma o del repartidor.</li>
 </ul>
-<div class="note">El efectivo se cobra al recibir un pedido o cuando el repartidor vende una recarga directamente. En ambos casos el monto queda como deuda del repartidor y los $2 son su comisión.</div>
+<p>Si Sivetel responde con un error temporal, la recarga se reintenta automáticamente. Si el error es definitivo, se marca como fallida y puedes reembolsarla desde el mismo panel.</p>
+<div class="note">
+  Las credenciales de Sivetel se cargan en <strong>Configuración → Recargas</strong>: cuenta, usuario, contraseña, URL de la API y tiempo máximo. La contraseña se guarda enmascarada y no aparece en auditoría. Activa <strong>Mostrar recargas de tiempo aire</strong> y <strong>Procesar recargas con Sivetel</strong> cuando las credenciales estén cargadas.
+</div>
+
+<h3>4.2 Operación sin repartidores, cierre y programados</h3>
+<p>En <strong>Operación en vivo</strong> aparece la tarjeta <strong>Pedidos sin repartidor</strong>. Ahí se concentran los pedidos que necesitan atención.</p>
+<table>
+  <tr><th>Situación</th><th>Qué hace el sistema</th><th>Qué haces tú</th></tr>
+  <tr><td>No hay repartidores al crear el pedido</td><td>El cliente ve el aviso y elige esperar 30 minutos o recoger en el negocio. Si espera, el pedido no se prepara hasta que un repartidor lo acepte.</td><td>Asignar un repartidor o tomar el pedido.</td></tr>
+  <tr><td>Pedido listo sin repartidor por 15 minutos</td><td>Se envía aviso push y correo al administrador.</td><td>Contactar repartidores, asignar, tomar o cambiar a recoger.</td></tr>
+  <tr><td>Cliente esperó 30 minutos sin repartidor</td><td>Se le avisa para que elija recoger o cancelar. Si no decide, se cancela.</td><td>Revisar la cancelación y el reembolso.</td></tr>
+  <tr><td>Pedido a 30 minutos del cierre</td><td>Se manda al negocio para que confirme si aún lo acepta. Si no responde en 10 minutos, se cancela y se avisa al cliente.</td><td>Dar seguimiento al negocio y al reembolso.</td></tr>
+  <tr><td>Pedido programado</td><td>Aparece arriba y con color, se recuerda al negocio 1 hora antes y se valida contra su horario.</td><td>Revisar programados fuera de horario y preparación anticipada.</td></tr>
+</table>
+<p>Acciones disponibles en la tarjeta <strong>Pedidos sin repartidor</strong>:</p>
+<ul>
+  <li><strong>Asignar:</strong> elige un repartidor disponible y se le envía el pedido.</li>
+  <li><strong>Tomar:</strong> el administrador se hace cargo de la entrega. No se paga comisión a ningún repartidor y el envío queda como ingreso de la plataforma.</li>
+  <li><strong>Recogí:</strong> marca que el administrador ya recogió el pedido.</li>
+  <li><strong>Entregué:</strong> cierra el pedido como entregado. Si es efectivo, queda cobrado.</li>
+  <li><strong>Pasar a recoger:</strong> cambia el pedido a recoger en el negocio. Si ya estaba pagado por transferencia, el envío se reembolsa el siguiente día hábil.</li>
+  <li><strong>Cancelar:</strong> aplica la política de cancelación y reembolso.</li>
+</ul>
+<p>En los pedidos programados, si el negocio intenta preparar un producto perecedero con mucha anticipación, el sistema le muestra una advertencia y le pide aceptar o esperar. Si acepta, se prepara y se avisa al cliente. En productos no perecederos no se muestra la advertencia.</p>
+<p>Si un negocio con reparto propio se queda sin repartidores, puede solicitar <strong>apoyo de TuPedidoJR</strong>. El pedido entra a la cola normal y la tarifa de apoyo se descuenta del siguiente corte del negocio. Si no hay repartidor en 15 minutos, se avisa al negocio.</p>
+<div class="note">
+  Estas funciones se controlan en <strong>Configuración → Envíos</strong>: activar operación sin repartidores, espera del cliente, aviso al admin, cierre del negocio, recordatorio de programados y apoyo de reparto.
+</div>
 
 <h3>5. Validación de comprobantes</h3>
 <figure class="shot">
@@ -127,6 +167,8 @@
 <table>
   <tr><th>Grupo</th><th>Qué puedes ajustar</th></tr>
   <tr><td>Comisiones y envíos</td><td>Comisión, cuotas, tarifa base, radio y costo por km.</td></tr>
+  <tr><td>Envíos y reparto</td><td>Operación sin repartidores, espera del cliente, aviso al admin, cierre del negocio, pedidos programados y apoyo de reparto.</td></tr>
+  <tr><td>Recargas</td><td>Mostrar recargas, procesar con Sivetel, cuenta, usuario, contraseña, URL y tiempo máximo.</td></tr>
   <tr><td>Repartidores</td><td>Servicios activos (5), aviso (4), bonos y hora pico.</td></tr>
   <tr><td>Incidencias</td><td>Minutos de reentrega de comida, horas de resguardo, costo de reentrega, tope de autorización y oficina.</td></tr>
   <tr><td>Clientes</td><td>Abonos máximos y abono mínimo.</td></tr>

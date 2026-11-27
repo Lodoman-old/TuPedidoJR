@@ -280,3 +280,28 @@ async def test_recently_recharged_error_is_retried(db_session, monkeypatch):
     assert recarga.status == "pending"
     assert recarga.provider_attempts == 1
     assert "5 minutos" in (recarga.error_message or "")
+
+
+async def test_provider_status_detects_balance_or_intermittency():
+    class FakeClient:
+        def __init__(self, value):
+            self.value = value
+
+        async def consultar_saldos(self):
+            return {"tiempoaire": self.value}
+
+    ok = await sivetel_service.provider_status(FakeClient("10.00"))
+    assert ok["available"] is True
+    assert ok["message"] == ""
+
+    empty = await sivetel_service.provider_status(FakeClient("0.00"))
+    assert empty["available"] is False
+    assert "intermitencia" in empty["message"].lower()
+
+    class FailingClient:
+        async def consultar_saldos(self):
+            raise sivetel_service.SivetelError(8090, "Saldo Insuficiente.")
+
+    failed = await sivetel_service.provider_status(FailingClient())
+    assert failed["available"] is False
+    assert "intermitencia" in failed["message"].lower()

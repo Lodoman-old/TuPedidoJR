@@ -24,6 +24,10 @@ from app.services.order_service import get_setting_value
 logger = logging.getLogger(__name__)
 
 PRODUCT_CACHE_SECONDS = 3600
+PROVIDER_UNAVAILABLE_MESSAGE = (
+    "El servicio de recargas no está disponible por una intermitencia. "
+    "Intenta más tarde."
+)
 
 
 class SivetelError(Exception):
@@ -350,6 +354,28 @@ async def obtener_catalogo(
     products = await client.obtener_productos()
     _PRODUCTS_CACHE = (now, products)
     return products
+
+
+async def provider_status(client: SivetelClient) -> dict:
+    """Indica si Sivetel tiene saldo para tiempo aire.
+
+    No expone el saldo exacto al cliente. Si la consulta falla, se trata como
+    intermitencia para no crear recargas que no se puedan procesar.
+    """
+    try:
+        saldos = await client.consultar_saldos()
+        raw = saldos.get("tiempoaire") if isinstance(saldos, dict) else None
+        balance = Decimal(str(raw if raw is not None else "0"))
+    except (SivetelError, InvalidOperation, TypeError, ValueError):
+        return {
+            "available": False,
+            "message": PROVIDER_UNAVAILABLE_MESSAGE,
+        }
+    available = balance > 0
+    return {
+        "available": available,
+        "message": "" if available else PROVIDER_UNAVAILABLE_MESSAGE,
+    }
 
 
 async def resolver_producto(

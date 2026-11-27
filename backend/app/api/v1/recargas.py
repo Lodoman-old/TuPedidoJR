@@ -94,7 +94,9 @@ async def catalogo(
             status_code=502,
             detail=f"No se pudo consultar el catálogo: {exc.message}",
         ) from exc
-    return sivetel_service.catalog_payload(products)
+    payload = sivetel_service.catalog_payload(products)
+    payload["provider"] = await sivetel_service.provider_status(client)
+    return payload
 
 
 async def _resolve_catalog_product(db: AsyncSession, code: str | None) -> dict:
@@ -118,6 +120,9 @@ async def _resolve_catalog_product(db: AsyncSession, code: str | None) -> dict:
             status_code=502,
             detail=f"No se pudo consultar el catálogo: {exc.message}",
         ) from exc
+    status = await sivetel_service.provider_status(client)
+    if not status["available"]:
+        raise HTTPException(status_code=503, detail=status["message"])
     product = sivetel_service.find_product(products, code)
     if product is None:
         raise HTTPException(

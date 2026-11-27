@@ -398,6 +398,12 @@ async function createRecarga() {
   const phone = document.getElementById('rcPhone').value.trim();
   const msg = document.getElementById('rcCreateMsg');
   const btn = document.getElementById('rcCreateBtn');
+  if (rcCatalog?.provider?.available === false) {
+    msg.className = 'small text-warning mt-2';
+    msg.textContent = rcCatalog.provider.message
+      || 'El servicio de recargas no está disponible por una intermitencia. Intenta más tarde.';
+    return;
+  }
   if (!product) {
     msg.className = 'small text-danger mt-2';
     msg.textContent = 'Selecciona compañía, tipo y producto.';
@@ -613,6 +619,20 @@ async function loadRechargePage() {
     rcBanks = Array.isArray(banks) ? banks : [];
     loading.classList.add('d-none');
     content.classList.remove('d-none');
+
+    const provider = rcCatalog.provider || {};
+    if (provider.available === false) {
+      const error = document.getElementById('rcError');
+      error.className = 'alert alert-warning';
+      error.classList.remove('d-none');
+      error.textContent = provider.message
+        || 'El servicio de recargas no está disponible por una intermitencia. Intenta más tarde.';
+      const createBtn = document.getElementById('rcCreateBtn');
+      if (createBtn) {
+        createBtn.disabled = true;
+        createBtn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Recargas no disponibles';
+      }
+    }
 
     if (profile && profile.name) {
       document.getElementById('rcName').value = profile.name;

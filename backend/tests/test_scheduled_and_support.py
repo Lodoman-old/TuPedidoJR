@@ -125,10 +125,10 @@ async def test_scheduled_within_hours_no_approval(
 ):
     await _enable_scheduled(db_session)
     row, item = restaurant
-    _add_schedule(db_session, row, datetime.now(TZ).weekday(), time(0, 0), time(0, 0))
+    scheduled = datetime.now(TZ) + timedelta(hours=2)
+    _add_schedule(db_session, row, scheduled.weekday(), time(0, 0), time(0, 0))
     await db_session.commit()
 
-    scheduled = datetime.now(TZ) + timedelta(hours=2)
     resp = await client.post(
         "/api/v1/orders",
         json=_order_body(row, item, scheduled),
@@ -213,10 +213,10 @@ async def test_scheduled_reminder_is_sent(
 ):
     await _enable_scheduled(db_session)
     row, item = restaurant
-    _add_schedule(db_session, row, datetime.now(TZ).weekday(), time(0, 0), time(0, 0))
+    scheduled = datetime.now(TZ) + timedelta(minutes=30)
+    _add_schedule(db_session, row, scheduled.weekday(), time(0, 0), time(0, 0))
     await db_session.commit()
 
-    scheduled = datetime.now(TZ) + timedelta(minutes=30)
     created = await client.post(
         "/api/v1/orders",
         json=_order_body(row, item, scheduled),

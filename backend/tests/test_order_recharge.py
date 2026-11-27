@@ -4,6 +4,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
+import pytest
 from httpx import AsyncClient
 
 from app.core.security import decode_access_token
@@ -15,6 +16,25 @@ from app.models.restaurant import Restaurant
 from app.models.user import User
 from app.services import sivetel_service
 from app.services.setting_service import set_setting
+
+
+@pytest.fixture(autouse=True)
+def _fake_sivetel(monkeypatch):
+    """Las pruebas de pedidos no llaman a Sivetel real."""
+    async def fake_config(db):
+        return sivetel_service.SivetelConfig(
+            base_url="https://example.test/ApiWS",
+            account="demo",
+            user="demo",
+            password="demo",
+            timeout_seconds=10,
+        )
+
+    async def fake_status(client):
+        return {"available": True, "message": ""}
+
+    monkeypatch.setattr(sivetel_service, "load_config", fake_config)
+    monkeypatch.setattr(sivetel_service, "provider_status", fake_status)
 
 
 def _headers(token: str) -> dict:
@@ -413,3 +433,27 @@ async def test_transfer_cancelled_after_payment_refunds_only_order(
     recarga = await db_session.scalar(select_recarga(order["id"]))
     await db_session.refresh(recarga)
     assert recarga.payment_status == "paid"
+
+
+async def test_checkout_recharge_blocked_without_provider_balance(
+    client, db_session, monkeypatch
+):
+    customer, restaurant, item = await _seed(client, db_session)
+
+    async def fake_status(client):
+        return {
+            "available": False,
+            "message": (
+                "El servicio de recargas no está disponible por una "
+                "intermitencia. Intenta más tarde."
+            ),
+        }
+
+    monkeypatch.setattr(sivetel_service, "provider_status", fake_status)
+    resp = await client.post(
+        "/api/v1/orders",
+        json=_payload(restaurant, item),
+        headers=_headers(customer),
+    )
+    assert resp.status_code == 503, resp.text
+    assert "intermitencia" in resp.json()["detail"].lower()

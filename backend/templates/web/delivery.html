@@ -129,6 +129,7 @@ let myDeliveryOrdersCache = [];
 let serviceLimits = { active: 0, max: 5, warn: 4 };
 let rechargesEnabled = false;
 let courierCatalog = null;
+let courierProviderAvailable = true;
 
 function esc(v) {
   return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
@@ -144,8 +145,10 @@ async function loadRechargeConfig() {
   if (rechargesEnabled) {
     try {
       courierCatalog = await apiRequest('GET', '/recargas/catalogo');
+      courierProviderAvailable = courierCatalog?.provider?.available !== false;
     } catch (e) {
       courierCatalog = null;
+      courierProviderAvailable = false;
     }
   }
   document.getElementById('rechargesTabBtn')?.classList.toggle('d-none', !rechargesEnabled);
@@ -783,13 +786,18 @@ async function loadCourierRecargas() {
   el.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
   try {
     const rows = await apiRequest('GET', '/recargas/my');
+    const providerUnavailable = courierCatalog?.provider?.available === false;
+    const providerWarning = providerUnavailable
+      ? `<div class="alert alert-warning small"><i class="bi bi-exclamation-triangle"></i> ${esc(courierCatalog?.provider?.message || 'El servicio de recargas no está disponible por una intermitencia. Intenta más tarde.')}</div>`
+      : '';
     el.innerHTML = `
       <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
         <div class="small text-muted">Vende una recarga al entregar un pedido o directamente a quien la necesite.</div>
-        <button class="btn btn-sm btn-success" onclick="openCourierRecarga()">
+        <button class="btn btn-sm btn-success" onclick="openCourierRecarga()" ${providerUnavailable ? 'disabled' : ''}>
           <i class="bi bi-phone"></i> Recargar
         </button>
       </div>
+      ${providerWarning}
       <div class="alert alert-info small">
         <i class="bi bi-info-circle"></i> Puedes ofrecer recargas al entregar un pedido o venderlas
         directamente. Cobras el monto <strong>+ $2 de comisión para ti</strong> y el monto de la
@@ -886,6 +894,14 @@ function openCourierRecarga(order = null) {
   if (!rechargesEnabled) return;
   if (!courierCatalog) {
     showToast('No se pudo cargar el catálogo de recargas', 'danger');
+    return;
+  }
+  if (!courierProviderAvailable) {
+    showToast(
+      courierCatalog?.provider?.message
+        || 'El servicio de recargas no está disponible por una intermitencia. Intenta más tarde.',
+      'warning'
+    );
     return;
   }
   const modal = document.createElement('div');

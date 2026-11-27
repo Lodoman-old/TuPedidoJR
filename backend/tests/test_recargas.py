@@ -16,6 +16,14 @@ from app.services import recarga_service, sivetel_service
 from app.services.setting_service import set_setting
 
 
+@pytest.fixture(autouse=True)
+def _fake_provider_status(monkeypatch):
+    async def fake_status(client):
+        return {"available": True, "message": ""}
+
+    monkeypatch.setattr(sivetel_service, "provider_status", fake_status)
+
+
 def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
@@ -434,3 +442,71 @@ async def test_refund_reverses_debt_and_commission(
     await db_session.refresh(dp)
     assert Decimal(str(dp.pending_platform_debt)) == Decimal("0.00")
     assert Decimal(str(dp.pending_platform_credit)) == Decimal("0.00")
+
+
+async def test_catalog_shows_intermittency_and_blocks_recarga(
+    client: AsyncClient, db_session, monkeypatch
+):
+    await set_setting(db_session, "RECHARGES_ENABLED", "true")
+    await db_session.commit()
+    resp = await client.post("/api/v1/auth/register", json={
+        "name": "Cliente Intermitencia",
+        "email": "cliente-intermitencia@test.com",
+        "password": "pass1234",
+    })
+    token = resp.json()["access_token"]
+
+    async def fake_config(db):
+        return sivetel_service.SivetelConfig(
+            base_url="https://example.test/ApiWS",
+            account="demo",
+            user="demo",
+            password="demo",
+            timeout_seconds=10,
+        )
+
+    async def fake_catalog(client):
+        return [
+            {
+                "nombre": "Bait",
+                "codigo": "BAIT099",
+                "descripcion": "Bait Internet en Casa $99.00",
+                "monto": "99.00",
+            }
+        ]
+
+    async def fake_status(client):
+        return {
+            "available": False,
+            "message": (
+                "El servicio de recargas no está disponible por una "
+                "intermitencia. Intenta más tarde."
+            ),
+        }
+
+    monkeypatch.setattr(sivetel_service, "load_config", fake_config)
+    monkeypatch.setattr(sivetel_service, "obtener_catalogo", fake_catalog)
+    monkeypatch.setattr(sivetel_service, "provider_status", fake_status)
+
+    catalog = await client.get(
+        "/api/v1/recargas/catalogo", headers=_headers(token)
+    )
+    assert catalog.status_code == 200, catalog.text
+    data = catalog.json()
+    assert data["provider"]["available"] is False
+    assert "intermitencia" in data["provider"]["message"].lower()
+    assert data["companies"]
+
+    created = await client.post(
+        "/api/v1/recargas",
+        json={
+            "company": "Bait",
+            "phone": "5555555506",
+            "amount": 99,
+            "payment_method": "transfer",
+            "product_code": "BAIT099",
+        },
+        headers=_headers(token),
+    )
+    assert created.status_code == 503, created.text
+    assert "intermitencia" in created.json()["detail"].lower()

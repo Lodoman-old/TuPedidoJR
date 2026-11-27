@@ -135,6 +135,9 @@ async def _validate_checkout_recharge(
                 status_code=502,
                 detail=f"No se pudo consultar el catálogo: {exc.message}",
             ) from exc
+        provider = await sivetel_service.provider_status(client)
+        if not provider["available"]:
+            raise HTTPException(status_code=503, detail=provider["message"])
         product = sivetel_service.find_product(products, code)
         if product is None:
             raise HTTPException(
@@ -148,6 +151,23 @@ async def _validate_checkout_recharge(
         body.recharge_amount = Decimal(product["amount"])
         body.recharge_phone = digits
         return
+
+    config = await sivetel_service.load_config(db)
+    if config is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Sivetel no está configurado.",
+        )
+    try:
+        client = sivetel_service.SivetelClient(config)
+        provider = await sivetel_service.provider_status(client)
+    except sivetel_service.SivetelError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"No se pudo consultar Sivetel: {exc.message}",
+        ) from exc
+    if not provider["available"]:
+        raise HTTPException(status_code=503, detail=provider["message"])
 
     if amount < recarga_service.MIN_RECHARGE:
         raise HTTPException(

@@ -73,6 +73,7 @@ let scheduleState = { enabled: false, value: '' };
   let rechargeState = { enabled: false, company: '', kind: '', code: '', description: '', phone: '', amount: 0 };
   let rechargeCatalog = null;
   let rechargeCatalogError = '';
+  let rechargeProviderAvailable = true;
 
   function sanitizeCartWithMenu(info) {
     const menu = info?.menu || [];
@@ -349,6 +350,7 @@ let scheduleState = { enabled: false, value: '' };
         </label>
       </div>
       <div class="form-text">Para tu celular o para otra persona. Se cobra junto con el pedido.</div>
+      <div class="small text-warning mt-1 d-none" id="rechargeUnavailable"></div>
       <div id="rechargeFields" class="${rechargeState.enabled ? '' : 'd-none'} mt-2">
         <div class="row g-2">
           <div class="col-12 col-md-6">
@@ -453,6 +455,7 @@ let scheduleState = { enabled: false, value: '' };
     container.innerHTML = html;
 
     attachCartEvents(cart);
+    applyRechargeProviderState();
     setupScheduleToggle();
     renderAddressSection();
     document.getElementById('savedAddressSelect')?.addEventListener('change', onSavedAddressChange);
@@ -1060,6 +1063,19 @@ let scheduleState = { enabled: false, value: '' };
       select.disabled = true;
       return;
     }
+    if (!rechargeProviderAvailable) {
+      select.disabled = true;
+      for (const id of ['rechargeKind', 'rechargeProduct', 'rechargePhone']) {
+        const el = document.getElementById(id);
+        if (el) el.disabled = true;
+      }
+      if (error) {
+        error.textContent = rechargeCatalog?.provider?.message
+          || 'El servicio de recargas no está disponible por una intermitencia. Intenta más tarde.';
+        error.classList.remove('d-none');
+      }
+      return;
+    }
     if (!rechargeCatalog) {
       select.innerHTML = '<option value="">Catálogo no disponible</option>';
       select.disabled = true;
@@ -1084,14 +1100,51 @@ let scheduleState = { enabled: false, value: '' };
     fillRechargeProducts();
   }
 
+  function applyRechargeProviderState() {
+    if (!paymentConfig.recharges_enabled || rechargeProviderAvailable) return;
+    const warning = document.getElementById('rechargeUnavailable');
+    if (warning) {
+      warning.textContent = rechargeCatalog?.provider?.message
+        || rechargeCatalogError
+        || 'El servicio de recargas no está disponible por una intermitencia. Intenta más tarde.';
+      warning.classList.remove('d-none');
+    }
+    const toggle = document.getElementById('rechargeToggle');
+    if (toggle) {
+      toggle.checked = false;
+      toggle.disabled = true;
+    }
+    rechargeState.enabled = false;
+    document.getElementById('rechargeFields')?.classList.add('d-none');
+  }
+
   async function loadRechargeCatalog() {
     if (!paymentConfig.recharges_enabled) return;
     try {
       rechargeCatalog = await apiRequest('GET', '/recargas/catalogo');
       rechargeCatalogError = '';
+      rechargeProviderAvailable = rechargeCatalog?.provider?.available !== false;
     } catch (e) {
       rechargeCatalog = null;
       rechargeCatalogError = e.message;
+      rechargeProviderAvailable = false;
+    }
+    const warning = document.getElementById('rechargeUnavailable');
+    if (warning) {
+      warning.textContent = rechargeCatalog?.provider?.message || rechargeCatalogError || '';
+      warning.classList.toggle(
+        'd-none',
+        rechargeProviderAvailable || !warning.textContent
+      );
+    }
+    if (!rechargeProviderAvailable) {
+      const toggle = document.getElementById('rechargeToggle');
+      if (toggle) {
+        toggle.checked = false;
+        toggle.disabled = true;
+      }
+      rechargeState.enabled = false;
+      document.getElementById('rechargeFields')?.classList.add('d-none');
     }
     setupRechargeSelects();
   }

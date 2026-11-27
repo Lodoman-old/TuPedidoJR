@@ -42,7 +42,7 @@
         <div class="small text-muted mt-1" id="balanceUploadMsg"></div>
       </div>
 
-      <div class="card p-2 mb-2">
+      <div class="card p-2 mb-2" id="balanceManualCard">
         <a class="small" data-bs-toggle="collapse" href="#balanceManual">Capturar clave de rastreo</a>
         <div class="collapse" id="balanceManual">
           <div class="row g-2 mt-1">
@@ -185,11 +185,15 @@
         return;
       }
 
-      if (!pc.cep_enabled || !pc.banxico_open || !pc.apicep_ready) {
+      if (!pc.transfer_auto_validation_available) {
         const warning = document.getElementById('balanceUnavailable');
         warning.classList.remove('d-none');
         warning.textContent = 'La validación de saldo está disponible de 09:30 a 23:00. Si no, puedes pagarlo con tu próximo pedido.';
         return;
+      }
+      const manualCard = document.getElementById('balanceManualCard');
+      if (manualCard) {
+        manualCard.classList.toggle('d-none', pc.banxico_open === false);
       }
 
       const created = await apiRequest('POST', '/balance/payments');
@@ -235,7 +239,7 @@
       btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Validando...';
     }
     msg.className = 'text-muted small';
-    msg.textContent = 'Leyendo tu comprobante y consultando Banxico...';
+    msg.textContent = 'Leyendo tu comprobante y validando tu pago...';
     try {
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;

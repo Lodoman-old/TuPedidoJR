@@ -175,7 +175,7 @@
         <div class="small text-muted mt-1" id="rcReceiptMsg"></div>
       </div>
 
-      <div class="card p-2 mb-2">
+      <div class="card p-2 mb-2" id="rcManualCard">
         <a class="small" data-bs-toggle="collapse" href="#rcManual">O captura la clave de rastreo</a>
         <div class="collapse show" id="rcManual">
           <div class="row g-2 mt-1">
@@ -521,7 +521,7 @@ async function validateReceipt() {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Validando...';
   }
   msg.className = 'small text-muted mt-1';
-  msg.textContent = 'Leyendo tu comprobante y consultando Banxico...';
+  msg.textContent = 'Leyendo tu comprobante y validando tu pago...';
   try {
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -629,7 +629,11 @@ async function loadRechargePage() {
       document.getElementById('rcError').classList.remove('d-none');
       document.getElementById('rcError').textContent =
         'La validación con Banxico no está activada. No es posible pagar recargas por transferencia en este momento.';
-    } else if (rcPaymentConfig && rcPaymentConfig.banxico_open === false) {
+    } else if (
+      rcPaymentConfig
+      && rcPaymentConfig.banxico_open === false
+      && !rcPaymentConfig.gemini_ready
+    ) {
       document.getElementById('rcError').classList.remove('d-none');
       document.getElementById('rcError').textContent =
         'Banxico está cerrado en este horario. La validación de transferencias está disponible de 09:30 a 23:00.';
@@ -639,6 +643,14 @@ async function loadRechargePage() {
       document.getElementById('rcError').classList.remove('d-none');
       document.getElementById('rcError').textContent =
         'La plataforma no tiene configurada su cuenta bancaria. Intenta más tarde.';
+    }
+
+    const manualCard = document.getElementById('rcManualCard');
+    if (manualCard) {
+      manualCard.classList.toggle(
+        'd-none',
+        rcPaymentConfig && rcPaymentConfig.banxico_open === false
+      );
     }
 
     loadHistory();

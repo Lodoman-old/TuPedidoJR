@@ -42,6 +42,7 @@ from app.services.file_service import save_document
 from app.services.receipt_validation_service import (
     TRANSFER as TRANSFER_RECEIPT,
     create_and_validate,
+    match_receiver_account,
 )
 from app.services.restaurant_access import ORDER_ROLES, have_role
 from app.services.estimation_service import calculate_estimated_time
@@ -1188,15 +1189,7 @@ def _cep_code_for_bank_name(value) -> str | None:
 
 
 def _match_receiver_account(extracted: dict, accounts: list[dict]) -> dict | None:
-    text = " ".join(
-        str(extracted.get(key) or "")
-        for key in ("recipient", "account", "beneficiaryName", "reference")
-    )
-    digits = "".join(ch for ch in text if ch.isdigit())
-    for account in accounts:
-        if account["clabe"] and account["clabe"] in digits:
-            return account
-    return None
+    return match_receiver_account(accounts, extracted)
 
 
 async def _transfer_receiver_accounts(db: AsyncSession) -> list[dict]:

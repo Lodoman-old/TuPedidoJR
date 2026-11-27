@@ -323,7 +323,7 @@ def _bank_key(value) -> str:
     return BANK_ALIASES.get(key, key)
 
 
-def _match_receiver_account(
+def match_receiver_account(
     accounts: list[dict], extracted: dict
 ) -> dict | None:
     """Encuentra la cuenta de la plataforma que aparece en el comprobante."""
@@ -360,7 +360,7 @@ def _same_bank_still_valid(
     """
     if not api_receiver_bank or not accounts:
         return True
-    destination = _match_receiver_account(accounts, extracted)
+    destination = match_receiver_account(accounts, extracted)
     if destination is None:
         return True
     bank_code = str(destination.get("bank_code") or "")
@@ -607,7 +607,16 @@ async def _validate_with_gemini(db: AsyncSession, record: ReceiptValidation) -> 
 
     bank = await _bank_settings(db)
     if record.expected_kind == TRANSFER:
-        expected_recipient = record.expected_recipient or _expected_recipient(bank, None, None)
+        expected_recipient = record.expected_recipient
+        if not expected_recipient:
+            try:
+                accounts = await bank_service.receiver_accounts(db)
+            except ValueError:
+                accounts = []
+            expected_recipient = " o ".join(
+                f"{account['clabe']} {account.get('holder') or ''}".strip()
+                for account in accounts
+            ) or _expected_recipient(bank, None, None)
     else:
         # En un ticket de compra el comercio puede ser cualquiera; no se compara
         # contra la cuenta bancaria de la plataforma.

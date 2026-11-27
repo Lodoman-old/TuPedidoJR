@@ -155,6 +155,9 @@ async function loadRechargeConfig() {
   if (!rechargesEnabled && document.getElementById('tab-recargas')?.classList.contains('active')) {
     switchTab('available');
   }
+  if (document.getElementById('tab-recargas')?.classList.contains('active')) {
+    loadCourierRecargas();
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

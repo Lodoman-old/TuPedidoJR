@@ -28,12 +28,13 @@ from app.schemas.auth import (
     VerifyEmailRequest,
 )
 from app.services import email_verification_service, registration_guard, totp_service
+from app.services.access_log_service import record_access, role_for
 from app.services.email_service import send_password_reset, email_typo_suggestion
 from app.services.phone_service import phone_in_use
 from app.services.presence_service import touch_last_seen
 from app.services.push_service import schedule_admin_duplicate_phone
 from app.services.order_service import get_setting_value
-from app.services.security_service import security_guard
+from app.services.security_service import client_ip, security_guard
 
 router = APIRouter()
 _RESET_SALT = "tupedidojr-password-reset"
@@ -197,6 +198,15 @@ async def login(
             "requires_2fa": True,
             "temp_token": _twofa_serializer().dumps({"uid": str(user.id)}),
         }
+
+    await record_access(
+        db,
+        user,
+        role=await role_for(db, user),
+        ip=client_ip(request),
+        path="/web/login",
+        user_agent=request.headers.get("user-agent"),
+    )
 
     return _token_response(user)
 

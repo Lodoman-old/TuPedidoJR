@@ -19,6 +19,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import async_session
+from app.models.access_log import AccessLog
 from app.models.security import BlockedIP, SecurityEvent
 from app.services.order_service import get_setting_value
 
@@ -234,13 +235,17 @@ class SecurityGuard:
             pass
 
     async def cleanup(self, days: int = 30) -> None:
-        """Borra eventos viejos y bloqueos ya vencidos."""
+        """Borra eventos viejos, bloqueos vencidos y accesos antiguos."""
         try:
             now = datetime.now(timezone.utc)
             cutoff = now - timedelta(days=max(1, days))
+            access_cutoff = now - timedelta(days=90)
             async with self._session() as db:
                 await db.execute(
                     delete(SecurityEvent).where(SecurityEvent.created_at < cutoff)
+                )
+                await db.execute(
+                    delete(AccessLog).where(AccessLog.created_at < access_cutoff)
                 )
                 await db.execute(
                     delete(BlockedIP).where(

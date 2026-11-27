@@ -24,6 +24,7 @@ from app.models.menu_option import MenuOption, MenuOptionGroup
 from app.models.order_item_option import OrderItemOption
 from app.models.user_cart import UserCart
 from app.models.audit_log import AuditLog
+from app.models.access_log import AccessLog
 from app.models.reservation import Reservation
 from app.models.store_request import StoreRequest
 from app.models.shipment import Shipment
@@ -71,6 +72,7 @@ __all__ = [
     "OrderItemOption",
     "UserCart",
     "AuditLog",
+    "AccessLog",
     "Reservation",
     "StoreRequest",
     "Shipment",

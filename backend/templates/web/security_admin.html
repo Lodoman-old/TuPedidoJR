@@ -8,9 +8,14 @@
       últimas 24 horas y puedes bloquear o desbloquear direcciones IP.
     </p>
   </div>
-  <button class="btn btn-outline-secondary btn-sm" onclick="loadSecurity()">
-    <i class="bi bi-arrow-clockwise"></i> Actualizar
-  </button>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-primary btn-sm" href="/web/admin/access">
+      <i class="bi bi-diagram-3"></i> Accesos e IPs
+    </a>
+    <button class="btn btn-outline-secondary btn-sm" onclick="loadSecurity()">
+      <i class="bi bi-arrow-clockwise"></i> Actualizar
+    </button>
+  </div>
 </div>
 <div id="secError" class="alert alert-danger d-none"></div>
 <div id="secOk" class="alert alert-success d-none"></div>

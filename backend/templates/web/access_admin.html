@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-2 gap-2 flex-wrap">
+  <div>
+    <h4 class="m-0"><i class="bi bi-diagram-3"></i> Accesos e IPs</h4>
+    <p class="small text-muted mb-0 mt-1">
+      Desde qué direcciones IP se entra al sistema y qué pantallas se visitan.
+      Los administradores también se registran aquí.
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary btn-sm" href="/web/admin/security">
+      <i class="bi bi-shield-check"></i> Seguridad
+    </a>
+    <button class="btn btn-outline-secondary btn-sm" onclick="loadAccess()">
+      <i class="bi bi-arrow-clockwise"></i> Actualizar
+    </button>
+  </div>
+</div>
+
+<div id="accError" class="alert alert-danger d-none"></div>
+<div id="accLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+<div id="accContent" class="d-none">
+
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-2">
+      <div class="card p-3 h-100"><small class="text-muted">IPs distintas</small><strong class="fs-4" id="accIps">0</strong></div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card p-3 h-100"><small class="text-muted">Usuarios</small><strong class="fs-4" id="accUsers">0</strong></div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card p-3 h-100"><small class="text-muted">Accesos</small><strong class="fs-4" id="accVisits">0</strong></div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card p-3 h-100"><small class="text-muted">Pantallas</small><strong class="fs-4" id="accScreens">0</strong></div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card p-3 h-100"><small class="text-muted">Últimas 24 h</small><strong class="fs-4 text-primary" id="accRecent">0</strong></div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card p-3 h-100"><small class="text-muted">Periodo</small><strong class="fs-5" id="accPeriod">7 días</strong></div>
+    </div>
+  </div>
+
+  <div class="card p-2 mb-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-6 col-md-2">
+        <label class="form-label small mb-1">Periodo</label>
+        <select class="form-select form-select-sm" id="accDays">
+          <option value="1">Últimas 24 h</option>
+          <option value="7" selected>7 días</option>
+          <option value="30">30 días</option>
+          <option value="90">90 días</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small mb-1">IP</label>
+        <input class="form-control form-control-sm" id="accIpFilter" placeholder="Ej. 189.203.10.5">
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label small mb-1">Usuario</label>
+        <input class="form-control form-control-sm" id="accUserFilter" placeholder="Nombre o correo">
+      </div>
+      <div class="col-12 col-md-3 d-flex gap-2">
+        <button class="btn btn-primary btn-sm flex-fill" onclick="applyFilters()">
+          <i class="bi bi-search"></i> Filtrar
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="clearFilters()">Limpiar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-3 mb-3">
+    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+      <h6 class="mb-0"><i class="bi bi-globe2"></i> Direcciones IP</h6>
+      <small class="text-muted">Toca una IP para filtrar sus accesos.</small>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0" style="min-width:820px">
+        <thead>
+          <tr>
+            <th>IP</th><th>Usuarios</th><th class="text-end">Accesos</th>
+            <th>Primera vez</th><th>Última vez</th><th>Última pantalla</th>
+          </tr>
+        </thead>
+        <tbody id="accIpBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-5">
+      <div class="card p-3 mb-3 h-100">
+        <h6 class="mb-2"><i class="bi bi-window-stack"></i> Pantallas más usadas</h6>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Pantalla</th><th class="text-end">Accesos</th><th class="text-end">Usuarios</th></tr></thead>
+            <tbody id="accScreenBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-7">
+      <div class="card p-3 mb-3 h-100">
+        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+          <h6 class="mb-0"><i class="bi bi-clock-history"></i> Accesos recientes</h6>
+          <small class="text-muted" id="accCount"></small>
+        </div>
+        <div class="table-responsive" style="max-height:520px;overflow-y:auto">
+          <table class="table table-sm align-middle mb-0" style="min-width:760px">
+            <thead>
+              <tr><th>Fecha</th><th>Usuario</th><th>Rol</th><th>IP</th><th>Pantalla</th></tr>
+            </thead>
+            <tbody id="accVisitBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const ROLE_LABELS = {
+    admin: 'Administrador',
+    courier: 'Repartidor',
+    business: 'Negocio',
+    customer: 'Cliente',
+  };
+
+  function accEsc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function accDate(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleString('es-MX', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+  }
+
+  function accRelative(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    const diff = Date.now() - date.getTime();
+    const minutes = Math.round(diff / 60000);
+    if (minutes < 1) return 'Ahora';
+    if (minutes < 60) return `Hace ${minutes} min`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `Hace ${hours} h`;
+    return accDate(value);
+  }
+
+  function accCurrentFilters() {
+    const params = new URLSearchParams();
+    params.set('days', document.getElementById('accDays').value || '7');
+    const ip = document.getElementById('accIpFilter').value.trim();
+    const q = document.getElementById('accUserFilter').value.trim();
+    if (ip) params.set('ip', ip);
+    if (q) params.set('q', q);
+    return params;
+  }
+
+  function applyFilters() {
+    loadAccess();
+  }
+
+  function clearFilters() {
+    document.getElementById('accIpFilter').value = '';
+    document.getElementById('accUserFilter').value = '';
+    document.getElementById('accDays').value = '7';
+    loadAccess();
+  }
+
+  function filterByIp(ip) {
+    document.getElementById('accIpFilter').value = ip;
+    loadAccess();
+  }
+
+  function renderAccess(data) {
+    document.getElementById('accIps').textContent = data.totals.ips;
+    document.getElementById('accUsers').textContent = data.totals.users;
+    document.getElementById('accVisits').textContent = data.totals.visits;
+    document.getElementById('accScreens').textContent = data.totals.screens;
+    document.getElementById('accRecent').textContent = data.totals.last_24h;
+    document.getElementById('accPeriod').textContent =
+      data.days === 1 ? '24 horas' : `${data.days} días`;
+
+    const ipBody = document.getElementById('accIpBody');
+    if (!data.ips.length) {
+      ipBody.innerHTML = '<tr><td colspan="6" class="text-muted small">Sin accesos en este periodo.</td></tr>';
+    } else {
+      ipBody.innerHTML = data.ips.map((row) => `
+        <tr>
+          <td>
+            <button class="btn btn-link btn-sm p-0 fw-semibold" onclick="filterByIp('${accEsc(row.ip)}')">
+              ${accEsc(row.ip)}
+            </button>
+            ${row.user_names.length ? `<div class="small text-muted">${accEsc(row.user_names.join(', '))}</div>` : ''}
+          </td>
+          <td>${row.users}</td>
+          <td class="text-end">${row.visits}</td>
+          <td class="small">${accDate(row.first_seen)}</td>
+          <td class="small">${accRelative(row.last_seen)}</td>
+          <td class="small">${accEsc(row.last_screen || '—')}${row.last_path ? `<div class="text-muted">${accEsc(row.last_path)}</div>` : ''}</td>
+        </tr>`).join('');
+    }
+
+    const screenBody = document.getElementById('accScreenBody');
+    if (!data.screens.length) {
+      screenBody.innerHTML = '<tr><td colspan="3" class="text-muted small">Sin datos.</td></tr>';
+    } else {
+      screenBody.innerHTML = data.screens.map((row) => `
+        <tr>
+          <td>
+            <div class="fw-semibold small">${accEsc(row.screen || row.path)}</div>
+            <div class="small text-muted">${accEsc(row.path)}</div>
+          </td>
+          <td class="text-end">${row.visits}</td>
+          <td class="text-end">${row.users}</td>
+        </tr>`).join('');
+    }
+
+    const visitBody = document.getElementById('accVisitBody');
+    document.getElementById('accCount').textContent = `${data.visits.length} registros`;
+    if (!data.visits.length) {
+      visitBody.innerHTML = '<tr><td colspan="5" class="text-muted small">Sin accesos en este periodo.</td></tr>';
+    } else {
+      visitBody.innerHTML = data.visits.map((row) => `
+        <tr>
+          <td class="small text-nowrap">${accDate(row.created_at)}</td>
+          <td>
+            <div class="small fw-semibold">${accEsc(row.user_name)}</div>
+            <div class="small text-muted">${accEsc(row.user_email || '')}</div>
+          </td>
+          <td class="small">${accEsc(ROLE_LABELS[row.role] || row.role || '—')}</td>
+          <td class="small">${accEsc(row.ip || '—')}</td>
+          <td>
+            <div class="small fw-semibold">${accEsc(row.screen || row.path)}</div>
+            <div class="small text-muted">${accEsc(row.path)}</div>
+          </td>
+        </tr>`).join('');
+    }
+  }
+
+  async function loadAccess() {
+    const loading = document.getElementById('accLoading');
+    const content = document.getElementById('accContent');
+    const error = document.getElementById('accError');
+    error.classList.add('d-none');
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+    try {
+      const params = accCurrentFilters();
+      const data = await apiRequest('GET', `/admin/security/access?${params.toString()}`);
+      renderAccess(data);
+      loading.classList.add('d-none');
+      content.classList.remove('d-none');
+    } catch (e) {
+      loading.classList.add('d-none');
+      if (String(e.message).includes('401') || String(e.message).includes('403')) {
+        location.href = '/web/login';
+        return;
+      }
+      error.textContent = e.message;
+      error.classList.remove('d-none');
+    }
+  }
+
+  document.getElementById('accIpFilter').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') applyFilters();
+  });
+  document.getElementById('accUserFilter').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') applyFilters();
+  });
+
+  loadAccess();
+</script>
+{% endblock %}

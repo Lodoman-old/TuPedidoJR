@@ -1,14 +1,15 @@
 """Panel de seguridad: eventos, IPs bloqueadas y ajustes."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_superuser
 from app.db.session import get_db
+from app.models.access_log import AccessLog
 from app.models.courier_sos import CourierSOS
 from app.models.user import User
 from app.services.audit_service import log_action
@@ -79,6 +80,176 @@ async def security_overview(
             "email_mode": settings.get("email_mode") or "daily",
         },
         "server_time": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/security/access")
+async def access_overview(
+    days: int = Query(default=7, ge=1, le=90),
+    ip: str | None = Query(default=None, max_length=64),
+    q: str | None = Query(default=None, max_length=120),
+    limit: int = Query(default=200, ge=20, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    """Accesos por IP, usuario y pantalla para el administrador."""
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=days)
+    filters = [AccessLog.created_at >= since]
+    ip_filter = (ip or "").strip()
+    if ip_filter:
+        filters.append(AccessLog.ip == ip_filter)
+    user_filter = (q or "").strip()
+    pattern = f"%{user_filter}%"
+    if user_filter:
+        filters.append(
+            or_(User.name.ilike(pattern), User.email.ilike(pattern))
+        )
+
+    def apply_join(stmt):
+        return stmt.outerjoin(User, User.id == AccessLog.user_id)
+
+    rows = (
+        await db.execute(
+            apply_join(
+                select(AccessLog, User.name, User.email)
+                .where(*filters)
+                .order_by(AccessLog.created_at.desc())
+                .limit(limit)
+            )
+        )
+    ).all()
+
+    visits = [
+        {
+            "id": str(row.AccessLog.id),
+            "created_at": row.AccessLog.created_at.isoformat()
+            if row.AccessLog.created_at
+            else None,
+            "user_id": str(row.AccessLog.user_id)
+            if row.AccessLog.user_id
+            else None,
+            "user_name": row.name or "Usuario eliminado",
+            "user_email": row.email,
+            "role": row.AccessLog.role,
+            "ip": row.AccessLog.ip,
+            "screen": row.AccessLog.screen,
+            "path": row.AccessLog.path,
+            "user_agent": row.AccessLog.user_agent,
+        }
+        for row in rows
+    ]
+
+    totals_row = (
+        await db.execute(
+            apply_join(
+                select(
+                    func.count(AccessLog.id),
+                    func.count(func.distinct(AccessLog.ip)),
+                    func.count(func.distinct(AccessLog.user_id)),
+                    func.count(func.distinct(AccessLog.screen)),
+                ).where(*filters)
+            )
+        )
+    ).one()
+
+    last_24h = (
+        await db.execute(
+            apply_join(
+                select(func.count(AccessLog.id)).where(
+                    *filters, AccessLog.created_at >= now - timedelta(hours=24)
+                )
+            )
+        )
+    ).scalar_one() or 0
+
+    ip_rows = (
+        await db.execute(
+            apply_join(
+                select(
+                    AccessLog.ip,
+                    func.count(AccessLog.id),
+                    func.count(func.distinct(AccessLog.user_id)),
+                    func.min(AccessLog.created_at),
+                    func.max(AccessLog.created_at),
+                )
+                .where(*filters)
+                .group_by(AccessLog.ip)
+                .order_by(func.max(AccessLog.created_at).desc())
+                .limit(100)
+            )
+        )
+    ).all()
+
+    latest_by_ip: dict[str, dict] = {}
+    for visit in visits:
+        key = visit["ip"] or "desconocida"
+        entry = latest_by_ip.setdefault(
+            key,
+            {"last_screen": None, "last_path": None, "user_names": []},
+        )
+        if entry["last_screen"] is None:
+            entry["last_screen"] = visit["screen"]
+            entry["last_path"] = visit["path"]
+        name = visit["user_name"]
+        if name and name not in entry["user_names"] and len(entry["user_names"]) < 5:
+            entry["user_names"].append(name)
+
+    ips = []
+    for row in ip_rows:
+        key = row[0] or "desconocida"
+        extra = latest_by_ip.get(key, {})
+        ips.append(
+            {
+                "ip": key,
+                "visits": int(row[1] or 0),
+                "users": int(row[2] or 0),
+                "first_seen": row[3].isoformat() if row[3] else None,
+                "last_seen": row[4].isoformat() if row[4] else None,
+                "last_screen": extra.get("last_screen"),
+                "last_path": extra.get("last_path"),
+                "user_names": extra.get("user_names") or [],
+            }
+        )
+
+    screen_rows = (
+        await db.execute(
+            apply_join(
+                select(
+                    AccessLog.screen,
+                    AccessLog.path,
+                    func.count(AccessLog.id),
+                    func.count(func.distinct(AccessLog.user_id)),
+                )
+                .where(*filters)
+                .group_by(AccessLog.screen, AccessLog.path)
+                .order_by(func.count(AccessLog.id).desc())
+                .limit(60)
+            )
+        )
+    ).all()
+
+    return {
+        "days": days,
+        "filters": {"ip": ip_filter or None, "q": user_filter or None},
+        "totals": {
+            "visits": int(totals_row[0] or 0),
+            "ips": int(totals_row[1] or 0),
+            "users": int(totals_row[2] or 0),
+            "screens": int(totals_row[3] or 0),
+            "last_24h": int(last_24h),
+        },
+        "ips": ips,
+        "screens": [
+            {
+                "screen": row[0],
+                "path": row[1],
+                "visits": int(row[2] or 0),
+                "users": int(row[3] or 0),
+            }
+            for row in screen_rows
+        ],
+        "visits": visits,
     }
 
 

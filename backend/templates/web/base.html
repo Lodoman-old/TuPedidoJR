@@ -281,6 +281,7 @@
               <li><a class="dropdown-item" href="/web/admin/push"><i class="bi bi-bell"></i> Notificaciones push</a></li>
               <li><a class="dropdown-item" href="/web/admin/audit"><i class="bi bi-journal-text"></i> Auditoría</a></li>
               <li><a class="dropdown-item" href="/web/admin/security"><i class="bi bi-shield-check"></i> Seguridad y bloqueos</a></li>
+              <li><a class="dropdown-item" href="/web/admin/access"><i class="bi bi-diagram-3"></i> Accesos e IPs</a></li>
               <li><a class="dropdown-item" href="/manuales/admin" data-admin-manual><i class="bi bi-book"></i> Manual del administrador</a></li>
             </ul>
           </li>
@@ -1463,7 +1464,7 @@ function updateCartBadge() { const badges = [document.getElementById('cartBadge'
         window.location.href = `/web/login?next=${encodeURIComponent(next)}`;
         return;
       }
-      if (token && sessionStorage.getItem('is_superuser') !== 'true') {
+      if (token) {
         fetch(`${API_BASE}/analytics/visit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

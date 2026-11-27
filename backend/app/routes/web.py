@@ -490,6 +490,11 @@ async def web_admin_security(request: Request):
     return templates.TemplateResponse(request, "security_admin.html")
 
 
+@router.get("/admin/access")
+async def web_admin_access(request: Request):
+    return templates.TemplateResponse(request, "access_admin.html")
+
+
 @router.get("/admin/restaurants")
 async def web_admin_restaurants(request: Request):
     return templates.TemplateResponse(request, "restaurant_registrations_admin.html")

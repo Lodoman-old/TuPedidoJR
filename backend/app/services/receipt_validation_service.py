@@ -200,7 +200,8 @@ Referencia o descripción: {context_label}.
 
 Las fechas y horas del comprobante están en hora de México (UTC-6). No reportes
 diferencias de horario por la zona horaria; solo si la fecha u hora es distinta
-en esa misma zona.
+en esa misma zona. Ignora diferencias de hasta 5 minutos: no las incluyas en
+"issues" ni afectan tu confianza.
 
 Devuelve SOLO un JSON válido, sin markdown, con esta forma:
 {{
@@ -573,6 +574,69 @@ async def _validate_with_apicep(
     return record
 
 
+def _model_confidence(data) -> int:
+    try:
+        value = float((data or {}).get("confidence") or 0)
+    except (TypeError, ValueError):
+        return 0
+    if 0 < value <= 1:
+        value *= 100
+    return int(max(0, min(100, round(value))))
+
+
+def _extraction_score(data, expected_kind: str) -> float:
+    """Mide qué tan completa y útil es una lectura del comprobante."""
+    if not isinstance(data, dict):
+        return -1.0
+    score = _model_confidence(data) / 100
+    if _normalize_kind(data.get("document_type")) == expected_kind:
+        score += 4
+    if _parse_amount(data.get("total")) is not None:
+        score += 2
+    if data.get("date"):
+        score += 1
+    if data.get("recipient") or data.get("account"):
+        score += 1
+    if data.get("reference"):
+        score += 0.5
+    return score
+
+
+def _needs_escalation(data, min_confidence: int, expected_kind: str) -> bool:
+    if not isinstance(data, dict):
+        return True
+    if _normalize_kind(data.get("document_type")) != expected_kind:
+        return True
+    if _model_confidence(data) < min_confidence:
+        return True
+    if _parse_amount(data.get("total")) is None:
+        return True
+    if not data.get("date"):
+        return True
+    if expected_kind == TRANSFER and not (
+        data.get("recipient") or data.get("account")
+    ):
+        return True
+    return False
+
+
+_WORD_MINUTES = {"un": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5}
+
+
+def _small_time_issue(text) -> bool:
+    """Ignora avisos por diferencias de hasta 5 minutos en la hora."""
+    value = str(text or "").lower()
+    if not any(token in value for token in ("hora", "minuto", "min")):
+        return False
+    match = re.search(r"(\d+)\s*min", value)
+    if match:
+        return int(match.group(1)) <= 5
+    match = re.search(r"\b(un|una|dos|tres|cuatro|cinco)\s+minuto", value)
+    if match:
+        return True
+    return "diferencia menor" in value or "difiere por un minuto" in value
+
+
 async def _validate_with_gemini(db: AsyncSession, record: ReceiptValidation) -> ReceiptValidation:
     api_key = (await get_setting_value(db, "GEMINI_API_KEY", "")).strip()
     model = (await get_setting_value(db, "GEMINI_MODEL", "gemini-3.5-flash-lite")).strip()
@@ -629,11 +693,27 @@ async def _validate_with_gemini(db: AsyncSession, record: ReceiptValidation) -> 
         None,
     )
 
+    escalation_enabled = (
+        await get_setting_value(db, "GEMINI_ESCALATION_ENABLED", "true")
+    ).strip().lower() == "true"
+    escalation_model = (
+        await get_setting_value(
+            db, "GEMINI_ESCALATION_MODEL", "gemini-3.8-flash"
+        )
+    ).strip() or "gemini-3.8-flash"
+    try:
+        escalation_min = int(
+            await get_setting_value(
+                db, "GEMINI_ESCALATION_MIN_CONFIDENCE", "85"
+            )
+        )
+    except (TypeError, ValueError):
+        escalation_min = 85
+
     try:
         content = path.read_bytes()
-        extracted = await _call_gemini(api_key, model, _mime_for(path), content, prompt)
     except Exception as exc:
-        logger.exception("No se pudo validar el comprobante %s", record.id)
+        logger.exception("No se pudo leer el comprobante %s", record.id)
         record.confidence = 0
         record.status = "low"
         record.error = str(exc)[:500]
@@ -641,6 +721,64 @@ async def _validate_with_gemini(db: AsyncSession, record: ReceiptValidation) -> 
         await db.commit()
         await db.refresh(record)
         return record
+
+    mime = _mime_for(path)
+    primary_error: Exception | None = None
+    try:
+        extracted = await _call_gemini(api_key, model, mime, content, prompt)
+        if not isinstance(extracted, dict):
+            raise RuntimeError("Gemini devolvió un formato inesperado")
+    except Exception as exc:
+        primary_error = exc
+        extracted = None
+
+    model_used = model
+    escalated = False
+    if (
+        escalation_enabled
+        and escalation_model != model
+        and _needs_escalation(extracted, escalation_min, record.expected_kind)
+    ):
+        try:
+            alternate = await _call_gemini(
+                api_key, escalation_model, mime, content, prompt
+            )
+            if not isinstance(alternate, dict):
+                raise RuntimeError("Gemini devolvió un formato inesperado")
+            if (
+                extracted is None
+                or _extraction_score(alternate, record.expected_kind)
+                > _extraction_score(extracted, record.expected_kind)
+            ):
+                extracted = alternate
+                model_used = escalation_model
+                escalated = True
+        except Exception:
+            logger.exception(
+                "No se pudo validar el comprobante %s con %s",
+                record.id,
+                escalation_model,
+            )
+
+    if extracted is None:
+        logger.exception(
+            "No se pudo validar el comprobante %s", record.id,
+            exc_info=primary_error,
+        )
+        record.confidence = 0
+        record.status = "low"
+        error_text = str(primary_error or "Gemini no devolvió datos")[:500]
+        record.error = error_text
+        record.issues = [error_text]
+        await db.commit()
+        await db.refresh(record)
+        return record
+
+    record.model = model_used
+    extracted["_model"] = model_used
+    extracted["_model_primary"] = model
+    if escalated:
+        extracted["_escalated"] = True
 
     document_type = _normalize_kind(extracted.get("document_type"))
     total = _parse_amount(extracted.get("total"))
@@ -676,7 +814,11 @@ async def _validate_with_gemini(db: AsyncSession, record: ReceiptValidation) -> 
     )
     model_issues = extracted.get("issues")
     if isinstance(model_issues, list):
-        issues.extend(str(item) for item in model_issues if item)
+        issues.extend(
+            str(item)
+            for item in model_issues
+            if item and not _small_time_issue(item)
+        )
 
     record.document_type = document_type
     record.confidence = confidence

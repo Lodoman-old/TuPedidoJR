@@ -1207,3 +1207,90 @@ async def test_reused_cep_from_other_payment_still_review(
 
     assert result.status == "review"
     assert any("ya fue validado" in issue for issue in result.issues)
+
+
+async def _gemini_settings(db_session, **values) -> None:
+    defaults = {
+        "GEMINI_API_KEY": "gemini_test_key",
+        "GEMINI_MODEL": "gemini-3.5-flash-lite",
+        "GEMINI_ESCALATION_ENABLED": "true",
+        "GEMINI_ESCALATION_MODEL": "gemini-3.8-flash",
+        "GEMINI_ESCALATION_MIN_CONFIDENCE": "85",
+    }
+    defaults.update(values)
+    for key, value in defaults.items():
+        await set_setting(db_session, key, value)
+
+
+async def _gemini_record(db_session, tmp_path):
+    record = await _receipt_record(db_session)
+    record.expected_date = datetime.now(timezone.utc)
+    record.expected_recipient = "OSCAR LOPEZ DAMIAN"
+    await db_session.commit()
+    path = tmp_path / "comprobante.png"
+    path.write_bytes(b"fake-image")
+    return record, path
+
+
+async def test_gemini_escalates_when_reading_is_poor(
+    db_session, monkeypatch, tmp_path
+):
+    await _gemini_settings(db_session)
+    record, path = await _gemini_record(db_session, tmp_path)
+    calls = []
+
+    async def fake_call(api_key, model, mime, content, prompt):
+        calls.append(model)
+        if model == "gemini-3.5-flash-lite":
+            return {"document_type": "other", "total": None, "confidence": 40}
+        return {
+            "document_type": "transfer_receipt",
+            "total": 100,
+            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "time": datetime.now(timezone.utc).strftime("%H:%M"),
+            "recipient": "OSCAR LOPEZ DAMIAN",
+            "account": "**709",
+            "confidence": 96,
+        }
+
+    monkeypatch.setattr(rvs, "_file_path", lambda url: path)
+    monkeypatch.setattr(rvs, "_call_gemini", fake_call)
+    result = await rvs._validate_with_gemini(db_session, record)
+
+    assert calls == ["gemini-3.5-flash-lite", "gemini-3.8-flash"]
+    assert result.model == "gemini-3.8-flash"
+    assert result.extracted["_escalated"] is True
+    assert result.extracted["_model"] == "gemini-3.8-flash"
+
+
+async def test_gemini_does_not_escalate_when_reading_is_good(
+    db_session, monkeypatch, tmp_path
+):
+    await _gemini_settings(db_session)
+    record, path = await _gemini_record(db_session, tmp_path)
+    calls = []
+
+    async def fake_call(api_key, model, mime, content, prompt):
+        calls.append(model)
+        return {
+            "document_type": "transfer_receipt",
+            "total": 100,
+            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "time": datetime.now(timezone.utc).strftime("%H:%M"),
+            "recipient": "OSCAR LOPEZ DAMIAN",
+            "account": "**709",
+            "confidence": 97,
+            "issues": [
+                "La hora del comprobante (10:22) difiere por un minuto "
+                "de la hora esperada (10:21)."
+            ],
+        }
+
+    monkeypatch.setattr(rvs, "_file_path", lambda url: path)
+    monkeypatch.setattr(rvs, "_call_gemini", fake_call)
+    result = await rvs._validate_with_gemini(db_session, record)
+
+    assert calls == ["gemini-3.5-flash-lite"]
+    assert result.model == "gemini-3.5-flash-lite"
+    assert not result.extracted.get("_escalated")
+    assert not any("minuto" in issue for issue in (result.issues or []))

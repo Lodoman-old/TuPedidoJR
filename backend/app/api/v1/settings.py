@@ -335,6 +335,21 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Modelo usado para leer imágenes y PDF. Ejemplo: gemini-3.5-flash-lite.",
         "type": "text", "default": "gemini-3.5-flash-lite",
     },
+    "GEMINI_ESCALATION_ENABLED": {
+        "group": "Validación de comprobantes", "label": "Reintentar con modelo superior",
+        "description": "Si el modelo principal lee el comprobante con poca confianza o le faltan datos, reintenta con un modelo más potente.",
+        "type": "bool", "default": "true",
+    },
+    "GEMINI_ESCALATION_MODEL": {
+        "group": "Validación de comprobantes", "label": "Modelo de respaldo",
+        "description": "Modelo que se usa solo cuando el principal no lee bien el comprobante. Ejemplo: gemini-3.8-flash.",
+        "type": "text", "default": "gemini-3.8-flash",
+    },
+    "GEMINI_ESCALATION_MIN_CONFIDENCE": {
+        "group": "Validación de comprobantes", "label": "Confianza mínima para reintentar",
+        "description": "Si el modelo principal devuelve menos de este porcentaje, se reintenta con el modelo de respaldo.",
+        "type": "int", "default": "85",
+    },
     "RECEIPT_AMOUNT_TOLERANCE": {
         "group": "Validación de comprobantes", "label": "Tolerancia de monto ($)",
         "description": "Diferencia permitida entre el monto del comprobante y el monto esperado.",

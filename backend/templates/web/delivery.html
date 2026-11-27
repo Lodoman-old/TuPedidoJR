@@ -128,12 +128,26 @@ let audioCtx = null;
 let myDeliveryOrdersCache = [];
 let serviceLimits = { active: 0, max: 5, warn: 4 };
 let rechargesEnabled = false;
+let courierCatalog = null;
+
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
 
 async function loadRechargeConfig() {
   try {
     const cfg = await apiRequest('GET', '/payments/config');
     rechargesEnabled = Boolean(cfg.recharges_enabled);
   } catch (e) { /* sin conexión: se deja oculto */ }
+  if (rechargesEnabled) {
+    try {
+      courierCatalog = await apiRequest('GET', '/recargas/catalogo');
+    } catch (e) {
+      courierCatalog = null;
+    }
+  }
   document.getElementById('rechargesTabBtn')?.classList.toggle('d-none', !rechargesEnabled);
   if (!rechargesEnabled && document.getElementById('tab-recargas')?.classList.contains('active')) {
     switchTab('available');
@@ -770,15 +784,21 @@ async function loadCourierRecargas() {
   try {
     const rows = await apiRequest('GET', '/recargas/my');
     el.innerHTML = `
+      <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+        <div class="small text-muted">Vende una recarga al entregar un pedido o directamente a quien la necesite.</div>
+        <button class="btn btn-sm btn-success" onclick="openCourierRecarga()">
+          <i class="bi bi-phone"></i> Recargar
+        </button>
+      </div>
       <div class="alert alert-info small">
-        <i class="bi bi-info-circle"></i> Las recargas se ofrecen al entregar un pedido.
-        Si el cliente acepta, cobras el monto <strong>+ $2 de comisión para ti</strong> y el
-        monto de la recarga queda como deuda con la plataforma.
+        <i class="bi bi-info-circle"></i> Puedes ofrecer recargas al entregar un pedido o venderlas
+        directamente. Cobras el monto <strong>+ $2 de comisión para ti</strong> y el monto de la
+        recarga queda como deuda con la plataforma.
       </div>
       <div class="card p-3">
         <h6 class="mb-2">Mis recargas</h6>
         <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-          <thead><tr><th>Fecha</th><th>Compañía</th><th>Teléfono</th><th class="text-end">Monto</th><th class="text-end">Comisión</th><th class="text-end">Total</th><th>Estado</th><th></th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Compañía</th><th>Teléfono</th><th class="text-end">Monto</th><th class="text-end">Tu comisión</th><th class="text-end">Total</th><th>Estado</th><th></th></tr></thead>
           <tbody>${rows.map(r => {
             const [label, color] = RECARGA_LABELS[r.status] || [r.status, 'secondary'];
             return `<tr>
@@ -807,34 +827,99 @@ async function retryMyRecarga(id) {
   } catch (e) { showToast(e.message, 'danger'); }
 }
 
-function offerRecarga(order) {
+function offerCompanyEntry(modal, name) {
+  return (courierCatalog?.companies || []).find((c) => c.name === name) || null;
+}
+
+function offerProductSelected(modal) {
+  const company = modal.querySelector('#offerCompany')?.value || '';
+  const kind = modal.querySelector('#offerKind')?.value || '';
+  const code = modal.querySelector('#offerProduct')?.value || '';
+  const entry = offerCompanyEntry(modal, company);
+  const items = entry?.categories?.[kind] || [];
+  return items.find((p) => p.code === code) || null;
+}
+
+function fillOfferCompanies(modal) {
+  const select = modal.querySelector('#offerCompany');
+  const companies = courierCatalog?.companies || [];
+  select.innerHTML = companies
+    .map((c) => `<option value="${esc(c.name)}">${esc(c.name)}</option>`)
+    .join('');
+  if (companies.length) select.value = companies[0].name;
+}
+
+function fillOfferKinds(modal) {
+  const kindSelect = modal.querySelector('#offerKind');
+  const entry = offerCompanyEntry(modal, modal.querySelector('#offerCompany')?.value || '');
+  const kinds = Object.keys(entry?.categories || {});
+  kindSelect.innerHTML = kinds.map((kind) => {
+    const label = (courierCatalog?.kinds || []).find((k) => k.key === kind)?.label || kind;
+    return `<option value="${esc(kind)}">${esc(label)}</option>`;
+  }).join('');
+  if (kinds.length) kindSelect.value = kinds[0];
+}
+
+function fillOfferProducts(modal) {
+  const productSelect = modal.querySelector('#offerProduct');
+  const entry = offerCompanyEntry(modal, modal.querySelector('#offerCompany')?.value || '');
+  const kind = modal.querySelector('#offerKind')?.value || '';
+  const items = entry?.categories?.[kind] || [];
+  productSelect.innerHTML = items.map((p) => (
+    `<option value="${esc(p.code)}">${esc(p.description)} — ${money0(p.amount)}</option>`
+  )).join('');
+  if (items.length) productSelect.value = items[0].code;
+  applyOfferProduct(modal);
+}
+
+function applyOfferProduct(modal) {
+  const product = offerProductSelected(modal);
+  const total = modal.querySelector('#offerTotal');
+  if (product) {
+    total.textContent = money0(Number(product.amount || 0) + 2);
+  } else {
+    total.textContent = money0(0);
+  }
+}
+
+function openCourierRecarga(order = null) {
   if (!rechargesEnabled) return;
+  if (!courierCatalog) {
+    showToast('No se pudo cargar el catálogo de recargas', 'danger');
+    return;
+  }
   const modal = document.createElement('div');
   modal.className = 'modal fade';
   modal.innerHTML = `
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
-          <h6 class="modal-title">¿El cliente quiere una recarga?</h6>
+          <h6 class="modal-title">${order ? '¿El cliente quiere una recarga?' : 'Vender una recarga'}</h6>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <p class="small text-muted">Ofrece saldo para su celular. Se cobra el monto + <strong>$2 de comisión</strong> para ti. El monto de la recarga queda como deuda con la plataforma.</p>
+          <p class="small text-muted">${order
+            ? 'Ofrece saldo, internet o paquete. Se cobra el monto + <strong>$2 de comisión para ti</strong>. El monto de la recarga queda como deuda con la plataforma.'
+            : 'Vende saldo, internet o paquete a quien lo necesite. Cobras el monto + <strong>$2 de comisión para ti</strong>. El monto de la recarga queda como deuda con la plataforma.'}</p>
           <div class="row g-2">
             <div class="col-6">
               <label class="form-label small mb-1">Compañía</label>
-              <input id="offerCompany" class="form-control form-control-sm" placeholder="Telcel, AT&T...">
+              <select id="offerCompany" class="form-select form-select-sm"></select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Tipo</label>
+              <select id="offerKind" class="form-select form-select-sm"></select>
+            </div>
+            <div class="col-12">
+              <label class="form-label small mb-1">Producto</label>
+              <select id="offerProduct" class="form-select form-select-sm"></select>
             </div>
             <div class="col-6">
               <label class="form-label small mb-1">Teléfono</label>
               <input id="offerPhone" class="form-control form-control-sm" inputmode="numeric" maxlength="10" placeholder="10 dígitos">
             </div>
-            <div class="col-6">
-              <label class="form-label small mb-1">Monto</label>
-              <input id="offerAmount" type="number" min="1" step="0.01" class="form-control form-control-sm" placeholder="0.00">
-            </div>
             <div class="col-6 d-flex align-items-end">
-              <div class="small text-muted">Total a cobrar: <strong id="offerTotal">$2.00</strong></div>
+              <div class="small text-muted">Total a cobrar: <strong id="offerTotal">$0</strong><br><span class="text-success">Incluye $2 para ti</span></div>
             </div>
           </div>
           <div id="offerError" class="text-danger small mt-2 d-none"></div>
@@ -848,20 +933,22 @@ function offerRecarga(order) {
   document.body.appendChild(modal);
   const bsModal = new bootstrap.Modal(modal);
   bsModal.show();
-  const amountInput = modal.querySelector('#offerAmount');
-  const updateTotal = () => {
-    const value = parseFloat(amountInput.value || 0);
-    modal.querySelector('#offerTotal').textContent = money0((Number.isFinite(value) ? value : 0) + 2);
-  };
-  amountInput.addEventListener('input', updateTotal);
+  fillOfferCompanies(modal);
+  fillOfferKinds(modal);
+  fillOfferProducts(modal);
+  modal.querySelector('#offerCompany').addEventListener('change', () => {
+    fillOfferKinds(modal);
+    fillOfferProducts(modal);
+  });
+  modal.querySelector('#offerKind').addEventListener('change', () => fillOfferProducts(modal));
+  modal.querySelector('#offerProduct').addEventListener('change', () => applyOfferProduct(modal));
   modal.querySelector('#offerConfirmBtn').addEventListener('click', async () => {
     const error = modal.querySelector('#offerError');
     error.classList.add('d-none');
-    const company = modal.querySelector('#offerCompany').value.trim();
+    const product = offerProductSelected(modal);
     const phone = modal.querySelector('#offerPhone').value.replace(/\D/g, '');
-    const amount = parseFloat(amountInput.value || 0);
-    if (!company || phone.length !== 10 || !(amount > 0)) {
-      error.textContent = 'Completa compañía, teléfono de 10 dígitos y monto.';
+    if (!product || phone.length !== 10) {
+      error.textContent = 'Selecciona un producto y escribe un teléfono de 10 dígitos.';
       error.classList.remove('d-none');
       return;
     }
@@ -869,10 +956,17 @@ function offerRecarga(order) {
     btn.disabled = true;
     try {
       const recarga = await apiRequest('POST', '/recargas', {
-        company, phone, amount, payment_method: 'cash', order_id: order.id,
+        company: product.company,
+        phone,
+        amount: Number(product.amount),
+        payment_method: 'cash',
+        order_id: order ? order.id : null,
+        product_code: product.code,
+        product_description: product.description,
+        product_kind: product.kind,
       });
       bsModal.hide();
-      showToast(`Recarga cobrada: ${money0(recarga.total)}. Queda pendiente de procesar.`);
+      showToast(`Recarga cobrada: ${money0(recarga.total)}. Tu comisión: ${money0(recarga.fee)}.`);
       switchTab('recargas');
     } catch (e) {
       error.textContent = e.message;
@@ -881,6 +975,10 @@ function offerRecarga(order) {
     }
   });
   modal.addEventListener('hidden.bs.modal', () => modal.remove());
+}
+
+function offerRecarga(order) {
+  return openCourierRecarga(order);
 }
 
 // ===== TAB: Ajustes =====

@@ -22,6 +22,7 @@ async def _cancel_expired(db: AsyncSession) -> int:
         select(Order)
         .where(
             Order.requires_courier_approval.is_(True),
+            Order.no_courier_hold.is_(False),
             Order.status.in_(["pending", "confirmed", "awaiting_courier"]),
             Order.delivery_person_id.is_(None),
             Order.courier_approval_deadline.is_not(None),

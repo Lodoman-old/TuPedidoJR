@@ -1532,10 +1532,21 @@ class TestRestaurantRegistrationAndTeam:
 
 
 class TestRechargesPage:
-    async def test_recharges_page_shows_coming_soon(self, client):
+    async def test_recharges_page_hides_flow_when_disabled(self, client):
         resp = await client.get("/web/recargas")
         assert resp.status_code == 200
-        assert "Próximamente" in resp.text
+        assert "recargas" in resp.text.lower()
+        assert "próximamente" in resp.text.lower()
+        assert "Solicitar recarga" not in resp.text
+
+    async def test_recharges_page_shows_transfer_flow(self, client, db_session):
+        from app.services.setting_service import set_setting
+
+        await set_setting(db_session, "RECHARGES_ENABLED", "true")
+        await db_session.commit()
+        resp = await client.get("/web/recargas")
+        assert resp.status_code == 200
+        assert "Pago por transferencia" in resp.text
         assert "CLABE" in resp.text
         assert "Banxico" in resp.text
         assert "Sin comisión" in resp.text
@@ -1744,6 +1755,60 @@ class TestSettingsApi:
             for item in group["settings"]
         }
         assert values["APP_COMMISSION_PERCENTAGE"] == "12.5"
+
+    async def test_password_settings_are_masked_and_preserved(
+        self, client, superuser_token, db_session,
+    ):
+        from sqlalchemy import select
+
+        from app.models.audit_log import AuditLog
+        from app.models.setting import Setting
+
+        resp = await client.patch(
+            "/api/v1/settings",
+            json={"values": {"SIVETEL_PASSWORD": "super-secret-prod"}},
+            headers=_headers(superuser_token),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["updated"]["SIVETEL_PASSWORD"] == "***"
+
+        resp = await client.get(
+            "/api/v1/settings", headers=_headers(superuser_token)
+        )
+        item = next(
+            row
+            for group in resp.json()["groups"]
+            for row in group["settings"]
+            if row["key"] == "SIVETEL_PASSWORD"
+        )
+        assert item["value"] == ""
+        assert item["has_value"] is True
+
+        resp = await client.patch(
+            "/api/v1/settings",
+            json={
+                "values": {
+                    "SIVETEL_PASSWORD": "",
+                    "SIVETEL_USER": "usuario-produccion",
+                }
+            },
+            headers=_headers(superuser_token),
+        )
+        assert resp.status_code == 200
+        assert "SIVETEL_PASSWORD" not in resp.json()["updated"]
+
+        row = await db_session.scalar(
+            select(Setting).where(Setting.key == "SIVETEL_PASSWORD")
+        )
+        assert row is not None and row.value == "super-secret-prod"
+
+        logs = (
+            await db_session.execute(
+                select(AuditLog).where(AuditLog.action == "settings.update")
+            )
+        ).scalars().all()
+        assert logs
+        assert all("super-secret-prod" not in str(log.detail) for log in logs)
 
     async def test_rejects_out_of_range(self, client, superuser_token):
         resp = await client.patch(

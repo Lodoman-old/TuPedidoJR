@@ -33,108 +33,628 @@
     font-size: .85rem;
     flex: 0 0 30px;
   }
+  .recharge-summary {
+    background: #f6f8ff;
+    border: 1px solid #dbe3ff;
+    border-radius: 12px;
+  }
+  .recharge-clabe {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 1.05rem;
+    letter-spacing: .04em;
+    word-break: break-all;
+  }
 </style>
 {% endblock %}
 {% block content %}
-<div class="recharge-hero p-4 mb-3">
-  {% if recharges_enabled %}
-  <span class="badge bg-warning text-dark mb-2"><i class="bi bi-phone"></i> Con tu pedido</span>
-  <h4 class="mb-1"><i class="bi bi-phone"></i> Recargas de tiempo aire</h4>
-  <p class="mb-0 opacity-75">
-    Ya puedes agregar una recarga al hacer tu pedido y pagarla junto con él.
-    La solicitud directa desde el portal estará disponible próximamente.
-  </p>
-  {% else %}
-  <span class="badge bg-warning text-dark mb-2"><i class="bi bi-clock"></i> Próximamente</span>
-  <h4 class="mb-1"><i class="bi bi-phone"></i> Recargas de tiempo aire</h4>
-  <p class="mb-0 opacity-75">
-    Estamos preparando la conexión con el proveedor automático. Por ahora no verás
-    la opción en el carrito ni en el panel del repartidor, y no hay solicitudes manuales.
-  </p>
-  {% endif %}
+<div id="rcLoading" class="text-center py-5">
+  <div class="spinner-border text-primary"></div>
 </div>
 
-<div class="row g-3">
-  <div class="col-md-7">
-    <div class="card p-3 h-100">
-      <h5 class="mb-3">Cómo funcionará</h5>
-      <div class="d-flex gap-3 mb-3">
-        <span class="recharge-step">1</span>
-        <div>
-          <div class="fw-semibold">{% if recharges_enabled %}La agregas al hacer tu pedido{% else %}La podrás agregar al hacer tu pedido{% endif %}</div>
-          <div class="small text-muted">Antes de confirmar, activa “Agregar recarga de tiempo aire” y elige compañía, número y monto.</div>
-        </div>
-      </div>
-      <div class="d-flex gap-3 mb-3">
-        <span class="recharge-step">2</span>
-        <div>
-          <div class="fw-semibold">Pagas como en tus pedidos</div>
-          <div class="small text-muted">
-            Escoges tu banco y te mostramos la CLABE de la cuenta correspondiente.
-            Validamos la transferencia con Banxico y, en cuanto se confirma el pago,
-            la recarga se aplica automáticamente. Si pagas en efectivo al recibir,
-            aplica la regla de los $2 según quién ofreció la recarga.
-          </div>
-        </div>
-      </div>
-      <div class="d-flex gap-3">
-        <span class="recharge-step">3</span>
-        <div>
-          <div class="fw-semibold">Recibes tu saldo</div>
-          <div class="small text-muted">
-            Se envía a la compañía y te avisamos cuando quede aplicada. Si el proveedor
-            falla, se te devuelve el monto.
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-5">
-    <div class="card p-3 h-100">
-      <div class="d-flex gap-3 align-items-start mb-3">
-        <div class="recharge-icon"><i class="bi bi-wallet2"></i></div>
-        <div>
-          <h5 class="mb-1">Formas de pago</h5>
-          <div class="small text-muted">Transferencia o efectivo al recibir un pedido.</div>
-        </div>
-      </div>
-      <div class="mb-3">
-        <div class="fw-semibold small"><i class="bi bi-bank"></i> Transferencia</div>
-        <div class="small text-muted">
-          Desde el portal o junto con tu pedido: eliges banco, te damos la CLABE y
-          validamos el pago con Banxico. <strong>Sin comisión de $2.</strong>
-        </div>
-      </div>
-      <div>
-        <div class="fw-semibold small"><i class="bi bi-cash-coin"></i> Efectivo al recibir un pedido</div>
-        <div class="small text-muted">
-          Siempre se cobra el monto <strong>+ $2</strong>. Si no la agregaste al
-          pedido y el repartidor te la ofrece al entregar, esos $2 son para el
-          <strong>repartidor</strong>.
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="alert alert-light border mt-3 d-flex gap-2 align-items-start">
-  <i class="bi bi-info-circle text-primary fs-5"></i>
-  <div class="small">
+<div id="rcContent" class="d-none">
+  <div class="recharge-hero p-4 mb-3">
+    <span class="badge bg-warning text-dark mb-2"><i class="bi bi-bank"></i> Pago por transferencia</span>
+    <h4 class="mb-1"><i class="bi bi-phone"></i> Recarga tu celular</h4>
     {% if recharges_enabled %}
-    <strong>Recarga directa desde el portal: Próximamente.</strong><br>
-    Por ahora solo puedes agregarla al hacer un pedido o aceptarla cuando el repartidor
-    te la ofrezca al entregar.
+    <p class="mb-0 opacity-75">
+      Elige el producto exacto, transfiere el total y validamos tu pago con Banxico.
+      Sin comisión de $2.
+    </p>
     {% else %}
-    <strong>Próximamente.</strong><br>
-    La opción aparecerá en el carrito cuando el proveedor automático esté conectado.
-    No habrá solicitudes manuales.
+    <p class="mb-0 opacity-75">
+      Estamos preparando la conexión con el proveedor automático.
+      Por ahora no hay solicitudes manuales.
+    </p>
     {% endif %}
   </div>
-</div>
 
-<div class="d-flex gap-2 flex-wrap mt-3">
-  <a href="/web/orders" class="btn btn-dark"><i class="bi bi-bag-check"></i> Volver a mis pedidos</a>
-  <a href="/web/mandados" class="btn btn-outline-secondary"><i class="bi bi-box"></i> Ver mandados</a>
+  {% if not recharges_enabled %}
+  <div class="alert alert-warning">
+    <i class="bi bi-clock"></i>
+    <strong>Recargas próximamente.</strong><br>
+    La recarga directa estará disponible cuando el proveedor automático quede conectado.
+  </div>
+  <div class="d-flex gap-2 flex-wrap mt-3">
+    <a href="/web/restaurants" class="btn btn-dark"><i class="bi bi-shop"></i> Ir a la tienda</a>
+    <a href="/web/orders" class="btn btn-outline-secondary"><i class="bi bi-bag-check"></i> Mis pedidos</a>
+  </div>
+  {% else %}
+  <div id="rcError" class="alert alert-danger d-none"></div>
+
+  <div class="card p-3 mb-3">
+    <div class="d-flex gap-3 align-items-start mb-3">
+      <span class="recharge-step">1</span>
+      <div>
+        <h5 class="mb-1">Elige tu recarga</h5>
+        <div class="small text-muted">Selecciona la compañía, el tipo y el producto exacto.</div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label small fw-bold" for="rcCompany">Compañía</label>
+        <select id="rcCompany" class="form-select" onchange="onCompanyChange()">
+          <option value="">Cargando...</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small fw-bold" for="rcKind">Tipo</label>
+        <select id="rcKind" class="form-select" onchange="onKindChange()">
+          <option value="">Selecciona el tipo</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small fw-bold" for="rcProduct">Producto</label>
+        <select id="rcProduct" class="form-select" onchange="onProductChange()">
+          <option value="">Selecciona el producto</option>
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small fw-bold" for="rcPhone">Teléfono a recargar</label>
+        <input id="rcPhone" class="form-control" inputmode="numeric" maxlength="10"
+               placeholder="10 dígitos" oninput="onPhoneInput()">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small fw-bold" for="rcName">Nombre (opcional)</label>
+        <input id="rcName" class="form-control" maxlength="150" placeholder="Para identificar tu recarga">
+      </div>
+    </div>
+
+    <div id="rcProductHelp" class="small text-muted mt-3"></div>
+
+    <div class="recharge-summary p-3 mt-3 d-flex justify-content-between align-items-center">
+      <div>
+        <div class="small text-muted">Total a transferir</div>
+        <div id="rcTotal" class="fs-4 fw-bold">$0</div>
+      </div>
+      <div class="text-end small text-muted">Sin comisión<br>Pago por transferencia</div>
+    </div>
+
+    <button id="rcCreateBtn" class="btn btn-dark mt-3 w-100" onclick="createRecarga()">
+      <i class="bi bi-arrow-right-circle"></i> Continuar al pago
+    </button>
+    <div id="rcCreateMsg" class="small mt-2"></div>
+  </div>
+
+  <div id="rcPayment" class="d-none">
+    <div class="card p-3 mb-3">
+      <div class="d-flex gap-3 align-items-start mb-3">
+        <span class="recharge-step">2</span>
+        <div>
+          <h5 class="mb-1">Paga por transferencia</h5>
+          <div class="small text-muted">
+            Transfiere el total exacto y valida tu clave de rastreo con Banxico.
+          </div>
+        </div>
+      </div>
+
+      <div id="rcSummary" class="recharge-summary p-3 mb-3"></div>
+
+      <div class="alert alert-info mb-3">
+        <div class="small text-muted">Referencia para tu transferencia</div>
+        <div id="rcReference" class="fs-5 fw-bold">#--------</div>
+        <div class="small mt-1">Escríbela en el concepto de tu transferencia.</div>
+      </div>
+
+      <label class="form-label small fw-bold" for="rcSenderBank">¿Desde qué banco vas a transferir?</label>
+      <select id="rcSenderBank" class="form-select mb-2" onchange="renderAccount()">
+        <option value="">Selecciona tu banco...</option>
+      </select>
+      <div class="small text-muted mb-3">
+        Te mostramos una cuenta de un banco distinto al tuyo para que Banxico pueda validar la transferencia.
+      </div>
+
+      <div id="rcAccountBox"></div>
+
+      <div class="card p-2 mb-2">
+        <div class="small fw-bold mb-1"><i class="bi bi-camera"></i> ¿Ya transferiste? Sube tu comprobante</div>
+        <input type="file" id="rcReceiptFile" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp,application/pdf">
+        <button class="btn btn-sm btn-primary mt-2" id="rcUploadBtn" onclick="validateReceipt()">
+          Validar mi comprobante
+        </button>
+        <div class="small text-muted mt-1" id="rcReceiptMsg"></div>
+      </div>
+
+      <div class="card p-2 mb-2">
+        <a class="small" data-bs-toggle="collapse" href="#rcManual">O captura la clave de rastreo</a>
+        <div class="collapse show" id="rcManual">
+          <div class="row g-2 mt-1">
+            <div class="col-md-6">
+              <label class="form-label small fw-bold" for="rcTrackingKey">Clave de rastreo</label>
+              <input id="rcTrackingKey" class="form-control" maxlength="30" placeholder="Clave del comprobante">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-bold" for="rcTransferDate">Fecha de la transferencia</label>
+              <input type="date" id="rcTransferDate" class="form-control">
+            </div>
+          </div>
+          <button id="rcValidateBtn" class="btn btn-outline-primary mt-3 w-100" onclick="validateTransfer()">
+            <i class="bi bi-shield-check"></i> Validar pago con Banxico
+          </button>
+          <div id="rcValidateMsg" class="small mt-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="rcDone" class="alert alert-success d-none"></div>
+
+  <div class="card p-3 mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h5 class="mb-0">Mis recargas</h5>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadHistory()">
+        <i class="bi bi-arrow-clockwise"></i> Actualizar
+      </button>
+    </div>
+    <div id="rcHistory" class="text-muted small">Cargando...</div>
+  </div>
+
+  <div class="alert alert-light border d-flex gap-2 align-items-start">
+    <i class="bi bi-info-circle text-primary fs-5"></i>
+    <div class="small">
+      <strong>Solo transferencia.</strong>
+      Si quieres pagar en efectivo, agrega la recarga a un pedido o pídesela a un repartidor.
+    </div>
+  </div>
+  {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if recharges_enabled %}
+<script>
+let rcCatalog = null;
+let rcRecarga = null;
+let rcAccounts = [];
+let rcBanks = [];
+let rcPaymentConfig = null;
+let rcHistoryRows = [];
+
+const RC_STATUS = {
+  requested: 'Por pagar',
+  pending: 'Pendiente de procesar',
+  processing: 'Procesando',
+  completed: 'Completada',
+  failed: 'Fallida',
+  refunded: 'Reembolsada',
+  cancelled: 'Cancelada',
+};
+
+function rcEsc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function rcMoney(value) {
+  return '$' + Number(value || 0).toLocaleString('es-MX', {
+    minimumFractionDigits: 0, maximumFractionDigits: 2,
+  });
+}
+
+function rcToday() {
+  return localDateInput(new Date());
+}
+
+function rcSelectedCompany() {
+  const name = document.getElementById('rcCompany').value;
+  return (rcCatalog.companies || []).find((c) => c.name === name) || null;
+}
+
+function rcKindLabel(key) {
+  const kind = (rcCatalog.kinds || []).find((k) => k.key === key);
+  return kind ? kind.label : key;
+}
+
+function rcSelectedProduct() {
+  const code = document.getElementById('rcProduct').value;
+  const company = rcSelectedCompany();
+  if (!company || !code) return null;
+  for (const items of Object.values(company.categories || {})) {
+    const found = items.find((item) => item.code === code);
+    if (found) return found;
+  }
+  return null;
+}
+
+function onCompanyChange() {
+  const company = rcSelectedCompany();
+  const kindSelect = document.getElementById('rcKind');
+  const productSelect = document.getElementById('rcProduct');
+  productSelect.innerHTML = '<option value="">Selecciona el producto</option>';
+  document.getElementById('rcProductHelp').textContent = '';
+  document.getElementById('rcTotal').textContent = '$0';
+  if (!company) {
+    kindSelect.innerHTML = '<option value="">Selecciona el tipo</option>';
+    return;
+  }
+  const kinds = (rcCatalog.kinds || []).filter(
+    (kind) => (company.categories || {})[kind.key]
+  );
+  kindSelect.innerHTML = '<option value="">Selecciona el tipo</option>' + kinds.map(
+    (kind) => `<option value="${rcEsc(kind.key)}">${rcEsc(kind.label)}</option>`
+  ).join('');
+  if (kinds.length === 1) {
+    kindSelect.value = kinds[0].key;
+    onKindChange();
+  }
+}
+
+function onKindChange() {
+  const company = rcSelectedCompany();
+  const kind = document.getElementById('rcKind').value;
+  const productSelect = document.getElementById('rcProduct');
+  document.getElementById('rcProductHelp').textContent = '';
+  document.getElementById('rcTotal').textContent = '$0';
+  if (!company || !kind) {
+    productSelect.innerHTML = '<option value="">Selecciona el producto</option>';
+    return;
+  }
+  const items = (company.categories || {})[kind] || [];
+  productSelect.innerHTML = '<option value="">Selecciona el producto</option>' + items.map(
+    (item) => `<option value="${rcEsc(item.code)}">${rcEsc(item.description)} — ${rcMoney(item.amount)}</option>`
+  ).join('');
+}
+
+function onProductChange() {
+  const product = rcSelectedProduct();
+  const help = document.getElementById('rcProductHelp');
+  if (!product) {
+    help.textContent = '';
+    document.getElementById('rcTotal').textContent = '$0';
+    return;
+  }
+  help.innerHTML = `<i class="bi bi-check-circle text-success"></i> Producto: <strong>${rcEsc(product.description)}</strong>`;
+  document.getElementById('rcTotal').textContent = rcMoney(product.amount);
+}
+
+function onPhoneInput() {
+  const input = document.getElementById('rcPhone');
+  input.value = input.value.replace(/\D/g, '').slice(0, 10);
+}
+
+function fillBanks() {
+  const select = document.getElementById('rcSenderBank');
+  const banks = rcBanks.length
+    ? rcBanks
+    : rcAccounts.map((account) => ({
+        code: account.bank_code,
+        name: account.bank_name || account.bank_code,
+      }));
+  if (!banks.length) {
+    select.innerHTML = '<option value="">La plataforma no tiene cuenta bancaria configurada</option>';
+    return;
+  }
+  select.innerHTML = '<option value="">Selecciona tu banco...</option>' + banks.map(
+    (bank) => `<option value="${rcEsc(bank.code)}">${rcEsc(bank.name)}</option>`
+  ).join('');
+}
+
+function recommendedAccount(senderCode) {
+  if (!rcAccounts.length) return null;
+  if (!senderCode) return rcAccounts[0];
+  return rcAccounts.find((account) => account.bank_code !== senderCode) || rcAccounts[0];
+}
+
+function renderAccount() {
+  const sender = document.getElementById('rcSenderBank').value;
+  const box = document.getElementById('rcAccountBox');
+  if (!sender) {
+    box.innerHTML = '';
+    return;
+  }
+  const account = recommendedAccount(sender);
+  if (!account) {
+    box.innerHTML = '<div class="alert alert-warning">La plataforma no tiene configurada la cuenta bancaria.</div>';
+    return;
+  }
+  box.innerHTML = `<div class="recharge-summary p-3 mb-2">
+    <div class="small fw-bold">Transfiere a ${rcEsc(account.bank_name || 'la plataforma')}</div>
+    <div class="small mt-1">Titular: ${rcEsc(account.account_holder || '—')}</div>
+    <div class="small mt-1">CLABE: <span class="recharge-clabe">${rcEsc(account.clabe || '—')}</span></div>
+    <div class="small text-muted mt-1">Es un banco distinto al tuyo para que Banxico pueda validar el pago.</div>
+  </div>`;
+}
+
+function renderSummary(recarga) {
+  document.getElementById('rcSummary').innerHTML = `
+    <div class="d-flex justify-content-between small">
+      <span class="text-muted">Compañía</span><strong>${rcEsc(recarga.company)}</strong>
+    </div>
+    <div class="d-flex justify-content-between small">
+      <span class="text-muted">Producto</span><strong class="text-end">${rcEsc(recarga.product_description || recarga.product_code || '')}</strong>
+    </div>
+    <div class="d-flex justify-content-between small">
+      <span class="text-muted">Teléfono</span><strong>${rcEsc(recarga.phone)}</strong>
+    </div>
+    <hr class="my-2">
+    <div class="d-flex justify-content-between">
+      <span class="fw-bold">Total</span><strong class="fs-5">${rcMoney(recarga.total)}</strong>
+    </div>`;
+}
+
+async function createRecarga() {
+  const product = rcSelectedProduct();
+  const phone = document.getElementById('rcPhone').value.trim();
+  const msg = document.getElementById('rcCreateMsg');
+  const btn = document.getElementById('rcCreateBtn');
+  if (!product) {
+    msg.className = 'small text-danger mt-2';
+    msg.textContent = 'Selecciona compañía, tipo y producto.';
+    return;
+  }
+  if (phone.length !== 10) {
+    msg.className = 'small text-danger mt-2';
+    msg.textContent = 'Escribe un teléfono de 10 dígitos.';
+    return;
+  }
+  msg.className = 'small text-muted mt-2';
+  msg.textContent = 'Creando tu recarga...';
+  if (btn) btn.disabled = true;
+  try {
+    const recarga = await apiRequest('POST', '/recargas', {
+      company: product.company,
+      phone,
+      amount: Number(product.amount),
+      payment_method: 'transfer',
+      product_code: product.code,
+      product_description: product.description,
+      product_kind: product.kind,
+      customer_name: document.getElementById('rcName').value.trim() || null,
+    });
+    rcRecarga = recarga;
+    document.getElementById('rcReference').textContent = '#' + String(recarga.id).slice(0, 8).toUpperCase();
+    document.getElementById('rcTransferDate').value = rcToday();
+    renderSummary(recarga);
+    document.getElementById('rcPayment').classList.remove('d-none');
+    document.getElementById('rcPayment').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    msg.className = 'small text-success mt-2';
+    msg.textContent = 'Recarga creada. Ahora realiza la transferencia.';
+    document.getElementById('rcCreateBtn').classList.add('d-none');
+    loadHistory();
+  } catch (e) {
+    msg.className = 'small text-danger mt-2';
+    msg.textContent = e.message;
+    if (String(e.message).includes('401') || String(e.message).toLowerCase().includes('autentic')) {
+      location.href = '/web/login?next=/web/recargas';
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function validateTransfer() {
+  if (!rcRecarga) return;
+  const key = document.getElementById('rcTrackingKey').value.trim();
+  const bank = document.getElementById('rcSenderBank').value;
+  const dateValue = document.getElementById('rcTransferDate').value;
+  const msg = document.getElementById('rcValidateMsg');
+  const btn = document.getElementById('rcValidateBtn');
+  if (key.length < 4) {
+    msg.className = 'small text-danger mt-2';
+    msg.textContent = 'Escribe la clave de rastreo de tu comprobante.';
+    return;
+  }
+  if (!bank) {
+    msg.className = 'small text-danger mt-2';
+    msg.textContent = 'Selecciona el banco desde el que transferiste.';
+    return;
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Validando...';
+  }
+  msg.className = 'small text-muted mt-2';
+  msg.textContent = 'Consultando Banxico...';
+  try {
+    const res = await apiRequest('POST', `/recargas/${rcRecarga.id}/validate-transfer`, {
+      clave_rastreo: key,
+      sender_bank: bank,
+      transfer_date: dateValue || null,
+    });
+    rcRecarga = res.recarga || rcRecarga;
+    showPaymentDone(res);
+  } catch (e) {
+    msg.className = 'small text-danger mt-2';
+    msg.textContent = e.message;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-shield-check"></i> Validar pago con Banxico';
+    }
+  }
+}
+
+function showPaymentDone(res) {
+  if (res && res.recarga) rcRecarga = res.recarga;
+  document.getElementById('rcPayment').classList.add('d-none');
+  const done = document.getElementById('rcDone');
+  done.classList.remove('d-none');
+  done.innerHTML = `<i class="bi bi-check-circle"></i> <strong>${rcEsc(res.message || 'Pago validado.')}</strong><br>
+    <span class="small">Recarga #${rcEsc(String(rcRecarga.id).slice(0, 8).toUpperCase())} por ${rcMoney(rcRecarga.total)} para ${rcEsc(rcRecarga.phone)}.</span>`;
+  done.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  showToast('Pago validado');
+  setTimeout(loadHistory, 1500);
+}
+
+async function validateReceipt() {
+  if (!rcRecarga) return;
+  const input = document.getElementById('rcReceiptFile');
+  const file = input && input.files && input.files[0];
+  const msg = document.getElementById('rcReceiptMsg');
+  const btn = document.getElementById('rcUploadBtn');
+  if (!file) {
+    msg.className = 'small text-danger mt-1';
+    msg.textContent = 'Selecciona la foto o PDF de tu comprobante.';
+    return;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    msg.className = 'small text-danger mt-1';
+    msg.textContent = 'El archivo es muy grande. Usa una foto o PDF de menos de 8 MB.';
+    return;
+  }
+  const token = sessionStorage.getItem('token');
+  const formData = new FormData();
+  formData.append('file', file);
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Validando...';
+  }
+  msg.className = 'small text-muted mt-1';
+  msg.textContent = 'Leyendo tu comprobante y consultando Banxico...';
+  try {
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const r = await fetch(`${API_BASE}/recargas/${rcRecarga.id}/validate-receipt`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || `Error ${r.status}`);
+    if (data.payment_status === 'approved') {
+      showPaymentDone(data);
+    } else {
+      msg.className = 'small text-warning mt-1';
+      msg.textContent = data.message || 'Tu comprobante quedó en revisión.';
+      showToast('Comprobante en revisión', 'warning');
+      setTimeout(loadHistory, 1500);
+    }
+  } catch (e) {
+    msg.className = 'small text-danger mt-1';
+    msg.textContent = e.message;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Validar mi comprobante';
+    }
+  }
+}
+
+async function loadHistory() {
+  const box = document.getElementById('rcHistory');
+  try {
+    const rows = await apiRequest('GET', '/recargas/portal');
+    rcHistoryRows = rows;
+    if (!rows.length) {
+      box.innerHTML = '<div class="text-muted small">Todavía no tienes recargas desde el portal.</div>';
+      return;
+    }
+    box.innerHTML = `<div class="table-responsive"><table class="table table-sm align-middle mb-0">
+      <thead><tr>
+        <th>Fecha</th><th>Compañía</th><th>Teléfono</th><th>Producto</th>
+        <th class="text-end">Monto</th><th>Estado</th><th></th>
+      </tr></thead>
+      <tbody>${rows.map((row) => `<tr>
+        <td class="small text-nowrap">${rcEsc(new Date(row.created_at).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }))}</td>
+        <td class="small">${rcEsc(row.company)}</td>
+        <td class="small">${rcEsc(row.phone)}</td>
+        <td class="small">${rcEsc(row.product_description || row.product_code || '—')}</td>
+        <td class="small text-end">${rcMoney(row.total)}</td>
+        <td class="small"><span class="badge ${row.status === 'completed' ? 'bg-success' : row.status === 'failed' || row.status === 'cancelled' ? 'bg-danger' : row.status === 'refunded' ? 'bg-secondary' : 'bg-warning text-dark'}">${rcEsc(RC_STATUS[row.status] || row.status)}</span></td>
+        <td class="text-end">${row.payment_status !== 'paid' && row.status === 'requested'
+          ? `<button class="btn btn-sm btn-outline-dark" onclick="resumePayment('${rcEsc(row.id)}')">Continuar pago</button>`
+          : ''}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  } catch (e) {
+    box.innerHTML = `<div class="small text-danger">${rcEsc(e.message)}</div>`;
+  }
+}
+
+function resumePayment(id) {
+  const row = rcHistoryRows.find((item) => String(item.id) === String(id));
+  if (!row) return;
+  rcRecarga = row;
+  document.getElementById('rcReference').textContent = '#' + String(row.id).slice(0, 8).toUpperCase();
+  if (!document.getElementById('rcTransferDate').value) {
+    document.getElementById('rcTransferDate').value = rcToday();
+  }
+  renderSummary(row);
+  document.getElementById('rcDone').classList.add('d-none');
+  document.getElementById('rcPayment').classList.remove('d-none');
+  document.getElementById('rcPayment').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function loadRechargePage() {
+  const loading = document.getElementById('rcLoading');
+  const content = document.getElementById('rcContent');
+  try {
+    const [profile, pc, catalog, bd, banks] = await Promise.all([
+      getProfile(),
+      apiRequest('GET', '/payments/config').catch(() => null),
+      apiRequest('GET', '/recargas/catalogo'),
+      getBankDetails().catch(() => null),
+      apiRequest('GET', '/payments/transfer-banks').catch(() => []),
+    ]);
+    rcPaymentConfig = pc || {};
+    rcCatalog = catalog || { companies: [], kinds: [] };
+    rcAccounts = (bd && bd.accounts) || [];
+    rcBanks = Array.isArray(banks) ? banks : [];
+    loading.classList.add('d-none');
+    content.classList.remove('d-none');
+
+    if (profile && profile.name) {
+      document.getElementById('rcName').value = profile.name;
+    }
+    document.getElementById('rcTransferDate').value = rcToday();
+
+    const companySelect = document.getElementById('rcCompany');
+    companySelect.innerHTML = '<option value="">Selecciona tu compañía</option>' + (rcCatalog.companies || []).map(
+      (company) => `<option value="${rcEsc(company.name)}">${rcEsc(company.name)} (${company.count})</option>`
+    ).join('');
+    fillBanks();
+
+    if (rcPaymentConfig && rcPaymentConfig.cep_enabled === false) {
+      document.getElementById('rcError').classList.remove('d-none');
+      document.getElementById('rcError').textContent =
+        'La validación con Banxico no está activada. No es posible pagar recargas por transferencia en este momento.';
+    } else if (rcPaymentConfig && rcPaymentConfig.banxico_open === false) {
+      document.getElementById('rcError').classList.remove('d-none');
+      document.getElementById('rcError').textContent =
+        'Banxico está cerrado en este horario. La validación de transferencias está disponible de 09:30 a 23:00.';
+    }
+
+    if (!rcAccounts.length) {
+      document.getElementById('rcError').classList.remove('d-none');
+      document.getElementById('rcError').textContent =
+        'La plataforma no tiene configurada su cuenta bancaria. Intenta más tarde.';
+    }
+
+    loadHistory();
+  } catch (e) {
+    loading.classList.add('d-none');
+    content.classList.remove('d-none');
+    if (String(e.message).includes('401') || String(e.message).toLowerCase().includes('autentic')) {
+      location.href = '/web/login?next=/web/recargas';
+      return;
+    }
+    document.getElementById('rcError').classList.remove('d-none');
+    document.getElementById('rcError').textContent = e.message;
+  }
+}
+
+loadRechargePage();
+</script>
+{% endif %}
 {% endblock %}

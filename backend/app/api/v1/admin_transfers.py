@@ -12,8 +12,10 @@ from app.api.deps import require_superuser
 from app.db.session import get_db
 from app.models.balance_payment import BalancePayment
 from app.models.order import Order
+from app.models.recarga_order import RecargaOrder
 from app.models.receipt_validation import ReceiptValidation
 from app.models.user import User
+from app.services import recarga_service
 from app.services.balance_payment_service import settle_balance_payment_record
 from app.services.cep_validation_service import banxico_open
 from app.services.order_transfer_service import settle_order_transfer
@@ -36,6 +38,7 @@ STATUS_LABELS = {
 }
 ENTITY_LABELS = {
     "order_transfer": "Transferencia de pedido",
+    "recarga_transfer": "Transferencia de recarga",
     "balance_payment": "Pago de saldo pendiente",
 }
 
@@ -52,6 +55,7 @@ async def _record_row(
 ) -> dict:
     order = None
     payment = None
+    recarga = None
     customer = None
     order_link = None
 
@@ -64,12 +68,22 @@ async def _record_row(
         payment = await db.get(BalancePayment, record.entity_id)
         if payment:
             customer = await db.get(User, payment.user_id)
+    elif record.entity_type == "recarga_transfer":
+        recarga = await db.get(RecargaOrder, record.entity_id)
+        if recarga:
+            customer = (
+                await db.get(User, recarga.user_id)
+                if recarga.user_id
+                else None
+            )
 
     amount = record.expected_amount
     if order is not None and order.total is not None:
         amount = order.total_to_pay
     elif payment is not None and payment.amount is not None:
         amount = payment.amount
+    elif recarga is not None and recarga.total is not None:
+        amount = recarga.total
 
     created = record.created_at
     age_minutes = 0
@@ -86,6 +100,8 @@ async def _record_row(
         short = str(order.id)[:8].upper()
     elif payment is not None:
         short = str(payment.id)[:8].upper()
+    elif recarga is not None:
+        short = str(recarga.id)[:8].upper()
     else:
         short = str(record.id)[:8].upper()
 
@@ -122,7 +138,7 @@ async def transfers_summary(
         select(ReceiptValidation)
         .where(
             ReceiptValidation.entity_type.in_(
-                ("order_transfer", "balance_payment")
+                ("order_transfer", "balance_payment", "recarga_transfer")
             ),
             ReceiptValidation.status.in_(RELEVANT),
         )
@@ -184,7 +200,7 @@ async def revalidate_pending_transfers(
         select(ReceiptValidation)
         .where(
             ReceiptValidation.entity_type.in_(
-                ("order_transfer", "balance_payment")
+                ("order_transfer", "balance_payment", "recarga_transfer")
             ),
             ReceiptValidation.status.in_(UNRESOLVED),
         )
@@ -202,6 +218,10 @@ async def revalidate_pending_transfers(
                 await settle_order_transfer(db, record, True)
             elif record.entity_type == "balance_payment":
                 await settle_balance_payment_record(db, record, True)
+            elif record.entity_type == "recarga_transfer":
+                await recarga_service.settle_transfer_receipt(
+                    db, record, approved=True
+                )
             confirmed += 1
         await db.commit()
         processed += 1

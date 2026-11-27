@@ -33,7 +33,13 @@ class OrderCreate(BaseModel):
     debt_payment_mode: str | None = Field(default=None, pattern="^(full|installments)$")
     recharge_company: str | None = Field(default=None, max_length=40)
     recharge_phone: str | None = Field(default=None, max_length=20)
+    recharge_product_code: str | None = Field(default=None, max_length=30)
+    recharge_product_description: str | None = Field(default=None, max_length=200)
+    recharge_kind: str | None = Field(default=None, max_length=20)
     recharge_amount: Decimal = Field(default=Decimal("0"), ge=0)
+    no_courier_action: str | None = Field(
+        default=None, pattern="^(wait|pickup)$"
+    )
 
 
 class OrderItemOptionOut(BaseModel):
@@ -73,6 +79,9 @@ class OrderOut(BaseModel):
     total: Decimal
     recharge_company: str | None = None
     recharge_phone: str | None = None
+    recharge_product_code: str | None = None
+    recharge_product_description: str | None = None
+    recharge_kind: str | None = None
     recharge_amount: Decimal = Decimal("0")
     recharge_fee: Decimal = Decimal("0")
     recharge_status: str | None = None
@@ -95,12 +104,31 @@ class OrderOut(BaseModel):
     delivery_earnings: Decimal
     tip_amount: Decimal = Decimal("0")
     scheduled_for: datetime | None = None
+    scheduled_outside_hours: bool = False
+    scheduled_approval_status: str | None = None
+    scheduled_approval_deadline: datetime | None = None
+    scheduled_approved_at: datetime | None = None
+    scheduled_prep_ack: bool = False
+    scheduled_prep_ack_at: datetime | None = None
+    scheduled_reminder_sent_at: datetime | None = None
+    courier_support_requested: bool = False
+    courier_support_fee: Decimal = Decimal("0")
+    courier_support_requested_at: datetime | None = None
+    courier_support_alert_at: datetime | None = None
     delivery_mode: str = "platform"
     fulfillment_type: str = "delivery"
     restaurant_owes_platform: Decimal = Decimal("0")
     points_redeemed: int = 0
     loyalty_discount: Decimal = Decimal("0")
     requires_courier_approval: bool = False
+    no_courier_hold: bool = False
+    no_courier_notified_at: datetime | None = None
+    no_courier_decision_deadline: datetime | None = None
+    courier_alert_at: datetime | None = None
+    near_closing: bool = False
+    business_confirmation_deadline: datetime | None = None
+    admin_delivery: bool = False
+    admin_delivery_by: UUID | None = None
     awaiting_courier_at: datetime | None = None
     courier_approval_deadline: datetime | None = None
     refund_account_holder: str | None = None
@@ -108,6 +136,7 @@ class OrderOut(BaseModel):
     refund_clabe: str | None = None
     placed_at: datetime
     confirmed_at: datetime | None
+    ready_at: datetime | None = None
     picked_up_at: datetime | None
     delivered_at: datetime | None
     cancelled_at: datetime | None = None
@@ -163,6 +192,19 @@ class AvailableOrderOut(OrderOut):
 
 class OrderStatusUpdate(BaseModel):
     status: str = Field(..., pattern=r"^(pending|confirmed|awaiting_courier|preparing|ready|in_delivery|picked_up|delivered|cancelled)$")
+    accept_early_prep: bool = False
+
+
+class ScheduledApprovalRequest(BaseModel):
+    accept: bool
+
+
+class AdminAssignCourierRequest(BaseModel):
+    courier_id: UUID
+
+
+class AdminOrderStatusUpdate(BaseModel):
+    status: str = Field(..., pattern=r"^(picked_up|delivered)$")
 
 
 class TrackPoint(BaseModel):

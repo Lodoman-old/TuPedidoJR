@@ -8,9 +8,12 @@ from pydantic import BaseModel, Field
 class RecargaCreate(BaseModel):
     company: str = Field(..., min_length=2, max_length=40)
     phone: str = Field(..., min_length=10, max_length=20)
-    amount: Decimal = Field(..., gt=0, le=1000)
+    amount: Decimal = Field(..., gt=0, le=5000)
     payment_method: str = Field(default="cash", pattern="^(cash|transfer)$")
     order_id: UUID | None = None
+    product_code: str | None = Field(default=None, max_length=30)
+    product_description: str | None = Field(default=None, max_length=200)
+    product_kind: str | None = Field(default=None, max_length=20)
     customer_name: str | None = Field(default=None, max_length=150)
 
 
@@ -25,6 +28,9 @@ class RecargaOut(BaseModel):
     courier_name: str | None = None
     company: str
     phone: str
+    product_code: str | None = None
+    product_description: str | None = None
+    product_kind: str | None = None
     amount: Decimal
     fee: Decimal
     total: Decimal
@@ -32,6 +38,8 @@ class RecargaOut(BaseModel):
     payment_status: str
     status: str
     provider_reference: str | None = None
+    transfer_tracking_key: str | None = None
+    cep_status: str | None = None
     error_message: str | None = None
     notes: str | None = None
     paid_at: datetime | None = None

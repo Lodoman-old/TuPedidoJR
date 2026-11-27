@@ -120,8 +120,17 @@ async def build_tracking(db: AsyncSession, order: Order) -> dict:
             ("in_delivery", "En reparto por el negocio"),
             ("delivered", "Entregado"),
         ]
+    elif getattr(order, "admin_delivery", False):
+        tracking_steps = [
+            ("pending", "Pedido recibido"),
+            ("confirmed", "Confirmado por el negocio"),
+            ("preparing", "En preparación"),
+            ("ready", "Listo"),
+            ("in_delivery", "En reparto por TuPedidoJR"),
+            ("delivered", "Entregado"),
+        ]
     keys = [key for key, _ in tracking_steps]
-    if order.requires_courier_approval:
+    if order.requires_courier_approval and not getattr(order, "admin_delivery", False):
         insert_at = keys.index("confirmed") + 1
         tracking_steps = (
             tracking_steps[:insert_at]

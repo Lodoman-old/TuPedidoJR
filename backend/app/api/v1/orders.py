@@ -45,13 +45,21 @@ from app.services.receipt_validation_service import (
 )
 from app.services.restaurant_access import ORDER_ROLES, have_role
 from app.services.estimation_service import calculate_estimated_time
-from app.services.order_service import calculate_order_totals, get_approval_timeout_min, get_setting_value, resolve_item_options
+from app.services.order_service import (
+    calculate_order_totals,
+    delivery_ops_v2_enabled,
+    get_approval_timeout_min,
+    get_int_setting,
+    get_setting_value,
+    resolve_item_options,
+)
 from app.services.order_serialization import order_out
 from app.services.order_transfer_service import apply_preapproved_transfer
-from app.services import recarga_service
+from app.services import courier_availability, delivery_ops_service, recarga_service, sivetel_service
 from app.services.loyalty_service import apply_redemption, preview_redemption, award_on_delivery
-from app.services.push_service import schedule_available_order, schedule_courier_preparing, schedule_courier_ready, schedule_new_order, schedule_order_release, schedule_order_status, schedule_admin_transfer_review
-from app.services.schedule_service import restaurant_open_state
+from app.services.push_service import schedule_available_order, schedule_courier_preparing, schedule_courier_ready, schedule_customer_early_prep, schedule_new_order, schedule_near_closing_order, schedule_no_courier_wait, schedule_order_release, schedule_order_status, schedule_scheduled_outside_hours, schedule_admin_transfer_review
+from app.services.schedule_service import minutes_to_close, restaurant_open_state, schedule_state_at
+from app.services.scheduled_service import ScheduledOrderError, enforce_scheduled_rules
 from app.services.tracking_service import build_tracking
 from app.ws.manager import ConnectionManager
 
@@ -81,12 +89,18 @@ def _is_pickup(body: OrderCreate) -> bool:
     return body.fulfillment_type == "pickup"
 
 
-def _validate_checkout_recharge(body: OrderCreate) -> None:
+async def _validate_checkout_recharge(
+    db: AsyncSession, body: OrderCreate
+) -> None:
     """Valida la recarga solo al crear el pedido, no en la vista previa."""
     amount = Decimal(body.recharge_amount or 0)
-    if amount <= 0:
+    code = (body.recharge_product_code or "").strip().upper()
+    if amount <= 0 and not code:
         body.recharge_company = None
         body.recharge_phone = None
+        body.recharge_product_code = None
+        body.recharge_product_description = None
+        body.recharge_kind = None
         body.recharge_amount = Decimal("0")
         return
     if _is_pickup(body):
@@ -94,6 +108,47 @@ def _validate_checkout_recharge(body: OrderCreate) -> None:
             status_code=400,
             detail="La recarga solo aplica con entrega a domicilio.",
         )
+    digits = "".join(ch for ch in str(body.recharge_phone or "") if ch.isdigit())
+    if len(digits) != 10:
+        raise HTTPException(
+            status_code=400,
+            detail="Escribe un número de 10 dígitos para la recarga.",
+        )
+
+    if code:
+        if not await recarga_service.recharges_enabled(db):
+            raise HTTPException(
+                status_code=400,
+                detail="Las recargas de tiempo aire no están disponibles por ahora.",
+            )
+        config = await sivetel_service.load_config(db)
+        if config is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Sivetel no está configurado.",
+            )
+        try:
+            client = sivetel_service.SivetelClient(config)
+            products = await sivetel_service.obtener_catalogo(client)
+        except sivetel_service.SivetelError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"No se pudo consultar el catálogo: {exc.message}",
+            ) from exc
+        product = sivetel_service.find_product(products, code)
+        if product is None:
+            raise HTTPException(
+                status_code=400,
+                detail="El producto de recarga ya no está disponible.",
+            )
+        body.recharge_product_code = product["code"]
+        body.recharge_company = product["company"]
+        body.recharge_product_description = product["description"]
+        body.recharge_kind = product["kind"]
+        body.recharge_amount = Decimal(product["amount"])
+        body.recharge_phone = digits
+        return
+
     if amount < recarga_service.MIN_RECHARGE:
         raise HTTPException(
             status_code=400,
@@ -102,19 +157,13 @@ def _validate_checkout_recharge(body: OrderCreate) -> None:
     if amount > recarga_service.MAX_RECHARGE:
         raise HTTPException(
             status_code=400,
-            detail="La recarga máxima es de $500.",
+            detail="La recarga supera el máximo permitido.",
         )
     company = (body.recharge_company or "").strip()
     if len(company) < 2:
         raise HTTPException(
             status_code=400,
             detail="Escribe la compañía de la recarga.",
-        )
-    digits = "".join(ch for ch in str(body.recharge_phone or "") if ch.isdigit())
-    if len(digits) != 10:
-        raise HTTPException(
-            status_code=400,
-            detail="Escribe un número de 10 dígitos para la recarga.",
         )
     body.recharge_company = company
     body.recharge_phone = digits
@@ -399,6 +448,24 @@ async def estimate_price(
             "Podría no ser aceptado por ningún repartidor por la distancia."
         )
 
+    ops_v2 = await delivery_ops_v2_enabled(db)
+    available_couriers = 0
+    no_courier = False
+    no_courier_wait_min = await get_int_setting(db, "NO_COURIER_WAIT_MIN", 30)
+    no_courier_decision_min = await get_int_setting(
+        db, "NO_COURIER_DECISION_MIN", 15
+    )
+    near_closing = False
+    minutes_close = None
+    near_closing_min = await get_int_setting(db, "NEAR_CLOSING_MIN", 30)
+    if ops_v2 and not pickup and restaurant.delivery_mode == "platform":
+        available_couriers = await courier_availability.available_courier_count(db)
+        no_courier = available_couriers == 0
+        minutes_close = await minutes_to_close(db, restaurant)
+        near_closing = (
+            minutes_close is not None and minutes_close <= near_closing_min
+        )
+
     return {
         "subtotal": f"{subtotal:.2f}",
         "delivery_fee": f"{delivery_fee:.2f}",
@@ -411,6 +478,9 @@ async def estimate_price(
         "total": f"{total:.2f}",
         "recharge_company": body.recharge_company,
         "recharge_phone": body.recharge_phone,
+        "recharge_product_code": body.recharge_product_code,
+        "recharge_product_description": body.recharge_product_description,
+        "recharge_kind": body.recharge_kind,
         "recharge_amount": f"{recharge_amount:.2f}",
         "recharge_fee": f"{recharge_fee:.2f}",
         "recharge_total": f"{recharge_total:.2f}",
@@ -420,6 +490,13 @@ async def estimate_price(
         "requires_courier_approval": requires_approval,
         "approval_km": approval_km,
         "approval_timeout_min": approval_timeout_min,
+        "available_couriers": available_couriers,
+        "no_courier": no_courier,
+        "no_courier_wait_min": no_courier_wait_min,
+        "no_courier_decision_min": no_courier_decision_min,
+        "near_closing": near_closing,
+        "minutes_to_close": minutes_close,
+        "near_closing_min": near_closing_min,
         "delivery_mode": "pickup" if pickup else restaurant.delivery_mode,
         "fulfillment_type": body.fulfillment_type,
     }
@@ -438,7 +515,7 @@ async def create_order(
     if restaurant.status != "active" and not current_user.is_superuser:
         raise HTTPException(status_code=409, detail="El restaurante todavía no está activo")
 
-    _validate_checkout_recharge(body)
+    await _validate_checkout_recharge(db, body)
     if (body.recharge_amount or 0) > 0 and not await recarga_service.recharges_enabled(db):
         raise HTTPException(
             status_code=400,
@@ -467,7 +544,11 @@ async def create_order(
             raise HTTPException(status_code=400, detail="La cita ya está cerrada")
         appointment_link = appointment.id
 
-    if not current_user.is_superuser and not appointment_link:
+    if (
+        not current_user.is_superuser
+        and not appointment_link
+        and body.scheduled_for is None
+    ):
         open_state = await restaurant_open_state(db, restaurant)
         if not restaurant.is_open:
             raise HTTPException(
@@ -609,6 +690,61 @@ async def create_order(
         courier_deadline = datetime.now(timezone.utc) + timedelta(
             minutes=approval_timeout_min
         )
+
+    ops_v2 = await delivery_ops_v2_enabled(db)
+    no_courier_hold = False
+    near_closing = False
+    business_deadline = None
+    scheduled_outside_hours = False
+    scheduled_approval_status = None
+    scheduled_approval_deadline = None
+    if scheduled_for is not None and not pickup:
+        schedule_state = await schedule_state_at(db, restaurant, scheduled_for)
+        if schedule_state["has_schedule"] and not schedule_state["is_open"]:
+            scheduled_outside_hours = True
+            scheduled_approval_status = "pending"
+            approval_min = await get_int_setting(
+                db, "SCHEDULED_APPROVAL_MIN", 30
+            )
+            scheduled_approval_deadline = datetime.now(timezone.utc) + timedelta(
+                minutes=max(approval_min, 1)
+            )
+    if (
+        ops_v2
+        and not pickup
+        and restaurant.delivery_mode == "platform"
+        and scheduled_for is None
+    ):
+        available = await courier_availability.available_courier_count(db)
+        if available == 0:
+            if body.no_courier_action != "wait":
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "No hay repartidores disponibles ahora. "
+                        "Elige recoger en el negocio."
+                    ),
+                )
+            requires_approval = True
+            no_courier_hold = True
+            wait_min = await get_int_setting(db, "NO_COURIER_WAIT_MIN", 30)
+            courier_deadline = datetime.now(timezone.utc) + timedelta(
+                minutes=wait_min
+            )
+        minutes_close = await minutes_to_close(db, restaurant)
+        near_closing_min = await get_int_setting(db, "NEAR_CLOSING_MIN", 30)
+        if (
+            minutes_close is not None
+            and minutes_close <= near_closing_min
+        ):
+            near_closing = True
+            response_min = await get_int_setting(
+                db, "NEAR_CLOSING_RESPONSE_MIN", 10
+            )
+            business_deadline = datetime.now(timezone.utc) + timedelta(
+                minutes=max(response_min, 1)
+            )
+
     refund_holder = (body.refund_account_holder or "").strip()
     refund_bank = (body.refund_bank or "").strip()
     refund_clabe = _clean_clabe(body.refund_clabe)
@@ -674,7 +810,7 @@ async def create_order(
         user_id=current_user.id,
         restaurant_id=restaurant.id,
         appointment_id=appointment_link,
-        status="pending",
+        status="awaiting_courier" if no_courier_hold else "pending",
         delivery_mode="pickup" if pickup else restaurant.delivery_mode,
         fulfillment_type=body.fulfillment_type,
         restaurant_owes_platform=(
@@ -700,15 +836,26 @@ async def create_order(
         delivery_distance_km=distance_km,
         tip_amount=tip_amount,
         scheduled_for=scheduled_for,
+        scheduled_outside_hours=scheduled_outside_hours,
+        scheduled_approval_status=scheduled_approval_status,
+        scheduled_approval_deadline=scheduled_approval_deadline,
         points_redeemed=points_redeemed,
         loyalty_discount=loyalty_discount,
         requires_courier_approval=requires_approval,
+        no_courier_hold=no_courier_hold,
+        courier_alert_at=None,
+        near_closing=near_closing,
+        business_confirmation_deadline=business_deadline,
+        admin_delivery=False,
         courier_approval_deadline=courier_deadline,
         refund_account_holder=refund_holder or None,
         refund_bank=refund_bank or None,
         refund_clabe=refund_clabe or None,
         recharge_company=body.recharge_company if recharge_amount > 0 else None,
         recharge_phone=body.recharge_phone if recharge_amount > 0 else None,
+        recharge_product_code=body.recharge_product_code if recharge_amount > 0 else None,
+        recharge_product_description=body.recharge_product_description if recharge_amount > 0 else None,
+        recharge_kind=body.recharge_kind if recharge_amount > 0 else None,
         recharge_amount=recharge_amount,
         recharge_fee=recharge_fee,
         recharge_status="pending" if recharge_amount > 0 else None,
@@ -724,6 +871,9 @@ async def create_order(
             origin="checkout",
             company=body.recharge_company,
             phone=body.recharge_phone,
+            product_code=body.recharge_product_code,
+            product_description=body.recharge_product_description,
+            product_kind=body.recharge_kind,
             amount=recharge_amount,
             fee=recharge_fee,
             total=recharge_total,
@@ -771,6 +921,12 @@ async def create_order(
         if requires_approval:
             # El repartidor se busca desde que se paga, no cuando el restaurante confirma.
             schedule_available_order(str(order.id), False)
+        if near_closing:
+            schedule_near_closing_order(str(order.id))
+        if no_courier_hold:
+            schedule_no_courier_wait(str(order.id))
+        if scheduled_outside_hours:
+            schedule_scheduled_outside_hours(str(order.id))
     return result.scalar_one()
 
 
@@ -873,6 +1029,55 @@ async def get_order(
     return order_out(
         order,
         can_see_refund=bool(current_user.is_superuser or order.user_id == current_user.id),
+        customer_phone=customer.phone if customer else None,
+    )
+
+
+@router.post("/{order_id}/switch-to-pickup", response_model=OrderOut)
+async def customer_switch_to_pickup(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """El cliente cambia a recoger cuando se agotó la espera de repartidor."""
+    result = await db.execute(
+        select(Order)
+        .where(Order.id == order_id)
+        .options(selectinload(Order.items))
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if order.user_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="No puedes modificar este pedido")
+    if not order.no_courier_hold and order.status != "awaiting_courier":
+        raise HTTPException(
+            status_code=400,
+            detail="Este pedido no está esperando repartidor",
+        )
+    try:
+        refund = await delivery_ops_service.switch_order_to_pickup(
+            db, order, actor_id=current_user.id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    await log_action(
+        db,
+        current_user.id,
+        "order.customer_switch_to_pickup",
+        "order",
+        order.id,
+        {"refund_amount": str(refund)},
+    )
+    await db.commit()
+    await db.refresh(order)
+    schedule_new_order(str(order.id))
+    schedule_order_status(str(order.id), order.status)
+    customer = await db.get(User, order.user_id)
+    return order_out(
+        order,
+        can_see_refund=True,
         customer_phone=customer.phone if customer else None,
     )
 
@@ -1443,6 +1648,17 @@ async def update_order_status(
             status_code=400,
             detail="Espera a que un repartidor acepte el pedido antes de prepararlo",
         )
+    if order.near_closing:
+        if body.status not in ("confirmed", "preparing"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Confirma si aceptas el pedido cerca del cierre. "
+                    "Si no lo aceptas, cancélalo."
+                ),
+            )
+        order.near_closing = False
+        order.business_confirmation_deadline = None
 
     requested = body.status
     if (
@@ -1458,12 +1674,35 @@ async def update_order_status(
                 "No prepares el pedido hasta que se valide."
             ),
         )
+    if restaurant is None:
+        restaurant = await db.get(Restaurant, order.restaurant_id)
+    try:
+        await enforce_scheduled_rules(
+            db,
+            order,
+            restaurant,
+            requested,
+            accept_early_prep=body.accept_early_prep,
+        )
+    except ScheduledOrderError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if (
         requested == "confirmed"
         and order.requires_courier_approval
         and order.delivery_mode == "platform"
     ):
         requested = "preparing" if order.delivery_person_id else "awaiting_courier"
+
+    try:
+        await enforce_scheduled_rules(
+            db,
+            order,
+            restaurant,
+            requested,
+            accept_early_prep=body.accept_early_prep,
+        )
+    except ScheduledOrderError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     order.status = requested
     now = datetime.now(timezone.utc)
@@ -1484,6 +1723,8 @@ async def update_order_status(
         and order.confirmed_at is None
     ):
         order.confirmed_at = now
+    elif requested == "ready":
+        order.ready_at = now
     elif requested == "picked_up" and order.picked_up_at is None:
         order.picked_up_at = now
     elif requested == "delivered" and order.delivered_at is None:

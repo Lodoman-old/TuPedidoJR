@@ -13,6 +13,7 @@ from app.models.order import Order
 from app.models.recarga_order import RecargaOrder
 from app.models.restaurant import Restaurant
 from app.models.user import User
+from app.services import sivetel_service
 from app.services.setting_service import set_setting
 
 
@@ -150,6 +151,51 @@ def select_recarga(order_id):
     from sqlalchemy import select
 
     return select(RecargaOrder).where(RecargaOrder.order_id == uuid.UUID(order_id))
+
+
+async def test_order_with_catalog_product_code(client, db_session, monkeypatch):
+    customer, restaurant, item = await _seed(client, db_session)
+
+    async def fake_config(db):
+        return sivetel_service.SivetelConfig(
+            base_url="https://example.test/ApiWS",
+            account="demo",
+            user="demo",
+            password="demo",
+            timeout_seconds=10,
+        )
+
+    async def fake_catalog(client):
+        return [
+            {
+                "nombre": "Bait",
+                "codigo": "BAIT099",
+                "descripcion": "Bait Internet en Casa $99.00",
+                "monto": "99.00",
+            }
+        ]
+
+    monkeypatch.setattr(sivetel_service, "load_config", fake_config)
+    monkeypatch.setattr(sivetel_service, "obtener_catalogo", fake_catalog)
+
+    resp = await client.post(
+        "/api/v1/orders",
+        json=_payload(
+            restaurant,
+            item,
+            recharge_amount=0,
+            recharge_product_code="BAIT099",
+        ),
+        headers=_headers(customer),
+    )
+    assert resp.status_code == 201, resp.text
+    data = resp.json()
+    assert Decimal(data["recharge_amount"]) == Decimal("99.00")
+    assert data["recharge_company"] == "Bait"
+    assert data["recharge_product_code"] == "BAIT099"
+    assert data["recharge_product_description"] == "Bait Internet en Casa $99.00"
+    assert data["recharge_kind"] == "datos"
+    assert Decimal(data["total_to_pay"]) == Decimal(data["total"]) + Decimal("101.00")
 
 
 async def test_transfer_order_creates_pending_recharge(client, db_session):

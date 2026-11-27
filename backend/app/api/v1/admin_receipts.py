@@ -13,6 +13,7 @@ from app.models.rental_booking import RentalBooking
 from app.models.receipt_validation import ReceiptValidation
 from app.models.restaurant import Restaurant
 from app.models.user import User
+from app.services import recarga_service
 from app.services.order_transfer_service import (
     apply_preapproved_transfer,
     settle_order_transfer,
@@ -32,6 +33,7 @@ ENTITY_LABELS = {
     "rental_payment": "Pago de renta",
     "affiliation_payment": "Afiliación anual",
     "order_transfer": "Transferencia de pedido",
+    "recarga_transfer": "Transferencia de recarga",
     "balance_payment": "Pago de saldo pendiente",
 }
 KIND_LABELS = {
@@ -156,7 +158,17 @@ async def revalidate(
     elif record.entity_type == "balance_payment" and record.status == "high":
         await settle_balance_payment_record(db, record, True)
         await db.commit()
+    elif record.entity_type == "recarga_transfer":
+        if record.status in ("high", "preapproved"):
+            await _settle_recarga(db, record, True)
+        await db.commit()
     return _row(record)
+
+
+async def _settle_recarga(
+    db: AsyncSession, record: ReceiptValidation, approved: bool
+) -> None:
+    await recarga_service.settle_transfer_receipt(db, record, approved=approved)
 
 
 async def _settle_entity(db: AsyncSession, record: ReceiptValidation, approved: bool) -> bool:
@@ -170,6 +182,8 @@ async def _settle_entity(db: AsyncSession, record: ReceiptValidation, approved: 
         await settle_order_transfer(db, record, approved)
     elif record.entity_type == "balance_payment":
         await settle_balance_payment_record(db, record, approved)
+    elif record.entity_type == "recarga_transfer":
+        await _settle_recarga(db, record, approved)
     return False
 
 

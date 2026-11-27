@@ -65,9 +65,11 @@
   const REC_STATUS = {
     requested: ['Por confirmar pago', 'warning text-dark'],
     pending: ['Pendiente de procesar', 'info text-dark'],
+    processing: ['Procesando', 'info text-dark'],
     completed: ['Completada', 'success'],
     failed: ['Fallida', 'danger'],
     refunded: ['Reembolsada', 'secondary'],
+    cancelled: ['Cancelada', 'secondary'],
   };
   let recRows = [];
   let recToComplete = null;
@@ -95,6 +97,9 @@
         <thead><tr><th>Fecha</th><th>Cliente / Repartidor</th><th>Pedido</th><th>Compañía</th><th>Teléfono</th><th class="text-end">Monto</th><th class="text-end">Comisión</th><th class="text-end">Total</th><th>Estado</th><th></th></tr></thead>
         <tbody>${recRows.map(r => {
           const [label, color] = REC_STATUS[r.status] || [r.status, 'secondary'];
+          const beneficiary = r.origin === 'courier'
+            ? 'Repartidor'
+            : (r.payment_method === 'cash' && Number(r.fee || 0) > 0 ? 'Plataforma' : '—');
           const actions = [];
           if (r.status === 'requested' && r.payment_method === 'transfer') {
             actions.push(`<button class="btn btn-sm btn-outline-primary" onclick="confirmRecargaPayment('${r.id}')">Confirmar pago</button>`);
@@ -113,10 +118,10 @@
             <td class="small">${new Date(r.created_at).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
             <td class="small">${esc(r.customer_name || 'Cliente')}<br><span class="text-muted">${esc(r.courier_name || 'Sin repartidor')}</span></td>
             <td class="small">${r.order_code ? '#' + esc(r.order_code) : 'Suelta'}${r.origin === 'checkout' ? '<br><span class="badge bg-dark">Con pedido</span>' : r.origin === 'courier' ? '<br><span class="badge bg-info text-dark">Repartidor</span>' : r.origin === 'portal' ? '<br><span class="badge bg-secondary">Portal</span>' : ''}</td>
-            <td>${esc(r.company)}</td>
+            <td>${esc(r.company)}${r.product_description ? `<br><small class="text-muted">${esc(r.product_description)}</small>` : ''}</td>
             <td>${esc(r.phone)}</td>
             <td class="text-end">${money(r.amount)}</td>
-            <td class="text-end text-success">${money(r.fee)}</td>
+            <td class="text-end text-success">${money(r.fee)}${beneficiary !== '—' ? `<br><small class="text-muted">${beneficiary}</small>` : ''}</td>
             <td class="text-end fw-bold">${money(r.total)}</td>
             <td><span class="badge bg-${color}">${label}</span>
               ${r.provider_reference ? `<br><small class="text-muted">Ref: ${esc(r.provider_reference)}</small>` : ''}

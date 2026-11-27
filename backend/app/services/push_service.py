@@ -29,6 +29,7 @@ from app.models.restaurant_user import RestaurantUser
 from app.models.setting import Setting
 from app.models.user import User
 from app.services.restaurant_access import ORDER_ROLES
+from app.services.restaurant_access import ORDER_ROLES
 
 logger = logging.getLogger(__name__)
 
@@ -1654,9 +1655,15 @@ async def notify_order_release(order_id: str) -> None:
             needs_courier = bool(
                 order.requires_courier_approval and not order.delivery_person_id
             )
+            needs_schedule_approval = bool(
+                order.scheduled_outside_hours
+                and order.scheduled_approval_status == "pending"
+            )
         await notify_new_order(order_id)
         if needs_courier:
             await notify_available_order(order_id, False)
+        if needs_schedule_approval:
+            await notify_scheduled_outside_hours(order_id)
     except Exception:
         logger.exception("Order release notification failed for %s", order_id)
 
@@ -1666,6 +1673,432 @@ def schedule_order_release(order_id: str) -> None:
         asyncio.create_task(notify_order_release(order_id))
     except RuntimeError:
         logger.debug("No event loop for order release notification")
+
+
+async def _send_customer_order_message(
+    db,
+    order: Order,
+    title: str,
+    message: str,
+    *,
+    data: dict | None = None,
+    style: str = "amber",
+) -> None:
+    await send_to_user(
+        db,
+        order.user_id,
+        title,
+        message,
+        data or {"type": "order_status", "order_id": str(order.id)},
+        style,
+    )
+    customer = await db.get(User, order.user_id)
+    if not customer or not customer.email:
+        return
+    try:
+        from app.services.email_service import send_email
+
+        await send_email(
+            db,
+            customer.email,
+            title,
+            f"<p>{message}</p><p>Pedido #{str(order.id)[:8].upper()}</p>",
+            message,
+        )
+    except Exception:
+        logger.exception("No se pudo enviar correo de pedido %s", order.id)
+
+
+async def notify_no_courier_wait(order_id: str) -> None:
+    """Avisa al cliente que el pedido espera repartidor."""
+    try:
+        async with async_session() as db:
+            order = await db.get(Order, order_id)
+            if not order or not order.no_courier_hold:
+                return
+            from app.services.order_service import get_int_setting
+
+            wait_min = await get_int_setting(db, "NO_COURIER_WAIT_MIN", 30)
+            await _send_customer_order_message(
+                db,
+                order,
+                "Buscando repartidor",
+                (
+                    f"No hay repartidores disponibles ahora. Estamos buscando uno "
+                    f"para tu pedido; puedes esperar hasta {wait_min} minutos o "
+                    "recogerlo en el negocio."
+                ),
+            )
+    except Exception:
+        logger.exception("No se pudo avisar al cliente sin repartidor")
+
+
+def schedule_no_courier_wait(order_id: str) -> None:
+    try:
+        asyncio.create_task(notify_no_courier_wait(order_id))
+    except RuntimeError:
+        logger.debug("No event loop for no-courier customer notification")
+
+
+async def notify_admin_no_courier(order_id: str, minutes: int) -> None:
+    """Avisa a los superusuarios que un pedido lleva mucho sin repartidor."""
+    try:
+        async with async_session() as db:
+            order = await db.get(Order, order_id)
+            if not order:
+                return
+            admins = list(
+                (
+                    await db.execute(
+                        select(User).where(
+                            User.is_superuser.is_(True),
+                            User.is_active.is_(True),
+                        )
+                    )
+                ).scalars().all()
+            )
+            short = str(order.id)[:8].upper()
+            body = (
+                f"Pedido #{short} sin repartidor por {minutes} minutos. "
+                "Puedes asignar un repartidor o entregarlo tú."
+            )
+            for admin in admins:
+                await send_to_user(
+                    db,
+                    admin.id,
+                    "Pedido sin repartidor",
+                    body,
+                    {"type": "no_courier", "order_id": str(order.id)},
+                    "red",
+                )
+    except Exception:
+        logger.exception("No se pudo avisar al admin sin repartidor")
+
+
+def schedule_admin_no_courier(order_id: str, minutes: int) -> None:
+    try:
+        asyncio.create_task(notify_admin_no_courier(order_id, minutes))
+    except RuntimeError:
+        logger.debug("No event loop for admin no-courier notification")
+
+
+async def notify_near_closing_order(order_id: str) -> None:
+    """Avisa al negocio que el pedido está cerca del cierre."""
+    try:
+        async with async_session() as db:
+            order = await db.get(Order, order_id)
+            if not order or not order.near_closing:
+                return
+            restaurant = await db.get(Restaurant, order.restaurant_id)
+            if not restaurant:
+                return
+            members = await db.execute(
+                select(RestaurantUser.user_id).where(
+                    RestaurantUser.restaurant_id == restaurant.id,
+                    RestaurantUser.is_active.is_(True),
+                    RestaurantUser.role.in_(ORDER_ROLES),
+                )
+            )
+            user_ids = {restaurant.owner_id, *members.scalars().all()}
+            short = str(order.id)[:8].upper()
+            body = (
+                f"Pedido #{short} cerca del cierre. "
+                "Confirma si aún lo aceptas; si no respondes en 10 minutos "
+                "se cancelará."
+            )
+            for user_id in user_ids:
+                await send_to_user(
+                    db,
+                    user_id,
+                    "Pedido cerca del cierre",
+                    body,
+                    {"type": "near_closing", "order_id": str(order.id)},
+                    "amber",
+                )
+    except Exception:
+        logger.exception("No se pudo avisar al negocio del cierre")
+
+
+def schedule_near_closing_order(order_id: str) -> None:
+    try:
+        asyncio.create_task(notify_near_closing_order(order_id))
+    except RuntimeError:
+        logger.debug("No event loop for near-closing notification")
+
+
+async def notify_customer_near_closing_cancelled(order_id: str) -> None:
+    try:
+        async with async_session() as db:
+            order = await db.get(Order, order_id)
+            if not order:
+                return
+            refund = (
+                " Si pagaste por transferencia, el reembolso se procesará el "
+                "siguiente día hábil."
+                if order.payment_method == "transfer"
+                else ""
+            )
+            await _send_customer_order_message(
+                db,
+                order,
+                "Pedido cancelado",
+                (
+                    "El negocio no aceptó el pedido porque estaba por cerrar."
+                    + refund
+                ),
+                data={"type": "near_closing_cancelled", "order_id": str(order.id)},
+                style="red",
+            )
+    except Exception:
+        logger.exception("No se pudo avisar al cliente de la cancelación")
+
+
+def schedule_customer_near_closing_cancelled(order_id: str) -> None:
+    try:
+        asyncio.create_task(notify_customer_near_closing_cancelled(order_id))
+    except RuntimeError:
+        logger.debug("No event loop for near-closing cancellation")
+
+
+async def notify_customer_no_courier_decision(order_id: str) -> None:
+    try:
+        async with async_session() as db:
+            order = await db.get(Order, order_id)
+            if not order:
+                return
+            await _send_customer_order_message(
+                db,
+                order,
+                "Tiempo de espera terminado",
+                (
+                    "No apareció un repartidor en el tiempo de espera. "
+                    "Puedes recoger el pedido en el negocio o cancelarlo."
+                ),
+                data={"type": "no_courier_decision", "order_id": str(order.id)},
+                style="red",
+            )
+    except Exception:
+        logger.exception("No se pudo avisar al cliente la decisión")
+
+
+def schedule_customer_no_courier_decision(order_id: str) -> None:
+    try:
+        asyncio.create_task(notify_customer_no_courier_decision(order_id))
+    except RuntimeError:
+        logger.debug("No event loop for no-courier decision notification")
+
+
+async def _restaurant_user_ids(db, restaurant_id) -> set:
+    restaurant = await db.get(Restaurant, restaurant_id)
+    if not restaurant:
+        return set()
+    members = await db.execute(
+        select(RestaurantUser.user_id).where(
+            RestaurantUser.restaurant_id == restaurant.id,
+            RestaurantUser.is_active.is_(True),
+            RestaurantUser.role.in_(ORDER_ROLES),
+        )
+    )
+    return {restaurant.owner_id, *members.scalars().all()}
+
+
+async def notify_scheduled_outside_hours(order_id: str) -> None:
+    try:
+        async with async_session() as db:
+            order = await db.get(Order, order_id)
+            if not order or not order.scheduled_for:
+                return
+            short = str(order.id)[:8].upper()
+            when = order.scheduled_for.astimezone(
+                ZoneInfo("America/Mexico_City")
+            ).strftime("%d/%m %H:%M")
+            body = (
+                f"Pedido #{short} programado para {when}, fuera de tu horario. "
+                "Confirma si lo aceptas o recházalo."
+            )
+            for user_id in await _restaurant_user_ids(db, order.restaurant_id):
+                await send_to_user(
+                    db,
+                    user_id,
+                    "Pedido programado fuera de horario",
+                    body,
+                    {"type": "scheduled_outside_hours", "order_id": str(order.id)},
+                    "amber",
+                )
+    except Exception:
+        logger.exception("No se pudo avisar del pedido fuera de horario")
+
+
+def schedule_scheduled_outside_hours(order_id: str) -> None:
+    try:
+        asyncio.create_task(notify_scheduled_outside_hours(order_id))
+    except RuntimeError:
+        logger.debug("No event loop for scheduled outside-hours notification")
+
+
+async def notify_scheduled_reminder(order_id: str, minutes: int) -> None:
+    try:
+        async with async_session() as db:
+            order = await db.get(Order, order_id)
+            if not order or not order.scheduled_for:
+                return
+            short = str(order.id)[:8].upper()
+            when = order.scheduled_for.astimezone(
+                ZoneInfo("America/Mexico_City")
+            ).strftime("%d/%m %H:%M")
+            body = (
+                f"Pedido #{short} programado para {when}. "
+                f"Falta{'n' if minutes != 1 else ''} {minutes} minuto(s); "
+                "prepáralo a tiempo."
+            )
+            for user_id in await _restaurant_user_ids(db, order.restaurant_id):
+                await send_to_user(
+                    db,
+                    user_id,
+                    "Pedido programado",
+                    body,
+                    {"type": "scheduled_reminder", "order_id": str(order.id)},
+                    "amber",
+                )
+    except Exception:
+        logger.exception("No se pudo enviar el recordatorio programado")
+
+
+def schedule_scheduled_reminder(order_id: str, minutes: int) -> None:
+    try:
+        asyncio.create_task(notify_scheduled_reminder(order_id, minutes))
+    except RuntimeError:
+        logger.debug("No event loop for scheduled reminder")
+
+
+async def notify_customer_early_prep(order_id: str) -> None:
+    try:
+        async with async_session() as db:
+            order = await db.get(Order, order_id)
+            if not order:
+                return
+            when = order.scheduled_for.astimezone(
+                ZoneInfo("America/Mexico_City")
+            ).strftime("%d/%m %H:%M") if order.scheduled_for else ""
+            await _send_customer_order_message(
+                db,
+                order,
+                "Pedido programado en preparación",
+                (
+                    f"El negocio comenzó a preparar tu pedido programado"
+                    f"{f' para {when}' if when else ''}."
+                ),
+                data={"type": "scheduled_prep", "order_id": str(order.id)},
+                style="green",
+            )
+    except Exception:
+        logger.exception("No se pudo avisar de la preparación anticipada")
+
+
+def schedule_customer_early_prep(order_id: str) -> None:
+    try:
+        asyncio.create_task(notify_customer_early_prep(order_id))
+    except RuntimeError:
+        logger.debug("No event loop for early prep notification")
+
+
+async def notify_business_courier_support_waiting(
+    order_id: str, minutes: int
+) -> None:
+    try:
+        async with async_session() as db:
+            order = await db.get(Order, order_id)
+            if not order:
+                return
+            short = str(order.id)[:8].upper()
+            body = (
+                f"Pedido #{short} con apoyo de TuPedidoJR sigue sin repartidor "
+                f"después de {minutes} minutos. Te avisaremos cuando alguien lo acepte."
+            )
+            for user_id in await _restaurant_user_ids(db, order.restaurant_id):
+                await send_to_user(
+                    db,
+                    user_id,
+                    "Apoyo de reparto sin asignar",
+                    body,
+                    {"type": "courier_support_waiting", "order_id": str(order.id)},
+                    "amber",
+                )
+    except Exception:
+        logger.exception("No se pudo avisar del apoyo sin repartidor")
+
+
+def schedule_business_courier_support_waiting(
+    order_id: str, minutes: int
+) -> None:
+    try:
+        asyncio.create_task(
+            notify_business_courier_support_waiting(order_id, minutes)
+        )
+    except RuntimeError:
+        logger.debug("No event loop for courier support waiting notification")
+
+
+async def notify_customer_scheduled_rejected(order_id: str) -> None:
+    try:
+        async with async_session() as db:
+            order = await db.get(Order, order_id)
+            if not order:
+                return
+            refund = (
+                " Si pagaste por transferencia, el reembolso se procesará el "
+                "siguiente día hábil."
+                if order.payment_method == "transfer"
+                else ""
+            )
+            await _send_customer_order_message(
+                db,
+                order,
+                "Pedido programado no aceptado",
+                (
+                    "El negocio no aceptó tu pedido programado fuera de horario."
+                    + refund
+                ),
+                data={"type": "scheduled_rejected", "order_id": str(order.id)},
+                style="red",
+            )
+    except Exception:
+        logger.exception("No se pudo avisar del programado rechazado")
+
+
+def schedule_customer_scheduled_rejected(order_id: str) -> None:
+    try:
+        asyncio.create_task(notify_customer_scheduled_rejected(order_id))
+    except RuntimeError:
+        logger.debug("No event loop for scheduled rejected notification")
+
+
+async def notify_customer_scheduled_approved(order_id: str) -> None:
+    try:
+        async with async_session() as db:
+            order = await db.get(Order, order_id)
+            if not order:
+                return
+            await _send_customer_order_message(
+                db,
+                order,
+                "Pedido programado aceptado",
+                (
+                    "El negocio aceptó tu pedido programado fuera de horario. "
+                    "Te avisaremos cuando esté en preparación."
+                ),
+                data={"type": "scheduled_approved", "order_id": str(order.id)},
+                style="green",
+            )
+    except Exception:
+        logger.exception("No se pudo avisar del programado aceptado")
+
+
+def schedule_customer_scheduled_approved(order_id: str) -> None:
+    try:
+        asyncio.create_task(notify_customer_scheduled_approved(order_id))
+    except RuntimeError:
+        logger.debug("No event loop for scheduled approved notification")
 
 
 def schedule_new_restaurant_registration(restaurant_id: str) -> None:

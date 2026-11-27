@@ -27,6 +27,19 @@ async def get_approval_timeout_min(db: AsyncSession) -> int:
         return 30
 
 
+async def get_int_setting(db: AsyncSession, key: str, default: int) -> int:
+    raw = await get_setting_value(db, key, str(default))
+    try:
+        return max(int(float(raw)), 0)
+    except (TypeError, ValueError):
+        return default
+
+
+async def delivery_ops_v2_enabled(db: AsyncSession) -> bool:
+    value = await get_setting_value(db, "DELIVERY_OPS_V2_ENABLED", "false")
+    return str(value).strip().lower() == "true"
+
+
 async def resolve_item_options(db: AsyncSession, menu_item, option_ids: list[str] | None):
     """Validate selected options and return (unit_price, selected_options)."""
     from decimal import Decimal

@@ -31,8 +31,10 @@ from app.services.reengagement_service import customer_winback_loop
 from app.services.business_summary_service import business_summary_loop
 from app.services.onboarding_reminder_service import onboarding_reminder_loop
 from app.services.courier_timeout_service import courier_timeout_loop
+from app.services.delivery_ops_service import delivery_ops_loop
 from app.services.cep_retry_service import cep_retry_loop
 from app.services.transfer_timeout_service import transfer_timeout_loop
+from app.services.recarga_service import recarga_processing_loop
 from app.services.push_service import bootstrap_push_settings
 from app.services.security_service import security_guard
 from app.ws.delivery_ws import router as delivery_ws_router
@@ -56,6 +58,7 @@ async def lifespan(app: FastAPI):
     task = asyncio.create_task(ws_manager.start_persist_background_task())
     affiliation_task = asyncio.create_task(affiliation_reminder_loop())
     courier_timeout_task = asyncio.create_task(courier_timeout_loop())
+    delivery_ops_task = asyncio.create_task(delivery_ops_loop())
     appointment_task = asyncio.create_task(appointment_reminder_loop())
     security_task = asyncio.create_task(security_summary_loop())
     winback_task = asyncio.create_task(customer_winback_loop())
@@ -63,10 +66,12 @@ async def lifespan(app: FastAPI):
     onboarding_task = asyncio.create_task(onboarding_reminder_loop())
     cep_retry_task = asyncio.create_task(cep_retry_loop())
     transfer_timeout_task = asyncio.create_task(transfer_timeout_loop())
+    recarga_task = asyncio.create_task(recarga_processing_loop())
     yield
     task.cancel()
     affiliation_task.cancel()
     courier_timeout_task.cancel()
+    delivery_ops_task.cancel()
     appointment_task.cancel()
     security_task.cancel()
     winback_task.cancel()
@@ -74,6 +79,7 @@ async def lifespan(app: FastAPI):
     onboarding_task.cancel()
     cep_retry_task.cancel()
     transfer_timeout_task.cancel()
+    recarga_task.cancel()
     await ws_manager.stop()
     logger.info("Servidor detenido")
 

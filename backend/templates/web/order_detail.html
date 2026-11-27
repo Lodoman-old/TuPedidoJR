@@ -206,7 +206,32 @@
       ${o.fulfillment_type === 'pickup'
         ? `<div class="alert alert-info py-2 small"><i class="bi bi-shop"></i> Pedido para recoger en el negocio</div>`
         : (o.delivery_mode === 'own' ? '<div class="alert alert-info py-2 small"><i class="bi bi-shop"></i> Entrega propia del negocio</div>' : '')}
-      ${o.requires_courier_approval && ['pending', 'confirmed', 'awaiting_courier'].includes(o.status) ? `<div class="alert alert-warning py-2 small">
+      ${o.near_closing && ['pending', 'confirmed', 'awaiting_courier'].includes(o.status) ? `<div class="alert alert-warning py-2 small">
+        <i class="bi bi-clock-history"></i>
+        <strong>El negocio está por cerrar.</strong> Estamos esperando que confirme si aún acepta tu pedido.
+      </div>` : ''}
+      ${o.scheduled_outside_hours ? `<div class="alert ${o.scheduled_approval_status === 'accepted' ? 'alert-success' : o.scheduled_approval_status === 'rejected' ? 'alert-danger' : 'alert-warning'} py-2 small">
+        <i class="bi bi-calendar-check"></i>
+        ${o.scheduled_approval_status === 'accepted'
+          ? 'El negocio aceptó tu pedido programado fuera de horario.'
+          : o.scheduled_approval_status === 'rejected'
+            ? 'El negocio no aceptó tu pedido programado fuera de horario.'
+            : 'Tu pedido está programado fuera del horario del negocio. Estamos esperando su confirmación.'}
+      </div>` : ''}
+      ${o.scheduled_prep_ack ? `<div class="alert alert-info py-2 small">
+        <i class="bi bi-fire"></i> El negocio comenzó a preparar tu pedido programado.
+      </div>` : ''}
+      ${o.no_courier_hold && ['pending', 'confirmed', 'awaiting_courier'].includes(o.status) ? `<div class="alert alert-warning py-2 small">
+        <i class="bi bi-hourglass-split"></i>
+        <strong>Buscando repartidor.</strong> No hay repartidores disponibles ahora.
+        ${o.no_courier_notified_at
+          ? 'Pasó el tiempo de espera. Puedes recoger tu pedido en el negocio o cancelarlo.'
+          : 'Puedes esperar a que se conecte uno o recoger tu pedido en el negocio.'}
+        <div class="mt-2 d-flex gap-2 flex-wrap">
+          <button class="btn btn-sm btn-dark" onclick="switchToPickup()">Recoger en el negocio</button>
+        </div>
+      </div>` : ''}
+      ${o.requires_courier_approval && !o.no_courier_hold && ['pending', 'confirmed', 'awaiting_courier'].includes(o.status) ? `<div class="alert alert-warning py-2 small">
         <i class="bi bi-hourglass-split"></i>
         ${o.delivery_person_id
           ? `<strong>Repartidor reservado.</strong> Un repartidor ya aceptó tu pedido; el negocio debe confirmarlo para comenzar a prepararlo.`
@@ -237,7 +262,7 @@
         (o.discount_amount > 0 ? `<div class="d-flex justify-content-between small text-success"><span>Descuento</span><span>−${money0(o.discount_amount)}</span></div>` : '') +
         (parseFloat(o.loyalty_discount || 0) > 0 ? `<div class="d-flex justify-content-between small text-primary"><span>Puntos canjeados (${o.points_redeemed || 0})</span><span>−${money0(o.loyalty_discount)}</span></div>` : '') +
         (parseFloat(o.tip_amount || 0) > 0 ? `<div class="d-flex justify-content-between small text-success"><span>Propina</span><span>${money0(o.tip_amount)}</span></div>` : '') +
-        (parseFloat(o.recharge_amount || 0) > 0 ? `<div class="d-flex justify-content-between small"><span>Recarga ${escHtml(o.recharge_company || '')} ${escHtml(o.recharge_phone || '')}</span><span>${money0(o.recharge_amount)}</span></div>` : '') +
+        (parseFloat(o.recharge_amount || 0) > 0 ? `<div class="d-flex justify-content-between small"><span>${escHtml(o.recharge_product_description || ('Recarga ' + (o.recharge_company || '') + ' ' + (o.recharge_phone || '')))}</span><span>${money0(o.recharge_amount)}</span></div>` : '') +
         (parseFloat(o.recharge_fee || 0) > 0 ? `<div class="d-flex justify-content-between small"><span>Comisión de recarga (efectivo)</span><span>${money0(o.recharge_fee)}</span></div>` : '') +
         `<hr>
         <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>${money0(o.total_to_pay || o.total)}</span></div>
@@ -250,7 +275,7 @@
       html += `<button class="btn btn-outline-primary w-100 mb-2" id="payBtn" onclick="payOrder()"><i class="bi bi-credit-card"></i> Pagar con Mercado Pago</button>`;
     }
     if (o.payment_method === 'cash' && o.status !== 'delivered' && o.status !== 'cancelled') {
-      html += `<div class="alert alert-success mb-2"><i class="bi bi-cash"></i> Pagarás en efectivo al recibir</div>`;
+      html += `<div class="alert alert-success mb-2"><i class="bi bi-cash"></i> Pagarás en efectivo ${o.fulfillment_type === 'pickup' ? 'al recoger' : 'al recibir'}</div>`;
     }
     if (o.payment_method === 'transfer' && o.status !== 'delivered' && o.status !== 'cancelled' && paymentConfig.transfer_enabled) {
       const hasBank = bankDetails && (bankDetails.bank_name || bankDetails.clabe || bankDetails.account_holder);
@@ -443,6 +468,17 @@
       try { await cancelOrder(OID, reason); showToast('Pedido cancelado'); setTimeout(() => loadOrder(false), 1000); }
       catch (ex) { showToast(ex.message, 'danger'); }
     });
+  }
+
+  async function switchToPickup() {
+    if (!confirm('¿Cambiar tu pedido a recoger en el negocio?')) return;
+    try {
+      await apiRequest('POST', `/orders/${OID}/switch-to-pickup`, {});
+      showToast('Pedido cambiado a recoger');
+      setTimeout(() => loadOrder(false), 1000);
+    } catch (ex) {
+      showToast(ex.message, 'danger');
+    }
   }
 
   function repeatOrder() {

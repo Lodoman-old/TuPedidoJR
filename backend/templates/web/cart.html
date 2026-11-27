@@ -50,7 +50,8 @@
   let paymentConfig = { cash_enabled: true, mp_enabled: false, transfer_enabled: false, recharges_enabled: false };
   let appliedCoupon = null;
   let bankDetails = null;
-  let estimateState = { requires_courier_approval: false, approval_km: 8, approval_timeout_min: 30, distance_km: null };
+  let estimateState = { requires_courier_approval: false, approval_km: 8, approval_timeout_min: 30, distance_km: null, no_courier: false, no_courier_wait_min: 30, near_closing: false, minutes_to_close: null };
+  let noCourierAction = 'wait';
   let colonias = [];
   let cpCenter = null;
   let addressState = { street: '', cp: '', colonia: '', lat: null, lng: null, source: '', full: '' };
@@ -69,7 +70,9 @@
   let coverageInside = null;
 let scheduleState = { enabled: false, value: '' };
   let cartNotice = '';
-  let rechargeState = { enabled: false, company: '', phone: '', amount: 0 };
+  let rechargeState = { enabled: false, company: '', kind: '', code: '', description: '', phone: '', amount: 0 };
+  let rechargeCatalog = null;
+  let rechargeCatalogError = '';
 
   function sanitizeCartWithMenu(info) {
     const menu = info?.menu || [];
@@ -348,31 +351,30 @@ let scheduleState = { enabled: false, value: '' };
       <div class="form-text">Para tu celular o para otra persona. Se cobra junto con el pedido.</div>
       <div id="rechargeFields" class="${rechargeState.enabled ? '' : 'd-none'} mt-2">
         <div class="row g-2">
-          <div class="col-6">
+          <div class="col-12 col-md-6">
             <label class="form-label small mb-1" for="rechargeCompany">Compañía</label>
-            <input id="rechargeCompany" class="form-control form-control-sm" list="rechargeCompanies" placeholder="Telcel, AT&T..." value="${esc(rechargeState.company || '')}">
-            <datalist id="rechargeCompanies">
-              <option value="Telcel"></option>
-              <option value="AT&amp;T"></option>
-              <option value="Movistar"></option>
-              <option value="Bait"></option>
-              <option value="Unefon"></option>
-            </datalist>
+            <select id="rechargeCompany" class="form-select form-select-sm"></select>
           </div>
-          <div class="col-6">
+          <div class="col-6 col-md-3">
+            <label class="form-label small mb-1" for="rechargeKind">Tipo</label>
+            <select id="rechargeKind" class="form-select form-select-sm"></select>
+          </div>
+          <div class="col-6 col-md-3">
             <label class="form-label small mb-1" for="rechargePhone">Celular</label>
             <input id="rechargePhone" class="form-control form-control-sm" inputmode="numeric" maxlength="10" placeholder="10 dígitos" value="${esc(rechargeState.phone || '')}">
           </div>
-          <div class="col-6">
-            <label class="form-label small mb-1" for="rechargeAmount">Monto</label>
-            <input id="rechargeAmount" type="number" min="10" max="500" step="1" class="form-control form-control-sm" placeholder="10 a 500" value="${rechargeState.amount > 0 ? esc(String(rechargeState.amount)) : ''}">
+          <div class="col-12">
+            <label class="form-label small mb-1" for="rechargeProduct">Producto</label>
+            <select id="rechargeProduct" class="form-select form-select-sm"></select>
+            <div class="form-text" id="rechargeProductHelp"></div>
           </div>
         </div>
         <div class="small text-muted mt-2" id="rechargeHint"></div>
+        <div class="small text-danger mt-1 d-none" id="rechargeCatalogError"></div>
       </div>
     </div>`;
     } else {
-      rechargeState = { enabled: false, company: '', phone: '', amount: 0 };
+      rechargeState = { enabled: false, company: '', kind: '', code: '', description: '', phone: '', amount: 0 };
     }
 
     html += `<div class="card p-3 mb-3 d-none" id="loyaltyCard">      <div class="d-flex justify-content-between align-items-center">
@@ -397,6 +399,25 @@ let scheduleState = { enabled: false, value: '' };
       </div>
     </div>`;
 
+    html += `<div class="card p-3 mb-3 d-none" id="noCourierCard">
+      <div class="alert alert-warning py-2 mb-2" id="noCourierNotice"></div>
+      <div class="form-check mb-1">
+        <input class="form-check-input" type="radio" name="noCourierAction" id="ncWait" value="wait" checked>
+        <label class="form-check-label small" for="ncWait">
+          Esperar <strong id="ncWaitMin">30</strong> minutos a que se conecte un repartidor.
+        </label>
+      </div>
+      <div class="form-check" id="ncPickupWrap">
+        <input class="form-check-input" type="radio" name="noCourierAction" id="ncPickup" value="pickup">
+        <label class="form-check-label small" for="ncPickup">
+          Mejor paso a recogerlo al negocio.
+        </label>
+      </div>
+      <div class="form-text mt-2">
+        Si eliges esperar, el negocio no preparará el pedido hasta que un repartidor lo acepte.
+      </div>
+    </div>`;
+
     html += `<div class="card p-3 mb-3">
       <div class="d-flex justify-content-between"><span>Subtotal</span><span id="summarySubtotal">${money(subtotal)}</span></div>
       <div class="d-flex justify-content-between"><span>Envío</span><span id="deliveryFee">—</span></div>
@@ -404,7 +425,7 @@ let scheduleState = { enabled: false, value: '' };
       <div class="d-flex justify-content-between"><span>Propina</span><span id="tipRow">$0.00</span></div>
       <div id="loyaltyRow" class="d-none d-flex justify-content-between text-primary"><span>Puntos canjeados</span><span id="loyaltyAmount">-$0.00</span></div>
       <div id="discountRow" class="d-none d-flex justify-content-between text-success"><span>Descuento</span><span id="discountAmount">-$0.00</span></div>
-      <div id="rechargeRow" class="d-none d-flex justify-content-between"><span>Recarga de tiempo aire</span><span id="rechargeAmountDisplay">$0</span></div>
+      <div id="rechargeRow" class="d-none d-flex justify-content-between"><span id="rechargeLabel">Recarga de tiempo aire</span><span id="rechargeAmountDisplay">$0</span></div>
       <div id="rechargeFeeRow" class="d-none d-flex justify-content-between"><span>Comisión de recarga</span><span id="rechargeFeeDisplay">$0</span></div>
       <hr>
       <div class="d-flex justify-content-between fw-bold fs-5"><span>Total</span><span id="totalAmount">${money(subtotal)}</span></div>
@@ -928,6 +949,10 @@ let scheduleState = { enabled: false, value: '' };
     const feeValue = Number(fee || 0);
     const rechargeRow = document.getElementById('rechargeRow');
     const rechargeFeeRow = document.getElementById('rechargeFeeRow');
+    const label = document.getElementById('rechargeLabel');
+    if (label) {
+      label.textContent = rechargeState.description || 'Recarga de tiempo aire';
+    }
     if (rechargeRow) {
       rechargeRow.classList.toggle('d-none', amountValue <= 0);
       const display = document.getElementById('rechargeAmountDisplay');
@@ -938,6 +963,137 @@ let scheduleState = { enabled: false, value: '' };
       const display = document.getElementById('rechargeFeeDisplay');
       if (display) display.textContent = money(feeValue);
     }
+  }
+
+  function rechargeCompanyEntry(name) {
+    return (rechargeCatalog?.companies || []).find((c) => c.name === name) || null;
+  }
+
+  function rechargeCurrentProduct() {
+    const companySelect = document.getElementById('rechargeCompany');
+    const kindSelect = document.getElementById('rechargeKind');
+    const productSelect = document.getElementById('rechargeProduct');
+    const entry = rechargeCompanyEntry(companySelect?.value || '');
+    const items = entry?.categories?.[kindSelect?.value || ''] || [];
+    return items.find((p) => p.code === productSelect?.value) || null;
+  }
+
+  function fillRechargeCompanies() {
+    const select = document.getElementById('rechargeCompany');
+    if (!select) return;
+    const companies = rechargeCatalog?.companies || [];
+    select.innerHTML = companies
+      .map((c) => `<option value="${esc(c.name)}">${esc(c.name)}</option>`)
+      .join('');
+    if (!companies.length) return;
+    const current = companies.some((c) => c.name === rechargeState.company)
+      ? rechargeState.company
+      : companies[0].name;
+    select.value = current;
+    rechargeState.company = current;
+  }
+
+  function fillRechargeKinds() {
+    const kindSelect = document.getElementById('rechargeKind');
+    if (!kindSelect) return;
+    const entry = rechargeCompanyEntry(document.getElementById('rechargeCompany')?.value || '');
+    const kinds = Object.keys(entry?.categories || {});
+    kindSelect.innerHTML = kinds.map((kind) => {
+      const label = (rechargeCatalog?.kinds || []).find((k) => k.key === kind)?.label || kind;
+      return `<option value="${esc(kind)}">${esc(label)}</option>`;
+    }).join('');
+    if (!kinds.length) return;
+    const current = kinds.includes(rechargeState.kind) ? rechargeState.kind : kinds[0];
+    kindSelect.value = current;
+    rechargeState.kind = current;
+  }
+
+  function fillRechargeProducts() {
+    const productSelect = document.getElementById('rechargeProduct');
+    const help = document.getElementById('rechargeProductHelp');
+    if (!productSelect) return;
+    const entry = rechargeCompanyEntry(document.getElementById('rechargeCompany')?.value || '');
+    const kind = document.getElementById('rechargeKind')?.value || '';
+    const items = entry?.categories?.[kind] || [];
+    productSelect.innerHTML = items.map((p) => (
+      `<option value="${esc(p.code)}">${esc(p.description)} — ${money0(p.amount)}</option>`
+    )).join('');
+    if (!items.length) {
+      if (help) help.textContent = '';
+      rechargeState.code = '';
+      rechargeState.description = '';
+      rechargeState.amount = 0;
+      return;
+    }
+    const current = items.some((p) => p.code === rechargeState.code)
+      ? rechargeState.code
+      : items[0].code;
+    productSelect.value = current;
+    applyRechargeProduct();
+  }
+
+  function applyRechargeProduct() {
+    const product = rechargeCurrentProduct();
+    const help = document.getElementById('rechargeProductHelp');
+    if (product) {
+      rechargeState.company = product.company;
+      rechargeState.kind = product.kind;
+      rechargeState.code = product.code;
+      rechargeState.description = product.description;
+      rechargeState.amount = Number(product.amount || 0);
+      if (help) help.textContent = `Producto: ${product.description}`;
+    } else {
+      rechargeState.code = '';
+      rechargeState.description = '';
+      rechargeState.amount = 0;
+      if (help) help.textContent = '';
+    }
+    updateRechargeHint();
+    refreshEstimate();
+  }
+
+  function setupRechargeSelects() {
+    const select = document.getElementById('rechargeCompany');
+    if (!select) return;
+    const error = document.getElementById('rechargeCatalogError');
+    if (!paymentConfig.recharges_enabled) {
+      select.disabled = true;
+      return;
+    }
+    if (!rechargeCatalog) {
+      select.innerHTML = '<option value="">Catálogo no disponible</option>';
+      select.disabled = true;
+      for (const id of ['rechargeKind', 'rechargeProduct']) {
+        const el = document.getElementById(id);
+        if (el) el.disabled = true;
+      }
+      if (error) {
+        error.textContent = rechargeCatalogError || 'No se pudo cargar el catálogo de recargas.';
+        error.classList.remove('d-none');
+      }
+      return;
+    }
+    select.disabled = false;
+    for (const id of ['rechargeKind', 'rechargeProduct']) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = false;
+    }
+    if (error) error.classList.add('d-none');
+    fillRechargeCompanies();
+    fillRechargeKinds();
+    fillRechargeProducts();
+  }
+
+  async function loadRechargeCatalog() {
+    if (!paymentConfig.recharges_enabled) return;
+    try {
+      rechargeCatalog = await apiRequest('GET', '/recargas/catalogo');
+      rechargeCatalogError = '';
+    } catch (e) {
+      rechargeCatalog = null;
+      rechargeCatalogError = e.message;
+    }
+    setupRechargeSelects();
   }
 
   function updateRechargeHint() {
@@ -960,9 +1116,10 @@ let scheduleState = { enabled: false, value: '' };
     fields?.classList.toggle('d-none', !rechargeState.enabled);
     if (rechargeState.enabled) {
       rechargeState.company = (document.getElementById('rechargeCompany')?.value || '').trim();
+      rechargeState.kind = (document.getElementById('rechargeKind')?.value || '').trim();
+      rechargeState.code = (document.getElementById('rechargeProduct')?.value || '').trim();
       rechargeState.phone = (document.getElementById('rechargePhone')?.value || '').replace(/\D/g, '').slice(0, 10);
-      const amount = Number(document.getElementById('rechargeAmount')?.value || 0);
-      rechargeState.amount = Number.isFinite(amount) ? amount : 0;
+      applyRechargeProduct();
     }
     updateRechargeHint();
     refreshEstimate();
@@ -971,7 +1128,7 @@ let scheduleState = { enabled: false, value: '' };
   let _rechargeDebounce = null;
   function onRechargeInput() {
     clearTimeout(_rechargeDebounce);
-    _rechargeDebounce = setTimeout(readRechargeUi, 350);
+    _rechargeDebounce = setTimeout(readRechargeUi, 300);
   }
 
   function validateRechargeSelection() {
@@ -980,12 +1137,16 @@ let scheduleState = { enabled: false, value: '' };
       showToast('La recarga solo aplica con entrega a domicilio', 'danger');
       return false;
     }
-    if (rechargeState.company.length < 2 || rechargeState.phone.length !== 10) {
-      showToast('Completa la compañía y un número de 10 dígitos para la recarga', 'danger');
+    if (!rechargeCatalog) {
+      showToast('No se pudo cargar el catálogo de recargas', 'danger');
       return false;
     }
-    if (!(rechargeState.amount >= 10 && rechargeState.amount <= 500)) {
-      showToast('La recarga debe ser entre $10 y $500', 'danger');
+    if (!rechargeState.code || !(rechargeState.amount > 0)) {
+      showToast('Selecciona un producto de recarga', 'danger');
+      return false;
+    }
+    if (rechargeState.phone.length !== 10) {
+      showToast('Escribe un número de 10 dígitos para la recarga', 'danger');
       return false;
     }
     return true;
@@ -1011,6 +1172,34 @@ function updateApprovalUi() {
   }
   const refund = document.getElementById('refundAccountBlock');
   if (refund) refund.classList.toggle('d-none', !(required && selectedPaymentMethod() === 'transfer'));
+  updateNoCourierUi();
+}
+
+function updateNoCourierUi() {
+  const card = document.getElementById('noCourierCard');
+  if (!card) return;
+  const show = Boolean(estimateState.no_courier) && fulfillment !== 'pickup';
+  card.classList.toggle('d-none', !show);
+  if (!show) return;
+  const waitMin = Number(estimateState.no_courier_wait_min || 30);
+  const waitLabel = document.getElementById('ncWaitMin');
+  if (waitLabel) waitLabel.textContent = waitMin;
+  const notice = document.getElementById('noCourierNotice');
+  if (notice) {
+    notice.innerHTML = `<i class="bi bi-exclamation-triangle"></i> ` +
+      `<strong>No hay repartidores disponibles ahora.</strong> ` +
+      `Puedes esperar hasta ${waitMin} minutos o recoger tu pedido en el negocio.`;
+  }
+  const pickupWrap = document.getElementById('ncPickupWrap');
+  const canPickup = !restaurantInfo || restaurantInfo.pickup_enabled !== false;
+  pickupWrap?.classList.toggle('d-none', !canPickup);
+  if (!canPickup) {
+    noCourierAction = 'wait';
+    const waitRadio = document.getElementById('ncWait');
+    if (waitRadio) waitRadio.checked = true;
+  }
+  const pickupRadio = document.getElementById('ncPickup');
+  if (pickupRadio && pickupRadio.checked) noCourierAction = 'pickup';
 }
 
 async function loadDebtInfo() {
@@ -1110,6 +1299,10 @@ async function refreshEstimate() {
         approval_km: Number(res.approval_km || 0),
         approval_timeout_min: Number(res.approval_timeout_min || 0),
         distance_km: res.distance_km != null ? Number(res.distance_km) : null,
+        no_courier: Boolean(res.no_courier),
+        no_courier_wait_min: Number(res.no_courier_wait_min || 30),
+        near_closing: Boolean(res.near_closing),
+        minutes_to_close: res.minutes_to_close != null ? Number(res.minutes_to_close) : null,
       };
       updateApprovalUi();
       const distanceWarn = document.getElementById('distanceWarning');
@@ -1242,15 +1435,46 @@ async function refreshEstimate() {
     updateTipButtons();
     const rechargeToggle = document.getElementById('rechargeToggle');
     if (rechargeToggle) {
-      rechargeToggle.addEventListener('change', readRechargeUi);
-      ['rechargeCompany', 'rechargePhone', 'rechargeAmount'].forEach((id) => {
-        document.getElementById(id)?.addEventListener('input', onRechargeInput);
+      rechargeToggle.addEventListener('change', () => {
+        if (rechargeToggle.checked) setupRechargeSelects();
+        readRechargeUi();
       });
+      document.getElementById('rechargeCompany')?.addEventListener('change', () => {
+        rechargeState.kind = '';
+        rechargeState.code = '';
+        fillRechargeKinds();
+        fillRechargeProducts();
+        readRechargeUi();
+      });
+      document.getElementById('rechargeKind')?.addEventListener('change', () => {
+        rechargeState.code = '';
+        fillRechargeProducts();
+        readRechargeUi();
+      });
+      document.getElementById('rechargeProduct')?.addEventListener('change', applyRechargeProduct);
+      document.getElementById('rechargePhone')?.addEventListener('input', onRechargeInput);
+      if (rechargeCatalog) setupRechargeSelects();
     }
     document.querySelectorAll('input[name="fulfillment"]').forEach(radio => {
       radio.addEventListener('change', () => {
         fulfillment = radio.value;
+        if (fulfillment !== 'pickup') {
+          noCourierAction = 'wait';
+          const waitRadio = document.getElementById('ncWait');
+          if (waitRadio) waitRadio.checked = true;
+        }
         updateFulfillmentUi();
+      });
+    });
+    document.querySelectorAll('input[name="noCourierAction"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        noCourierAction = radio.value;
+        if (noCourierAction === 'pickup') {
+          fulfillment = 'pickup';
+          const pickupRadio = document.getElementById('fulPickup');
+          if (pickupRadio) pickupRadio.checked = true;
+          updateFulfillmentUi();
+        }
       });
     });
     updateFulfillmentUi();
@@ -1409,8 +1633,10 @@ async function refreshEstimate() {
       const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked')?.value || 'cash';
       if (rechargeState.enabled) {
         rechargeState.company = (document.getElementById('rechargeCompany')?.value || '').trim();
+        rechargeState.kind = (document.getElementById('rechargeKind')?.value || '').trim();
+        rechargeState.code = (document.getElementById('rechargeProduct')?.value || '').trim();
         rechargeState.phone = (document.getElementById('rechargePhone')?.value || '').replace(/\D/g, '').slice(0, 10);
-        rechargeState.amount = Number(document.getElementById('rechargeAmount')?.value || 0) || 0;
+        applyRechargeProduct();
         if (!validateRechargeSelection()) return;
       }
       const debtMode = document.querySelector('input[name="debtMode"]:checked')?.value || null;
@@ -1435,6 +1661,7 @@ async function refreshEstimate() {
           pickup ? 0 : tipAmount, scheduledFor, pointsToRedeem, pickup ? 'pickup' : 'delivery',
           refundAccount, debtMode,
           rechargeState.enabled ? { ...rechargeState } : null,
+          pickup ? null : noCourierAction,
         );
         await clearCartNow();
         if (paymentMethod === 'cash') showToast(pickup ? 'Pedido creado — pagarás al recoger' : 'Pedido creado — pagarás en efectivo al recibir');
@@ -1479,6 +1706,7 @@ async function refreshEstimate() {
     try { paymentConfig = await apiRequest('GET', '/payments/config'); } catch (e) { /* ignore */ }
     loyaltyVisible = Boolean(paymentConfig?.loyalty_enabled && paymentConfig?.loyalty_visible);
     loyaltyValue = parseFloat(paymentConfig?.loyalty_value_per_point || 1) || 1;
+    await loadRechargeCatalog();
     try { bankDetails = await getBankDetails(); } catch (e) { /* ignore */ }
     const cartRid = sessionStorage.getItem('cartRestaurantId')
       || (getCart().find(i => i.restaurant_id) || {}).restaurant_id;

@@ -115,7 +115,6 @@
     html.capacitor-app .floating-cart { bottom: 96px; }
     html.capacitor-app .modal-dialog { margin-top: 42px; margin-bottom: 42px; }
     html.capacitor-app .toast-container { bottom: 44px !important; }
-    html.capacitor-app #downloadAppNav { display: none !important; }
     @media (max-width: 767.98px) {
       .table-responsive > table.table { min-width: 640px; }
     }
@@ -255,7 +254,6 @@
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/my-appointments"><i class="bi bi-calendar2-check"></i> Mis citas</a></li>
           <li class="nav-item nav-delivery-hide nav-customer-hide"><a class="nav-link" href="/web/my-rentals"><i class="bi bi-box2-heart"></i> Mis rentas</a></li>
           <li class="nav-item d-none" id="deliveryNav"><a class="nav-link" href="/web/delivery"><i class="bi bi-bicycle"></i> Repartidor</a></li>
-          <li class="nav-item" id="downloadAppNav"><a class="nav-link" href="/web/app"><i class="bi bi-phone"></i> Descargar app</a></li>
           <li class="nav-item dropdown d-none" id="adminNav">
             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
                aria-expanded="false" title="Administración" aria-label="Administración">
@@ -346,6 +344,58 @@ const APP_TZ = 'America/Mexico_City';
   Date.prototype.toLocaleString = wrap(Date.prototype.toLocaleString);
   Date.prototype.toLocaleDateString = wrap(Date.prototype.toLocaleDateString);
   Date.prototype.toLocaleTimeString = wrap(Date.prototype.toLocaleTimeString);
+})();
+
+function handleSessionExpired() {
+  if (window.__sessionRedirecting) return;
+  if (window.location.pathname === '/web/login') return;
+  window.__sessionRedirecting = true;
+  try {
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('is_superuser');
+    sessionStorage.removeItem('is_delivery');
+    sessionStorage.removeItem('is_restaurant_staff');
+    sessionStorage.removeItem('my_restaurant_id');
+    sessionStorage.removeItem('is_restaurant_manager');
+  } catch (e) { /* almacenamiento no disponible */ }
+  const next = encodeURIComponent(window.location.pathname + window.location.search);
+  window.location.replace(`/web/login?next=${next}`);
+}
+
+(function wrapFetchForExpiredSession() {
+  const originalFetch = window.fetch.bind(window);
+  const AUTH_PATHS = [
+    '/auth/login', '/auth/register', '/auth/2fa', '/auth/forgot-password',
+    '/auth/reset-password', '/auth/verify-email',
+  ];
+  function authHeader(headers) {
+    if (!headers) return '';
+    try {
+      if (headers instanceof Headers) return headers.get('Authorization') || '';
+      if (Array.isArray(headers)) {
+        const found = headers.find((pair) => String(pair[0]).toLowerCase() === 'authorization');
+        return found ? found[1] : '';
+      }
+      return headers.Authorization || headers.authorization || '';
+    } catch (e) {
+      return '';
+    }
+  }
+  window.fetch = async function (input, init) {
+    const response = await originalFetch(input, init);
+    try {
+      const url = typeof input === 'string' ? input : (input && input.url) || '';
+      const isApi = url.includes('/api/');
+      const isAuth = AUTH_PATHS.some((path) => url.includes(path));
+      const token = sessionStorage.getItem('token');
+      const sentAuth = authHeader(init && init.headers)
+        || authHeader(input && input.headers);
+      if (response.status === 401 && isApi && !isAuth && token && sentAuth) {
+        handleSessionExpired();
+      }
+    } catch (e) { /* nunca bloquear la petición original */ }
+    return response;
+  };
 })();
 function localDateInput(date) {
   const value = date || new Date();
@@ -501,8 +551,14 @@ async function updateMenuItem(restaurantId, itemId, data) {
 async function listRestaurantOrders(restaurantId) {
   return await apiRequest('GET', `/restaurants/${restaurantId}/orders`);
 }
-async function updateRestaurantOrderStatus(restaurantId, orderId, status) {
-  return await apiRequest('PATCH', `/restaurants/${restaurantId}/orders/${orderId}/status`, { status });
+async function updateRestaurantOrderStatus(restaurantId, orderId, status, acceptEarlyPrep = false) {
+  return await apiRequest('PATCH', `/restaurants/${restaurantId}/orders/${orderId}/status`, { status, accept_early_prep: acceptEarlyPrep });
+}
+async function requestCourierSupport(restaurantId, orderId) {
+  return await apiRequest('POST', `/restaurants/${restaurantId}/orders/${orderId}/request-courier-support`, {});
+}
+async function scheduledOrderApproval(restaurantId, orderId, accept) {
+  return await apiRequest('POST', `/restaurants/${restaurantId}/orders/${orderId}/scheduled-approval`, { accept });
 }
 async function estimateTime(restaurantId, items, lat, lng) {
   return await apiRequest('POST', '/orders/estimate', { restaurant_id: restaurantId, items, delivery_address: 'placeholder', delivery_location: { lat, lng } });
@@ -520,10 +576,13 @@ async function estimatePrice(restaurantId, items, lat, lng, couponCode, tipAmoun
     fulfillment_type: fulfillmentType || 'delivery',
     recharge_company: recharge?.company || null,
     recharge_phone: recharge?.phone || null,
+    recharge_product_code: recharge?.code || null,
+    recharge_product_description: recharge?.description || null,
+    recharge_kind: recharge?.kind || null,
     recharge_amount: recharge?.amount || 0,
   });
 }
-async function createOrder(restaurantId, items, deliveryAddress, lat, lng, notes, couponCode, paymentMethod, tipAmount, scheduledFor, pointsToRedeem, fulfillmentType, refundAccount, debtPaymentMode, recharge) {
+async function createOrder(restaurantId, items, deliveryAddress, lat, lng, notes, couponCode, paymentMethod, tipAmount, scheduledFor, pointsToRedeem, fulfillmentType, refundAccount, debtPaymentMode, recharge, noCourierAction) {
   const body = {
     restaurant_id: restaurantId, items,
     delivery_address: deliveryAddress || null,
@@ -543,8 +602,12 @@ async function createOrder(restaurantId, items, deliveryAddress, lat, lng, notes
   if (recharge && recharge.amount > 0) {
     body.recharge_company = recharge.company;
     body.recharge_phone = recharge.phone;
+    body.recharge_product_code = recharge.code;
+    body.recharge_product_description = recharge.description;
+    body.recharge_kind = recharge.kind;
     body.recharge_amount = recharge.amount;
   }
+  if (noCourierAction) body.no_courier_action = noCourierAction;
   return await apiRequest('POST', '/orders', body);
 }
 async function updateRefundAccount(orderId, holder, bank, clabe) {

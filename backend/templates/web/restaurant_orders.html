@@ -8,6 +8,28 @@
 </div>
 <div id="ordersContainer"></div>
 <div id="ordersLoading" class="text-center py-3"><div class="spinner-border text-primary"></div></div>
+
+<div class="modal fade" id="earlyPrepModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Preparación anticipada</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning py-2 small mb-2">
+          <i class="bi bi-exclamation-triangle"></i>
+          En productos perecederos no es buena práctica preparar con tanta anticipación.
+        </div>
+        <div id="earlyPrepMsg" class="small text-muted"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Esperar</button>
+        <button type="button" class="btn btn-warning" onclick="acceptEarlyPrep()">Aceptar y preparar</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -33,6 +55,7 @@
   const STATUS_COLORS = { pending: "warning", confirmed: "primary", awaiting_courier: "warning", preparing: "info", ready: "success", in_delivery: "info", picked_up: "teal", delivered: "secondary", cancelled: "danger" };
 
   let ordersBusy = false;
+  let earlyPrepPending = null;
 
   const scheduledAlerts = new Set();
   let audioCtx = null;
@@ -101,6 +124,19 @@
       const orders = await listRestaurantOrders(RID);
       loading.classList.add('d-none');
       checkScheduledAlerts(orders);
+      orders.sort((a, b) => {
+        const now = Date.now();
+        const aS = a.scheduled_for ? new Date(a.scheduled_for).getTime() : null;
+        const bS = b.scheduled_for ? new Date(b.scheduled_for).getTime() : null;
+        const aFuture = aS && aS > now ? aS : null;
+        const bFuture = bS && bS > now ? bS : null;
+        if (aFuture && bFuture) return aFuture - bFuture;
+        if (aFuture) return -1;
+        if (bFuture) return 1;
+        if (a.near_closing && !b.near_closing) return -1;
+        if (b.near_closing && !a.near_closing) return 1;
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      });
       if (!orders.length) {
         container.innerHTML = '<p class="text-muted text-center py-4">No hay pedidos</p>';
         return;
@@ -123,9 +159,19 @@
         const schedLine = sched
           ? `<small class="${sched.cls} d-block">Programado para ${sched.kind}: ${sched.when.toLocaleString()}${sched.mins > 0 ? ` · faltan ${sched.mins} min` : ' · ya es la hora'}</small>`
           : '';
-        html += `<div class="card p-3 mb-2">
+        const isFutureScheduled = o.scheduled_for && new Date(o.scheduled_for).getTime() > Date.now();
+        const cardStyle = isFutureScheduled
+          ? 'border-left:6px solid #6f42c1;'
+          : (o.near_closing ? 'border-left:6px solid #ffc107;' : '');
+        html += `<div class="card p-3 mb-2" style="${cardStyle}">
           <div class="d-flex justify-content-between flex-wrap gap-2">
-            <h6 class="mb-1">#${o.id.slice(0, 8)} <span class="badge bg-${color}">${STATUS_LABELS[status] || status.toUpperCase()}</span></h6>
+            <h6 class="mb-1">#${o.id.slice(0, 8)}
+              <span class="badge bg-${color}">${STATUS_LABELS[status] || status.toUpperCase()}</span>
+              ${isFutureScheduled ? `<span class="badge" style="background:#6f42c1">Programado</span>` : ''}
+              ${o.near_closing ? '<span class="badge bg-warning text-dark">Cerca del cierre</span>' : ''}
+              ${o.scheduled_outside_hours && o.scheduled_approval_status === 'pending' ? '<span class="badge bg-danger">Fuera de horario</span>' : ''}
+              ${o.courier_support_requested ? '<span class="badge bg-info text-dark">Apoyo TuPedidoJR</span>' : ''}
+            </h6>
             <small>${money0(o.total || 0)}</small>
           </div>
           <small class="text-muted">${(o.items || []).length} artículo(s)</small>
@@ -141,18 +187,39 @@
           ${o.delivery_mode === 'own' && o.delivery_address ? `<small class="text-muted d-block"><i class="bi bi-geo-alt"></i> ${esc(o.delivery_address)}</small>` : ''}
           ${o.delivery_mode === 'own' ? '<small class="text-info d-block">Entrega propia del negocio</small>' : ''}
           ${o.fulfillment_type === 'pickup' ? '<small class="text-primary d-block">Recoger en el negocio</small>' : ''}
-          ${o.requires_courier_approval && status === 'pending' ? `<div class="alert alert-info py-2 mt-2 mb-0 small"><i class="bi bi-hourglass-split"></i> ${o.delivery_person_id ? '<strong>Ya hay un repartidor reservado.</strong> Confirma el pedido para que pase a preparación.' : '<strong>Pedido lejano.</strong> Ya se está ofreciendo a repartidores. Al confirmarlo, no lo prepares hasta que alguien lo acepte.'}${o.courier_approval_deadline ? ` Si no hay repartidor antes de las ${new Date(o.courier_approval_deadline).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}, se cancelará automáticamente.` : ''}</div>` : ''}
-          ${status === 'awaiting_courier' ? `<div class="alert alert-warning py-2 mt-2 mb-0 small"><i class="bi bi-hourglass-split"></i> <strong>No prepares este pedido todavía.</strong> Está lejos y espera a que un repartidor lo acepte. Cuando alguien lo tome, el pedido pasará solo a preparación y te avisaremos.${o.courier_approval_deadline ? ` Si no hay repartidor antes de las ${new Date(o.courier_approval_deadline).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}, se cancelará automáticamente.` : ''}</div>` : ''}
+          ${o.near_closing ? `<div class="alert alert-warning py-2 mt-2 mb-0 small"><i class="bi bi-clock-history"></i> <strong>Pedido cerca del cierre.</strong> Confirma si aún lo aceptas.${o.business_confirmation_deadline ? ` Si no respondes antes de las ${new Date(o.business_confirmation_deadline).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}, se cancelará y se avisará al cliente.` : ''}</div>` : ''}
+          ${o.scheduled_outside_hours && o.scheduled_approval_status === 'pending' ? `<div class="alert alert-danger py-2 mt-2 mb-0 small">
+            <i class="bi bi-calendar-x"></i> <strong>Pedido programado fuera de horario.</strong>
+            El cliente lo pidió para una hora en la que normalmente cierras. ¿Aceptas entregarlo a esa hora?
+            ${o.scheduled_approval_deadline ? `<br>Si no respondes antes de las ${new Date(o.scheduled_approval_deadline).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}, se cancelará y se avisará al cliente.` : ''}
+            <div class="mt-2 d-flex gap-2 flex-wrap">
+              <button class="btn btn-sm btn-success" onclick="approveScheduled('${o.id}', true)">Aceptar programado</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="approveScheduled('${o.id}', false)">Rechazar programado</button>
+            </div>
+          </div>` : ''}
+          ${o.courier_support_requested ? `<div class="alert alert-info py-2 mt-2 mb-0 small"><i class="bi bi-bicycle"></i> <strong>Apoyo de TuPedidoJR solicitado.</strong> Tarifa ${money0(o.courier_support_fee || 0)} que se descontará de tu siguiente corte.</div>` : ''}
+          ${o.requires_courier_approval && status === 'pending' && !o.near_closing ? `<div class="alert alert-info py-2 mt-2 mb-0 small"><i class="bi bi-hourglass-split"></i> ${o.delivery_person_id ? '<strong>Ya hay un repartidor reservado.</strong> Confirma el pedido para que pase a preparación.' : '<strong>Pedido lejano.</strong> Ya se está ofreciendo a repartidores. Al confirmarlo, no lo prepares hasta que alguien lo acepte.'}${o.courier_approval_deadline ? ` Si no hay repartidor antes de las ${new Date(o.courier_approval_deadline).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}, se cancelará automáticamente.` : ''}</div>` : ''}
+          ${status === 'awaiting_courier' ? (o.no_courier_hold
+            ? `<div class="alert alert-warning py-2 mt-2 mb-0 small"><i class="bi bi-hourglass-split"></i> <strong>Sin repartidor disponible.</strong> No prepares este pedido todavía. Estamos buscando uno y el administrador ya está enterado.</div>`
+            : `<div class="alert alert-warning py-2 mt-2 mb-0 small"><i class="bi bi-hourglass-split"></i> <strong>No prepares este pedido todavía.</strong> Está lejos y espera a que un repartidor lo acepte. Cuando alguien lo tome, el pedido pasará solo a preparación y te avisaremos.${o.courier_approval_deadline ? ` Si no hay repartidor antes de las ${new Date(o.courier_approval_deadline).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}, se cancelará automáticamente.` : ''}</div>`) : ''}
           ${schedLine}
           <div class="mt-2 d-flex gap-2 flex-wrap">`;
         if (canAdvance) {
-          const advanceLabel = nextStatus === 'delivered'
-            ? (isPickup ? '<i class="bi bi-cash-coin"></i> Entregar y cobrar' : '<i class="bi bi-check2"></i> Entregar')
-            : 'Avanzar';
+          const advanceLabel = o.near_closing
+            ? '<i class="bi bi-check2-circle"></i> Aceptar pedido'
+            : (nextStatus === 'delivered'
+              ? (isPickup ? '<i class="bi bi-cash-coin"></i> Entregar y cobrar' : '<i class="bi bi-check2"></i> Entregar')
+              : 'Avanzar');
           html += `<button class="btn btn-sm btn-success" onclick="advanceOrder('${o.id}')">${advanceLabel}</button>`;
+        } else if (o.near_closing && status === 'awaiting_courier') {
+          html += `<button class="btn btn-sm btn-success" onclick="advanceOrder('${o.id}')"><i class="bi bi-check2-circle"></i> Aceptar pedido</button>`;
         }
         if (['pending', 'confirmed', 'awaiting_courier', 'preparing', 'ready'].includes(status)) {
-          html += `<button class="btn btn-sm btn-outline-danger" onclick="cancelRestaurantOrderUI('${o.id}')">Cancelar</button>`;
+          const cancelLabel = o.near_closing ? 'Rechazar pedido' : 'Cancelar';
+          html += `<button class="btn btn-sm btn-outline-danger" onclick="cancelRestaurantOrderUI('${o.id}')">${cancelLabel}</button>`;
+        }
+        if (isOwn && !o.courier_support_requested && ['pending', 'confirmed', 'preparing', 'ready'].includes(status)) {
+          html += `<button class="btn btn-sm btn-outline-primary" onclick="askCourierSupport('${o.id}')"><i class="bi bi-bicycle"></i> Solicitar apoyo TuPedidoJR</button>`;
         }
         html += `</div></div>`;
       }
@@ -166,6 +233,7 @@
   }
 
   async function advanceOrder(oid) {
+    let nextStatus = null;
     try {
       const order = await getOrder(oid);
       const isPickup = order.fulfillment_type === 'pickup' || order.delivery_mode === 'pickup';
@@ -176,10 +244,17 @@
           ? ['pending', 'confirmed', 'preparing', 'ready', 'in_delivery', 'delivered']
           : (order.requires_courier_approval ? STATUS_ORDER_FAR : STATUS_ORDER));
       const status = order.status;
+      if (order.near_closing) {
+        await updateRestaurantOrderStatus(RID, oid, 'confirmed');
+        showToast('Pedido aceptado');
+        loadOrders(true);
+        return;
+      }
       if (status === 'awaiting_courier') return showToast('Espera a que un repartidor acepte el pedido', 'warning');
       const idx = flow.indexOf(status);
       if (idx < 0 || idx >= flow.length - 1) return showToast('No se puede avanzar más', 'warning');
       const next = flow[idx + 1];
+      nextStatus = next;
       if (next === 'delivered' && isPickup) {
         openRestaurantDeliveryModal(order, isPickup);
         return;
@@ -187,7 +262,54 @@
       await updateRestaurantOrderStatus(RID, oid, next);
       showToast(`Pedido ${STATUS_LABELS[next] || next}`);
       loadOrders(true);
-    } catch (e) { showToast('Error: ' + e.message, 'danger'); }
+    } catch (e) {
+      if (String(e.message).includes('perecederos')) {
+        earlyPrepPending = { orderId: oid, status: nextStatus };
+        document.getElementById('earlyPrepMsg').textContent = e.message;
+        new bootstrap.Modal(document.getElementById('earlyPrepModal')).show();
+        return;
+      }
+      showToast('Error: ' + e.message, 'danger');
+    }
+  }
+
+  async function acceptEarlyPrep() {
+    if (!earlyPrepPending) return;
+    const { orderId, status } = earlyPrepPending;
+    try {
+      await updateRestaurantOrderStatus(RID, orderId, status, true);
+      bootstrap.Modal.getInstance(document.getElementById('earlyPrepModal'))?.hide();
+      earlyPrepPending = null;
+      showToast('Pedido aceptado para preparación anticipada');
+      loadOrders(true);
+    } catch (e) {
+      showToast('Error: ' + e.message, 'danger');
+    }
+  }
+
+  async function approveScheduled(orderId, accept) {
+    const message = accept
+      ? '¿Aceptar el pedido programado fuera de horario?'
+      : '¿Rechazar el pedido programado? Se cancelará y se avisará al cliente.';
+    if (!confirm(message)) return;
+    try {
+      await scheduledOrderApproval(RID, orderId, accept);
+      showToast(accept ? 'Pedido programado aceptado' : 'Pedido programado rechazado');
+      loadOrders(true);
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
+  async function askCourierSupport(orderId) {
+    if (!confirm('¿Solicitar un repartidor de TuPedidoJR? La tarifa se descontará de tu siguiente corte.')) return;
+    try {
+      await requestCourierSupport(RID, orderId);
+      showToast('Apoyo de reparto solicitado');
+      loadOrders(true);
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
   }
 
   function openRestaurantDeliveryModal(order, isPickup) {

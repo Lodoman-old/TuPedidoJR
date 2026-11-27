@@ -16,7 +16,7 @@ from app.models.delivery_person import DeliveryPerson
 from app.models.order import Order
 from app.models.restaurant import Restaurant
 from app.models.user import User
-from app.services import phone_verification_service
+from app.services import courier_availability, delivery_ops_service, phone_verification_service
 from app.services.audit_service import log_action
 from app.services.email_service import send_courier_welcome
 from app.services.schedule_service import get_timezone, open_state_map
@@ -214,7 +214,6 @@ async def admin_dashboard(
 
     couriers_result = await db.execute(select(DeliveryPerson))
     couriers = list(couriers_result.scalars().all())
-    available_couriers = sum(1 for c in couriers if c.is_available)
 
     transfers_result = await db.execute(
         select(func.count(Order.id), func.coalesce(func.sum(Order.total), 0))
@@ -265,6 +264,8 @@ async def admin_dashboard(
     recent_result = await db.execute(
         select(Order).order_by(Order.placed_at.desc()).limit(15)
     )
+    courier_alerts = await delivery_ops_service.courier_alert_rows(db)
+    available_courier_list = await courier_availability.available_couriers(db)
     recent_orders = [
         {
             "id": str(o.id),
@@ -301,7 +302,7 @@ async def admin_dashboard(
         },
         "couriers": {
             "total": len(couriers),
-            "available": available_couriers,
+            "available": len(available_courier_list),
         },
         "transfers": {
             "count": int(transfers_count or 0),
@@ -314,7 +315,9 @@ async def admin_dashboard(
         "alerts": {
             "pending_10min": [_alert(o) for o in pending_alert_result.scalars().all()],
             "late_preparing": [_alert(o) for o in late_preparing_result.scalars().all()],
+            "courier": courier_alerts,
         },
+        "available_couriers": available_courier_list,
         "recent_orders": recent_orders,
     }
 

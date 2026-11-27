@@ -101,6 +101,66 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Si un pedido retenido no recibe repartidor en este tiempo, se cancela solo y se devuelve el dinero cuando aplica. Vacío o 0 desactiva la cancelación automática.",
         "type": "int", "default": "30",
     },
+    "DELIVERY_OPS_V2_ENABLED": {
+        "group": "Envíos", "label": "Activar operación sin repartidores",
+        "description": "Muestra el aviso de sin repartidores, retiene pedidos y activa alertas y acciones del administrador. Déjalo apagado hasta probar el flujo.",
+        "type": "bool", "default": "false",
+    },
+    "NO_COURIER_WAIT_MIN": {
+        "group": "Envíos", "label": "Espera del cliente sin repartidor (min)",
+        "description": "Minutos que el cliente puede esperar a que se conecte un repartidor antes de elegir recoger o cancelar.",
+        "type": "int", "default": "30",
+    },
+    "NO_COURIER_DECISION_MIN": {
+        "group": "Envíos", "label": "Tiempo para decidir recoger o cancelar (min)",
+        "description": "Minutos que tiene el cliente para decidir cuando se agota la espera de repartidor.",
+        "type": "int", "default": "15",
+    },
+    "COURIER_ALERT_MIN": {
+        "group": "Envíos", "label": "Aviso al admin por pedido sin repartidor (min)",
+        "description": "Minutos que un pedido puede estar listo sin repartidor antes de avisar al administrador.",
+        "type": "int", "default": "15",
+    },
+    "NEAR_CLOSING_MIN": {
+        "group": "Envíos", "label": "Aviso de cierre del negocio (min)",
+        "description": "Minutos antes del cierre en los que el pedido se manda al negocio para que confirme si aún lo acepta.",
+        "type": "int", "default": "30",
+    },
+    "NEAR_CLOSING_RESPONSE_MIN": {
+        "group": "Envíos", "label": "Respuesta del negocio cerca del cierre (min)",
+        "description": "Minutos que tiene el negocio para aceptar un pedido cercano al cierre antes de cancelarlo.",
+        "type": "int", "default": "10",
+    },
+    "SCHEDULED_REMINDER_MIN": {
+        "group": "Envíos", "label": "Recordatorio de pedido programado (min)",
+        "description": "Minutos antes de la hora programada en los que se avisa al negocio para que lo prepare.",
+        "type": "int", "default": "60",
+    },
+    "SCHEDULED_APPROVAL_MIN": {
+        "group": "Envíos", "label": "Respuesta a pedido fuera de horario (min)",
+        "description": "Minutos que tiene el negocio para aceptar un pedido programado fuera de su horario antes de cancelarlo.",
+        "type": "int", "default": "30",
+    },
+    "SCHEDULED_PREP_WINDOW_MIN": {
+        "group": "Envíos", "label": "Ventana de preparación programada (min)",
+        "description": "Si el negocio intenta preparar un pedido programado antes de este tiempo, se le advierte sobre productos perecederos.",
+        "type": "int", "default": "60",
+    },
+    "COURIER_SUPPORT_ENABLED": {
+        "group": "Envíos", "label": "Permitir apoyo de reparto a negocios",
+        "description": "Permite que un negocio con reparto propio solicite un repartidor de TuPedidoJR y pague la tarifa de apoyo.",
+        "type": "bool", "default": "false",
+    },
+    "COURIER_SUPPORT_FEE": {
+        "group": "Envíos", "label": "Tarifa de apoyo de reparto",
+        "description": "Monto que se descuenta al negocio de su siguiente corte por cada pedido con apoyo de TuPedidoJR.",
+        "type": "money", "default": "30.0",
+    },
+    "COURIER_SUPPORT_ALERT_MIN": {
+        "group": "Envíos", "label": "Aviso de apoyo sin repartidor (min)",
+        "description": "Minutos sin repartidor para avisar al negocio que su pedido de apoyo sigue esperando.",
+        "type": "int", "default": "15",
+    },
     "COVERAGE_ENFORCE": {
         "group": "Envíos", "label": "Limitar entregas a Juventino Rosas",
         "description": "Rechaza pedidos a domicilio y envíos de negocio fuera del municipio. Recoger en el negocio no se limita y los mandados tampoco.",
@@ -455,6 +515,36 @@ KNOWN_SETTINGS: dict[str, dict] = {
         "description": "Actívalo solo cuando el proveedor automático esté conectado. Si está apagado, no se ofrece la recarga en el carrito ni al repartidor.",
         "type": "bool", "default": "false",
     },
+    "SIVETEL_ENABLED": {
+        "group": "Recargas", "label": "Procesar recargas con Sivetel",
+        "description": "Activa el envío automático de recargas a Sivetel. Requiere cuenta, usuario y contraseña de la API.",
+        "type": "bool", "default": "false",
+    },
+    "SIVETEL_BASE_URL": {
+        "group": "Recargas", "label": "Sivetel URL de la API",
+        "description": "URL base del Web Service. En producción: https://app.sivetel.com/ApiWS",
+        "type": "text", "default": "https://app.sivetel.com/ApiWS",
+    },
+    "SIVETEL_ACCOUNT": {
+        "group": "Recargas", "label": "Sivetel cuenta",
+        "description": "Número de cuenta con el que te registraste en Sivetel.",
+        "type": "text", "default": "",
+    },
+    "SIVETEL_USER": {
+        "group": "Recargas", "label": "Sivetel usuario",
+        "description": "Usuario de la API generado por Sivetel.",
+        "type": "text", "default": "",
+    },
+    "SIVETEL_PASSWORD": {
+        "group": "Recargas", "label": "Sivetel contraseña",
+        "description": "Contraseña de la API. Se usa solo en el servidor.",
+        "type": "password", "default": "",
+    },
+    "SIVETEL_TIMEOUT_SECONDS": {
+        "group": "Recargas", "label": "Sivetel tiempo máximo",
+        "description": "Segundos de espera por respuesta de Sivetel. Su documentación maneja hasta 90 segundos.",
+        "type": "int", "default": "90",
+    },
     "EMAIL_VERIFICATION_GRACE_ORDERS": {
         "group": "Clientes", "label": "Pedidos de cortesía sin correo",
         "description": "Cuántos pedidos puede hacer un cliente nuevo sin confirmar su correo. Al llegar al límite, se le pide confirmarlo para seguir pidiendo.",
@@ -628,14 +718,18 @@ async def list_settings(
 
     groups: dict[str, list[dict]] = {}
     for key, meta in KNOWN_SETTINGS.items():
+        is_secret = meta["type"] == "password"
+        stored_value = stored.get(key, meta["default"])
         item = {
             "key": key,
             "label": meta["label"],
             "description": meta["description"],
             "type": meta["type"],
-            "value": stored.get(key, meta["default"]),
+            "value": "" if is_secret else stored_value,
             "default": meta["default"],
         }
+        if is_secret:
+            item["has_value"] = bool(stored_value)
         if meta.get("options"):
             item["options"] = meta["options"]
         groups.setdefault(meta["group"], []).append(item)
@@ -664,8 +758,14 @@ async def update_settings(
     result = await db.execute(select(Setting))
     existing = {row.key: row for row in result.scalars().all()}
 
-    updated = {}
+    updated: dict[str, str] = {}
+    audit_values: dict[str, str] = {}
     for key, raw in body.values.items():
+        meta = KNOWN_SETTINGS[key]
+        is_secret = meta["type"] == "password"
+        if is_secret and not str(raw or "").strip():
+            # El panel envía vacío para no cambiar la contraseña guardada.
+            continue
         value = _normalize_value(key, raw)
         setting = existing.get(key)
         if setting:
@@ -674,13 +774,14 @@ async def update_settings(
             db.add(Setting(
                 key=key,
                 value=value,
-                description=KNOWN_SETTINGS[key]["description"],
+                description=meta["description"],
             ))
         updated[key] = value
+        audit_values[key] = "***" if is_secret else value
 
     await log_action(
         db, current_user.id, "settings.update", "settings", None,
-        {"values": updated},
+        {"values": audit_values},
     )
     await db.commit()
-    return {"updated": updated}
+    return {"updated": audit_values}

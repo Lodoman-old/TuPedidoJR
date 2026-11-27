@@ -42,6 +42,104 @@ def _in_range(moment: time, start: time, end: time) -> bool:
     return moment >= start or moment <= end
 
 
+def current_shift(
+    schedules: list[RestaurantSchedule], now: datetime
+) -> dict | None:
+    """Turno vigente con su apertura y cierre reales.
+
+    Considera los horarios que cruzan la medianoche. Un horario 00:00-00:00
+    se interpreta como abierto 24 horas.
+    """
+    today = now.weekday()
+    current = now.time()
+
+    for row in schedules:
+        if row.day_of_week != today or row.is_closed:
+            continue
+        start, end = _to_time(row.open_time), _to_time(row.close_time)
+        if start == end:
+            open_at = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
+            close_at = open_at + timedelta(days=1)
+            return {
+                "open_at": open_at,
+                "close_at": close_at,
+                "is_overnight": True,
+            }
+        if start < end and start <= current <= end:
+            return {
+                "open_at": datetime.combine(now.date(), start, tzinfo=now.tzinfo),
+                "close_at": datetime.combine(now.date(), end, tzinfo=now.tzinfo),
+                "is_overnight": False,
+            }
+        if start > end and current >= start:
+            return {
+                "open_at": datetime.combine(now.date(), start, tzinfo=now.tzinfo),
+                "close_at": datetime.combine(
+                    now.date() + timedelta(days=1), end, tzinfo=now.tzinfo
+                ),
+                "is_overnight": True,
+            }
+
+    yesterday = (today - 1) % 7
+    for row in schedules:
+        if row.day_of_week != yesterday or row.is_closed:
+            continue
+        start, end = _to_time(row.open_time), _to_time(row.close_time)
+        if start > end and current <= end:
+            return {
+                "open_at": datetime.combine(
+                    now.date() - timedelta(days=1), start, tzinfo=now.tzinfo
+                ),
+                "close_at": datetime.combine(now.date(), end, tzinfo=now.tzinfo),
+                "is_overnight": True,
+            }
+    return None
+
+
+async def minutes_to_close(
+    db: AsyncSession,
+    restaurant: Restaurant,
+    now: datetime | None = None,
+) -> int | None:
+    """Minutos hasta el cierre del turno vigente, o None si no hay horario."""
+    schedules = await get_schedules(db, restaurant.id)
+    if not schedules:
+        return None
+    tz = await get_timezone(db)
+    now = now.astimezone(tz) if now else datetime.now(tz)
+    shift = current_shift(schedules, now)
+    if shift is None:
+        return None
+    seconds = (shift["close_at"] - now).total_seconds()
+    return max(int(seconds // 60), 0)
+
+
+async def schedule_state_at(
+    db: AsyncSession,
+    restaurant: Restaurant,
+    target: datetime,
+) -> dict:
+    """Evalúa si una fecha/hora programada cae dentro del horario."""
+    schedules = await get_schedules(db, restaurant.id)
+    if not schedules:
+        return {
+            "has_schedule": False,
+            "is_open": None,
+            "message": "El negocio no tiene horario configurado.",
+        }
+    tz = await get_timezone(db)
+    if target.tzinfo is None:
+        local_target = target.replace(tzinfo=ZoneInfo("UTC")).astimezone(tz)
+    else:
+        local_target = target.astimezone(tz)
+    state = _evaluate(schedules, local_target)
+    return {
+        "has_schedule": True,
+        "is_open": bool(state["is_open"]),
+        "message": state["message"],
+    }
+
+
 def _evaluate(schedules: list[RestaurantSchedule], now: datetime) -> dict:
     """Pure evaluation of a weekly schedule at ``now``."""
     if not schedules:

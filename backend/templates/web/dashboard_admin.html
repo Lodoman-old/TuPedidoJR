@@ -9,6 +9,25 @@
 <div id="dashboardError" class="alert alert-danger d-none"></div>
 <div id="dashboardLoading" class="text-center py-5"><div class="spinner-border text-primary"></div></div>
 <div id="dashboardContent" class="d-none"></div>
+<div class="modal fade" id="assignCourierModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Asignar repartidor</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2">Elige un repartidor disponible. Se le enviará el pedido.</p>
+        <select id="assignCourierSelect" class="form-select"></select>
+        <div id="assignCourierMsg" class="small text-danger mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="confirmAssignCourier()">Asignar</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="card p-3 mt-3">
   <h6><i class="bi bi-book"></i> Manuales</h6>
   <p class="small text-muted mb-2">Guía de operación, repartidores, incidencias y finanzas.</p>
@@ -25,6 +44,118 @@
     return `<div class="col-6 col-md-3"><div class="card p-3 text-center ${color}">
       <small class="text-muted">${label}</small><strong class="fs-4">${value}</strong>
     </div></div>`;
+  }
+
+  let availableCouriers = [];
+  let assignOrderId = null;
+
+  function courierAlertTable(title, rows) {
+    if (!rows || !rows.length) return '';
+    return `<div class="card p-3 mb-3 border-danger">
+      <h6 class="text-danger">${title}</h6>
+      <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Pedido</th><th>Negocio</th><th>Estado</th><th class="text-end">Min</th><th class="text-end">Total</th><th class="text-end">Acciones</th></tr></thead>
+        <tbody>${rows.map(o => `<tr>
+          <td>#${o.short}</td>
+          <td class="small">${o.restaurant_name}</td>
+          <td class="small">${o.status}${o.no_courier_hold ? ' · esperando' : ''}${o.admin_delivery ? ' · admin' : ''}</td>
+          <td class="text-end">${o.minutes}</td>
+          <td class="text-end">${money(o.total)}</td>
+          <td class="text-end">
+            <div class="d-flex gap-1 justify-content-end flex-wrap">
+              ${o.admin_delivery ? `
+                ${['in_delivery', 'picked_up'].includes(o.status) ? '' : `<button class="btn btn-sm btn-outline-primary" onclick="adminOrderStatus('${o.id}','picked_up')">Recogí</button>`}
+                <button class="btn btn-sm btn-success" onclick="adminOrderStatus('${o.id}','delivered')">Entregué</button>
+              ` : `
+                <button class="btn btn-sm btn-outline-primary" onclick="openAssignCourier('${o.id}')">Asignar</button>
+                <button class="btn btn-sm btn-outline-dark" onclick="takeDelivery('${o.id}')">Tomar</button>
+              `}
+              <button class="btn btn-sm btn-outline-secondary" onclick="switchPickup('${o.id}')">Pasar a recoger</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="cancelAdminOrder('${o.id}')">Cancelar</button>
+            </div>
+          </td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+  }
+
+  function openAssignCourier(orderId) {
+    assignOrderId = orderId;
+    const select = document.getElementById('assignCourierSelect');
+    const msg = document.getElementById('assignCourierMsg');
+    msg.textContent = '';
+    if (!availableCouriers.length) {
+      select.innerHTML = '<option value="">No hay repartidores disponibles</option>';
+    } else {
+      select.innerHTML = availableCouriers.map(c =>
+        `<option value="${c.id}">${c.name} · ${c.active_services} servicio(s)</option>`
+      ).join('');
+    }
+    new bootstrap.Modal(document.getElementById('assignCourierModal')).show();
+  }
+
+  async function confirmAssignCourier() {
+    if (!assignOrderId) return;
+    const select = document.getElementById('assignCourierSelect');
+    const msg = document.getElementById('assignCourierMsg');
+    if (!select.value) {
+      msg.textContent = 'No hay repartidores disponibles.';
+      return;
+    }
+    try {
+      await apiRequest('POST', `/admin/orders/${assignOrderId}/assign-courier`, { courier_id: select.value });
+      bootstrap.Modal.getInstance(document.getElementById('assignCourierModal'))?.hide();
+      showToast('Repartidor asignado');
+      loadDashboard();
+    } catch (e) {
+      msg.textContent = e.message;
+    }
+  }
+
+  async function takeDelivery(orderId) {
+    if (!confirm('¿Tomarás tú el pedido y lo entregarás? Ya no se ofrecerá a repartidores.')) return;
+    try {
+      await apiRequest('POST', `/admin/orders/${orderId}/take-delivery`, {});
+      showToast('Pedido tomado para entrega propia');
+      loadDashboard();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
+  async function adminOrderStatus(orderId, status) {
+    const label = status === 'delivered' ? 'entregado' : 'recogido';
+    if (!confirm(`¿Marcar el pedido como ${label}?`)) return;
+    try {
+      await apiRequest('POST', `/admin/orders/${orderId}/status`, { status });
+      showToast(`Pedido ${label}`);
+      loadDashboard();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
+  async function switchPickup(orderId) {
+    if (!confirm('¿Cambiar el pedido a recoger en el negocio? Si ya estaba pagado por transferencia, el envío se reembolsará el siguiente día hábil.')) return;
+    try {
+      await apiRequest('POST', `/admin/orders/${orderId}/switch-to-pickup`, {});
+      showToast('Pedido cambiado a recoger');
+      loadDashboard();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
+  async function cancelAdminOrder(orderId) {
+    const reason = prompt('Motivo de la cancelación:');
+    if (reason === null) return;
+    try {
+      await apiRequest('POST', `/orders/${orderId}/cancel`, { reason: reason || 'Cancelado por el administrador' });
+      showToast('Pedido cancelado');
+      loadDashboard();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
   }
 
   function alertTable(title, rows, color) {
@@ -52,6 +183,7 @@
     loading.classList.remove('d-none');
     try {
       const data = await apiRequest('GET', '/admin/dashboard');
+      availableCouriers = data.available_couriers || [];
       const statusText = data.active.by_status
         .filter(s => s.count > 0)
         .map(s => `${s.label}: ${s.count}`)
@@ -72,6 +204,7 @@
           <h6>Estado de pedidos activos</h6>
           <div class="small text-muted">${statusText}</div>
         </div>
+        ${courierAlertTable('Pedidos sin repartidor', data.alerts.courier)}
         ${alertTable('Pedidos pendientes hace más de 10 minutos', data.alerts.pending_10min, 'danger')}
         ${alertTable('Pedidos en preparación/listos hace más de 45 minutos', data.alerts.late_preparing, 'warning')}
         <div class="card p-3">

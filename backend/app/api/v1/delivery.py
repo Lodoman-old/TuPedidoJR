@@ -129,6 +129,7 @@ async def available_orders(
                 ),
             ),
             Order.delivery_person_id.is_(None),
+            Order.admin_delivery.is_(False),
             Order.delivery_mode == "platform",
         )
         .options(selectinload(Order.items))
@@ -236,6 +237,12 @@ async def accept_order(
     order.delivery_person_id = dp.id
     if approval_flow:
         order.status = "preparing"
+    if order.no_courier_hold:
+        order.no_courier_hold = False
+        order.no_courier_decision_deadline = None
+        order.courier_approval_deadline = None
+        if order.status in ("pending", "awaiting_courier"):
+            order.status = "preparing"
     # En el flujo normal el estado del pedido lo controla el restaurante
     # (preparando/listo). Aceptar solo asigna al repartidor.
     bonus = dp.delivery_bonus_per_order or Decimal("0")
@@ -340,6 +347,10 @@ async def deliver_order(
     order.status = "delivered"
     if order.delivered_at is None:
         order.delivered_at = datetime.now(timezone.utc)
+    if order.courier_support_requested and (order.courier_support_fee or 0) > 0:
+        order.restaurant_owes_platform = (
+            order.restaurant_owes_platform or Decimal("0")
+        ) + order.courier_support_fee
     remaining_order_id = await db.scalar(
         select(Order.id)
         .where(

@@ -11,6 +11,7 @@ from app.db.session import async_session
 from app.models.order import Order
 from app.models.receipt_validation import ReceiptValidation
 from app.models.user import User
+from app.services import recarga_service
 from app.services.cep_validation_service import banxico_open
 from app.services.order_service import get_setting_value
 from app.services.order_transfer_service import (
@@ -53,7 +54,9 @@ async def retry_pending_cep(limit: int = 20) -> int:
         result = await db.execute(
             select(ReceiptValidation)
             .where(
-                ReceiptValidation.entity_type == "order_transfer",
+                ReceiptValidation.entity_type.in_(
+                    ("order_transfer", "recarga_transfer")
+                ),
                 ReceiptValidation.status.in_(("pending_cep", "preapproved")),
                 ReceiptValidation.created_at >= cutoff,
             )
@@ -75,6 +78,44 @@ async def retry_pending_cep(limit: int = 20) -> int:
             if was_preapproved:
                 # Damos un margen corto antes de cargar al cliente.
                 max_attempts = min(max_attempts, 2)
+
+            if record.entity_type == "recarga_transfer":
+                if attempts >= max_attempts:
+                    record.status = "review"
+                    record.summary = "Se agotaron los reintentos con Banxico."
+                    record.extracted = extracted
+                    await db.commit()
+                    continue
+                try:
+                    record = await revalidate_receipt(db, record)
+                except Exception:
+                    logger.exception(
+                        "Falló el reintento CEP de la recarga %s", record.id
+                    )
+                    continue
+                processed += 1
+                extracted = dict(record.extracted or {})
+                if record.status in ("high", "preapproved"):
+                    await recarga_service.settle_transfer_receipt(
+                        db, record, approved=True
+                    )
+                    await db.commit()
+                    continue
+                if record.status == "pending_cep":
+                    attempts += 1
+                    extracted["cep_retry_count"] = attempts
+                    record.extracted = extracted
+                    record.summary = (
+                        "Banxico todavía no confirma el pago. Se reintentará."
+                    )
+                    await db.commit()
+                    if attempts >= max_attempts:
+                        record.status = "review"
+                        record.summary = "Se agotaron los reintentos con Banxico."
+                        await db.commit()
+                    continue
+                await db.commit()
+                continue
 
             order, _, customer_name = await _order_info(db, record)
             if not order:

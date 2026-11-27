@@ -25,6 +25,7 @@ from app.api.v1.reports import router as reports_router
 from app.api.v1.admin_payouts import router as admin_payouts_router
 from app.api.v1.admin_mandados import router as admin_mandados_router
 from app.api.v1.admin_dashboard import router as admin_dashboard_router
+from app.api.v1.admin_orders import router as admin_orders_router
 from app.api.v1.admin_audit import router as admin_audit_router
 from app.api.v1.admin_receipts import router as admin_receipts_router
 from app.api.v1.admin_transfers import router as admin_transfers_router
@@ -72,6 +73,7 @@ router.include_router(reports_router, prefix="/reports", tags=["Reportes"])
 router.include_router(admin_payouts_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_mandados_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_dashboard_router, prefix="/admin", tags=["Administración"])
+router.include_router(admin_orders_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_audit_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_receipts_router, prefix="/admin", tags=["Administración"])
 router.include_router(admin_transfers_router, prefix="/admin", tags=["Administración"])

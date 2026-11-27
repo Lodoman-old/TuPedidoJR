@@ -40,13 +40,19 @@ from app.services.affiliation_payment_service import (
     schedule_affiliation_validation,
 )
 from app.services.geocode_service import geocode_structured
-from app.schemas.order import CancelOrderRequest, OrderOut, OrderStatusUpdate
+from app.schemas.order import (
+    CancelOrderRequest,
+    OrderOut,
+    OrderStatusUpdate,
+    ScheduledApprovalRequest,
+)
 from app.services.cancellation_service import apply_cancellation
 from app.services.affiliation_qr_service import send_affiliation_qr_email
 from app.services.file_service import delete_upload, save_upload
 from app.services.geo_service import get_nearby_restaurants
 from app.services.loyalty_service import award_on_delivery
-from app.services.push_service import schedule_available_order, schedule_courier_preparing, schedule_courier_ready, schedule_order_status, schedule_admin_payout_request
+from app.services.push_service import schedule_available_order, schedule_courier_preparing, schedule_courier_ready, schedule_customer_scheduled_approved, schedule_customer_scheduled_rejected, schedule_order_status, schedule_admin_payout_request
+from app.services.scheduled_service import ScheduledOrderError, enforce_scheduled_rules
 from app.services.schedule_service import (
     get_schedules,
     get_timezone,
@@ -827,6 +833,7 @@ async def list_restaurant_orders(
             or_(
                 Order.requires_courier_approval.is_(False),
                 Order.delivery_person_id.is_not(None),
+                Order.near_closing.is_(True),
             ),
         )
         .options(selectinload(Order.items))
@@ -892,11 +899,23 @@ async def update_restaurant_order_status(
         not current_user.is_superuser
         and order.requires_courier_approval
         and not order.delivery_person_id
+        and not order.near_closing
     ):
         raise HTTPException(
             status_code=400,
             detail="Este pedido se mostrará al restaurante cuando un repartidor lo acepte",
         )
+    if order.near_closing:
+        if body.status not in ("confirmed", "preparing"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Confirma si aceptas el pedido cerca del cierre. "
+                    "Si no lo aceptas, cancélalo."
+                ),
+            )
+        order.near_closing = False
+        order.business_confirmation_deadline = None
     if (
         order.status == "awaiting_courier"
         and body.status == "preparing"
@@ -908,12 +927,33 @@ async def update_restaurant_order_status(
         )
 
     requested = body.status
+    try:
+        await enforce_scheduled_rules(
+            db,
+            order,
+            restaurant,
+            requested,
+            accept_early_prep=body.accept_early_prep,
+        )
+    except ScheduledOrderError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if (
         requested == "confirmed"
         and order.requires_courier_approval
         and order.delivery_mode == "platform"
     ):
         requested = "preparing" if order.delivery_person_id else "awaiting_courier"
+
+    try:
+        await enforce_scheduled_rules(
+            db,
+            order,
+            restaurant,
+            requested,
+            accept_early_prep=body.accept_early_prep,
+        )
+    except ScheduledOrderError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     order.status = requested
     now = datetime.now(timezone.utc)
@@ -934,6 +974,8 @@ async def update_restaurant_order_status(
         and order.confirmed_at is None
     ):
         order.confirmed_at = now
+    elif requested == "ready":
+        order.ready_at = now
     elif requested == "picked_up" and order.picked_up_at is None:
         order.picked_up_at = now
     elif requested == "delivered" and order.delivered_at is None:
@@ -976,6 +1018,157 @@ async def update_restaurant_order_status(
     )
 
 
+@router.post(
+    "/{restaurant_id}/orders/{order_id}/scheduled-approval",
+    response_model=OrderOut,
+)
+async def scheduled_order_approval(
+    restaurant_id: str,
+    order_id: str,
+    body: ScheduledApprovalRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """El negocio acepta o rechaza un pedido programado fuera de horario."""
+    restaurant = await db.scalar(
+        select(Restaurant).where(Restaurant.id == restaurant_id)
+    )
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurante no encontrado")
+    if not await have_role(db, restaurant.id, current_user, ORDER_ROLES):
+        raise HTTPException(status_code=403, detail="No eres dueño de este restaurante")
+
+    result = await db.execute(
+        select(Order)
+        .where(Order.id == order_id, Order.restaurant_id == restaurant_id)
+        .options(selectinload(Order.items))
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if (
+        not order.scheduled_outside_hours
+        or order.scheduled_approval_status != "pending"
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Este pedido no está esperando aprobación de horario.",
+        )
+    if order.status in ("delivered", "cancelled", "delivery_failed"):
+        raise HTTPException(status_code=400, detail="El pedido ya está cerrado")
+
+    now = datetime.now(timezone.utc)
+    if body.accept:
+        order.scheduled_approval_status = "accepted"
+        order.scheduled_approved_at = now
+        order.scheduled_approval_deadline = None
+        schedule_customer_scheduled_approved(str(order.id))
+    else:
+        order.scheduled_approval_status = "rejected"
+        order.scheduled_approval_deadline = None
+        await apply_cancellation(
+            db,
+            order,
+            actor_id=current_user.id,
+            role="admin" if current_user.is_superuser else "restaurant",
+            reason=(
+                "El negocio no aceptó el pedido programado fuera de horario."
+            ),
+            now=now,
+        )
+        schedule_customer_scheduled_rejected(str(order.id))
+
+    await db.commit()
+    await db.refresh(order)
+    await _get_ws_manager().notify_order_status(str(order.id), order.status)
+    schedule_order_status(str(order.id), order.status)
+    customer = await db.get(User, order.user_id)
+    return order_out(
+        order,
+        can_see_refund=True,
+        customer_phone=customer.phone if customer else None,
+    )
+
+
+@router.post(
+    "/{restaurant_id}/orders/{order_id}/request-courier-support",
+    response_model=OrderOut,
+)
+async def request_courier_support(
+    restaurant_id: str,
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Un negocio con reparto propio pide apoyo de TuPedidoJR."""
+    enabled = (
+        await get_setting_value(db, "COURIER_SUPPORT_ENABLED", "false")
+    ).lower() == "true"
+    if not enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="El apoyo de reparto no está activado.",
+        )
+    restaurant = await db.scalar(
+        select(Restaurant).where(Restaurant.id == restaurant_id)
+    )
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurante no encontrado")
+    if not await have_role(db, restaurant.id, current_user, ORDER_ROLES):
+        raise HTTPException(status_code=403, detail="No eres dueño de este restaurante")
+
+    result = await db.execute(
+        select(Order)
+        .where(Order.id == order_id, Order.restaurant_id == restaurant_id)
+        .options(selectinload(Order.items))
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if order.delivery_mode != "own":
+        raise HTTPException(
+            status_code=400,
+            detail="El pedido no es de reparto propio del negocio.",
+        )
+    if order.delivery_person_id:
+        raise HTTPException(
+            status_code=400, detail="El pedido ya tiene repartidor."
+        )
+    if order.status in ("delivered", "cancelled", "delivery_failed"):
+        raise HTTPException(status_code=400, detail="El pedido ya está cerrado")
+
+    try:
+        fee = Decimal(
+            str(await get_setting_value(db, "COURIER_SUPPORT_FEE", "30.0"))
+        ).quantize(Decimal("0.01"))
+    except Exception:
+        fee = Decimal("30.00")
+
+    now = datetime.now(timezone.utc)
+    order.delivery_mode = "platform"
+    order.courier_support_requested = True
+    order.courier_support_fee = fee
+    order.courier_support_requested_at = now
+    order.courier_support_alert_at = None
+    order.delivery_earnings = fee
+    if order.status in ("pending", "confirmed"):
+        order.status = "awaiting_courier"
+        order.requires_courier_approval = True
+        order.awaiting_courier_at = now
+        order.courier_approval_deadline = None
+
+    await db.commit()
+    await db.refresh(order)
+    schedule_available_order(str(order.id), order.status == "ready")
+    schedule_order_status(str(order.id), order.status)
+    customer = await db.get(User, order.user_id)
+    return order_out(
+        order,
+        can_see_refund=True,
+        customer_phone=customer.phone if customer else None,
+    )
+
+
 @router.post("/{restaurant_id}/orders/{order_id}/cancel", response_model=OrderOut)
 async def cancel_restaurant_order(
     restaurant_id: str,
@@ -1004,6 +1197,7 @@ async def cancel_restaurant_order(
         not current_user.is_superuser
         and order.requires_courier_approval
         and not order.delivery_person_id
+        and not order.near_closing
     ):
         raise HTTPException(
             status_code=400,

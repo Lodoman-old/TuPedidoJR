@@ -485,7 +485,8 @@ async def validate_recarga_receipt(
 
     accounts = await bank_service.receiver_accounts(db)
     expected_recipient = " o ".join(
-        account["clabe"] for account in accounts
+        f"{account['clabe']} {account.get('holder') or ''}".strip()
+        for account in accounts
     )
 
     try:

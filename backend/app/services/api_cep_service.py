@@ -18,10 +18,13 @@ MAX_IMAGE_BYTES = 1024 * 1024  # apiCEP acepta máximo 1 MB
 
 
 class ApiCepError(Exception):
-    def __init__(self, status: str, message: str):
+    def __init__(
+        self, status: str, message: str, payload: dict | None = None
+    ):
         super().__init__(message)
         self.status = status
         self.message = message
+        self.payload = payload or {}
 
 
 def _normalize_bank(value: str) -> str:
@@ -142,12 +145,14 @@ async def validate_receipt(
         )
     if response.status_code >= 400:
         detail = ""
+        body: dict | None = None
         try:
-            body = response.json()
-            if isinstance(body, dict):
-                detail = str(body.get("error") or "")
+            parsed_body = response.json()
+            if isinstance(parsed_body, dict):
+                body = parsed_body
+                detail = str(parsed_body.get("error") or "")
         except ValueError:
-            detail = ""
+            body = None
         logger.warning(
             "apiCEP respondió %s: %s", response.status_code, response.text[:300]
         )
@@ -155,6 +160,7 @@ async def validate_receipt(
             "error",
             detail[:300]
             or f"apiCEP respondió {response.status_code}. Intenta más tarde.",
+            payload=body,
         )
     try:
         return response.json()

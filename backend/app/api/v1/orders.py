@@ -1479,7 +1479,10 @@ async def validate_transfer_receipt(
             )
 
     accounts = await _transfer_receiver_accounts(db)
-    expected_recipient = " o ".join(account["clabe"] for account in accounts)
+    expected_recipient = " o ".join(
+        f"{account['clabe']} {account.get('holder') or ''}".strip()
+        for account in accounts
+    )
     receiver_bank = accounts[0]["bank_code"]
 
     try:

@@ -21,6 +21,7 @@ from app.services import receipt_validation_service as rvs
 from app.services import api_cep_service
 from app.services.api_cep_service import ApiCepError
 from app.services.cep_validation_service import CepValidationError, validate_transfer
+from app.services.setting_service import set_setting
 
 
 def _headers(token: str) -> dict:
@@ -1001,3 +1002,129 @@ async def test_receipt_contact_returns_customer_phone(client, db_session):
         headers=_headers(token),
     )
     assert denied.status_code == 403
+
+
+BANK_CLABE_BANAMEX = "002215905341409070"
+BANK_CLABE_AZTECA = "127242013746241709"
+BOTH_RECIPIENTS = (
+    f"{BANK_CLABE_BANAMEX} OSCAR LOPEZ DAMIAN o "
+    f"{BANK_CLABE_AZTECA} OSCAR LOPEZ DAMIAN"
+)
+
+
+async def _two_bank_accounts(db_session) -> None:
+    await set_setting(db_session, "BANK_CLABE", BANK_CLABE_BANAMEX)
+    await set_setting(db_session, "BANK_NAME", "BANAMEX")
+    await set_setting(db_session, "BANK_ACCOUNT_HOLDER", "OSCAR LOPEZ DAMIAN")
+    await set_setting(db_session, "BANK_CLABE_2", BANK_CLABE_AZTECA)
+    await set_setting(db_session, "BANK_NAME_2", "Banco Azteca")
+    await set_setting(db_session, "BANK_ACCOUNT_HOLDER_2", "OSCAR LOPEZ DAMIAN")
+
+
+def test_recipient_ok_matches_masked_account_and_holder():
+    extracted = {
+        "recipient": "OSCAR LOPEZ DAMIAN",
+        "account": "**709",
+        "merchant": "Banamex",
+        "reference": "271126",
+    }
+    assert rvs._recipient_ok(BOTH_RECIPIENTS, extracted) is True
+    assert rvs._recipient_ok(BOTH_RECIPIENTS, {"account": BANK_CLABE_AZTECA}) is True
+    assert rvs._recipient_ok(
+        BANK_CLABE_BANAMEX, {"account": "**123", "recipient": "OTRA PERSONA"}
+    ) is False
+
+
+async def _recarga_review_record(db_session) -> ReceiptValidation:
+    record = ReceiptValidation(
+        entity_type="recarga_transfer",
+        entity_id=uuid.uuid4(),
+        file_url="/static/uploads/comprobante.webp",
+        expected_kind="transfer_receipt",
+        expected_amount=Decimal("50.00"),
+        expected_date=datetime.now(timezone.utc),
+        expected_recipient=BOTH_RECIPIENTS,
+        status="review",
+    )
+    db_session.add(record)
+    await db_session.commit()
+    await db_session.refresh(record)
+    return record
+
+
+async def _fake_transfer_gemini(account: str):
+    async def fake(db, record):
+        record.provider = "gemini"
+        record.document_type = rvs.TRANSFER
+        record.confidence = 50
+        record.status = "review"
+        record.issues = []
+        record.extracted = {
+            "total": 50.0,
+            "recipient": "OSCAR LOPEZ DAMIAN",
+            "account": account,
+            "merchant": "Banamex",
+            "_checks": {
+                "amount_ok": True,
+                "date_ok": True,
+                "recipient_ok": True,
+                "fields_ok": True,
+            },
+        }
+        return record
+
+    return fake
+
+
+def _same_bank_error():
+    async def fake(db, *, file_url, expected_amount=None):
+        raise ApiCepError(
+            "error",
+            "El banco emisor y el banco receptor no pueden ser la misma "
+            "institución. Las transferencias SPEI deben ser entre instituciones "
+            "distintas.",
+            payload={
+                "extracted": {"senderBank": "Banamex", "receiverBank": "BANAMEX"}
+            },
+        )
+
+    return fake
+
+
+async def test_same_bank_false_positive_uses_receipt_account(
+    db_session, monkeypatch
+):
+    await _fallback_settings(db_session)
+    await _two_bank_accounts(db_session)
+    record = await _recarga_review_record(db_session)
+
+    monkeypatch.setattr(rvs, "banxico_open", lambda: True)
+    monkeypatch.setattr(rvs, "validate_apicep_receipt", _same_bank_error())
+    monkeypatch.setattr(
+        rvs, "_validate_with_gemini", await _fake_transfer_gemini("**709")
+    )
+    result = await rvs.revalidate_receipt(db_session, record)
+
+    assert result.status == "review"
+    assert result.extracted["_same_bank"] is False
+    assert "Mismo banco" not in (result.summary or "")
+    assert not any("Mismo banco" in issue for issue in (result.issues or []))
+
+
+async def test_same_bank_kept_when_receipt_matches_that_bank(
+    db_session, monkeypatch
+):
+    await _fallback_settings(db_session)
+    await _two_bank_accounts(db_session)
+    record = await _recarga_review_record(db_session)
+
+    monkeypatch.setattr(rvs, "banxico_open", lambda: True)
+    monkeypatch.setattr(rvs, "validate_apicep_receipt", _same_bank_error())
+    monkeypatch.setattr(
+        rvs, "_validate_with_gemini", await _fake_transfer_gemini("**070")
+    )
+    result = await rvs.revalidate_receipt(db_session, record)
+
+    assert result.status == "review"
+    assert result.extracted["_same_bank"] is True
+    assert "Mismo banco" in (result.summary or "")

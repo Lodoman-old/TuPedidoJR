@@ -15,14 +15,16 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from uuid import UUID
 
+import clabe
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import async_session
 from app.models.receipt_validation import ReceiptValidation
+from app.services import bank_service
 from app.services.api_cep_service import ApiCepError, validate_receipt as validate_apicep_receipt
-from app.services.cep_validation_service import banxico_open
+from app.services.cep_validation_service import BANXICO_TZ, banxico_open
 from app.services.file_service import UPLOAD_DIR
 from app.services.order_service import get_setting_value
 
@@ -86,7 +88,8 @@ def _parse_datetime(value, time_value=None) -> datetime | None:
             parsed = datetime.strptime(text, fmt)
             if fmt in ("%Y-%m-%d", "%d-%m-%Y"):
                 parsed = parsed.replace(hour=12, minute=0)
-            return parsed.replace(tzinfo=timezone.utc)
+            # Los comprobantes muestran la hora local de México.
+            return parsed.replace(tzinfo=BANXICO_TZ).astimezone(timezone.utc)
         except ValueError:
             continue
     return None
@@ -178,15 +181,26 @@ def _build_prompt(
 ) -> str:
     kind_label = "ticket de compra" if expected_kind == PURCHASE else "comprobante de transferencia"
     amount_label = f"${Decimal(expected_amount):,.2f} MXN" if expected_amount is not None else "no especificado"
-    date_label = expected_date.strftime("%Y-%m-%d %H:%M") if expected_date else "no especificada"
+    if expected_date:
+        if expected_date.tzinfo is None:
+            expected_date = expected_date.replace(tzinfo=timezone.utc)
+        date_label = expected_date.astimezone(BANXICO_TZ).strftime(
+            "%Y-%m-%d %H:%M"
+        )
+    else:
+        date_label = "no especificada"
     recipient_label = expected_recipient or "no especificado"
     context_label = context or "no especificado"
     return f"""Eres un auditor de comprobantes de TuPedidoJR. Analiza el documento adjunto.
 Tipo esperado: {kind_label}.
 Monto esperado: {amount_label}.
-Fecha esperada: {date_label}.
+Fecha esperada (hora de México, UTC-6): {date_label}.
 Destinatario/CLABE esperada: {recipient_label}.
 Referencia o descripción: {context_label}.
+
+Las fechas y horas del comprobante están en hora de México (UTC-6). No reportes
+diferencias de horario por la zona horaria; solo si la fecha u hora es distinta
+en esa misma zona.
 
 Devuelve SOLO un JSON válido, sin markdown, con esta forma:
 {{
@@ -266,22 +280,96 @@ async def _bank_settings(db: AsyncSession) -> dict:
 def _recipient_ok(expected: str | None, extracted: dict) -> bool | None:
     if not expected:
         return None
-    expected_norm = _normalize_text(expected)
-    actual_parts = [
-        extracted.get("recipient"), extracted.get("account"),
-        extracted.get("reference"), extracted.get("merchant"),
-    ]
-    actual_norm = _normalize_text(" ".join(str(p) for p in actual_parts if p))
+    actual_text = " ".join(
+        str(extracted.get(key) or "")
+        for key in (
+            "recipient", "account", "reference", "merchant", "beneficiaryName"
+        )
+    )
+    actual_norm = _normalize_text(actual_text)
     if not actual_norm:
         return False
-    expected_digits = re.sub(r"\D", "", expected)
-    if len(expected_digits) >= 10:
-        if expected_digits in re.sub(r"\D", "", actual_norm):
+    actual_digits = re.sub(r"\D", "", actual_text)
+
+    expected_clabes = re.findall(r"\d{10,}", expected)
+    for digits in expected_clabes:
+        if digits in actual_digits:
             return True
+
+    # Los comprobantes suelen mostrar la cuenta enmascarada ("**709").
+    # Se compara el sufijo visible contra cada CLABE configurada.
+    masked = re.findall(r"\d{3,6}", str(extracted.get("account") or ""))
+    for suffix in masked:
+        if any(digits.endswith(suffix) for digits in expected_clabes):
+            return True
+
     for token in re.split(r"[^a-z0-9]+", expected.lower()):
-        if len(token) >= 5 and token in actual_norm:
+        if len(token) >= 5 and not token.isdigit() and token in actual_norm:
             return True
     return False
+
+
+BANK_ALIASES = {
+    "citibanamex": "banamex",
+    "banconacionaldemexico": "banamex",
+    "bancoazteca": "azteca",
+    "bbva": "bbvamexico",
+    "bancomer": "bbvamexico",
+}
+
+
+def _bank_key(value) -> str:
+    key = re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+    return BANK_ALIASES.get(key, key)
+
+
+def _match_receiver_account(
+    accounts: list[dict], extracted: dict
+) -> dict | None:
+    """Encuentra la cuenta de la plataforma que aparece en el comprobante."""
+    text = " ".join(
+        str(extracted.get(key) or "")
+        for key in ("recipient", "account", "beneficiaryName", "reference")
+    )
+    digits = re.sub(r"\D", "", text)
+    for account in accounts:
+        clabe_value = str(account.get("clabe") or "")
+        if clabe_value and clabe_value in digits:
+            return account
+    account_text = str(extracted.get("account") or "")
+    for suffix in re.findall(r"\d{3,6}", account_text):
+        matches = [
+            account
+            for account in accounts
+            if str(account.get("clabe") or "").endswith(suffix)
+        ]
+        if len(matches) == 1:
+            return matches[0]
+    return None
+
+
+def _same_bank_still_valid(
+    api_receiver_bank: str, extracted: dict, accounts: list[dict]
+) -> bool:
+    """Descarta un falso 'mismo banco' cuando apiCEP eligió otra cuenta.
+
+    Con dos cuentas receptoras configuradas, apiCEP puede validar contra la
+    primera y responder "misma institución" aunque el comprobante muestre la
+    cuenta del otro banco. Si el comprobante apunta a una cuenta de otro banco,
+    la conclusión de apiCEP no aplica.
+    """
+    if not api_receiver_bank or not accounts:
+        return True
+    destination = _match_receiver_account(accounts, extracted)
+    if destination is None:
+        return True
+    bank_code = str(destination.get("bank_code") or "")
+    destination_bank = (
+        clabe.BANK_NAMES.get(bank_code) or destination.get("bank_name") or ""
+    )
+    if not destination_bank:
+        return True
+    return _bank_key(api_receiver_bank) == _bank_key(destination_bank)
 
 
 def _is_same_bank_error(text: str) -> bool:
@@ -344,9 +432,14 @@ async def _validate_with_apicep(
         record.issues = [text[:500]] if text else []
         if _is_same_bank_error(text):
             record.status = "review"
+            api_data = (exc.payload or {}).get("extracted")
+            if not isinstance(api_data, dict):
+                api_data = {}
             record.extracted = {
                 **(record.extracted or {}),
                 "_same_bank": True,
+                "_apicep_sender": api_data.get("senderBank"),
+                "_apicep_receiver": api_data.get("receiverBank"),
             }
             record.summary = (
                 "Transferencia entre cuentas del mismo banco. "
@@ -637,9 +730,22 @@ async def _fallback_with_gemini(
             "Tu comprobante quedó pendiente para reintentar al abrir.",
         )
 
+    api_receiver_bank = str(
+        (record.extracted or {}).get("_apicep_receiver") or ""
+    )
     gemini = await _validate_with_gemini(db, record)
     gemini_error = gemini.error
     checks = (gemini.extracted or {}).get("_checks") or {}
+
+    if same_bank:
+        try:
+            accounts = await bank_service.receiver_accounts(db)
+        except ValueError:
+            accounts = []
+        if not _same_bank_still_valid(
+            api_receiver_bank, gemini.extracted or {}, accounts
+        ):
+            same_bank = False
 
     if record.entity_type != "order_transfer":
         gemini.extracted = {
@@ -648,11 +754,19 @@ async def _fallback_with_gemini(
             "_fallback_reason": reason,
         }
         gemini.status = "review"
-        gemini.summary = (
-            "Mismo banco: Banxico no emite CEP. Revisión manual."
-            if same_bank
-            else "Banxico está fuera de horario. Revisión manual del comprobante."
-        )
+        if same_bank:
+            gemini.summary = (
+                "Mismo banco: Banxico no emite CEP. Revisión manual."
+            )
+        elif reason == "Transferencia entre cuentas del mismo banco.":
+            gemini.summary = (
+                "No pudimos validar la transferencia automáticamente. "
+                "El administrador la revisará."
+            )
+        else:
+            gemini.summary = (
+                reason or "El administrador revisará tu comprobante."
+            )
         if gemini_error and gemini_error not in (gemini.issues or []):
             gemini.issues = [*(gemini.issues or []), gemini_error]
         gemini.error = gemini_error

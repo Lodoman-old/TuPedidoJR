@@ -12,7 +12,7 @@ from app.models.delivery_person import DeliveryPerson
 from app.models.order import Order
 from app.models.recarga_order import RecargaOrder
 from app.models.user import User
-from app.services import sivetel_service
+from app.services import recarga_ticket_service, sivetel_service
 from app.services.order_service import get_setting_value
 
 logger = logging.getLogger(__name__)
@@ -272,6 +272,7 @@ async def complete_recarga(
             order.recharge_status = "completed"
     await db.commit()
     await db.refresh(recarga)
+    await _send_completion_ticket(db, recarga)
     return recarga
 
 
@@ -410,6 +411,15 @@ def _error_parts(body: dict) -> tuple[int, str]:
     return code, str(body.get("message") or "Error de Sivetel")
 
 
+async def _send_completion_ticket(
+    db: AsyncSession, recarga: RecargaOrder
+) -> None:
+    try:
+        await recarga_ticket_service.send_recarga_ticket(db, recarga)
+    except Exception:
+        logger.exception("No se pudo enviar el ticket de la recarga %s", recarga.id)
+
+
 async def _mark_completed(
     db: AsyncSession, recarga: RecargaOrder, body: dict
 ) -> None:
@@ -468,6 +478,7 @@ async def process_recarga_with_sivetel(
             if body.get("status"):
                 await _mark_completed(db, recarga, body)
                 await db.commit()
+                await _send_completion_ticket(db, recarga)
                 return "completed"
             code, message = _error_parts(body)
             if code == 414:
@@ -499,6 +510,7 @@ async def process_recarga_with_sivetel(
         if body.get("status"):
             await _mark_completed(db, recarga, body)
             await db.commit()
+            await _send_completion_ticket(db, recarga)
             return "completed"
 
         code, message = _error_parts(body)
@@ -509,6 +521,7 @@ async def process_recarga_with_sivetel(
             if retry_body.get("status"):
                 await _mark_completed(db, recarga, retry_body)
                 await db.commit()
+                await _send_completion_ticket(db, recarga)
                 return "completed"
             code, message = _error_parts(retry_body)
 

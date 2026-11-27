@@ -560,7 +560,7 @@ async function validateReceipt() {
 async function loadHistory() {
   const box = document.getElementById('rcHistory');
   try {
-    const rows = await apiRequest('GET', '/recargas/portal');
+    const rows = await apiRequest('GET', '/recargas/history');
     rcHistoryRows = rows;
     if (!rows.length) {
       box.innerHTML = '<div class="text-muted small">Todavía no tienes recargas desde el portal.</div>';
@@ -578,9 +578,14 @@ async function loadHistory() {
         <td class="small">${rcEsc(row.product_description || row.product_code || '—')}</td>
         <td class="small text-end">${rcMoney(row.total)}</td>
         <td class="small"><span class="badge ${row.status === 'completed' ? 'bg-success' : row.status === 'failed' || row.status === 'cancelled' ? 'bg-danger' : row.status === 'refunded' ? 'bg-secondary' : 'bg-warning text-dark'}">${rcEsc(RC_STATUS[row.status] || row.status)}</span></td>
-        <td class="text-end">${row.payment_status !== 'paid' && row.status === 'requested'
-          ? `<button class="btn btn-sm btn-outline-dark" onclick="resumePayment('${rcEsc(row.id)}')">Continuar pago</button>`
-          : ''}</td>
+        <td class="text-end">${row.status === 'completed'
+          ? `<div class="d-flex gap-1 justify-content-end">
+               <a class="btn btn-sm btn-outline-dark" href="/web/recargas/${rcEsc(row.id)}/ticket">Ticket</a>
+               <button class="btn btn-sm btn-outline-success" onclick="shareRecargaWhatsApp('${rcEsc(row.id)}')"><i class="bi bi-whatsapp"></i></button>
+             </div>`
+          : row.payment_status !== 'paid' && row.status === 'requested'
+            ? `<button class="btn btn-sm btn-outline-dark" onclick="resumePayment('${rcEsc(row.id)}')">Continuar pago</button>`
+            : ''}</td>
       </tr>`).join('')}</tbody>
     </table></div>`;
   } catch (e) {
@@ -600,6 +605,23 @@ function resumePayment(id) {
   document.getElementById('rcDone').classList.add('d-none');
   document.getElementById('rcPayment').classList.remove('d-none');
   document.getElementById('rcPayment').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function shareRecargaWhatsApp(id) {
+  const row = rcHistoryRows.find((item) => String(item.id) === String(id));
+  if (!row) return;
+  const number = 'TPJ-R' + String(row.id).slice(0, 8).toUpperCase();
+  const lines = [
+    `Ticket TuPedidoJR ${number}`,
+    `Compañía: ${row.company}`,
+    `Teléfono: ${row.phone}`,
+    `Producto: ${row.product_description || row.product_code || ''}`,
+    `Monto: ${rcMoney(row.amount)}`,
+    `Total: ${rcMoney(row.total)}`,
+    `Folio: ${row.provider_reference || '—'}`,
+    `${location.origin}/web/recargas/${row.id}/ticket`,
+  ];
+  window.open(`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`, '_blank');
 }
 
 async function loadRechargePage() {

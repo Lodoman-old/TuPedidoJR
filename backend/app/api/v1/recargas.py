@@ -15,7 +15,12 @@ from app.models.recarga_order import RecargaOrder
 from app.models.user import User
 from app.schemas.order import TransferValidationRequest
 from app.schemas.recarga import RecargaComplete, RecargaCreate, RecargaFail, RecargaOut
-from app.services import bank_service, recarga_service, sivetel_service
+from app.services import (
+    bank_service,
+    recarga_service,
+    recarga_ticket_service,
+    sivetel_service,
+)
 from app.services.cep_validation_service import CepValidationError, validate_transfer
 from app.services.file_service import save_document
 from app.services.order_service import get_setting_value
@@ -243,6 +248,41 @@ async def my_portal_recargas(
         )
     ).scalars().all()
     return [_out(row) for row in rows]
+
+
+@router.get("/history", response_model=list[RecargaOut])
+async def my_recarga_history(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Todas las recargas del cliente: portal, pedido y venta del repartidor."""
+    rows = (
+        await db.execute(
+            select(RecargaOrder)
+            .where(RecargaOrder.user_id == current_user.id)
+            .order_by(RecargaOrder.created_at.desc())
+            .limit(50)
+        )
+    ).scalars().all()
+    return [_out(row) for row in rows]
+
+
+@router.get("/{recarga_id}/ticket")
+async def recarga_ticket(
+    recarga_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    recarga = await recarga_service.get_recarga(db, _uuid(recarga_id))
+    if recarga is None:
+        raise HTTPException(status_code=404, detail="Recarga no encontrada")
+    allowed = current_user.is_superuser or recarga.user_id == current_user.id
+    if not allowed and recarga.delivery_person_id:
+        dp = await _courier_for_user(db, current_user)
+        allowed = bool(dp and recarga.delivery_person_id == dp.id)
+    if not allowed:
+        raise HTTPException(status_code=404, detail="Recarga no encontrada")
+    return recarga_ticket_service.ticket_payload(recarga)
 
 
 @router.post("/{recarga_id}/validate-transfer")

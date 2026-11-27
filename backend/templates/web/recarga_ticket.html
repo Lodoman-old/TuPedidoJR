@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<style>
+  .ticket-wrap { max-width: 720px; margin: 0 auto; }
+  .ticket-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, .08);
+  }
+  .ticket-head {
+    background: #1B2F6B;
+    color: #fff;
+    padding: 24px;
+  }
+  .ticket-head img {
+    height: 42px;
+    background: #fff;
+    border-radius: 8px;
+    padding: 5px 8px;
+  }
+  .ticket-title { font-size: 1.35rem; font-weight: 700; margin-top: 14px; }
+  .ticket-number { font-size: .85rem; opacity: .8; }
+  .ticket-body { padding: 24px; }
+  .ticket-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 9px 0;
+    border-bottom: 1px solid #eef2f7;
+    font-size: .92rem;
+  }
+  .ticket-row span:first-child { color: #64748b; }
+  .ticket-row span:last-child { font-weight: 600; color: #0f172a; text-align: right; }
+  .ticket-total {
+    margin-top: 16px;
+    padding: 14px;
+    background: #f8fafc;
+    border-radius: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+  .ticket-note {
+    margin-top: 14px;
+    font-size: .8rem;
+    color: #64748b;
+  }
+  @media print {
+    nav, .floating-cart, .toast-container, .btn, #ticketActions, .alert { display: none !important; }
+    body { background: #fff !important; }
+    .ticket-card { box-shadow: none; border-color: #cbd5e1; }
+    .ticket-wrap { max-width: 100%; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="ticket-wrap">
+  <div id="ticketActions" class="d-flex justify-content-between align-items-center mb-3">
+    <a href="/web/recargas" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Volver a mis recargas
+    </a>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-success" onclick="shareTicketWhatsApp()">
+        <i class="bi bi-whatsapp"></i> Enviar por WhatsApp
+      </button>
+      <button class="btn btn-sm btn-dark" onclick="window.print()">
+        <i class="bi bi-printer"></i> Imprimir / Guardar PDF
+      </button>
+    </div>
+  </div>
+
+  <div id="ticketLoading" class="text-center py-5">
+    <div class="spinner-border text-primary"></div>
+  </div>
+  <div id="ticketError" class="alert alert-danger d-none"></div>
+  <div id="ticketContent" class="d-none"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const RID = '{{ recarga_id }}';
+  let currentTicket = null;
+
+  function ticketEsc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function ticketMoney(value) {
+    return '$' + Number(value || 0).toLocaleString('es-MX', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2,
+    });
+  }
+
+  function ticketRows(t) {
+    const rows = [
+      ['Compañía', t.company],
+      ['Teléfono', t.phone],
+      ['Producto', t.product_description],
+      ['Monto de la recarga', ticketMoney(t.amount)],
+    ];
+    if (Number(t.fee || 0) > 0) {
+      rows.push(['Comisión', ticketMoney(t.fee)]);
+    }
+    rows.push(['Forma de pago', t.payment_method]);
+    if (t.order_code) rows.push(['Pedido', '#' + t.order_code]);
+    rows.push(['Folio del proveedor', t.provider_folio || '—']);
+    rows.push(['Fecha', t.completed_at]);
+    return rows;
+  }
+
+  function shareTicketWhatsApp() {
+    if (!currentTicket) return;
+    const t = currentTicket;
+    const text = [
+      `Ticket TuPedidoJR ${t.ticket_number}`,
+      `Compañía: ${t.company}`,
+      `Teléfono: ${t.phone}`,
+      `Producto: ${t.product_description}`,
+      `Total: ${ticketMoney(t.total)}`,
+      `Folio: ${t.provider_folio || '—'}`,
+    ].join('\n');
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  }
+
+  async function loadTicket() {
+    const loading = document.getElementById('ticketLoading');
+    const error = document.getElementById('ticketError');
+    const content = document.getElementById('ticketContent');
+    try {
+      const t = await apiRequest('GET', `/recargas/${RID}/ticket`);
+      currentTicket = t;
+      const rows = ticketRows(t).map(([label, value]) => `
+        <div class="ticket-row">
+          <span>${ticketEsc(label)}</span>
+          <span>${ticketEsc(value)}</span>
+        </div>`).join('');
+      content.innerHTML = `
+        <div class="ticket-card">
+          <div class="ticket-head">
+            <img src="/static/logo.png" alt="TuPedidoJR">
+            <div class="ticket-title">Ticket de recarga</div>
+            <div class="ticket-number">${ticketEsc(t.ticket_number)}</div>
+          </div>
+          <div class="ticket-body">
+            <div class="small text-muted mb-2">
+              Cliente: <strong>${ticketEsc(t.customer_name)}</strong> · Estado: <strong>${ticketEsc(t.status)}</strong>
+            </div>
+            ${rows}
+            <div class="ticket-total">
+              <span>Total cobrado</span>
+              <span>${ticketMoney(t.total)}</span>
+            </div>
+            <div class="ticket-note">
+              Este ticket es tu comprobante de TuPedidoJR. Conserva el folio del proveedor para cualquier aclaración.
+            </div>
+          </div>
+        </div>`;
+      loading.classList.add('d-none');
+      content.classList.remove('d-none');
+    } catch (e) {
+      loading.classList.add('d-none');
+      if (String(e.message).includes('401') || String(e.message).toLowerCase().includes('autentic')) {
+        location.href = `/web/login?next=${encodeURIComponent(location.pathname + location.search)}`;
+        return;
+      }
+      error.textContent = e.message;
+      error.classList.remove('d-none');
+    }
+  }
+
+  loadTicket();
+</script>
+{% endblock %}

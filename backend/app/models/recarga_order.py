@@ -45,3 +45,4 @@ class RecargaOrder(TimestampMixin, Base):
     paid_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     refunded_at = Column(DateTime(timezone=True), nullable=True)
+    ticket_sent_at = Column(DateTime(timezone=True), nullable=True)

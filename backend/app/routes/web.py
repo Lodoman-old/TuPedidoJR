@@ -395,6 +395,13 @@ async def web_recharges(request: Request, db: AsyncSession = Depends(get_db)):
     )
 
 
+@router.get("/recargas/{recarga_id}/ticket")
+async def web_recarga_ticket(request: Request, recarga_id: str):
+    return templates.TemplateResponse(
+        request, "recarga_ticket.html", {"recarga_id": recarga_id}
+    )
+
+
 @router.get("/app")
 async def web_app_download(request: Request, db: AsyncSession = Depends(get_db)):
     public_url = (

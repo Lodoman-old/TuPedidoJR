@@ -130,6 +130,7 @@ let serviceLimits = { active: 0, max: 5, warn: 4 };
 let rechargesEnabled = false;
 let courierCatalog = null;
 let courierProviderAvailable = true;
+let courierRecargaRows = [];
 
 function esc(v) {
   return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
@@ -789,6 +790,7 @@ async function loadCourierRecargas() {
   el.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
   try {
     const rows = await apiRequest('GET', '/recargas/my');
+    courierRecargaRows = rows;
     const providerUnavailable = courierCatalog?.provider?.available === false;
     const providerWarning = providerUnavailable
       ? `<div class="alert alert-warning small"><i class="bi bi-exclamation-triangle"></i> ${esc(courierCatalog?.provider?.message || 'El servicio de recargas no está disponible por una intermitencia. Intenta más tarde.')}</div>`
@@ -820,7 +822,7 @@ async function loadCourierRecargas() {
               <td class="text-end text-success">${money0(r.fee)}</td>
               <td class="text-end fw-bold">${money0(r.total)}</td>
               <td><span class="badge bg-${color}">${label}</span>${r.error_message ? `<br><small class="text-danger">${esc(r.error_message)}</small>` : ''}</td>
-              <td class="text-end">${r.status === 'failed' ? `<button class="btn btn-sm btn-outline-primary" onclick="retryMyRecarga('${r.id}')">Reintentar</button>` : ''}</td>
+              <td class="text-end">${r.status === 'completed' ? `<div class="d-flex gap-1 justify-content-end"><a class="btn btn-sm btn-outline-dark" href="/web/recargas/${r.id}/ticket">Ticket</a><button class="btn btn-sm btn-outline-success" onclick="shareCourierTicketWhatsApp('${r.id}')"><i class="bi bi-whatsapp"></i></button></div>` : ''}${r.status === 'failed' ? `<button class="btn btn-sm btn-outline-primary" onclick="retryMyRecarga('${r.id}')">Reintentar</button>` : ''}</td>
             </tr>`;
           }).join('') || '<tr><td colspan="8" class="text-center text-muted">Todavía no tienes recargas.</td></tr>'}</tbody>
         </table></div>
@@ -836,6 +838,27 @@ async function retryMyRecarga(id) {
     showToast('Recarga enviada de nuevo a procesar');
     loadCourierRecargas();
   } catch (e) { showToast(e.message, 'danger'); }
+}
+
+function shareCourierTicketWhatsApp(id) {
+  const row = courierRecargaRows.find((item) => String(item.id) === String(id));
+  if (!row) return;
+  const number = 'TPJ-R' + String(row.id).slice(0, 8).toUpperCase();
+  const digits = String(row.phone || '').replace(/\D/g, '');
+  const base = digits.length === 10
+    ? `https://wa.me/52${digits}`
+    : 'https://wa.me/';
+  const lines = [
+    `Ticket TuPedidoJR ${number}`,
+    `Compañía: ${row.company}`,
+    `Teléfono: ${row.phone}`,
+    `Producto: ${row.product_description || row.product_code || ''}`,
+    `Monto: ${money0(row.amount)}`,
+    `Total: ${money0(row.total)}`,
+    `Folio: ${row.provider_reference || '—'}`,
+    `${location.origin}/web/recargas/${row.id}/ticket`,
+  ];
+  window.open(`${base}?text=${encodeURIComponent(lines.join('\n'))}`, '_blank');
 }
 
 function offerCompanyEntry(modal, name) {

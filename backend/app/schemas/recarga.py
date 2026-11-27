@@ -45,6 +45,7 @@ class RecargaOut(BaseModel):
     paid_at: datetime | None = None
     completed_at: datetime | None = None
     refunded_at: datetime | None = None
+    ticket_sent_at: datetime | None = None
     created_at: datetime
 
     class Config:

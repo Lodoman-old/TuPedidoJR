@@ -1,5 +1,6 @@
 """Recargas: función en pausa y acciones sobre registros anteriores."""
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -12,7 +13,7 @@ from app.models.delivery_person import DeliveryPerson
 from app.models.order import Order
 from app.models.restaurant import Restaurant
 from app.models.user import User
-from app.services import recarga_service, sivetel_service
+from app.services import recarga_service, recarga_ticket_service, sivetel_service
 from app.services.setting_service import set_setting
 
 
@@ -510,3 +511,75 @@ async def test_catalog_shows_intermittency_and_blocks_recarga(
     )
     assert created.status_code == 503, created.text
     assert "intermitencia" in created.json()["detail"].lower()
+
+
+async def test_recarga_ticket_endpoint_and_email(
+    client: AsyncClient, db_session, monkeypatch
+):
+    resp = await client.post("/api/v1/auth/register", json={
+        "name": "Cliente Ticket",
+        "email": "cliente-ticket@test.com",
+        "password": "pass1234",
+    })
+    token = resp.json()["access_token"]
+    user = await db_session.get(
+        User, uuid.UUID(decode_access_token(token)["sub"])
+    )
+    recarga = await recarga_service.create_transfer_recarga(
+        db_session,
+        user,
+        company="Bait",
+        phone="5555555506",
+        amount=Decimal("99.00"),
+        product_code="BAIT099",
+        product_description="Bait Internet en Casa $99.00",
+        product_kind="datos",
+    )
+    recarga.status = "completed"
+    recarga.provider_folio = "123456"
+    recarga.completed_at = datetime.now(timezone.utc)
+    await db_session.commit()
+    await db_session.refresh(recarga)
+
+    ticket = await client.get(
+        f"/api/v1/recargas/{recarga.id}/ticket", headers=_headers(token)
+    )
+    assert ticket.status_code == 200, ticket.text
+    data = ticket.json()
+    assert data["ticket_number"] == f"TPJ-R{str(recarga.id)[:8].upper()}"
+    assert data["company"] == "Bait"
+    assert data["phone"] == "5555555506"
+    assert data["provider_folio"] == "123456"
+    assert data["total"] == "99.00"
+
+    other = await client.post("/api/v1/auth/register", json={
+        "name": "Otro Cliente",
+        "email": "otro-ticket@test.com",
+        "password": "pass1234",
+    })
+    other_token = other.json()["access_token"]
+    denied = await client.get(
+        f"/api/v1/recargas/{recarga.id}/ticket",
+        headers=_headers(other_token),
+    )
+    assert denied.status_code == 404
+
+    captured = {}
+
+    async def fake_send(db, to, subject, html, text=None, attachments=None):
+        captured.update({
+            "to": to, "subject": subject, "html": html, "text": text
+        })
+        return True, "ok"
+
+    monkeypatch.setattr(recarga_ticket_service, "send_email", fake_send)
+    sent = await recarga_ticket_service.send_recarga_ticket(db_session, recarga)
+    assert sent is True
+    assert captured["to"] == "cliente-ticket@test.com"
+    assert "Bait" in captured["subject"]
+    assert "5555555506" in captured["html"]
+    assert "123456" in captured["html"]
+    await db_session.refresh(recarga)
+    assert recarga.ticket_sent_at is not None
+    again = await recarga_ticket_service.send_recarga_ticket(db_session, recarga)
+    assert again is False

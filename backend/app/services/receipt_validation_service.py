@@ -412,6 +412,23 @@ async def _mark_pending_cep(
     return record
 
 
+async def _has_prior_valid_receipt(
+    db: AsyncSession, record: ReceiptValidation
+) -> bool:
+    """Indica si el mismo pago ya tenía un comprobante validado."""
+    prior = await db.scalar(
+        select(ReceiptValidation.id)
+        .where(
+            ReceiptValidation.entity_type == record.entity_type,
+            ReceiptValidation.entity_id == record.entity_id,
+            ReceiptValidation.id != record.id,
+            ReceiptValidation.status.in_(("high", "preapproved", "approved")),
+        )
+        .limit(1)
+    )
+    return prior is not None
+
+
 async def _validate_with_apicep(
     db: AsyncSession, record: ReceiptValidation
 ) -> ReceiptValidation:
@@ -509,7 +526,11 @@ async def _validate_with_apicep(
         )
     if amount_ok is False:
         issues.append("El monto no coincide con el esperado.")
-    if reused:
+    # apiCEP marca el CEP como "ya validado" en cualquier reenvío. Si el mismo
+    # pago ya tenía un comprobante aprobado, es un reenvío legítimo: la
+    # protección contra reutilización se aplica por entidad (pedido/recarga).
+    reused_same_payment = reused and await _has_prior_valid_receipt(db, record)
+    if reused and not reused_same_payment:
         issues.append("Ese comprobante ya fue validado antes.")
 
     valid = (
@@ -517,7 +538,7 @@ async def _validate_with_apicep(
         and confirmed
         and cep_status == "LIQUIDADO"
         and amount_ok is not False
-        and not reused
+        and (not reused or reused_same_payment)
     )
     pending_cep = status == "pending" or cep_status == "EN_PROCESO"
     record.document_type = TRANSFER

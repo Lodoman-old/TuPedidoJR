@@ -1128,3 +1128,82 @@ async def test_same_bank_kept_when_receipt_matches_that_bank(
     assert result.status == "review"
     assert result.extracted["_same_bank"] is True
     assert "Mismo banco" in (result.summary or "")
+
+
+async def test_reused_cep_accepted_for_same_payment(db_session, monkeypatch):
+    await _apicep_settings(db_session)
+    entity_id = uuid.uuid4()
+    prior = ReceiptValidation(
+        entity_type="recarga_transfer",
+        entity_id=entity_id,
+        file_url="/static/uploads/comprobante.webp",
+        expected_kind="transfer_receipt",
+        expected_amount=Decimal("100.00"),
+        status="high",
+    )
+    db_session.add(prior)
+    await db_session.commit()
+
+    record = ReceiptValidation(
+        entity_type="recarga_transfer",
+        entity_id=entity_id,
+        file_url="/static/uploads/comprobante.webp",
+        expected_kind="transfer_receipt",
+        expected_amount=Decimal("100.00"),
+        status="review",
+    )
+    db_session.add(record)
+    await db_session.commit()
+    await db_session.refresh(record)
+
+    async def fake_validate(db, *, file_url, expected_amount=None):
+        payload = _apicep_payload()
+        payload["validation"]["cepPreviouslyValidated"] = True
+        return payload
+
+    monkeypatch.setattr(rvs, "banxico_open", lambda: True)
+    monkeypatch.setattr(rvs, "validate_apicep_receipt", fake_validate)
+    result = await rvs.revalidate_receipt(db_session, record)
+
+    assert result.status == "high"
+    assert result.issues == []
+
+
+async def test_reused_cep_from_other_payment_still_review(
+    db_session, monkeypatch
+):
+    await _apicep_settings(db_session)
+    prior = ReceiptValidation(
+        entity_type="recarga_transfer",
+        entity_id=uuid.uuid4(),
+        file_url="/static/uploads/comprobante.webp",
+        expected_kind="transfer_receipt",
+        expected_amount=Decimal("100.00"),
+        status="high",
+    )
+    db_session.add(prior)
+    await db_session.commit()
+
+    record = ReceiptValidation(
+        entity_type="recarga_transfer",
+        entity_id=uuid.uuid4(),
+        file_url="/static/uploads/comprobante.webp",
+        expected_kind="transfer_receipt",
+        expected_amount=Decimal("100.00"),
+        status="review",
+    )
+    db_session.add(record)
+    await db_session.commit()
+    await db_session.refresh(record)
+
+    async def fake_validate(db, *, file_url, expected_amount=None):
+        payload = _apicep_payload()
+        payload["validation"]["cepPreviouslyValidated"] = True
+        return payload
+
+    monkeypatch.setattr(rvs, "banxico_open", lambda: True)
+    monkeypatch.setattr(rvs, "validate_apicep_receipt", fake_validate)
+    result = await rvs.revalidate_receipt(db_session, record)
+
+    assert result.status == "review"
+    assert any("ya fue validado" in issue for issue in result.issues)
